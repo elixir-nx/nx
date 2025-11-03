@@ -1,3 +1,4 @@
+#include <fine.hpp>
 #include <torch/torch.h>
 
 #if defined(USING_TORCH_V1)
@@ -6,1277 +7,1082 @@
 #include <ATen/LegacyBatchedTensorImpl.h>
 #endif
 
-#include <atomic>
+#include "torchx_nif_util.h"
 #include <iostream>
+#include <numeric>
 
-#include "nx_nif_utils.hpp"
+namespace torchx {
 
-std::map<const std::string, const torch::ScalarType> dtypes = {{"byte", torch::kByte}, {"char", torch::kChar}, {"short", torch::kShort}, {"int", torch::kInt}, {"long", torch::kLong}, {"float8_e5m2", torch::kFloat8_e5m2}, {"half", torch::kHalf}, {"brain", torch::kBFloat16}, {"float", torch::kFloat}, {"double", torch::kDouble}, {"bool", torch::kBool}, {"complex", at::ScalarType::ComplexFloat}, {"complex_double", at::ScalarType::ComplexDouble}};
-std::map<const std::string, const int> dtype_sizes = {{"byte", 1}, {"char", 1}, {"short", 2}, {"int", 4}, {"long", 8}, {"float8_e5m2", 1}, {"half", 2}, {"brain", 2}, {"float", 4}, {"double", 8}, {"complex", 8}, {"complex_double", 16}};
+// Register TorchTensor as a resource type
+FINE_RESOURCE(TorchTensor);
 
-inline torch::ScalarType string2type(const std::string &atom) {
-  return dtypes[atom];
+// Macro to register both _cpu and _io variants of a function
+// Following EXLA's pattern - create wrapper functions
+#define REGISTER_TENSOR_NIF(NAME)                                              \
+  auto NAME##_cpu = NAME;                                                      \
+  auto NAME##_io = NAME;                                                       \
+  FINE_NIF(NAME##_cpu, ERL_NIF_DIRTY_JOB_CPU_BOUND);                           \
+  FINE_NIF(NAME##_io, ERL_NIF_DIRTY_JOB_IO_BOUND)
+
+// Macro to register both _cpu and _io variants for a specific arity
+// Creates a unified NIF handler that dispatches to the function
+// Usage: REGISTER_TENSOR_NIF_ARITY(name, function_symbol)
+#define REGISTER_TENSOR_NIF_ARITY(NAME, SYMBOL)                                \
+  static ERL_NIF_TERM SYMBOL##_nif(ErlNifEnv *env, int argc,                   \
+                                   const ERL_NIF_TERM argv[]) {                \
+    return fine::nif(env, argc, argv, SYMBOL);                                 \
+  }                                                                            \
+  auto __nif_registration_##SYMBOL##_cpu = fine::Registration::register_nif(   \
+      {#NAME "_cpu", fine::nif_arity(SYMBOL), SYMBOL##_nif,                    \
+       ERL_NIF_DIRTY_JOB_CPU_BOUND});                                          \
+  auto __nif_registration_##SYMBOL##_io = fine::Registration::register_nif(    \
+      {#NAME "_io", fine::nif_arity(SYMBOL), SYMBOL##_nif,                     \
+       ERL_NIF_DIRTY_JOB_IO_BOUND});                                           \
+  static_assert(true, "require a semicolon after the macro")
+
+// Helper to get tensor from resource, with proper error checking
+torch::Tensor &get_tensor(fine::ResourcePtr<TorchTensor> tensor_res) {
+  return tensor_res->tensor();
 }
 
-inline const std::string *type2string(const torch::ScalarType type) {
-  for (std::map<const std::string, const torch::ScalarType>::iterator i = dtypes.begin(); i != dtypes.end(); ++i) {
-    if (i->second == type)
-      return &i->first;
-  }
-  return nullptr;
+// Helper to create a tensor resource result
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+tensor_ok(const torch::Tensor &tensor) {
+  return fine::Ok(fine::make_resource<TorchTensor>(tensor));
 }
 
-// the class instance to manage the refcount of Tensor
-class TensorP {
- public:
-  TensorP(ErlNifEnv *env, const ERL_NIF_TERM arg) : ptr(nullptr) {
-    // setup
-    if (!enif_get_resource(env, arg, TENSOR_TYPE, (void **)&ptr)) {
-      err = nx::nif::error(env, "Unable to get tensor param in NIF");
-      return;
-    }
-
-    refcount = (std::atomic<int> *)(ptr + 1);
-    deleted = (std::atomic_flag *)(refcount + 1);
-
-    if (refcount->load() == 0) {
-      // already deallocated
-      ptr = nullptr;
-      err = nx::nif::error(env, "Tensor has been deallocated");
-      return;
-    }
-
-    if (is_valid()) {
-      // increase reference count
-      ++(*refcount);
-    }
-  }
-
-  ~TensorP() {
-    if (is_valid()) {
-      // decrease reference count
-      if (refcount->fetch_sub(1) == 0) {
-        ptr->~Tensor();
-      }
-    }
-  }
-
-  bool deallocate() {
-    if (is_valid() && atomic_flag_test_and_set(deleted) == false) {
-      --(*refcount);
-      return true;
-    } else {
-      return false;
-    }
-  }
-
-  torch::Tensor *data() const {
-    return ptr;
-  }
-
-  bool is_valid() const {
-    return ptr != nullptr;
-  }
-
-  ERL_NIF_TERM error() {
-    return err;
-  }
-
- private:
-  torch::Tensor *ptr;
-  std::atomic<int> *refcount;
-  std::atomic_flag *deleted;
-  ERL_NIF_TERM err;
-};
-
-#define NIF(NAME) ERL_NIF_TERM NAME(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
-
-#define SCALAR_PARAM(ARGN, VAR)                                      \
-  torch::Scalar VAR;                                                 \
-  VAR.~Scalar();                                                     \
-  double double_##VAR;                                               \
-  std::vector<double> complex_##VAR;                                 \
-  if (nx::nif::get_tuple<double>(env, argv[ARGN], complex_##VAR)) {  \
-    new (&VAR) torch::Scalar(c10::complex<double>(                   \
-        complex_##VAR[0],                                            \
-        complex_##VAR[1]));                                          \
-  } else if (enif_get_double(env, argv[ARGN], &double_##VAR) == 0) { \
-    int64_t int64_##VAR;                                             \
-    enif_get_int64(env, argv[ARGN], (ErlNifSInt64 *)&int64_##VAR);   \
-    new (&VAR) torch::Scalar(int64_##VAR);                           \
-  } else {                                                           \
-    new (&VAR) torch::Scalar(double_##VAR);                          \
-  }
-
-#define SHAPE_PARAM(ARGN, VAR) TUPLE_PARAM(ARGN, std::vector<int64_t>, VAR)
-
-#define TYPE_PARAM(ARGN, VAR)  \
-  ATOM_PARAM(ARGN, VAR##_atom) \
-  torch::ScalarType VAR = string2type(VAR##_atom)
-
-#define DEVICE_PARAM(ARGN, VAR) TUPLE_PARAM(ARGN, std::vector<int64_t>, VAR)
-
-#define DEVICE(DEV_VEC) torch::device(torch::Device((torch::DeviceType)DEV_VEC[0], (torch::DeviceIndex)DEV_VEC[1]))
-
-#define OPTS(TYPE, DEV_VEC) DEVICE(DEV_VEC).dtype(TYPE)
-
-#define TENSOR_PARAM(ARGN, VAR)      \
-  TensorP VAR##_tp(env, argv[ARGN]); \
-  torch::Tensor *VAR;                \
-  if (!VAR##_tp.is_valid()) {        \
-    return VAR##_tp.error();         \
-  } else {                           \
-    VAR = VAR##_tp.data();           \
-  }
-
-#define CATCH()                                                  \
-  catch (c10::Error & error) {                                   \
-    std::ostringstream msg;                                      \
-    msg << error.msg() << " in NIF." << __func__ << "/" << argc; \
-    return nx::nif::error(env, msg.str().c_str());               \
-  }
-
-#define SCALAR(S)                                                       \
-  try {                                                                 \
-    if (c10::isFloatingType(S.type()))                                  \
-      return nx::nif::ok(env, nx::nif::make(env, S.toDouble()));        \
-    else                                                                \
-      return nx::nif::ok(env, nx::nif::make(env, (int64_t)S.toLong())); \
-  }                                                                     \
-  CATCH()
-
-#define TENSOR(T)                                            \
-  try {                                                      \
-    return nx::nif::ok(env, create_tensor_resource(env, T)); \
-  }                                                          \
-  CATCH()
-
-#define TENSOR_LIST(TL)                                                                        \
-  try {                                                                                        \
-    const std::vector<torch::Tensor> &tl = TL;                                                 \
-    std::vector<ERL_NIF_TERM> res_list;                                                        \
-    for (torch::Tensor t : tl)                                                                 \
-      res_list.push_back(create_tensor_resource(env, t));                                      \
-    return nx::nif::ok(env, enif_make_list_from_array(env, res_list.data(), res_list.size())); \
-  }                                                                                            \
-  CATCH()
-
-#define TENSOR_TUPLE(TT)                                                                        \
-  try {                                                                                         \
-    const std::tuple<torch::Tensor, torch::Tensor> &tt = TT;                                    \
-    std::vector<ERL_NIF_TERM> res_list;                                                         \
-    for (torch::Tensor t : {std::get<0>(tt), std::get<1>(tt)})                                  \
-      res_list.push_back(create_tensor_resource(env, t));                                       \
-    return nx::nif::ok(env, enif_make_tuple_from_array(env, res_list.data(), res_list.size())); \
-  }                                                                                             \
-  CATCH()
-
-#define TENSOR_TUPLE_3(TT)                                                                      \
-  try {                                                                                         \
-    const std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> &tt = TT;                     \
-    std::vector<ERL_NIF_TERM> res_list;                                                         \
-    for (torch::Tensor t : {std::get<0>(tt), std::get<1>(tt), std::get<2>(tt)})                 \
-      res_list.push_back(create_tensor_resource(env, t));                                       \
-    return nx::nif::ok(env, enif_make_tuple_from_array(env, res_list.data(), res_list.size())); \
-  }                                                                                             \
-  CATCH()
-
-ERL_NIF_TERM
-create_tensor_resource(ErlNifEnv *env, torch::Tensor tensor) {
-  ERL_NIF_TERM ret;
-  torch::Tensor *tensorPtr;
-  std::atomic<int> *refcount;
-
-  tensorPtr = (torch::Tensor *)enif_alloc_resource(TENSOR_TYPE, sizeof(torch::Tensor) + sizeof(std::atomic<int>) + sizeof(std::atomic_flag));
-  if (tensorPtr == NULL)
-    return enif_make_badarg(env);
-
-  new (tensorPtr) torch::Tensor(tensor.variable_data());
-  refcount = new (tensorPtr + 1) std::atomic<int>(1);
-  new (refcount + 1) std::atomic_flag();
-
-  ret = enif_make_resource(env, tensorPtr);
-  enif_release_resource(tensorPtr);
-
-  return ret;
+// Helper for vector of int64 to IntArrayRef conversion
+c10::IntArrayRef vec_to_array_ref(const std::vector<int64_t> &vec) {
+  return c10::IntArrayRef(vec);
 }
 
-NIF(delete_tensor) {
-  TensorP tensor(env, argv[0]);
-
-  return tensor.deallocate() ? nx::nif::ok(env) : enif_make_badarg(env);
+// Helper for device tuple (device_type, device_index) to torch::Device
+torch::Device
+tuple_to_device(const std::tuple<int64_t, int64_t> &device_tuple) {
+  return torch::Device(
+      static_cast<torch::DeviceType>(std::get<0>(device_tuple)),
+      static_cast<torch::DeviceIndex>(std::get<1>(device_tuple)));
 }
 
-uint64_t elem_count(std::vector<int64_t> shape) {
-  return std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<>{});
+// Helper to count elements in a shape
+uint64_t elem_count(const std::vector<int64_t> &shape) {
+  return std::accumulate(shape.begin(), shape.end(), 1ULL, std::multiplies<>{});
 }
 
-NIF(from_blob) {
-  BINARY_PARAM(0, blob);
-  SHAPE_PARAM(1, shape);
-  TYPE_PARAM(2, type);
-  DEVICE_PARAM(3, device);
+// ============================================================================
+// Tensor Management Functions
+// ============================================================================
 
-  if (blob.size / dtype_sizes[type_atom] < elem_count(shape))
-    return nx::nif::error(env, "Binary size is too small for the requested shape");
-
-  auto tensor = torch::from_blob(blob.data, shape, torch::device(torch::kCPU).dtype(type));
-
-  if (DEVICE(device).device().type() == torch::kCPU) {
-    TENSOR(tensor.clone());
+fine::Atom delete_tensor(ErlNifEnv *env,
+                         fine::ResourcePtr<TorchTensor> tensor) {
+  if (tensor->deallocate()) {
+    return fine::Atom("ok");
   } else {
-    TENSOR(tensor.to(DEVICE(device)));
+    // Throw exception so backend can catch and return :already_deallocated
+    throw std::invalid_argument("Tensor has been deallocated");
   }
 }
 
-NIF(to_blob) {
-  ERL_NIF_TERM result;
-  TENSOR_PARAM(0, t);
-  size_t byte_size = t->nbytes();
-  int64_t limit = 0;
+REGISTER_TENSOR_NIF(delete_tensor);
 
-  bool has_received_limit = (argc == 2);
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+from_blob(ErlNifEnv *env, ErlNifBinary blob, std::vector<int64_t> shape,
+          fine::Atom type_atom, std::tuple<int64_t, int64_t> device_tuple) {
 
-  if (has_received_limit) {
-    PARAM(1, int64_t, param_limit);
-    limit = param_limit;
-    byte_size = limit * t->itemsize();
+  auto type = string2type(type_atom.to_string());
+  auto device = tuple_to_device(device_tuple);
+
+  // Check if binary is large enough
+  if (blob.size / dtype_sizes[type_atom.to_string()] < elem_count(shape)) {
+    throw std::invalid_argument(
+        "Binary size is too small for the requested shape");
   }
 
-  torch::optional<torch::Device> device = torch::device_of(*t);
-  // flatten the tensor to compensate for operations which return
-  // a column-major tensor. t->flatten() is a no-op if the tensor
-  // is already row-major, which was verified by printing t->data_ptr
-  // and reshaped.data_ptr and confirming they had the same value.
-  // We also slice if a limit was received and it doesn't encompass the full tensor.
-  torch::Tensor reshaped = (has_received_limit && byte_size < t->nbytes()) ? t->flatten().slice(0, 0, limit) : t->flatten();
+  auto tensor = torch::from_blob(blob.data, vec_to_array_ref(shape),
+                                 torch::device(torch::kCPU).dtype(type));
+
+  if (device.type() == torch::kCPU) {
+    return tensor_ok(tensor.clone());
+  } else {
+    return tensor_ok(tensor.to(device));
+  }
+}
+
+REGISTER_TENSOR_NIF(from_blob);
+
+// to_blob - arity 1 and 2 versions
+fine::Ok<ErlNifBinary> to_blob_1(ErlNifEnv *env,
+                                 fine::ResourcePtr<TorchTensor> tensor_res) {
+  auto &t = get_tensor(tensor_res);
+  size_t byte_size = t.nbytes();
+
+  torch::optional<torch::Device> device = torch::device_of(t);
+  torch::Tensor reshaped = t.flatten();
   void *data_ptr = reshaped.data_ptr();
 
-  if (device.has_value() && device.value().type() == torch::kCPU && data_ptr == t->data_ptr()) {
-    // case where we own the data_ptr and the data is in the CPU already
-    return nx::nif::ok(env, enif_make_resource_binary(env, t, data_ptr, byte_size));
-  } else if (device.has_value() && device.value().type() == torch::kCPU) {
-    // case where we don't own the data_ptr but the data is in the CPU already
-    void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
-    memcpy(result_data, data_ptr, byte_size);
-    return nx::nif::ok(env, result);
+  ErlNifBinary result;
+  enif_alloc_binary(byte_size, &result);
+
+  // Always copy data to avoid use-after-free when tensor is deallocated
+  if (device.has_value() && device.value().type() == torch::kCPU) {
+    memcpy(result.data, data_ptr, byte_size);
   } else {
-    // case where the data isn't in the CPU, therefore we don't own the data_ptr
-    void *result_data = (void *)enif_make_new_binary(env, byte_size, &result);
-    memcpy(result_data, reshaped.to(torch::kCPU).data_ptr(), byte_size);
-    return nx::nif::ok(env, result);
+    memcpy(result.data, reshaped.to(torch::kCPU).data_ptr(), byte_size);
+  }
+
+  return fine::Ok(result);
+}
+
+fine::Ok<ErlNifBinary> to_blob_2(ErlNifEnv *env,
+                                 fine::ResourcePtr<TorchTensor> tensor_res,
+                                 int64_t limit) {
+  auto &t = get_tensor(tensor_res);
+  size_t byte_size = limit * t.itemsize();
+
+  torch::optional<torch::Device> device = torch::device_of(t);
+  torch::Tensor reshaped =
+      (byte_size < t.nbytes()) ? t.flatten().slice(0, 0, limit) : t.flatten();
+  void *data_ptr = reshaped.data_ptr();
+
+  ErlNifBinary result;
+  enif_alloc_binary(byte_size, &result);
+
+  // Always copy data to avoid use-after-free when tensor is deallocated
+  if (device.has_value() && device.value().type() == torch::kCPU) {
+    memcpy(result.data, data_ptr, byte_size);
+  } else {
+    memcpy(result.data, reshaped.to(torch::kCPU).data_ptr(), byte_size);
+  }
+
+  return fine::Ok(result);
+}
+
+REGISTER_TENSOR_NIF_ARITY(to_blob, to_blob_1);
+REGISTER_TENSOR_NIF_ARITY(to_blob, to_blob_2);
+
+fine::Ok<torch::Scalar> item(ErlNifEnv *env,
+                             fine::ResourcePtr<TorchTensor> tensor) {
+  return fine::Ok(get_tensor(tensor).item());
+}
+
+REGISTER_TENSOR_NIF(item);
+
+fine::Ok<fine::Atom> scalar_type(ErlNifEnv *env,
+                                 fine::ResourcePtr<TorchTensor> tensor) {
+  const std::string *type_name = type2string(get_tensor(tensor).scalar_type());
+  if (type_name != nullptr) {
+    return fine::Ok(fine::Atom(*type_name));
+  } else {
+    throw std::runtime_error("Could not determine tensor type.");
   }
 }
 
-NIF(item) {
-  TENSOR_PARAM(0, t);
+FINE_NIF(scalar_type, 0);
 
-  SCALAR(t->item());
-}
-
-NIF(scalar_type) {
-  TENSOR_PARAM(0, t);
-
-  const std::string *type_name = type2string(t->scalar_type());
-
-  if (type_name != nullptr)
-    return nx::nif::ok(env, enif_make_atom(env, type_name->c_str()));
-  else
-    return nx::nif::error(env, "Could not determine tensor type.");
-}
-
-NIF(shape) {
-  TENSOR_PARAM(0, t);
-
+fine::Ok<fine::Term> shape(ErlNifEnv *env,
+                           fine::ResourcePtr<TorchTensor> tensor) {
+  auto &t = get_tensor(tensor);
   std::vector<ERL_NIF_TERM> sizes;
-  for (int64_t dim = 0; dim < t->dim(); dim++)
-    sizes.push_back(nx::nif::make(env, (t->size(dim))));
-
-  return nx::nif::ok(env, enif_make_tuple_from_array(env, sizes.data(), sizes.size()));
+  for (int64_t dim = 0; dim < t.dim(); dim++) {
+    sizes.push_back(fine::encode(env, t.size(dim)));
+  }
+  // Return as tuple (not list) since Elixir expects {} not []
+  return fine::Ok(
+      fine::Term(enif_make_tuple_from_array(env, sizes.data(), sizes.size())));
 }
 
-NIF(mps_is_available) {
+FINE_NIF(shape, 0);
+
+bool mps_is_available(ErlNifEnv *env) {
 #ifdef MAC_ARM64
-  bool has_mps = at::hasMPS();
+  return at::hasMPS();
 #else
-  bool has_mps = false;
+  return false;
 #endif
-  return nx::nif::make(env, has_mps);
 }
 
-NIF(cuda_is_available) {
-  return nx::nif::make(env, (bool)torch::cuda::is_available());
+FINE_NIF(mps_is_available, 0);
+
+bool cuda_is_available(ErlNifEnv *env) { return torch::cuda::is_available(); }
+
+FINE_NIF(cuda_is_available, 0);
+
+int64_t cuda_device_count(ErlNifEnv *env) {
+  return static_cast<int64_t>(torch::cuda::device_count());
 }
 
-NIF(cuda_device_count) {
-  return nx::nif::make(env, (int)torch::cuda::device_count());
+FINE_NIF(cuda_device_count, 0);
+
+fine::Ok<int64_t> nbytes(ErlNifEnv *env,
+                         fine::ResourcePtr<TorchTensor> tensor) {
+  return fine::Ok(static_cast<int64_t>(get_tensor(tensor).nbytes()));
 }
 
-NIF(nbytes) {
-  TENSOR_PARAM(0, t);
+FINE_NIF(nbytes, 0);
 
-  return nx::nif::ok(env, enif_make_int64(env, t->nbytes()));
+// ============================================================================
+// Tensor Shape Operations
+// ============================================================================
+
+fine::Ok<std::vector<fine::ResourcePtr<TorchTensor>>>
+split(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
+      int64_t batch_size) {
+  auto tensors = torch::split(get_tensor(tensor), batch_size);
+  std::vector<fine::ResourcePtr<TorchTensor>> results;
+  for (const auto &t : tensors) {
+    results.push_back(fine::make_resource<TorchTensor>(t));
+  }
+  return fine::Ok(results);
 }
 
-NIF(split) {
-  TENSOR_PARAM(0, t);
-  PARAM(1, int64_t, batch_size);
+REGISTER_TENSOR_NIF(split);
 
-  TENSOR_LIST(torch::split(*t, batch_size));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+reshape(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
+        std::vector<int64_t> shape) {
+  return tensor_ok(torch::reshape(get_tensor(tensor), vec_to_array_ref(shape)));
 }
 
-NIF(reshape) {
-  TENSOR_PARAM(0, t);
-  SHAPE_PARAM(1, shape);
+REGISTER_TENSOR_NIF(reshape);
 
-  TENSOR(torch::reshape(*t, shape));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+to_type(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
+        fine::Atom type_atom) {
+  auto type = string2type(type_atom.to_string());
+  return tensor_ok(get_tensor(tensor).toType(type));
 }
 
-NIF(to_type) {
-  TENSOR_PARAM(0, t);
-  TYPE_PARAM(1, type);
+REGISTER_TENSOR_NIF(to_type);
 
-  TENSOR(t->toType(type));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+to_device(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
+          std::tuple<int64_t, int64_t> device_tuple) {
+  auto device = tuple_to_device(device_tuple);
+  return tensor_ok(get_tensor(tensor).to(device));
 }
 
-NIF(to_device) {
-  TENSOR_PARAM(0, t);
-  DEVICE_PARAM(1, device);
+REGISTER_TENSOR_NIF(to_device);
 
-  TENSOR(t->to(DEVICE(device)));
+std::variant<fine::Ok<fine::ResourcePtr<TorchTensor>>>
+squeeze(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
+        std::optional<int64_t> dim) {
+  if (dim.has_value()) {
+    return tensor_ok(torch::squeeze(get_tensor(tensor), dim.value()));
+  } else {
+    return tensor_ok(torch::squeeze(get_tensor(tensor)));
+  }
 }
 
-NIF(squeeze) {
-  TENSOR_PARAM(0, t);
+REGISTER_TENSOR_NIF(squeeze);
 
-  if (argc == 2) {
-    PARAM(1, int64_t, dim);
-    TENSOR(torch::squeeze(*t, dim));
-  } else
-    TENSOR(torch::squeeze(*t));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+broadcast_to(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
+             std::vector<int64_t> shape) {
+  return tensor_ok(
+      torch::broadcast_to(get_tensor(tensor), vec_to_array_ref(shape)).clone());
 }
 
-NIF(broadcast_to) {
-  TENSOR_PARAM(0, t);
-  SHAPE_PARAM(1, shape);
+REGISTER_TENSOR_NIF(broadcast_to);
 
-  TENSOR(torch::broadcast_to(*t, shape).clone());
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+transpose(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor, int64_t dim0,
+          int64_t dim1) {
+  return tensor_ok(torch::transpose(get_tensor(tensor), dim0, dim1));
 }
 
-NIF(transpose) {
-  TENSOR_PARAM(0, t);
-  PARAM(1, int64_t, dim0);
-  PARAM(2, int64_t, dim1);
+REGISTER_TENSOR_NIF(transpose);
 
-  TENSOR(torch::transpose(*t, dim0, dim1));
-}
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+slice(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> input,
+      std::vector<int64_t> starts, std::vector<int64_t> lengths,
+      std::vector<int64_t> strides) {
 
-NIF(slice) {
-  TENSOR_PARAM(0, input);
-  LIST_PARAM(1, std::vector<int64_t>, starts);
-  LIST_PARAM(2, std::vector<int64_t>, lengths);
-  LIST_PARAM(3, std::vector<int64_t>, strides);
+  torch::Tensor result = get_tensor(input);
+  auto shape = result.sizes();
 
-  torch::Tensor output;
-  torch::Tensor destination = *input;
+  for (size_t dim = 0; dim < starts.size(); dim++) {
+    int64_t start = starts[dim];
+    int64_t stride = strides[dim];
+    int64_t length = lengths[dim];
+    int64_t end = std::min(start + length, shape[dim]);
 
-  auto shape = input->sizes();
-  size_t dim = 0;
-  for (dim = 0; dim < starts.size(); dim++) {
-    auto start = starts[dim];
-    auto stride = strides[dim];
-    auto length = lengths[dim];
-    auto end = std::min(start + length, shape[dim]);  // Ensuring we don't go out of bounds
-
-    // arguments are dimension, start index, NON-INCLUSIVE end index and stride
-    destination = destination.slice(dim, start, end, stride);
-    if (dim == starts.size() - 1) {
-      output = destination.clone();
-    }
+    result = result.slice(dim, start, end, stride);
   }
 
-  TENSOR(output);
+  // Clone the result to ensure memory ownership
+  return tensor_ok(result.clone());
 }
 
-NIF(concatenate) {
-  LIST_PARAM(0, std::vector<torch::Tensor>, tensors);
+REGISTER_TENSOR_NIF(slice);
 
-  PARAM(1, int64_t, axis);
-
-  TENSOR(torch::cat(tensors, axis));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+concatenate(ErlNifEnv *env,
+            std::vector<fine::ResourcePtr<TorchTensor>> tensor_list,
+            int64_t dim) {
+  std::vector<torch::Tensor> tensors;
+  for (const auto &t : tensor_list) {
+    tensors.push_back(get_tensor(t));
+  }
+  return tensor_ok(torch::cat(tensors, dim));
 }
 
-NIF(gather) {
-  TENSOR_PARAM(0, input);
-  TENSOR_PARAM(1, indices);
-  PARAM(2, int64_t, axis);
+REGISTER_TENSOR_NIF(concatenate);
 
-  TENSOR(torch::gather(*input, axis, *indices));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+gather(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> input,
+       fine::ResourcePtr<TorchTensor> index, int64_t dim) {
+  return tensor_ok(torch::gather(get_tensor(input), dim, get_tensor(index)));
 }
 
-NIF(index_put) {
-  TENSOR_PARAM(0, input);
-  LIST_PARAM(1, std::vector<torch::Tensor>, indices);
-  TENSOR_PARAM(2, updates);
-  PARAM(3, bool, accumulate);
+REGISTER_TENSOR_NIF(gather);
 
-  c10::List<c10::optional<at::Tensor>> convertedList;
-  for (const torch::Tensor &tensor : indices) {
-    convertedList.push_back(tensor);
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+index_put(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> input,
+          std::vector<fine::ResourcePtr<TorchTensor>> indices,
+          fine::ResourcePtr<TorchTensor> values, bool accumulate) {
+
+  c10::List<std::optional<at::Tensor>> torch_indices;
+  for (const auto &idx : indices) {
+    torch_indices.push_back(get_tensor(idx));
   }
 
-  TENSOR(torch::index_put(*input, convertedList, *updates, accumulate));
+  torch::Tensor result = get_tensor(input).clone();
+  result.index_put_(torch_indices, get_tensor(values), accumulate);
+  return tensor_ok(result);
 }
 
-NIF(index) {
-  TENSOR_PARAM(0, input);
-  LIST_PARAM(1, std::vector<torch::Tensor>, indices);
+REGISTER_TENSOR_NIF(index_put);
 
-  c10::List<c10::optional<at::Tensor>> convertedList;
-  for (const torch::Tensor &tensor : indices) {
-    convertedList.push_back(tensor);
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+index(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> input,
+      std::vector<fine::ResourcePtr<TorchTensor>> indices) {
+
+  c10::List<std::optional<at::Tensor>> torch_indices;
+  for (const auto &idx : indices) {
+    torch_indices.push_back(get_tensor(idx));
   }
 
-  TENSOR(torch::index(*input, convertedList));
+  return tensor_ok(get_tensor(input).index(torch_indices));
 }
 
-NIF(argsort) {
-  TENSOR_PARAM(0, input);
-  PARAM(1, bool, stable);
-  PARAM(2, int64_t, axis);
-  PARAM(3, bool, is_descending);
+REGISTER_TENSOR_NIF(index);
 
-  TENSOR(torch::argsort(*input, stable, axis, is_descending));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+argsort(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> input, bool stable,
+        int64_t dim, bool descending) {
+  return tensor_ok(torch::argsort(get_tensor(input), stable, dim, descending));
 }
 
-NIF(top_k) {
-  TENSOR_PARAM(0, input);
-  PARAM(1, int64_t, k);
+REGISTER_TENSOR_NIF(argsort);
 
-  TENSOR_TUPLE(at::topk(*input, k));
+fine::Ok<
+    std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>>>
+top_k(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> input, int64_t k) {
+  auto result = torch::topk(get_tensor(input), k);
+  return fine::Ok(
+      std::make_tuple(fine::make_resource<TorchTensor>(std::get<0>(result)),
+                      fine::make_resource<TorchTensor>(std::get<1>(result))));
 }
 
-NIF(flip) {
-  TENSOR_PARAM(0, input);
-  LIST_PARAM(1, std::vector<int64_t>, dims);
+REGISTER_TENSOR_NIF(top_k);
 
-  TENSOR(torch::flip(*input, dims));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+flip(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> input,
+     std::vector<int64_t> dims) {
+  return tensor_ok(torch::flip(get_tensor(input), vec_to_array_ref(dims)));
 }
 
-NIF(unfold) {
-  TENSOR_PARAM(0, input);
-  PARAM(1, int64_t, dim);
-  PARAM(2, int64_t, size);
-  PARAM(3, int64_t, step);
+REGISTER_TENSOR_NIF(flip);
 
-  TENSOR(at::native::unfold(*input, dim, size, step));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+unfold(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> input, int64_t dim,
+       int64_t size, int64_t step) {
+  return tensor_ok(get_tensor(input).unfold(dim, size, step));
 }
 
-NIF(put) {
-  TENSOR_PARAM(0, input);
-  LIST_PARAM(1, std::vector<int64_t>, indices);
-  TENSOR_PARAM(2, source);
+REGISTER_TENSOR_NIF(unfold);
 
-  torch::Tensor output = input->clone();
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+put(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> input,
+    std::vector<int64_t> indices, fine::ResourcePtr<TorchTensor> source) {
+
+  torch::Tensor output = get_tensor(input).clone();
   torch::Tensor destination = output;
 
-  auto source_shape = source->sizes();
+  auto source_shape = get_tensor(source).sizes();
 
   size_t dim = 0;
   for (dim = 0; dim < indices.size() - 1; dim++) {
     auto start = indices[dim];
-    // arguments are dimension, start index and NON-INCLUSIVE end index
     destination = destination.slice(dim, start, start + source_shape[dim]);
   }
 
-  auto start = indices[dim];
-  destination.slice(dim, start, start + source_shape[dim]) = *source;
+  destination.slice(dim, indices[dim], indices[dim] + source_shape[dim])
+      .copy_(get_tensor(source));
 
-  TENSOR(output);
+  return tensor_ok(output);
 }
 
-NIF(permute) {
-  TENSOR_PARAM(0, t);
-  LIST_PARAM(1, std::vector<int64_t>, dims);
+REGISTER_TENSOR_NIF(put);
 
-  TENSOR(t->permute(dims).contiguous());
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+permute(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> input,
+        std::vector<int64_t> permutation) {
+  return tensor_ok(get_tensor(input).permute(vec_to_array_ref(permutation)));
 }
 
-/* Creation */
+REGISTER_TENSOR_NIF(permute);
 
-NIF(scalar_tensor) {
-  SCALAR_PARAM(0, scalar);
-  TYPE_PARAM(1, type);
-  DEVICE_PARAM(2, device);
+// ============================================================================
+// Tensor Creation Functions
+// ============================================================================
 
-  TENSOR(torch::scalar_tensor(scalar, OPTS(type, device)));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+scalar_tensor(ErlNifEnv *env, torch::Scalar scalar, fine::Atom type_atom,
+              std::tuple<int64_t, int64_t> device_tuple) {
+  auto type = string2type(type_atom.to_string());
+  auto device = tuple_to_device(device_tuple);
+  return tensor_ok(
+      torch::scalar_tensor(scalar, torch::dtype(type).device(device)));
 }
 
-NIF(randint) {
-  PARAM(0, int64_t, min);
-  PARAM(1, int64_t, max);
-  SHAPE_PARAM(2, shape);
-  TYPE_PARAM(3, type);
-  DEVICE_PARAM(4, device);
+REGISTER_TENSOR_NIF(scalar_tensor);
 
-  TENSOR(torch::randint(min, max, shape, OPTS(type, device)));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+randint(ErlNifEnv *env, int64_t low, int64_t high, std::vector<int64_t> shape,
+        fine::Atom type_atom, std::tuple<int64_t, int64_t> device_tuple) {
+  auto type = string2type(type_atom.to_string());
+  auto device = tuple_to_device(device_tuple);
+  return tensor_ok(torch::randint(low, high, vec_to_array_ref(shape),
+                                  torch::dtype(type).device(device)));
 }
 
-NIF(rand) {
-  PARAM(0, double, min);
-  PARAM(1, double, max);
-  SHAPE_PARAM(2, shape);
-  TYPE_PARAM(3, type);
-  DEVICE_PARAM(4, device);
+REGISTER_TENSOR_NIF(randint);
 
-  TENSOR(min + torch::rand(shape, OPTS(type, device)) * (max - min));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+rand(ErlNifEnv *env, double min, double max, std::vector<int64_t> shape,
+     fine::Atom type_atom, std::tuple<int64_t, int64_t> device_tuple) {
+  auto type = string2type(type_atom.to_string());
+  auto device = tuple_to_device(device_tuple);
+  auto result =
+      torch::rand(vec_to_array_ref(shape), torch::dtype(type).device(device));
+  // Scale from [0, 1) to [min, max)
+  result = result * (max - min) + min;
+  return tensor_ok(result);
 }
 
-NIF(normal) {
-  PARAM(0, double, mean);
-  PARAM(1, double, std);
-  SHAPE_PARAM(2, shape);
-  TYPE_PARAM(3, type);
-  DEVICE_PARAM(4, device);
+REGISTER_TENSOR_NIF(rand);
 
-  TENSOR(torch::normal(mean, std, shape, c10::nullopt, OPTS(type, device)));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+normal(ErlNifEnv *env, double mean, double std, std::vector<int64_t> shape,
+       fine::Atom type_atom, std::tuple<int64_t, int64_t> device_tuple) {
+  auto type = string2type(type_atom.to_string());
+  auto device = tuple_to_device(device_tuple);
+  return tensor_ok(torch::normal(mean, std, vec_to_array_ref(shape),
+                                 c10::nullopt,
+                                 torch::dtype(type).device(device)));
 }
 
-NIF(arange) {
-  PARAM(0, int64_t, start);
-  PARAM(1, int64_t, end);
-  PARAM(2, int64_t, step);
-  TYPE_PARAM(3, type);
-  DEVICE_PARAM(4, device);
+REGISTER_TENSOR_NIF(normal);
 
-  if (argc == 6) {
-    SHAPE_PARAM(5, shape);
-    TENSOR(torch::reshape(torch::arange((double)start, (double)end, (double)step, OPTS(type, device)), shape));
+// arange - arity 5 and 6 versions
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+arange_5(ErlNifEnv *env, int64_t start, int64_t end, int64_t step,
+         fine::Atom type_atom, std::tuple<int64_t, int64_t> device_tuple) {
+  auto type = string2type(type_atom.to_string());
+  auto device = tuple_to_device(device_tuple);
+  return tensor_ok(torch::arange(
+      static_cast<double>(start), static_cast<double>(end),
+      static_cast<double>(step), torch::dtype(type).device(device)));
+}
+
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+arange_6(ErlNifEnv *env, int64_t start, int64_t end, int64_t step,
+         fine::Atom type_atom, std::tuple<int64_t, int64_t> device_tuple,
+         std::vector<int64_t> shape) {
+  auto type = string2type(type_atom.to_string());
+  auto device = tuple_to_device(device_tuple);
+  auto result = torch::arange(
+      static_cast<double>(start), static_cast<double>(end),
+      static_cast<double>(step), torch::dtype(type).device(device));
+  return tensor_ok(torch::reshape(result, vec_to_array_ref(shape)));
+}
+
+REGISTER_TENSOR_NIF_ARITY(arange, arange_5);
+REGISTER_TENSOR_NIF_ARITY(arange, arange_6);
+
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+ones(ErlNifEnv *env, std::vector<int64_t> shape, fine::Atom type_atom,
+     std::tuple<int64_t, int64_t> device_tuple) {
+  auto type = string2type(type_atom.to_string());
+  auto device = tuple_to_device(device_tuple);
+  return tensor_ok(
+      torch::ones(vec_to_array_ref(shape), torch::dtype(type).device(device)));
+}
+
+REGISTER_TENSOR_NIF(ones);
+
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+eye(ErlNifEnv *env, int64_t m, int64_t n, fine::Atom type_atom,
+    std::tuple<int64_t, int64_t> device_tuple) {
+  auto type = string2type(type_atom.to_string());
+  auto device = tuple_to_device(device_tuple);
+  return tensor_ok(torch::eye(m, n, torch::dtype(type).device(device)));
+}
+
+REGISTER_TENSOR_NIF(eye);
+
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+full(ErlNifEnv *env, std::vector<int64_t> shape, torch::Scalar scalar,
+     fine::Atom type_atom, std::tuple<int64_t, int64_t> device_tuple) {
+  auto type = string2type(type_atom.to_string());
+  auto device = tuple_to_device(device_tuple);
+  return tensor_ok(torch::full(vec_to_array_ref(shape), scalar,
+                               torch::dtype(type).device(device)));
+}
+
+REGISTER_TENSOR_NIF(full);
+
+// ============================================================================
+// Binary Operations
+// ============================================================================
+
+#define BINARY_OP(NAME, TORCH_OP)                                              \
+  fine::Ok<fine::ResourcePtr<TorchTensor>> NAME(                               \
+      ErlNifEnv *env, fine::ResourcePtr<TorchTensor> a,                        \
+      fine::ResourcePtr<TorchTensor> b) {                                      \
+    return tensor_ok(torch::TORCH_OP(get_tensor(a), get_tensor(b)));           \
+  }                                                                            \
+  REGISTER_TENSOR_NIF(NAME)
+
+BINARY_OP(bitwise_and, bitwise_and);
+BINARY_OP(bitwise_or, bitwise_or);
+BINARY_OP(bitwise_xor, bitwise_xor);
+BINARY_OP(left_shift, __lshift__);
+BINARY_OP(right_shift, __rshift__);
+BINARY_OP(equal, eq);
+BINARY_OP(not_equal, not_equal);
+BINARY_OP(greater, greater);
+BINARY_OP(less, less);
+BINARY_OP(greater_equal, greater_equal);
+BINARY_OP(less_equal, less_equal);
+BINARY_OP(logical_and, logical_and);
+BINARY_OP(logical_or, logical_or);
+BINARY_OP(logical_xor, logical_xor);
+BINARY_OP(add, add);
+BINARY_OP(subtract, subtract);
+BINARY_OP(divide, divide);
+BINARY_OP(remainder, remainder);
+BINARY_OP(quotient, floor_divide);
+BINARY_OP(multiply, multiply);
+BINARY_OP(pow, pow);
+BINARY_OP(atan2, atan2);
+BINARY_OP(min, min);
+BINARY_OP(max, max);
+BINARY_OP(fmod, fmod);
+
+#undef BINARY_OP
+
+// ============================================================================
+// Unary Operations
+// ============================================================================
+
+#define UNARY_OP(NAME, TORCH_OP)                                               \
+  fine::Ok<fine::ResourcePtr<TorchTensor>> NAME(                               \
+      ErlNifEnv *env, fine::ResourcePtr<TorchTensor> a) {                      \
+    return tensor_ok(torch::TORCH_OP(get_tensor(a)));                          \
+  }                                                                            \
+  REGISTER_TENSOR_NIF(NAME)
+
+UNARY_OP(abs, abs);
+UNARY_OP(ceil, ceil);
+UNARY_OP(floor, floor);
+UNARY_OP(negate, neg);
+UNARY_OP(round, round);
+UNARY_OP(sign, sign);
+UNARY_OP(exp, exp);
+UNARY_OP(expm1, expm1);
+UNARY_OP(sqrt, sqrt);
+UNARY_OP(rsqrt, rsqrt);
+UNARY_OP(log, log);
+UNARY_OP(log1p, log1p);
+UNARY_OP(bitwise_not, bitwise_not);
+UNARY_OP(logical_not, logical_not);
+UNARY_OP(sigmoid, sigmoid);
+UNARY_OP(sin, sin);
+UNARY_OP(asin, asin);
+UNARY_OP(sinh, sinh);
+UNARY_OP(asinh, asinh);
+UNARY_OP(cos, cos);
+UNARY_OP(acos, acos);
+UNARY_OP(cosh, cosh);
+UNARY_OP(acosh, acosh);
+UNARY_OP(tan, tan);
+UNARY_OP(atan, atan);
+UNARY_OP(tanh, tanh);
+UNARY_OP(atanh, atanh);
+UNARY_OP(erf, erf);
+UNARY_OP(erfc, erfc);
+UNARY_OP(erf_inv, erfinv);
+// cbrt is not in torch namespace, needs custom implementation
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+cbrt(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor) {
+  auto &t = get_tensor(tensor);
+  if (t.scalar_type() == torch::kDouble) {
+    return tensor_ok(torch::pow(t, 1.0 / 3));
   } else {
-    TENSOR(torch::arange((double)start, (double)end, (double)step, OPTS(type, device)));
+    return tensor_ok(torch::pow(t, 1.0f / 3));
   }
 }
 
-NIF(ones) {
-  SHAPE_PARAM(0, shape);
-  TYPE_PARAM(1, type);
-  DEVICE_PARAM(2, device);
-
-  TENSOR(torch::ones(shape, OPTS(type, device)));
+REGISTER_TENSOR_NIF(cbrt);
+UNARY_OP(is_nan, isnan);
+UNARY_OP(is_infinity, isinf);
+UNARY_OP(view_as_real, view_as_real);
+// conjugate needs special handling - conj() returns a view, must clone
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+conjugate(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> a) {
+  at::Tensor conjugated = get_tensor(a).conj();
+  return tensor_ok(conjugated.clone(conjugated.suggest_memory_format()));
 }
 
-NIF(eye) {
-  PARAM(0, int64_t, m);
-  PARAM(1, int64_t, n);
-  TYPE_PARAM(2, type);
-  DEVICE_PARAM(3, device);
+REGISTER_TENSOR_NIF(conjugate);
 
-  TENSOR(torch::eye(m, n, OPTS(type, device)));
-}
+#undef UNARY_OP
 
-NIF(full) {
-  SHAPE_PARAM(0, shape);
-  SCALAR_PARAM(1, scalar);
-  TYPE_PARAM(2, type);
-  DEVICE_PARAM(3, device);
+// ============================================================================
+// Reduction Operations
+// ============================================================================
 
-  TENSOR(torch::full(shape, scalar, OPTS(type, device)));
-}
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+tensordot(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> a,
+          fine::ResourcePtr<TorchTensor> b, std::vector<int64_t> axes_a,
+          std::vector<int64_t> batch_a, std::vector<int64_t> axes_b,
+          std::vector<int64_t> batch_b) {
 
-/* Binary Ops */
-
-#define BINARY_OP(OP) BINARY_OP2(OP, OP)
-
-#define BINARY_OP2(OP, NATIVE_OP)     \
-  NIF(OP) {                           \
-    TENSOR_PARAM(0, a);               \
-    TENSOR_PARAM(1, b);               \
-                                      \
-    TENSOR(torch::NATIVE_OP(*a, *b)); \
-  }
-
-#define BINARY_OPB(OP)                                       \
-  NIF(OP) {                                                  \
-    TENSOR_PARAM(0, a);                                      \
-    TENSOR_PARAM(1, b);                                      \
-                                                             \
-    nx::nif::ok(env, nx::nif::make(env, torch::OP(*a, *b))); \
-  }
-
-#define UNARY_OP(OP) UNARY_OP2(OP, OP)
-
-#define UNARY_OP2(OP, NATIVE)  \
-  NIF(OP) {                    \
-    TENSOR_PARAM(0, a);        \
-    TENSOR(torch::NATIVE(*a)); \
-  }
-
-BINARY_OP(bitwise_and)
-BINARY_OP(bitwise_or)
-BINARY_OP(bitwise_xor)
-BINARY_OP2(left_shift, __lshift__)
-BINARY_OP2(right_shift, __rshift__)
-
-BINARY_OP2(equal, eq)
-BINARY_OP(not_equal)
-BINARY_OP(greater)
-BINARY_OP(less)
-BINARY_OP(greater_equal)
-BINARY_OP(less_equal)
-
-BINARY_OP(logical_and)
-BINARY_OP(logical_or)
-BINARY_OP(logical_xor)
-
-BINARY_OP(add)
-BINARY_OP(subtract)
-BINARY_OP(divide)
-BINARY_OP(remainder)
-BINARY_OP(multiply)
-BINARY_OP(matmul)
-BINARY_OP2(pow, pow)
-BINARY_OP(atan2)
-BINARY_OP(min)
-BINARY_OP(max)
-
-NIF(fmod) {
-  TENSOR_PARAM(0, a);
-  TENSOR_PARAM(1, b);
-  TENSOR(at::fmod(*a, *b));
-}
-
-NIF(quotient) {
-  TENSOR_PARAM(0, a);
-  TENSOR_PARAM(1, b);
-  TENSOR(torch::divide(*a, *b, "trunc"));
-}
-
-NIF(tensordot) {
-  TENSOR_PARAM(0, t1);
-  TENSOR_PARAM(1, t2);
-  LIST_PARAM(2, std::vector<int64_t>, axes1);
-  LIST_PARAM(3, std::vector<int64_t>, batch_axes1);
-  LIST_PARAM(4, std::vector<int64_t>, axes2);
-  LIST_PARAM(5, std::vector<int64_t>, batch_axes2);
-
-  bool is_batched = batch_axes1.size() > 0 || batch_axes2.size() > 0;
+  bool is_batched = batch_a.size() > 0 || batch_b.size() > 0;
 
   torch::Tensor result;
 
   if (is_batched) {
-    // if any of the tensors is batched, we need to apply some transformations
-    // on the inputs and on the result to wrap the batched APIs that torch exposes
-    std::vector<at::BatchDim> batch_dims1, batch_dims2;
+    // Handle batched tensordot using vmap/BatchDim
+    std::vector<at::BatchDim> batch_dims_a, batch_dims_b;
     int64_t vmap_level = 0;
 
-    for (auto dim : batch_axes1) {
-      batch_dims1.push_back(at::BatchDim(vmap_level++, dim));
+    for (auto dim : batch_a) {
+      batch_dims_a.push_back(at::BatchDim(vmap_level++, dim));
     }
-    torch::Tensor batched_1 = at::makeBatched(*t1, at::BatchDims(batch_dims1.begin(), batch_dims1.end()));
+    torch::Tensor batched_a = at::makeBatched(
+        get_tensor(a), at::BatchDims(batch_dims_a.begin(), batch_dims_a.end()));
 
     vmap_level = 0;
-
-    for (auto dim : batch_axes2) {
-      batch_dims2.push_back(at::BatchDim(vmap_level++, dim));
+    for (auto dim : batch_b) {
+      batch_dims_b.push_back(at::BatchDim(vmap_level++, dim));
     }
-    torch::Tensor batched_2 = at::makeBatched(*t2, at::BatchDims(batch_dims2.begin(), batch_dims2.end()));
+    torch::Tensor batched_b = at::makeBatched(
+        get_tensor(b), at::BatchDims(batch_dims_b.begin(), batch_dims_b.end()));
 
-    torch::Tensor batched_result = torch::tensordot(batched_1, batched_2, axes1, axes2);
+    torch::Tensor batched_result =
+        torch::tensordot(batched_a, batched_b, vec_to_array_ref(axes_a),
+                         vec_to_array_ref(axes_b));
+
     auto impl = at::maybeGetBatchedImpl(batched_result);
     if (!impl) {
-      return nx::nif::error(env, "unable to get tensordot result");
+      throw std::runtime_error("unable to get tensordot result");
     }
     result = torch::clone(impl->value());
   } else {
-    result = torch::tensordot(*t1, *t2, axes1, axes2);
+    result =
+        torch::tensordot(get_tensor(a), get_tensor(b), vec_to_array_ref(axes_a),
+                         vec_to_array_ref(axes_b));
   }
 
-  TENSOR(result);
+  return tensor_ok(result);
 }
 
-/* Unary Ops */
+REGISTER_TENSOR_NIF(tensordot);
 
-UNARY_OP(abs)
-UNARY_OP(ceil)
-UNARY_OP(floor)
-UNARY_OP2(negate, negative)
-UNARY_OP(round)
-UNARY_OP(sign)
-UNARY_OP(exp)
-UNARY_OP(expm1)
-UNARY_OP(sqrt)
-UNARY_OP(rsqrt)
-UNARY_OP(log)
-UNARY_OP(log1p)
-UNARY_OP(bitwise_not)
-UNARY_OP(logical_not)
-UNARY_OP2(sigmoid, sigmoid)
-
-UNARY_OP(sin)
-UNARY_OP(asin)
-UNARY_OP(sinh)
-UNARY_OP(asinh)
-UNARY_OP(cos)
-UNARY_OP(acos)
-UNARY_OP(cosh)
-UNARY_OP(acosh)
-UNARY_OP(tan)
-UNARY_OP(atan)
-UNARY_OP(tanh)
-UNARY_OP(atanh)
-UNARY_OP(erf)
-UNARY_OP(erfc)
-UNARY_OP2(erf_inv, erfinv)
-
-NIF(view_as_real) {
-  TENSOR_PARAM(0, tensor);
-  TENSOR(torch::view_as_real(*tensor));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+matmul(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> a,
+       fine::ResourcePtr<TorchTensor> b) {
+  return tensor_ok(torch::matmul(get_tensor(a), get_tensor(b)));
 }
 
-NIF(conjugate) {
-  TENSOR_PARAM(0, tensor);
-  at::Tensor conjugated = tensor->conj();
-  TENSOR(conjugated.clone(conjugated.suggest_memory_format()));
+REGISTER_TENSOR_NIF(matmul);
+
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+pad(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
+    fine::ResourcePtr<TorchTensor> constant, std::vector<int64_t> config) {
+  return tensor_ok(torch::constant_pad_nd(get_tensor(tensor),
+                                          vec_to_array_ref(config),
+                                          get_tensor(constant).item()));
 }
 
-NIF(triangular_solve) {
-  TENSOR_PARAM(0, a);
-  TENSOR_PARAM(1, b);
-  PARAM(2, bool, transpose);
-  PARAM(3, bool, upper);
+REGISTER_TENSOR_NIF(pad);
 
-  auto ts_a = *a;
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+triangular_solve(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> a,
+                 fine::ResourcePtr<TorchTensor> b, bool transpose, bool upper) {
+  auto ts_a = get_tensor(a);
   if (transpose) {
-    auto num_dims = a->dim();
-    ts_a = torch::transpose(*a, num_dims - 2, num_dims - 1);
+    auto num_dims = ts_a.dim();
+    ts_a = torch::transpose(ts_a, num_dims - 2, num_dims - 1);
     upper = !upper;
   }
 
-  torch::Tensor result = torch::linalg_solve_triangular(ts_a, *b, upper, true, false);
-
-  TENSOR(result);
+  torch::Tensor result =
+      torch::linalg_solve_triangular(ts_a, get_tensor(b), upper, true, false);
+  return tensor_ok(result);
 }
 
-NIF(determinant) {
-  TENSOR_PARAM(0, t);
+REGISTER_TENSOR_NIF(triangular_solve);
 
-  TENSOR(t->det());
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+determinant(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
+  return tensor_ok(get_tensor(t).det());
 }
 
-NIF(sort) {
-  TENSOR_PARAM(0, t);
-  PARAM(1, bool, stable);
-  PARAM(2, int64_t, axis);
-  PARAM(3, bool, descending);
+REGISTER_TENSOR_NIF(determinant);
 
-  std::tuple<torch::Tensor, torch::Tensor> result = t->sort(stable, axis, descending);
-  TENSOR(std::get<0>(result));
+fine::Ok<fine::ResourcePtr<TorchTensor>> sort(ErlNifEnv *env,
+                                              fine::ResourcePtr<TorchTensor> t,
+                                              bool stable, int64_t axis,
+                                              bool descending) {
+  std::tuple<torch::Tensor, torch::Tensor> result =
+      get_tensor(t).sort(stable, axis, descending);
+  return tensor_ok(std::get<0>(result));
 }
 
-NIF(clip) {
-  TENSOR_PARAM(0, t);
-  TENSOR_PARAM(1, min);
-  TENSOR_PARAM(2, max);
+REGISTER_TENSOR_NIF(sort);
 
-  TENSOR(torch::clip(*t, *min, *max));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+clip(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t,
+     fine::ResourcePtr<TorchTensor> min, fine::ResourcePtr<TorchTensor> max) {
+  return tensor_ok(
+      torch::clip(get_tensor(t), get_tensor(min), get_tensor(max)));
 }
 
-NIF(where) {
-  TENSOR_PARAM(0, pred);
-  TENSOR_PARAM(1, on_true);
-  TENSOR_PARAM(2, on_false);
+REGISTER_TENSOR_NIF(clip);
 
-  TENSOR(torch::where(*pred, *on_true, *on_false));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+where(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> pred,
+      fine::ResourcePtr<TorchTensor> on_true,
+      fine::ResourcePtr<TorchTensor> on_false) {
+  return tensor_ok(torch::where(get_tensor(pred), get_tensor(on_true),
+                                get_tensor(on_false)));
 }
 
-/* Aggregates */
+REGISTER_TENSOR_NIF(where);
 
-NIF(sum) {
-  TENSOR_PARAM(0, t);
-  LIST_PARAM(1, std::vector<int64_t>, dims);
-  PARAM(2, bool, keep_dim);
-
-  TENSOR(torch::sum(*t, dims, keep_dim));
+fine::Ok<fine::ResourcePtr<TorchTensor>> sum(ErlNifEnv *env,
+                                             fine::ResourcePtr<TorchTensor> t,
+                                             std::vector<int64_t> dims,
+                                             bool keep_dim) {
+  return tensor_ok(torch::sum(get_tensor(t), vec_to_array_ref(dims), keep_dim));
 }
 
-NIF(product) {
-  TENSOR_PARAM(0, t);
+REGISTER_TENSOR_NIF(sum);
 
-  if (argc == 1) {
-    TENSOR(torch::prod(*t));
-  }
-
-  PARAM(1, int64_t, dim);
-  PARAM(2, bool, keep_dim);
-
-  TENSOR(torch::prod(*t, dim, keep_dim));
+// product - arity 1 and 3 versions
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+product_1(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
+  return tensor_ok(torch::prod(get_tensor(t)));
 }
 
-NIF(argmax) {
-  TENSOR_PARAM(0, t);
-  PARAM(1, int64_t, dim);
-  PARAM(2, bool, keep_dim);
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+product_3(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, int64_t dim,
+          bool keep_dim) {
+  return tensor_ok(torch::prod(get_tensor(t), dim, keep_dim));
+}
 
+REGISTER_TENSOR_NIF_ARITY(product, product_1);
+REGISTER_TENSOR_NIF_ARITY(product, product_3);
+
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+argmax(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, int64_t dim,
+       bool keep_dim) {
   if (dim == -1) {
-    TENSOR(torch::argmax(*t));
+    return tensor_ok(torch::argmax(get_tensor(t)));
   } else {
-    TENSOR(torch::argmax(*t, dim, keep_dim));
+    return tensor_ok(torch::argmax(get_tensor(t), dim, keep_dim));
   }
 }
 
-NIF(argmin) {
-  TENSOR_PARAM(0, t);
-  PARAM(1, int64_t, dim);
-  PARAM(2, bool, keep_dim);
+REGISTER_TENSOR_NIF(argmax);
 
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+argmin(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, int64_t dim,
+       bool keep_dim) {
   if (dim == -1) {
-    TENSOR(torch::argmin(*t));
+    return tensor_ok(torch::argmin(get_tensor(t)));
   } else {
-    TENSOR(torch::argmin(*t, dim, keep_dim));
+    return tensor_ok(torch::argmin(get_tensor(t), dim, keep_dim));
   }
 }
 
-NIF(cbrt) {
-  TENSOR_PARAM(0, tensor);
+REGISTER_TENSOR_NIF(argmin);
 
-  if (tensor->scalar_type() == torch::kDouble) {
-    TENSOR(torch::pow(*tensor, 1.0 / 3));
-  } else {
-    TENSOR(torch::pow(*tensor, 1.0f / 3));
-  }
-}
-NIF(fft) {
-  TENSOR_PARAM(0, tensor);
-  PARAM(1, int64_t, length);
-  PARAM(2, int64_t, axis);
-  TENSOR(torch::fft::fft(*tensor, length, axis));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+fft(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor, int64_t length,
+    int64_t axis) {
+  return tensor_ok(torch::fft::fft(get_tensor(tensor), length, axis));
 }
 
-NIF(ifft) {
-  TENSOR_PARAM(0, tensor);
-  PARAM(1, int64_t, length);
-  PARAM(2, int64_t, axis);
-  TENSOR(torch::fft::ifft(*tensor, length, axis));
+REGISTER_TENSOR_NIF(fft);
+
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+ifft(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor, int64_t length,
+     int64_t axis) {
+  return tensor_ok(torch::fft::ifft(get_tensor(tensor), length, axis));
 }
 
-NIF(fft2) {
-  TENSOR_PARAM(0, tensor);
-  LIST_PARAM(1, std::vector<int64_t>, lengths);
-  LIST_PARAM(2, std::vector<int64_t>, axes);
-  TENSOR(torch::fft::fft2(*tensor, lengths, axes));
+REGISTER_TENSOR_NIF(ifft);
+
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+fft2(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
+     std::vector<int64_t> lengths, std::vector<int64_t> axes) {
+  return tensor_ok(torch::fft::fft2(
+      get_tensor(tensor), vec_to_array_ref(lengths), vec_to_array_ref(axes)));
 }
 
-NIF(ifft2) {
-  TENSOR_PARAM(0, tensor);
-  LIST_PARAM(1, std::vector<int64_t>, lengths);
-  LIST_PARAM(2, std::vector<int64_t>, axes);
-  TENSOR(torch::fft::ifft2(*tensor, lengths, axes));
+REGISTER_TENSOR_NIF(fft2);
+
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+ifft2(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
+      std::vector<int64_t> lengths, std::vector<int64_t> axes) {
+  return tensor_ok(torch::fft::ifft2(
+      get_tensor(tensor), vec_to_array_ref(lengths), vec_to_array_ref(axes)));
 }
 
-NIF(is_nan) {
-  TENSOR_PARAM(0, tensor);
+REGISTER_TENSOR_NIF(ifft2);
 
-  TENSOR(torch::isnan(*tensor));
+// all - arity 1 and 3 versions
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+all_1(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
+  return tensor_ok(torch::all(get_tensor(t)));
 }
 
-NIF(is_infinity) {
-  TENSOR_PARAM(0, tensor);
-
-  TENSOR(torch::isinf(*tensor));
+fine::Ok<fine::ResourcePtr<TorchTensor>> all_3(ErlNifEnv *env,
+                                               fine::ResourcePtr<TorchTensor> t,
+                                               int64_t axis, bool keep_dim) {
+  return tensor_ok(torch::all(get_tensor(t), axis, keep_dim));
 }
 
-NIF(all) {
-  TENSOR_PARAM(0, t);
+REGISTER_TENSOR_NIF_ARITY(all, all_1);
+REGISTER_TENSOR_NIF_ARITY(all, all_3);
 
-  if (argc == 1) {
-    TENSOR(torch::all(*t));
-  } else {
-    PARAM(1, int64_t, axis);
-    PARAM(2, bool, keep_dim);
-
-    TENSOR(torch::all(*t, axis, keep_dim));
-  }
+// any - arity 1 and 3 versions
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+any_1(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
+  return tensor_ok(torch::any(get_tensor(t)));
 }
 
-NIF(any) {
-  TENSOR_PARAM(0, t);
-
-  if (argc == 1) {
-    TENSOR(torch::any(*t));
-  } else {
-    PARAM(1, int64_t, axis);
-    PARAM(2, bool, keep_dim);
-
-    TENSOR(torch::any(*t, axis, keep_dim));
-  }
+fine::Ok<fine::ResourcePtr<TorchTensor>> any_3(ErlNifEnv *env,
+                                               fine::ResourcePtr<TorchTensor> t,
+                                               int64_t axis, bool keep_dim) {
+  return tensor_ok(torch::any(get_tensor(t), axis, keep_dim));
 }
 
-NIF(all_close) {
-  TENSOR_PARAM(0, a);
-  TENSOR_PARAM(1, b);
-  PARAM(2, double, rtol);
-  PARAM(3, double, atol);
-  PARAM(4, bool, equal_nan);
+REGISTER_TENSOR_NIF_ARITY(any, any_1);
+REGISTER_TENSOR_NIF_ARITY(any, any_3);
 
-  bool all_close = torch::allclose(*a, *b, rtol, atol, equal_nan);
-
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+all_close(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> a,
+          fine::ResourcePtr<TorchTensor> b, double rtol, double atol,
+          bool equal_nan) {
+  bool result =
+      torch::allclose(get_tensor(a), get_tensor(b), rtol, atol, equal_nan);
   auto init_opts = torch::device(torch::kCPU).dtype(torch::kBool);
-  TENSOR(torch::scalar_tensor(all_close, init_opts));
+  return tensor_ok(torch::scalar_tensor(result, init_opts));
 }
 
-NIF(cumulative_sum) {
-  TENSOR_PARAM(0, t);
-  PARAM(1, int64_t, axis);
+REGISTER_TENSOR_NIF(all_close);
 
-  TENSOR(torch::cumsum(*t, axis));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+cumulative_sum(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, int64_t axis) {
+  return tensor_ok(torch::cumsum(get_tensor(t), axis));
 }
 
-NIF(cumulative_product) {
-  TENSOR_PARAM(0, t);
-  PARAM(1, int64_t, axis);
+REGISTER_TENSOR_NIF(cumulative_sum);
 
-  TENSOR(torch::cumprod(*t, axis));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+cumulative_product(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t,
+                   int64_t axis) {
+  return tensor_ok(torch::cumprod(get_tensor(t), axis));
 }
 
-NIF(cumulative_min) {
-  TENSOR_PARAM(0, t);
-  PARAM(1, int64_t, axis);
+REGISTER_TENSOR_NIF(cumulative_product);
 
-  const std::tuple<torch::Tensor, torch::Tensor> &tt = torch::cummin(*t, axis);
-  TENSOR(std::get<0>(tt));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+cumulative_min(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, int64_t axis) {
+  const std::tuple<torch::Tensor, torch::Tensor> &tt =
+      torch::cummin(get_tensor(t), axis);
+  return tensor_ok(std::get<0>(tt));
 }
 
-NIF(cumulative_max) {
-  TENSOR_PARAM(0, t);
-  PARAM(1, int64_t, axis);
+REGISTER_TENSOR_NIF(cumulative_min);
 
-  const std::tuple<torch::Tensor, torch::Tensor> &tt = torch::cummax(*t, axis);
-  TENSOR(std::get<0>(tt));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+cumulative_max(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, int64_t axis) {
+  const std::tuple<torch::Tensor, torch::Tensor> &tt =
+      torch::cummax(get_tensor(t), axis);
+  return tensor_ok(std::get<0>(tt));
 }
 
-NIF(cholesky) {
-  TENSOR_PARAM(0, t);
-  bool upper = false;
+REGISTER_TENSOR_NIF(cumulative_max);
 
-  if (argc == 2) {
-    GET(1, upper);
-  }
+// cholesky - arity 1 and 2 versions
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+cholesky_1(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
+  return tensor_ok(torch::cholesky(get_tensor(t)));
+}
 
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+cholesky_2(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, bool upper) {
   if (upper) {
-    TENSOR(torch::cholesky(*t).mH());
+    return tensor_ok(torch::cholesky(get_tensor(t)).mH());
   }
-
-  TENSOR(torch::cholesky(*t));
+  return tensor_ok(torch::cholesky(get_tensor(t)));
 }
 
-NIF(pad) {
-  TENSOR_PARAM(0, tensor);
-  TENSOR_PARAM(1, constant);
-  LIST_PARAM(2, std::vector<int64_t>, config);
+REGISTER_TENSOR_NIF_ARITY(cholesky, cholesky_1);
+REGISTER_TENSOR_NIF_ARITY(cholesky, cholesky_2);
 
-  TENSOR(torch::constant_pad_nd(*tensor, config, constant->item()));
+// qr - arity 1 and 2 versions
+fine::Ok<
+    std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>>>
+qr_1(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
+  auto result = torch::linalg_qr(get_tensor(t), "reduced");
+  return fine::Ok(
+      std::make_tuple(fine::make_resource<TorchTensor>(std::get<0>(result)),
+                      fine::make_resource<TorchTensor>(std::get<1>(result))));
 }
 
-/* Transformations */
-
-NIF(qr) {
-  TENSOR_PARAM(0, t);
-  bool reduced = true;
-
-  if (argc == 2) {
-    GET(1, reduced);
-  }
-
-  TENSOR_TUPLE(torch::linalg_qr(*t, reduced ? "reduced" : "complete"));
+fine::Ok<
+    std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>>>
+qr_2(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, bool reduced) {
+  auto result =
+      torch::linalg_qr(get_tensor(t), reduced ? "reduced" : "complete");
+  return fine::Ok(
+      std::make_tuple(fine::make_resource<TorchTensor>(std::get<0>(result)),
+                      fine::make_resource<TorchTensor>(std::get<1>(result))));
 }
 
-NIF(svd) {
-  TENSOR_PARAM(0, t);
-  bool full_matrices = true;
+REGISTER_TENSOR_NIF_ARITY(qr, qr_1);
+REGISTER_TENSOR_NIF_ARITY(qr, qr_2);
 
-  if (argc == 2) {
-    GET(1, full_matrices);
-  }
-
-  TENSOR_TUPLE_3(torch::linalg_svd(*t, full_matrices));
+// svd - arity 1 and 2 versions
+fine::Ok<
+    std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>,
+               fine::ResourcePtr<TorchTensor>>>
+svd_1(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
+  auto result = torch::linalg_svd(get_tensor(t), true);
+  return fine::Ok(
+      std::make_tuple(fine::make_resource<TorchTensor>(std::get<0>(result)),
+                      fine::make_resource<TorchTensor>(std::get<1>(result)),
+                      fine::make_resource<TorchTensor>(std::get<2>(result))));
 }
 
-NIF(lu) {
-  TENSOR_PARAM(0, t);
-
-  std::tuple<torch::Tensor, torch::Tensor> lu_result = torch::linalg_lu_factor(*t);
-  std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> plu = torch::lu_unpack(std::get<0>(lu_result), std::get<1>(lu_result));
-
-  TENSOR_TUPLE_3(plu);
+fine::Ok<
+    std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>,
+               fine::ResourcePtr<TorchTensor>>>
+svd_2(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, bool full_matrices) {
+  auto result = torch::linalg_svd(get_tensor(t), full_matrices);
+  return fine::Ok(
+      std::make_tuple(fine::make_resource<TorchTensor>(std::get<0>(result)),
+                      fine::make_resource<TorchTensor>(std::get<1>(result)),
+                      fine::make_resource<TorchTensor>(std::get<2>(result))));
 }
 
-NIF(amax) {
-  TENSOR_PARAM(0, tensor);
-  LIST_PARAM(1, std::vector<int64_t>, axes);
-  PARAM(2, bool, keep_axes);
+REGISTER_TENSOR_NIF_ARITY(svd, svd_1);
+REGISTER_TENSOR_NIF_ARITY(svd, svd_2);
 
-  TENSOR(at::amax(*tensor, axes, keep_axes));
+fine::Ok<
+    std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>,
+               fine::ResourcePtr<TorchTensor>>>
+lu(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
+  std::tuple<torch::Tensor, torch::Tensor> lu_result =
+      torch::linalg_lu_factor(get_tensor(t));
+  std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> plu =
+      torch::lu_unpack(std::get<0>(lu_result), std::get<1>(lu_result));
+
+  return fine::Ok(
+      std::make_tuple(fine::make_resource<TorchTensor>(std::get<0>(plu)),
+                      fine::make_resource<TorchTensor>(std::get<1>(plu)),
+                      fine::make_resource<TorchTensor>(std::get<2>(plu))));
 }
 
-NIF(amin) {
-  TENSOR_PARAM(0, tensor);
-  LIST_PARAM(1, std::vector<int64_t>, axes);
-  PARAM(2, bool, keep_axes);
+REGISTER_TENSOR_NIF(lu);
 
-  TENSOR(at::amin(*tensor, axes, keep_axes));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+amax(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
+     std::vector<int64_t> axes, bool keep_axes) {
+  return tensor_ok(
+      at::amax(get_tensor(tensor), vec_to_array_ref(axes), keep_axes));
 }
 
-NIF(eigh) {
-  TENSOR_PARAM(0, tensor);
+REGISTER_TENSOR_NIF(amax);
 
-  TENSOR_TUPLE(torch::linalg_eigh(*tensor));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+amin(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
+     std::vector<int64_t> axes, bool keep_axes) {
+  return tensor_ok(
+      at::amin(get_tensor(tensor), vec_to_array_ref(axes), keep_axes));
 }
 
-NIF(solve) {
-  TENSOR_PARAM(0, tensorA);
-  TENSOR_PARAM(1, tensorB);
+REGISTER_TENSOR_NIF(amin);
 
-  TENSOR(torch::linalg_solve(*tensorA, *tensorB));
+fine::Ok<
+    std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>>>
+eigh(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor) {
+  auto result = torch::linalg_eigh(get_tensor(tensor));
+  return fine::Ok(
+      std::make_tuple(fine::make_resource<TorchTensor>(std::get<0>(result)),
+                      fine::make_resource<TorchTensor>(std::get<1>(result))));
 }
 
-NIF(conv) {
-  TENSOR_PARAM(0, tensor);
-  TENSOR_PARAM(1, kernel);
+REGISTER_TENSOR_NIF(eigh);
 
-  LIST_PARAM(2, std::vector<int64_t>, stride);
-  LIST_PARAM(3, std::vector<int64_t>, padding);
-  LIST_PARAM(4, std::vector<int64_t>, dilation);
-  PARAM(5, bool, transposed);
-  PARAM(6, int64_t, groups);
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+solve(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensorA,
+      fine::ResourcePtr<TorchTensor> tensorB) {
+  return tensor_ok(
+      torch::linalg_solve(get_tensor(tensorA), get_tensor(tensorB)));
+}
 
+REGISTER_TENSOR_NIF(solve);
+
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+conv(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
+     fine::ResourcePtr<TorchTensor> kernel, std::vector<int64_t> stride,
+     std::vector<int64_t> padding, std::vector<int64_t> dilation,
+     bool transposed, int64_t groups) {
   c10::optional<at::Tensor> bias_tensor;
-
   std::vector<int64_t> output_padding;
   output_padding.push_back(0);
 
-  // aten::convolution(Tensor input, Tensor weight, Tensor? bias,
-  //      int[] stride, int[] padding, int[] dilation, bool transposed,
-  //      int[] output_padding, int groups) -> Tensor
-  TENSOR(at::convolution(*tensor, *kernel, bias_tensor,
-                         stride, padding, dilation, transposed, output_padding, groups));
+  return tensor_ok(at::convolution(get_tensor(tensor), get_tensor(kernel),
+                                   bias_tensor, vec_to_array_ref(stride),
+                                   vec_to_array_ref(padding),
+                                   vec_to_array_ref(dilation), transposed,
+                                   vec_to_array_ref(output_padding), groups));
 }
 
-NIF(max_pool_3d) {
-  TENSOR_PARAM(0, tensor);
-  LIST_PARAM(1, std::vector<int64_t>, kernel_size);
-  LIST_PARAM(2, std::vector<int64_t>, strides);
-  LIST_PARAM(3, std::vector<int64_t>, padding);
-  LIST_PARAM(4, std::vector<int64_t>, dilation);
+REGISTER_TENSOR_NIF(conv);
 
-  TENSOR(at::max_pool3d(*tensor, kernel_size, strides, padding, dilation));
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+max_pool_3d(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
+            std::vector<int64_t> kernel_size, std::vector<int64_t> strides,
+            std::vector<int64_t> padding, std::vector<int64_t> dilation) {
+  return tensor_ok(
+      at::max_pool3d(get_tensor(tensor), vec_to_array_ref(kernel_size),
+                     vec_to_array_ref(strides), vec_to_array_ref(padding),
+                     vec_to_array_ref(dilation)));
 }
 
-void free_tensor(ErlNifEnv *env, void *obj) {
-  torch::Tensor *tensor = reinterpret_cast<torch::Tensor *>(obj);
-  std::atomic<int> *refcount = reinterpret_cast<std::atomic<int> *>(tensor + 1);
-  std::atomic_flag *deleted = reinterpret_cast<std::atomic_flag *>(refcount + 1);
+REGISTER_TENSOR_NIF(max_pool_3d);
 
-  if (atomic_flag_test_and_set(deleted) == false) {
-    tensor->~Tensor();
-  }
+} // namespace torchx
 
-  deleted->~atomic_flag();
-  refcount->~atomic<int>();
-}
-
-static int
-open_resource_type(ErlNifEnv *env) {
-  const char *name = "Tensor";
-  ErlNifResourceFlags flags = (ErlNifResourceFlags)(ERL_NIF_RT_CREATE | ERL_NIF_RT_TAKEOVER);
-
-  TENSOR_TYPE = enif_open_resource_type(env, NULL, name, free_tensor, flags, NULL);
-  if (TENSOR_TYPE == NULL)
-    return -1;
-  return 0;
-}
-
-int upgrade(ErlNifEnv *env, void **priv_data, void **old_priv_data, ERL_NIF_TERM load_info) {
-  // Silence "unused var" warnings.
-  (void)(env);
-  (void)(priv_data);
-  (void)(old_priv_data);
-  (void)(load_info);
-
-  return 0;
-}
-
-int load(ErlNifEnv *env, void **priv_data, ERL_NIF_TERM load_info) {
-  if (open_resource_type(env) == -1)
-    return -1;
-
-  // Silence "unused var" warnings.
-  (void)(priv_data);
-  (void)(load_info);
-
-  return 0;
-}
-
-#define F(NAME, ARITY)    \
-  {                       \
-#NAME, ARITY, NAME, 0 \
-  }
-
-#define DF(NAME, ARITY)                                     \
-  {#NAME "_cpu", ARITY, NAME, ERL_NIF_DIRTY_JOB_CPU_BOUND}, \
-  {                                                         \
-#NAME "_io", ARITY, NAME, ERL_NIF_DIRTY_JOB_IO_BOUND    \
-  }
-
-static ErlNifFunc nif_functions[] = {
-    DF(randint, 5),
-    DF(rand, 5),
-    DF(normal, 5),
-    DF(arange, 5),
-    DF(arange, 6),
-    DF(scalar_tensor, 3),
-    DF(ones, 3),
-    DF(eye, 4),
-    DF(full, 4),
-
-    DF(item, 1),
-    DF(from_blob, 4),
-    DF(to_blob, 1),
-    DF(to_blob, 2),
-    DF(delete_tensor, 1),
-    DF(reshape, 2),
-    DF(split, 2),
-    DF(to_type, 2),
-    DF(to_device, 2),
-    DF(squeeze, 2),
-    DF(squeeze, 1),
-    DF(broadcast_to, 2),
-    DF(transpose, 3),
-    DF(permute, 2),
-    DF(slice, 4),
-    DF(concatenate, 2),
-    DF(gather, 3),
-    DF(index, 2),
-    DF(index_put, 4),
-    DF(argsort, 4),
-    DF(top_k, 2),
-    DF(flip, 2),
-    DF(unfold, 4),
-    DF(put, 3),
-
-    DF(add, 2),
-    DF(subtract, 2),
-    DF(divide, 2),
-    DF(remainder, 2),
-    DF(fmod, 2),
-    DF(quotient, 2),
-    DF(multiply, 2),
-    DF(pow, 2),
-    DF(atan2, 2),
-    DF(min, 2),
-    DF(max, 2),
-    DF(solve, 2),
-
-    DF(bitwise_and, 2),
-    DF(bitwise_or, 2),
-    DF(bitwise_xor, 2),
-    DF(left_shift, 2),
-    DF(right_shift, 2),
-
-    DF(equal, 2),
-    DF(not_equal, 2),
-    DF(greater, 2),
-    DF(less, 2),
-    DF(greater_equal, 2),
-    DF(less_equal, 2),
-
-    DF(logical_and, 2),
-    DF(logical_or, 2),
-    DF(logical_xor, 2),
-    DF(logical_not, 1),
-
-    DF(sum, 3),
-    DF(product, 1),
-    DF(product, 3),
-    DF(argmax, 3),
-    DF(argmin, 3),
-    DF(any, 1),
-    DF(any, 3),
-    DF(all, 1),
-    DF(all, 3),
-    DF(all_close, 5),
-
-    DF(cumulative_sum, 2),
-    DF(cumulative_product, 2),
-    DF(cumulative_min, 2),
-    DF(cumulative_max, 2),
-
-    DF(abs, 1),
-    DF(ceil, 1),
-    DF(floor, 1),
-    DF(negate, 1),
-    DF(round, 1),
-    DF(sign, 1),
-    DF(exp, 1),
-    DF(expm1, 1),
-    DF(sqrt, 1),
-    DF(rsqrt, 1),
-    DF(log, 1),
-    DF(log1p, 1),
-    DF(bitwise_not, 1),
-    DF(sigmoid, 1),
-    DF(sin, 1),
-    DF(asin, 1),
-    DF(sinh, 1),
-    DF(asinh, 1),
-    DF(view_as_real, 1),
-    DF(conjugate, 1),
-    DF(cos, 1),
-    DF(acos, 1),
-    DF(cosh, 1),
-    DF(acosh, 1),
-    DF(tan, 1),
-    DF(atan, 1),
-    DF(tanh, 1),
-    DF(atanh, 1),
-    DF(erf, 1),
-    DF(erfc, 1),
-    DF(erf_inv, 1),
-    DF(cbrt, 1),
-    DF(is_nan, 1),
-    DF(is_infinity, 1),
-    DF(fft, 3),
-    DF(ifft, 3),
-    DF(fft2, 3),
-    DF(ifft2, 3),
-
-    DF(tensordot, 6),
-    DF(matmul, 2),
-    DF(pad, 3),
-
-    DF(cholesky, 1),
-    DF(cholesky, 2),
-    DF(eigh, 1),
-    DF(qr, 1),
-    DF(qr, 2),
-    DF(svd, 1),
-    DF(svd, 2),
-    DF(lu, 1),
-    DF(triangular_solve, 4),
-    DF(determinant, 1),
-    DF(sort, 4),
-    DF(clip, 3),
-    DF(where, 3),
-    DF(amax, 3),
-    DF(amin, 3),
-
-    DF(conv, 7),
-    DF(max_pool_3d, 5),
-
-    F(mps_is_available, 0),
-    F(cuda_is_available, 0),
-    F(cuda_device_count, 0),
-    F(scalar_type, 1),
-    F(shape, 1),
-    F(nbytes, 1)};
-
-ERL_NIF_INIT(Elixir.Torchx.NIF, nif_functions, load, NULL, upgrade, NULL)
+// Initialize the NIF module
+FINE_INIT("Elixir.Torchx.NIF");

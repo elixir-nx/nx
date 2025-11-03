@@ -2,7 +2,7 @@ defmodule Torchx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.10.0"
+  @version "0.10.2"
 
   @libtorch_compilers [:torchx, :cmake]
 
@@ -43,6 +43,7 @@ defmodule Torchx.MixProject do
     [
       {:nx, "~> 0.10.0"},
       # {:nx, path: "../nx"},
+      {:fine, "~> 0.1.0", runtime: false},
       {:ex_doc, "~> 0.29", only: :docs}
     ]
   end
@@ -78,25 +79,29 @@ defmodule Torchx.MixProject do
     version = System.get_env("LIBTORCH_VERSION", "2.8.0")
     env_dir = System.get_env("LIBTORCH_DIR")
 
-    # 2.8.0 is the first version that supports cu129 and drops cu118
-    # cu118 might still be needed for older hardware, so we're keeping it
-    # for now.
-    valid_targets = ["cpu", "cu118", "cu126", "cu128"]
-
-    valid_targets =
+    # Supported targets for each LibTorch version:
+    {has_cxx11_abi, valid_targets} =
       case Version.parse(version) do
         {:ok, parsed} ->
-          if Version.match?(parsed, "<= 2.7.0") do
-            valid_targets
-          else
-            (valid_targets -- ["cu118"]) ++ ["cu129"]
+          cond do
+            Version.match?(parsed, "< 2.8.0") ->
+              {true, ["cpu", "cu118", "cu126", "cu128"]}
+
+            Version.match?(parsed, "< 2.9.0") ->
+              {false, ["cpu", "cu126", "cu129"]}
+
+            true ->
+              {false, ["cpu", "cu126", "cu128", "cu130"]}
           end
 
         _ ->
-          valid_targets
+          raise ArgumentError, "Unsupported LibTorch version"
       end
 
     %{
+      # Latest LibTorch does not support cxx11-abi
+      # but older versions still do
+      has_cxx11_abi: has_cxx11_abi,
       valid_targets: valid_targets,
       target: target,
       version: version,
@@ -150,7 +155,11 @@ defmodule Torchx.MixProject do
       url =
         case :os.type() do
           {:unix, :linux} ->
-            "https://download.pytorch.org/libtorch/#{libtorch_config.target}/libtorch-cxx11-abi-shared-with-deps-#{libtorch_config.version}%2B#{libtorch_config.target}.zip"
+            if libtorch_config.has_cxx11_abi do
+              "https://download.pytorch.org/libtorch/#{libtorch_config.target}/libtorch-cxx11-abi-shared-with-deps-#{libtorch_config.version}%2B#{libtorch_config.target}.zip"
+            else
+              "https://download.pytorch.org/libtorch/#{libtorch_config.target}/libtorch-shared-with-deps-#{libtorch_config.version}%2B#{libtorch_config.target}.zip"
+            end
 
           {:unix, :darwin} ->
             case List.to_string(:erlang.system_info(:system_architecture)) do
@@ -276,7 +285,8 @@ defmodule Torchx.MixProject do
       "LIBTORCH_LINK" => "#{libtorch_link_path}/lib",
       "MIX_APP_PATH" => mix_app_path,
       "PRIV_DIR" => priv_path,
-      "ERTS_INCLUDE_DIR" => erts_include_dir
+      "ERTS_INCLUDE_DIR" => erts_include_dir,
+      "FINE_INCLUDE_DIR" => Fine.include_dir()
     }
 
     cmd!(cmake, ["-S", ".", "-B", cmake_build_dir], env)
