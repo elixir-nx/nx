@@ -51,14 +51,14 @@ defmodule Nx.LinAlg.Eig do
       eigenvec = Nx.tensor([[1.0]], type: type)
       {Nx.reshape(eigenval, {1}), eigenvec}
     else
-      # Reduce to Hessenberg form
-      {h, _q} = hessenberg(a, opts)
+      # Reduce to Hessenberg form and keep the orthogonal transformation Q
+      {h, q} = hessenberg(a, opts)
 
       # Apply QR algorithm to find eigenvalues
       eigenvals = qr_algorithm(h, opts)
 
-      # Compute eigenvectors from the eigenvalues
-      eigenvecs = compute_eigenvectors(a, eigenvals, opts)
+      # Compute eigenvectors from the Hessenberg form and transform back
+      eigenvecs = compute_eigenvectors(h, q, eigenvals, opts)
 
       {eigenvals, eigenvecs}
     end
@@ -237,50 +237,103 @@ defmodule Nx.LinAlg.Eig do
     Nx.take(eigenvals, indices)
   end
 
-  defnp compute_eigenvectors(a, eigenvals, opts) do
+  defnp compute_eigenvectors(h, q, eigenvals, opts) do
     eps = opts[:eps]
-    # Compute eigenvectors using inverse iteration
-    {n, _} = Nx.shape(a)
-    type = Nx.type(a)
+    # Compute eigenvectors using inverse iteration on the Hessenberg matrix H
+    # Then transform back to original space using Q
+    {n, _} = Nx.shape(h)
+    type = Nx.type(h)
 
-    # For each eigenvalue, compute corresponding eigenvector
-    eigenvecs = Nx.fill(a, 0.0)
+    # For each eigenvalue, compute corresponding eigenvector of H
+    eigenvecs_h = Nx.broadcast(0.0, {n, n}) |> Nx.as_type(type)
 
-    {eigenvecs, _} =
-      while {eigenvecs, {k = 0, a, eigenvals}}, k < n do
+    [eigenvecs_h, eigenvals, h] = Nx.broadcast_vectors([eigenvecs_h, eigenvals, h])
+
+    {eigenvecs_h, _} =
+      while {eigenvecs_h, {k = 0, eigenvals, h}}, k < n do
         lambda = eigenvals[[k]]
 
-        # Solve (A - lambda*I)v = 0 using inverse iteration
-        # Start with a unit vector
-        v = Nx.iota({n, 1}, type: type)
+        # Solve (H - lambda*I)v = 0 using inverse iteration
+        # Start with a random-like vector (using k as seed)
+        v = Nx.iota({n}, type: type) |> Nx.add(k)
         v = v / Nx.LinAlg.norm(v)
 
-        # For simplicity in defn, we use a few iterations of power method-like approach
-        # (A - lambda*I + eps*I)^(-1) * v
-        b = a - lambda * Nx.eye(n, type: type) + eps * Nx.eye(n, type: type)
+        # Orthogonalize against previously computed eigenvectors using Gram-Schmidt
+        # For each column j < k, subtract projection onto v_j
+        v = orthogonalize_vector(v, eigenvecs_h, k, eps)
 
-        # Use a simple iterative approach instead of solve
-        # This is less accurate but works in defn
+        # Inverse iteration: repeatedly solve (H - lambda*I + eps*I)v = v_old
+        # This converges to the eigenvector
+        shift = Nx.complex(eps, eps)
+        eye = Nx.eye(n, type: type)
+        h_shifted = h - lambda * eye + shift * eye
 
-        [b, v] = Nx.broadcast_vectors([b, v])
+        # Perform a few iterations of inverse iteration
+        [v, h_shifted] = Nx.broadcast_vectors([v, h_shifted])
 
         {v, _} =
-          while {v, {i = 0, b}}, i < 5 do
-            # Simple gradient descent-like iteration
-            v_new = Nx.dot(b, v)
-            v_new = v_new / (Nx.LinAlg.norm(v_new) + eps)
-            {v_new, {i + 1, b}}
+          while {v, {iter = 0, h_shifted}}, iter < 10 do
+            # Solve h_shifted * v_new = v using triangular solve approximation
+            # Since h_shifted is close to singular, we use a regularized solve
+            # For simplicity, use a few Richardson iterations
+
+            {v_new, _} =
+              while {v_new = v, {i = 0, h_shifted, v}}, i < 5 do
+                residual = Nx.dot(h_shifted, [1], v_new, [0]) - v
+                v_new = v_new - Nx.multiply(0.1, residual)
+                {v_new, {i + 1, h_shifted, v}}
+              end
+
+            # Normalize
+            v_norm = Nx.LinAlg.norm(v_new)
+            v_new = Nx.select(Nx.abs(v_norm) > eps, v_new / v_norm, v)
+
+            {v_new, {iter + 1, h_shifted}}
           end
 
-        # Normalize
-        v = v / (Nx.LinAlg.norm(v) + eps)
-
         # Store eigenvector
-        eigenvecs = Nx.put_slice(eigenvecs, [0, k], v)
+        eigenvecs_h = Nx.put_slice(eigenvecs_h, [0, k], Nx.reshape(v, {n, 1}))
 
-        {eigenvecs, {k + 1, a, eigenvals}}
+        {eigenvecs_h, {k + 1, eigenvals, h}}
       end
 
-    eigenvecs
+    # Transform eigenvectors back to original space: V = Q * V_h
+    Nx.dot(q, eigenvecs_h)
+  end
+
+  # Orthogonalize vector v against the first k columns of matrix eigenvecs
+  # Uses Gram-Schmidt: v = v - sum(proj_j) where proj_j = <v, v_j> * v_j
+  defnp orthogonalize_vector(v, eigenvecs, k, eps) do
+    {_n, n_cols} = Nx.shape(eigenvecs)
+    
+    # We need to orthogonalize against columns 0..k-1
+    # Use a fixed iteration approach with masking to avoid out of bounds
+    max_iters = Nx.min(k, n_cols)
+    
+    # Broadcast vectors to ensure consistent shape
+    [v, eigenvecs] = Nx.broadcast_vectors([v, eigenvecs])
+    
+    {v_orthog, _} =
+      while {v_orthog = v, {j = 0, max_iters, eigenvecs, k}}, j < 5 do
+        # Only process if j < k and j < n_cols
+        should_process = Nx.logical_and(j < k, j < n_cols)
+        
+        v_orthog =
+          if should_process do
+            # Get column j (safe because we checked bounds)
+            col_idx = Nx.min(j, n_cols - 1)  # Clamp to valid range
+            v_j = eigenvecs[[.., col_idx]]
+            proj = Nx.dot(Nx.LinAlg.adjoint(v_j), v_orthog)
+            v_orthog - Nx.multiply(proj, v_j)
+          else
+            v_orthog
+          end
+        
+        {v_orthog, {j + 1, max_iters, eigenvecs, k}}
+      end
+
+    # Normalize the orthogonalized vector
+    v_norm = Nx.LinAlg.norm(v_orthog)
+    Nx.select(Nx.abs(v_norm) > eps, v_orthog / v_norm, v)
   end
 end
