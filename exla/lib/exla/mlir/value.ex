@@ -749,6 +749,42 @@ defmodule EXLA.MLIR.Value do
     {eigenvals, eigenvecs}
   end
 
+  def eig(%Value{function: func} = value, eigenvals_typespec, eigenvecs_typespec) do
+    %{type: op_type} = get_typespec(value)
+
+    operands = [value]
+    result_types = typespecs_to_mlir_types([eigenvals_typespec, eigenvecs_typespec])
+
+    call_target_name =
+      case op_type do
+        {:f, 32} ->
+          "eig_cpu_custom_call_f32"
+
+        {:f, 64} ->
+          "eig_cpu_custom_call_f64"
+
+        {:c, 64} ->
+          "eig_cpu_custom_call_c64"
+
+        {:c, 128} ->
+          "eig_cpu_custom_call_c128"
+
+        type ->
+          # Due to matching on EXLA.Defn, we are sure that the device here is always :host
+          raise "Eig decomposition not supported on :host device for type #{inspect(type)}"
+      end
+
+    attributes = [
+      call_target_name: attr_string(call_target_name),
+      api_version: attr_i32(4)
+    ]
+
+    [eigenvals, eigenvecs] =
+      op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
+
+    {eigenvals, eigenvecs}
+  end
+
   def qr(%Value{function: func} = value, q_typespec, r_typespec) do
     %{type: op_type} = get_typespec(value)
 
