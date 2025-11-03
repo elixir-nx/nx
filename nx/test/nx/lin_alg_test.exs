@@ -764,8 +764,6 @@ defmodule Nx.LinAlgTest do
       expected_eigenvals = Nx.tensor([6.0, 4.0, 1.0])
       assert_all_close(Nx.abs(eigenvals), Nx.abs(expected_eigenvals), atol: 1.0e-2)
 
-
-
       assert_all_close(
         Nx.dot(t, eigenvecs),
         Nx.dot(eigenvecs, Nx.make_diagonal(eigenvals)),
@@ -782,8 +780,6 @@ defmodule Nx.LinAlgTest do
       # Eigenvalues should be 6, 4, 1 (sorted by magnitude)
       expected_eigenvals = Nx.tensor([6.0, 3.0, 1.0])
       assert_all_close(Nx.abs(eigenvals), Nx.abs(expected_eigenvals), atol: 1.0e-2)
-
-
 
       assert_all_close(
         Nx.dot(t, eigenvecs),
@@ -893,8 +889,6 @@ defmodule Nx.LinAlgTest do
             |> Nx.vectorize(x: 2)
             |> Nx.make_diagonal()
             |> Nx.devectorize(keep_names: false)
-
-
 
           assert_all_close(
             Nx.dot(eigenvecs, [-1], [0], evals, [-2], [0]),

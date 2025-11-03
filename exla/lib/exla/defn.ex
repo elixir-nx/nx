@@ -458,7 +458,7 @@ defmodule EXLA.Defn do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     # Ensure output is complex type, converting to at least c64
-    out_type = Nx.Type.merge(Nx.Type.to_complex(Nx.Type.to_floating(Nx.type(tensor))), {:c, 64})
+    out_type = Nx.Type.merge(Nx.Type.to_complex(Nx.Type.to_floating(op_type(tensor))), {:c, 64})
 
     tensor =
       if op_type(tensor) != out_type do
