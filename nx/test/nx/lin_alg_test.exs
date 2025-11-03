@@ -984,7 +984,7 @@ defmodule Nx.LinAlgTest do
       assert {eigenvals, eigenvecs} = Nx.LinAlg.eig(t)
 
       # All eigenvalues should be 1
-      assert eigenvals == ~VEC[1.0+0.0i 1.0+0.0i 0.9992001056671143+0.0i]
+      assert_all_close(eigenvals, Nx.tensor([1, 1, 1]), atol: 1.0e-4)
 
       # For repeated eigenvalues, eigenvectors may not be orthonormal
       # Just verify that each column has reasonable norm

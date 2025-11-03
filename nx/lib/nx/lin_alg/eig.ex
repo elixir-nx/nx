@@ -18,7 +18,7 @@ defmodule Nx.LinAlg.Eig do
 
   defn eig(a, opts \\ []) do
     # do_sort: 1 = sort by |lambda| (default), 0 = no sorting
-    opts = keyword!(opts, eps: 1.0e-4, max_iter: 1_000, do_sort: 1, balance: 0)
+    opts = keyword!(opts, eps: 1.0e-4, max_iter: 1_000, do_sort: 1, balance: 1)
 
     a
     |> Nx.revectorize([collapsed_axes: :auto],
@@ -306,9 +306,9 @@ defmodule Nx.LinAlg.Eig do
     [a, dvec] = Nx.broadcast_vectors([a, dvec])
 
     {a, dvec, _} =
-      while {a, dvec, {sweep = 0, n, eps}}, sweep < 5 do
+      while {a, dvec, {sweep = 0}}, sweep < 5 do
         {a, dvec, _} =
-          while {a, dvec, {i = 0, n, eps}}, i < n do
+          while {a, dvec, {i = 0}}, i < n do
             row = Nx.sum(Nx.abs(a[i])) - Nx.abs(a[[i, i]])
             col = Nx.sum(Nx.abs(a[[.., i]])) - Nx.abs(a[[i, i]])
 
@@ -325,18 +325,20 @@ defmodule Nx.LinAlg.Eig do
 
             # Scale row i by s
             row_i = a[i] * s
-            a = Nx.put_slice(a, [i, 0], row_i)
+            a = Nx.put_slice(a, [i, 0], Nx.reshape(row_i, {1, n}))
+
             # Scale column i by 1/s
             col_i = a[[.., i]] / s
-            a = Nx.put_slice(a, [0, i], col_i)
+            a = Nx.put_slice(a, [0, i], Nx.reshape(col_i, {n, 1}))
+
             # Accumulate scaling into dvec
             dv = dvec[[i]] * s
             dvec = Nx.put_slice(dvec, [i], Nx.reshape(dv, {1}))
 
-            {a, dvec, {i + 1, n, eps}}
+            {a, dvec, {i + 1}}
           end
 
-        {a, dvec, {sweep + 1, n, eps}}
+        {a, dvec, {sweep + 1}}
       end
 
     {a, dvec}
