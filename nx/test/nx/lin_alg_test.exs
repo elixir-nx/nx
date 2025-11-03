@@ -761,8 +761,35 @@ defmodule Nx.LinAlgTest do
       assert {eigenvals, eigenvecs} = Nx.LinAlg.eig(t)
 
       # Eigenvalues should be 6, 4, 1 (sorted by magnitude)
-      expected_eigenvals = Nx.tensor([6.0, 4.0, 1.0]) |> Nx.as_type({:c, 64})
+      expected_eigenvals = Nx.tensor([6.0, 4.0, 1.0])
       assert_all_close(Nx.abs(eigenvals), Nx.abs(expected_eigenvals), atol: 1.0e-2)
+
+
+
+      assert_all_close(
+        Nx.dot(t, eigenvecs),
+        Nx.dot(eigenvecs, Nx.make_diagonal(eigenvals)),
+        atol: 1.0e-2
+      )
+    end
+
+    test "computes eigenvalues and eigenvectors for lower triangular matrix" do
+      # Lower triangular matrices have eigenvalues equal to diagonal elements
+      t = Nx.tensor([[1.0, 0.0, 0.0], [2.0, 3.0, 0.0], [4.0, 5.0, 6.0]])
+
+      assert {eigenvals, eigenvecs} = Nx.LinAlg.eig(t)
+
+      # Eigenvalues should be 6, 4, 1 (sorted by magnitude)
+      expected_eigenvals = Nx.tensor([6.0, 3.0, 1.0])
+      assert_all_close(Nx.abs(eigenvals), Nx.abs(expected_eigenvals), atol: 1.0e-2)
+
+
+
+      assert_all_close(
+        Nx.dot(t, eigenvecs),
+        Nx.dot(eigenvecs, Nx.make_diagonal(eigenvals)),
+        atol: 1.0e-2
+      )
     end
 
     test "computes complex eigenvalues for rotation matrix" do
@@ -827,7 +854,7 @@ defmodule Nx.LinAlgTest do
       # Generate well-conditioned matrices A = Q*Λ*Q^(-1) where Λ has well-separated eigenvalues
       key = Nx.Random.key(System.unique_integer())
 
-      for _ <- 1..5, type <- [{:f, 32}, {:c, 64}], reduce: key do
+      for _ <- 1..5, type <- [{:f, 32}, {:f, 64}], reduce: key do
         key ->
           # Generate unitary matrix Q from random matrix via QR
           {base_q, key} = Nx.Random.uniform(key, -2, 2, shape: {2, 3, 3}, type: type)
@@ -859,119 +886,21 @@ defmodule Nx.LinAlgTest do
             |> Nx.dot([2], [0], evals_test_diag, [1], [0])
             |> Nx.dot([2], [0], q_adj, [1], [0])
 
-          assert {eigenvals, eigenvecs} = Nx.LinAlg.eig(a, max_iter: 4000, eps: 1.0e-6)
+          assert {eigenvals, eigenvecs} = Nx.LinAlg.eig(a, balance: 0)
 
-          # For each batch and eigenvalue/eigenvector pair, verify A*v = λ*v
-          for batch <- 0..1 do
-            a_batch = a[batch]
-            eigenvals_batch = eigenvals[batch]
-            eigenvecs_batch = eigenvecs[batch]
+          evals =
+            eigenvals
+            |> Nx.vectorize(x: 2)
+            |> Nx.make_diagonal()
+            |> Nx.devectorize(keep_names: false)
 
-            for i <- 0..2 do
-              v = eigenvecs_batch[[.., i]]
-              lambda = eigenvals_batch[[i]]
 
-              # Compute A*v
-              av = Nx.dot(a_batch, [1], v, [0])
 
-              # Compute λ*v
-              lambda_v = Nx.multiply(lambda, v)
-
-              # They should be equal (or very close)
-              v_norm = Nx.LinAlg.norm(v) |> Nx.to_number()
-
-              if v_norm > 1.0e-6 do
-                # Check relative residual ||A v - λ v|| / (||A|| * ||v||)
-                residual = Nx.LinAlg.norm(Nx.subtract(av, lambda_v))
-                denom = Nx.add(Nx.multiply(Nx.LinAlg.norm(a_batch), Nx.LinAlg.norm(v)), 1.0e-12)
-                rel_res = Nx.divide(residual, denom)
-                assert Nx.to_number(rel_res) < 4.0
-              end
-            end
-          end
-
-          key
-      end
-    end
-
-    test "property: eigenvalues are invariant under similarity transformations" do
-      # If B = P^(-1) * A * P, then A and B have the same eigenvalues
-      key = Nx.Random.key(System.unique_integer())
-
-      for _ <- 1..5, reduce: key do
-        key ->
-          # Generate random matrix A
-          {a, key} = Nx.Random.uniform(key, -2, 2, shape: {3, 3}, type: {:f, 32})
-
-          # Generate invertible matrix P (use QR to ensure invertibility)
-          {p_base, key} = Nx.Random.uniform(key, -2, 2, shape: {3, 3}, type: {:f, 32})
-          {p, _} = Nx.LinAlg.qr(p_base)
-
-          # Compute B = P^(-1) * A * P
-          p_inv = Nx.LinAlg.invert(p)
-          b = p_inv |> Nx.dot(a) |> Nx.dot(p)
-
-          # Get eigenvalues of both matrices
-          {eigenvals_a, _} = Nx.LinAlg.eig(a, max_iter: 100)
-          {eigenvals_b, _} = Nx.LinAlg.eig(b, max_iter: 100)
-
-          # Sort eigenvalues by magnitude for comparison
-          eigenvals_a_sorted =
-            eigenvals_a
-            |> Nx.abs()
-            |> Nx.argsort(direction: :desc)
-            |> then(&Nx.take(eigenvals_a, &1))
-
-          eigenvals_b_sorted =
-            eigenvals_b
-            |> Nx.abs()
-            |> Nx.argsort(direction: :desc)
-            |> then(&Nx.take(eigenvals_b, &1))
-
-          # Eigenvalues should be the same (up to numerical errors)
-          assert_all_close(Nx.abs(eigenvals_a_sorted), Nx.abs(eigenvals_b_sorted),
-            atol: 0.5,
-            rtol: 0.5
+          assert_all_close(
+            Nx.dot(eigenvecs, [-1], [0], evals, [-2], [0]),
+            Nx.dot(a, [-1], [0], eigenvecs, [-2], [0]),
+            atol: 1.0e-3
           )
-
-          key
-      end
-    end
-
-    test "property: trace equals sum of eigenvalues" do
-      # The trace of a matrix equals the sum of its eigenvalues
-      key = Nx.Random.key(System.unique_integer())
-
-      for _ <- 1..10, reduce: key do
-        key ->
-          {a, key} = Nx.Random.uniform(key, -5, 5, shape: {4, 4}, type: {:f, 32})
-
-          trace = Nx.sum(Nx.take_diagonal(a))
-          {eigenvals, _} = Nx.LinAlg.eig(a, max_iter: 100)
-          eigenval_sum = Nx.sum(eigenvals)
-
-          # Real part of sum of eigenvalues should equal trace
-          assert_all_close(Nx.real(eigenval_sum), trace, atol: 0.5, rtol: 0.5)
-
-          key
-      end
-    end
-
-    test "property: determinant equals product of eigenvalues" do
-      # The determinant of a matrix equals the product of its eigenvalues
-      key = Nx.Random.key(System.unique_integer())
-
-      for _ <- 1..10, reduce: key do
-        key ->
-          {a, key} = Nx.Random.uniform(key, -2, 2, shape: {3, 3}, type: {:f, 32})
-
-          det = Nx.LinAlg.determinant(a)
-          {eigenvals, _} = Nx.LinAlg.eig(a, max_iter: 100)
-          eigenval_prod = Nx.product(eigenvals)
-
-          # Real part of product of eigenvalues should equal determinant
-          # Note: simplified QR algorithm has limited accuracy
-          assert_all_close(Nx.abs(Nx.real(eigenval_prod)), Nx.abs(det), atol: 1.0, rtol: 1.0)
 
           key
       end

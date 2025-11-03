@@ -1265,10 +1265,15 @@ defmodule Nx.LinAlg do
         v = adjoint(vt)
         ut = adjoint(u)
 
-        s_idx = Nx.abs(s) < opts[:eps]
-        adjusted_s = Nx.select(s_idx, 1, s)
+        # Ensure singular values are in a floating (real) type to avoid complex division issues
+        s = Nx.as_type(s, Nx.Type.to_floating(Nx.type(tensor)))
+        one = Nx.tensor(1.0, type: Nx.type(s))
+        zero = Nx.tensor(0.0, type: Nx.type(s))
 
-        s_inv_matrix = Nx.select(s_idx, 0, 1 / adjusted_s)
+        s_idx = Nx.abs(s) < opts[:eps]
+        adjusted_s = Nx.select(s_idx, one, s)
+
+        s_inv_matrix = Nx.select(s_idx, zero, one / adjusted_s)
 
         sut = Nx.new_axis(s_inv_matrix, -1) * ut
         Nx.dot(v, sut)
@@ -1458,7 +1463,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) tensor must be a square matrix or a batch of square matrices, got shape: {2, 3}
   """
   def eig(tensor, opts \\ []) do
-    opts = keyword!(opts, max_iter: 1_000, eps: 1.0e-4)
+    opts = keyword!(opts, [:balance, max_iter: 1_000, eps: 1.0e-4])
     %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
     %T{type: type, shape: shape} = tensor = Nx.devectorize(tensor)
 
