@@ -17,8 +17,7 @@ defmodule Nx.LinAlg.Eig do
   import Nx.Defn
 
   defn eig(a, opts \\ []) do
-    # do_sort: 1 = sort by |lambda| (default), 0 = no sorting
-    opts = keyword!(opts, eps: 1.0e-4, max_iter: 1_000, do_sort: 1, balance: 0)
+    opts = keyword!(opts, eps: 1.0e-4, max_iter: 1_000)
 
     a
     |> Nx.revectorize([collapsed_axes: :auto],
@@ -39,11 +38,9 @@ defmodule Nx.LinAlg.Eig do
     }
   end
 
-  # Sorting skipped in defn; if needed, implement as a deftransform post-process.
-
   defnp eig_matrix(a, opts \\ []) do
     # Convert to complex type since eigenvalues can be complex even for real matrices
-    type = Nx.Type.to_complex(Nx.Type.to_floating(Nx.type(a)))
+    type = Nx.Type.to_complex(Nx.type(a))
     a = Nx.as_type(a, type)
 
     {n, _} = Nx.shape(a)
@@ -57,46 +54,25 @@ defmodule Nx.LinAlg.Eig do
 
       _ ->
         # Fast path for already triangular matrices: compute directly
-        if is_upper_triangular(a, opts) do
-          eigenvals = Nx.take_diagonal(a)
-          eigenvecs = eigenvectors_from_upper_tri_orig(a, eigenvals, opts)
+        {eigenvals, eigenvecs} =
+          cond do
+            is_upper_triangular(a, opts) ->
+              eigenvals = Nx.take_diagonal(a)
+              eigenvecs = eigenvectors_from_upper_tri(a, eigenvals, opts)
+              {eigenvals, eigenvecs}
 
-          # Sort eigenpairs by |lambda| in descending order
-          sort_idx = Nx.argsort(Nx.abs(eigenvals), direction: :desc)
-          eigenvals = Nx.take(eigenvals, sort_idx)
-          eigenvecs = Nx.take(eigenvecs, sort_idx, axis: 1)
+            is_lower_triangular(a, opts) ->
+              eigenvals = Nx.take_diagonal(a)
+              eigenvecs = eigenvectors_from_lower_tri(a, eigenvals, opts)
+              {eigenvals, eigenvecs}
 
-          {eigenvals, eigenvecs}
-          # Fast path for Hermitian/normal matrices: use eigh for exact pairing
-        else
-          if is_lower_triangular(a, opts) do
-            eigenvals = Nx.take_diagonal(a)
-            eigenvecs = eigenvectors_from_lower_tri_orig(a, eigenvals, opts)
-
-            sort_idx = Nx.argsort(Nx.abs(eigenvals), direction: :desc)
-            eigenvals = Nx.take(eigenvals, sort_idx)
-            eigenvecs = Nx.take(eigenvecs, sort_idx, axis: 1)
-
-            {eigenvals, eigenvecs}
-          else
-            if is_hermitian(a, opts) do
-              # Run eigh on a real-valued view to match backend expectations (real eigenvalues/vectors),
-              # then cast results to complex output type.
-              real_type = Nx.Type.to_floating(Nx.Type.to_real(type))
-              a_real = a |> Nx.real() |> Nx.as_type(real_type)
-              {eigs_h, vecs_h} = Nx.LinAlg.eigh(a_real)
+            is_hermitian(a, opts) ->
+              {eigs_h, vecs_h} = Nx.LinAlg.eigh(a)
               {Nx.as_type(eigs_h, type), Nx.as_type(vecs_h, type)}
-            else
-              # Reduce to Hessenberg form and keep the orthogonal transformation Q
-              # Optionally balance the matrix for improved conditioning: ab = D^-1 * A * D
-              {a_bal, dvec} =
-                if opts[:balance] == 1 do
-                  balance(a, opts)
-                else
-                  {a, Nx.broadcast(1.0, {n}) |> Nx.as_type(type)}
-                end
 
-              {h, q_hessenberg} = hessenberg(a_bal, opts)
+            true ->
+              # Reduce to Hessenberg form and keep the orthogonal transformation Q
+              {h, q_hessenberg} = hessenberg(a, opts)
 
               # Apply QR algorithm to find Schur form, eigenvalues, and accumulated Schur vectors
               {schur, eigenvals, q_schur} = qr_algorithm(h, opts)
@@ -110,40 +86,21 @@ defmodule Nx.LinAlg.Eig do
               schur_norm = Nx.LinAlg.norm(schur)
               nearly_diag = offdiag_norm <= 1.0e-6 * (schur_norm + opts[:eps])
 
-              # Prefer specialized solver for triangular Schur forms; otherwise use inverse iteration.
-              upper_tri = is_upper_triangular(schur, opts)
-
-              eigenvecs_bal =
+              eigenvecs =
                 Nx.select(
                   nearly_diag,
                   q_total,
-                  Nx.select(
-                    upper_tri,
-                    eigenvectors_from_upper_tri(schur, q_total, eigenvals, opts),
-                    compute_eigenvectors(schur, q_total, eigenvals, opts)
-                  )
+                  compute_eigenvectors(schur, q_total, eigenvals, opts)
                 )
 
-              # Transform eigenvectors back to original A-space via D: V = D * V_bal
-              # ab = D^-1 * A * D => right eigenvectors of A are D times eigenvectors of ab
-              eigenvecs =
-                if opts[:balance] == 1 do
-                  # Scale rows by dvec
-                  scale = Nx.reshape(dvec, {n, 1})
-                  Nx.multiply(eigenvecs_bal, scale)
-                else
-                  eigenvecs_bal
-                end
-
-              # Sort eigenpairs by |lambda| in descending order
-              sort_idx = Nx.argsort(Nx.abs(eigenvals), direction: :desc)
-              eigenvals = Nx.take(eigenvals, sort_idx)
-              eigenvecs = Nx.take(eigenvecs, sort_idx, axis: 1)
-
               {eigenvals, eigenvecs}
-            end
           end
-        end
+
+        # Sort eigenpairs by |lambda| in descending order
+        sort_idx = Nx.argsort(Nx.abs(eigenvals), direction: :desc)
+        eigenvals = Nx.take(eigenvals, sort_idx)
+        eigenvecs = Nx.take(eigenvecs, sort_idx, axis: 1)
+        {eigenvals, eigenvecs}
     end
   end
 
@@ -156,16 +113,7 @@ defmodule Nx.LinAlg.Eig do
 
   defnp is_upper_triangular(a, opts) do
     eps = opts[:eps]
-    {n, _} = Nx.shape(a)
-    type = Nx.type(a)
-    row_idx = Nx.iota({n}, type: {:s, 32})
-    col_idx = row_idx
-    # Construct row/col index grids
-    row_mat = Nx.reshape(row_idx, {n, 1}) |> Nx.broadcast({n, n})
-    col_mat = Nx.reshape(col_idx, {1, n}) |> Nx.broadcast({n, n})
-    # Mask strictly lower triangular part (row > col)
-    lower_mask = Nx.greater(row_mat, col_mat)
-    lower = Nx.select(lower_mask, a, Nx.tensor(0.0, type: type))
+    lower = Nx.tril(a, k: -1)
     lower_norm = Nx.LinAlg.norm(lower)
     a_norm = Nx.LinAlg.norm(a)
     lower_norm <= 1.0e-6 * (a_norm + eps)
@@ -173,15 +121,7 @@ defmodule Nx.LinAlg.Eig do
 
   defnp is_lower_triangular(a, opts) do
     eps = opts[:eps]
-    {n, _} = Nx.shape(a)
-    type = Nx.type(a)
-    row_idx = Nx.iota({n}, type: {:s, 32})
-    col_idx = row_idx
-    row_mat = Nx.reshape(row_idx, {n, 1}) |> Nx.broadcast({n, n})
-    col_mat = Nx.reshape(col_idx, {1, n}) |> Nx.broadcast({n, n})
-    # Mask strictly upper triangular part (row < col)
-    upper_mask = Nx.less(row_mat, col_mat)
-    upper = Nx.select(upper_mask, a, Nx.tensor(0.0, type: type))
+    upper = Nx.triu(a, k: 1)
     upper_norm = Nx.LinAlg.norm(upper)
     a_norm = Nx.LinAlg.norm(a)
     upper_norm <= 1.0e-6 * (a_norm + eps)
@@ -347,56 +287,6 @@ defmodule Nx.LinAlg.Eig do
     Nx.take_diagonal(h)
   end
 
-  # Simple matrix balancing (scaling) to improve conditioning.
-  # Returns {ab, dvec} where ab = D^-1 * A * D and dvec is the diagonal of D.
-  defnp balance(a, opts) do
-    eps = opts[:eps]
-    {n, _} = Nx.shape(a)
-    type = Nx.type(a)
-
-    dvec = Nx.broadcast(1.0, {n}) |> Nx.as_type(type)
-
-    [a, dvec] = Nx.broadcast_vectors([a, dvec])
-
-    {a, dvec, _} =
-      while {a, dvec, {sweep = 0}}, sweep < 5 do
-        {a, dvec, _} =
-          while {a, dvec, {i = 0}}, i < n do
-            row = Nx.sum(Nx.abs(a[i])) - Nx.abs(a[[i, i]])
-            col = Nx.sum(Nx.abs(a[[.., i]])) - Nx.abs(a[[i, i]])
-
-            # s = sqrt(col/row), clipped to [0.5, 2.0]
-            s_raw = Nx.sqrt(col / (row + eps))
-            s_clipped = Nx.clip(s_raw, 0.5, 2.0)
-
-            s =
-              Nx.select(
-                Nx.logical_and(row > 0.0, col > 0.0),
-                s_clipped,
-                Nx.tensor(1.0, type: type)
-              )
-
-            # Scale row i by s
-            row_i = a[i] * s
-            a = Nx.put_slice(a, [i, 0], Nx.reshape(row_i, {1, n}))
-
-            # Scale column i by 1/s
-            col_i = a[[.., i]] / s
-            a = Nx.put_slice(a, [0, i], Nx.reshape(col_i, {n, 1}))
-
-            # Accumulate scaling into dvec
-            dv = dvec[[i]] * s
-            dvec = Nx.put_slice(dvec, [i], Nx.reshape(dv, {1}))
-
-            {a, dvec, {i + 1}}
-          end
-
-        {a, dvec, {sweep + 1}}
-      end
-
-    {a, dvec}
-  end
-
   defnp compute_eigenvectors(h, q, eigenvals, opts) do
     eps = opts[:eps]
     # Compute eigenvectors using stabilized inverse iteration on H via normal equations:
@@ -458,62 +348,8 @@ defmodule Nx.LinAlg.Eig do
     Nx.dot(q, eigenvecs_h)
   end
 
-  # Compute eigenvectors when H is upper triangular (Schur form) by back-substitution.
-  # For each eigenvalue lambda_k, solve (H - lambda_k I) v_k = 0 by setting v_k[k]=1 and
-  # solving for entries i=k-1..0. Then transform back with Q.
-  defnp eigenvectors_from_upper_tri(h, q, eigenvals, opts) do
-    eps = opts[:eps]
-    {n, _} = Nx.shape(h)
-    type = Nx.type(h)
-
-    eye = Nx.eye(n, type: type)
-    # Align metadata with h to avoid vectorization mismatches in while
-    [h, eye] = Nx.broadcast_vectors([h, eye])
-    v_h = h * Nx.tensor(0.0, type: type)
-
-    row_idx = Nx.iota({n}, type: {:s, 32})
-    col_idx = row_idx
-
-    {v_h, _} =
-      while {v_h, {k = 0, h, eigenvals, eye, row_idx, col_idx}}, k < n do
-        lambda = eigenvals[[k]]
-        u = h - lambda * eye
-
-        # Initialize v (inherit metadata from a row of u) and set v[k] = 1
-        v = u[0] * Nx.tensor(0.0, type: type)
-        v = Nx.put_slice(v, [k], Nx.tensor([1.0], type: type))
-
-        # Backward substitution for i = k-1 .. 0
-        {v, _} =
-          while {v, {i = k - 1, u, row_idx, col_idx, k}}, i >= 0 do
-            # mask over columns j: j > i (all columns after i)
-            mask_gt_i = Nx.greater(col_idx, i)
-            m = Nx.as_type(mask_gt_i, type)
-
-            row_u = u[i]
-            # sum_j u[i,j] * v[j] over masked range using multiplicative mask
-            sum = Nx.sum(row_u * v * m)
-            denom = u[[i, i]]
-            v_i = -sum / (denom + eps)
-            v = Nx.put_slice(v, [i], Nx.reshape(v_i, {1}))
-
-            {v, {i - 1, u, row_idx, col_idx, k}}
-          end
-
-        # Normalize v
-        v_norm = Nx.LinAlg.norm(v)
-        v = Nx.select(Nx.abs(v_norm) > eps, v / v_norm, v)
-
-        v_h = Nx.put_slice(v_h, [0, k], Nx.reshape(v, {n, 1}))
-
-        {v_h, {k + 1, h, eigenvals, eye, row_idx, col_idx}}
-      end
-
-    Nx.dot(q, v_h)
-  end
-
   # Fast path: compute eigenvectors directly from an upper-triangular A by back-substitution
-  defnp eigenvectors_from_upper_tri_orig(a, eigenvals, opts) do
+  defnp eigenvectors_from_upper_tri(a, eigenvals, opts) do
     eps = opts[:eps]
     {n, _} = Nx.shape(a)
     type = Nx.type(a)
@@ -558,7 +394,7 @@ defmodule Nx.LinAlg.Eig do
   end
 
   # Fast path: compute eigenvectors directly from a lower-triangular A by forward substitution
-  defnp eigenvectors_from_lower_tri_orig(a, eigenvals, opts) do
+  defnp eigenvectors_from_lower_tri(a, eigenvals, opts) do
     eps = opts[:eps]
     {n, _} = Nx.shape(a)
     type = Nx.type(a)

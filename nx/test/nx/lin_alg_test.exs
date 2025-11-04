@@ -796,7 +796,7 @@ defmodule Nx.LinAlgTest do
       # 90-degree rotation matrix has purely imaginary eigenvalues ±i
       t = Nx.tensor([[0.0, -1.0], [1.0, 0.0]])
 
-      assert {eigenvals, eigenvecs} = Nx.LinAlg.eig(t, balance: 0)
+      assert {eigenvals, eigenvecs} = Nx.LinAlg.eig(t)
 
       # Both eigenvalues should have magnitude 1
       assert_all_close(Nx.abs(eigenvals), Nx.tensor([1.0, 1.0]), atol: 1.0e-3)
@@ -901,7 +901,7 @@ defmodule Nx.LinAlgTest do
             |> Nx.dot([2], [0], evals_test_diag, [1], [0])
             |> Nx.dot([2], [0], q_adj, [1], [0])
 
-          assert {eigenvals, eigenvecs} = Nx.LinAlg.eig(a, balance: 0)
+          assert {eigenvals, eigenvecs} = Nx.LinAlg.eig(a)
 
           evals =
             eigenvals

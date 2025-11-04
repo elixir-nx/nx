@@ -1458,7 +1458,7 @@ defmodule Nx.LinAlg do
       ** (ArgumentError) tensor must be a square matrix or a batch of square matrices, got shape: {2, 3}
   """
   def eig(tensor, opts \\ []) do
-    opts = keyword!(opts, [:balance, max_iter: 1_000, eps: 1.0e-4])
+    opts = keyword!(opts, max_iter: 1_000, eps: 1.0e-4)
     %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
     %T{type: type, shape: shape} = tensor = Nx.devectorize(tensor)
 
