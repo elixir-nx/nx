@@ -196,7 +196,7 @@ defmodule Nx.LinAlg.Eig do
         {{h, accum_q}, {i + 1, eye}}
       end
 
-    {h, extract_eigenvalues(h, eps), accum_q}
+    {h, Nx.take_diagonal(h), accum_q}
   end
 
   defnp wilkinson_shift_full(h, n) do
@@ -224,12 +224,6 @@ defmodule Nx.LinAlg.Eig do
     end
   end
 
-  defnp extract_eigenvalues(h, _eps) do
-    # For now, just extract diagonal elements
-    # TODO: Add 2x2 block handling for complex conjugate pairs
-    Nx.take_diagonal(h)
-  end
-
   defnp compute_eigenvectors(h, q, eigenvals, opts) do
     eps = opts[:eps]
     # Compute eigenvectors using stabilized inverse iteration on H via normal equations:
@@ -248,8 +242,8 @@ defmodule Nx.LinAlg.Eig do
 
         # Deterministic initial vector
         # Use a real iota to avoid complex iota backend limitations, then cast to complex
-        v_real = Nx.iota({n}, type: Nx.Type.to_floating(Nx.Type.to_real(type)))
-        v = v_real |> Nx.as_type(type) |> Nx.add(k)
+        v_real = Nx.iota({n}, type: type)
+        v = v_real + k
         v = v / (Nx.LinAlg.norm(v) + eps)
 
         # Orthogonalize against previously computed eigenvectors
