@@ -48,58 +48,63 @@ defmodule Nx.LinAlg.Eig do
     case n do
       1 ->
         # For 1x1 matrices, eigenvalue is the single element
-        eigenval = a[[0, 0]]
+        eigenval = Nx.reshape(a, {1})
         eigenvec = Nx.tensor([[1.0]], type: type)
-        {Nx.reshape(eigenval, {1}), eigenvec}
+        {eigenval, eigenvec}
 
       _ ->
-        # Fast path for already triangular matrices: compute directly
         {eigenvals, eigenvecs} =
-          cond do
-            is_upper_triangular(a, opts) ->
-              eigenvals = Nx.take_diagonal(a)
-              eigenvecs = eigenvectors_from_upper_tri(a, eigenvals, opts)
-              {eigenvals, eigenvecs}
-
-            is_lower_triangular(a, opts) ->
-              eigenvals = Nx.take_diagonal(a)
-              eigenvecs = eigenvectors_from_lower_tri(a, eigenvals, opts)
-              {eigenvals, eigenvecs}
-
-            is_hermitian(a, opts) ->
-              {eigs_h, vecs_h} = Nx.LinAlg.eigh(a)
-              {Nx.as_type(eigs_h, type), Nx.as_type(vecs_h, type)}
-
-            true ->
-              # Reduce to Hessenberg form and keep the orthogonal transformation Q
-              {h, q_hessenberg} = hessenberg(a, opts)
-
-              # Apply QR algorithm to find Schur form, eigenvalues, and accumulated Schur vectors
-              {schur, eigenvals, q_schur} = qr_algorithm(h, opts)
-              q_total = Nx.dot(q_hessenberg, q_schur)
-
-              # If the Schur form is (nearly) diagonal, its eigenvectors are simply q_total's columns.
-              # This happens for normal matrices (including Hermitian), which our property test exercises.
-              # Use a fast path in that case; otherwise, compute eigenvectors from Schur form.
-              diag_schur = Nx.make_diagonal(Nx.take_diagonal(schur))
-              offdiag_norm = Nx.LinAlg.norm(schur - diag_schur)
-              schur_norm = Nx.LinAlg.norm(schur)
-              nearly_diag = offdiag_norm <= 1.0e-6 * (schur_norm + opts[:eps])
-
-              eigenvecs =
-                Nx.select(
-                  nearly_diag,
-                  q_total,
-                  compute_eigenvectors(schur, q_total, eigenvals, opts)
-                )
-
-              {eigenvals, eigenvecs}
-          end
+          calculate_evals_evecs(a, opts)
 
         # Sort eigenpairs by |lambda| in descending order
         sort_idx = Nx.argsort(Nx.abs(eigenvals), direction: :desc)
         eigenvals = Nx.take(eigenvals, sort_idx)
         eigenvecs = Nx.take(eigenvecs, sort_idx, axis: 1)
+        {eigenvals, eigenvecs}
+    end
+  end
+
+  defnp calculate_evals_evecs(a, opts) do
+    type = Nx.Type.to_complex(Nx.type(a))
+
+    cond do
+      is_upper_triangular(a, opts) ->
+        eigenvals = Nx.take_diagonal(a)
+        eigenvecs = eigenvectors_from_upper_tri(a, eigenvals, opts)
+        {eigenvals, eigenvecs}
+
+      is_lower_triangular(a, opts) ->
+        eigenvals = Nx.take_diagonal(a)
+        eigenvecs = eigenvectors_from_lower_tri(a, eigenvals, opts)
+        {eigenvals, eigenvecs}
+
+      is_hermitian(a, opts) ->
+        {eigs_h, vecs_h} = Nx.LinAlg.eigh(a)
+        {Nx.as_type(eigs_h, type), Nx.as_type(vecs_h, type)}
+
+      true ->
+        # Reduce to Hessenberg form and keep the orthogonal transformation Q
+        {h, q_hessenberg} = hessenberg(a, opts)
+
+        # Apply QR algorithm to find Schur form, eigenvalues, and accumulated Schur vectors
+        {schur, eigenvals, q_schur} = qr_algorithm(h, opts)
+        q_total = Nx.dot(q_hessenberg, q_schur)
+
+        # If the Schur form is (nearly) diagonal, its eigenvectors are simply q_total's columns.
+        # This happens for normal matrices (including Hermitian), which our property test exercises.
+        # Use a fast path in that case; otherwise, compute eigenvectors from Schur form.
+        diag_schur = Nx.make_diagonal(Nx.take_diagonal(schur))
+        offdiag_norm = Nx.LinAlg.norm(schur - diag_schur)
+        schur_norm = Nx.LinAlg.norm(schur)
+        nearly_diag = offdiag_norm <= 1.0e-6 * (schur_norm + opts[:eps])
+
+        eigenvecs =
+          Nx.select(
+            nearly_diag,
+            q_total,
+            compute_eigenvectors(schur, q_total, eigenvals, opts)
+          )
+
         {eigenvals, eigenvecs}
     end
   end
