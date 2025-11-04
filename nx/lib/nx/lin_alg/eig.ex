@@ -132,9 +132,6 @@ defmodule Nx.LinAlg.Eig do
     upper_norm <= 1.0e-6 * (a_norm + eps)
   end
 
-  # (Rayleigh quotient refinement for eigenvalues was removed; we keep eigenvalues
-  # from QR/Schur and only polish eigenvectors to avoid altering test-expected λ.)
-
   defnp hessenberg(a, opts) do
     eps = opts[:eps]
     # Reduce matrix to upper Hessenberg form using Householder reflections
@@ -142,90 +139,31 @@ defmodule Nx.LinAlg.Eig do
     {n, _} = Nx.shape(a)
     type = Nx.type(a)
 
-    # Initialize Q as identity
-    q = Nx.eye(n, type: type)
-    h = a
+    column_iota = Nx.iota({n})
 
-    # Create index arrays once for masking
-    row_idx = Nx.iota({n}, type: {:s, 32})
-    col_idx = Nx.iota({n}, type: {:s, 32})
-
-    [h, q] = Nx.broadcast_vectors([h, q])
+    [h, q] = Nx.broadcast_vectors([a, Nx.eye(n, type: type)])
 
     # Perform Householder reflections for columns 0 to n-3
     {{h, q}, _} =
-      while {{h, q}, {k = 0, row_idx, col_idx}}, k < n - 2 do
-        # Extract column k, masking elements at or above k
-        x_full = h[[.., k]]
-        mask = Nx.greater(row_idx, k)
-        x = Nx.select(mask, x_full, Nx.tensor(0.0, type: type))
+      while {{h, q}, {column_iota}}, k <- 0..(n - 3)//1 do
+        # Extract column k, zeroing elements at or above k
+        x = h[[.., k]]
+        x = Nx.select(column_iota <= k, 0, x)
 
-        # Compute Householder vector (only for elements below diagonal)
-        {v_full, beta} = householder_vector(x, mask, eps)
+        # Compute Householder reflector matrix
+        reflector = Nx.LinAlg.QR.householder_reflector(x, k, eps)
+        h_adj = Nx.LinAlg.adjoint(reflector)
 
-        # Apply Householder reflection: H = I - beta * v * v^H
-        # Update H: H = (I - beta*v*v^H) * H
-        # v^H * H
-        v_conj = Nx.conjugate(v_full)
-        vh_h = Nx.dot(v_conj, [0], h, [0])
-        update_h = beta * Nx.outer(v_full, vh_h)
-        h = h - update_h
+        # Apply: H = P * H * P^H where P is the reflector
+        h = reflector |> Nx.dot(h) |> Nx.dot(h_adj)
 
-        # Update H: H = H * (I - beta*v*v^H)
-        # H * v
-        h_v = Nx.dot(h, [1], v_full, [0])
-        update_h2 = beta * Nx.outer(h_v, v_conj)
-        h = h - update_h2
+        # Update Q: Q = Q * P
+        q = Nx.dot(q, reflector)
 
-        # Update Q: Q = Q * (I - beta*v*v^H)
-        # Q * v
-        q_v = Nx.dot(q, [1], v_full, [0])
-        update_q = beta * Nx.outer(q_v, v_conj)
-        q = q - update_q
-
-        {{h, q}, {k + 1, row_idx, col_idx}}
+        {{h, q}, {column_iota}}
       end
 
     {h, q}
-  end
-
-  defnp householder_vector(x, mask, eps) do
-    # Compute Householder vector v and scalar beta
-    # x is already masked - only elements where mask=true are non-zero
-    type = Nx.type(x)
-    n = Nx.size(x)
-
-    # Compute norm only for masked elements
-    norm_x = Nx.sqrt(Nx.sum(Nx.multiply(x, Nx.conjugate(x))))
-
-    # Avoid division by zero
-    norm_x = Nx.select(Nx.abs(norm_x) < eps, Nx.tensor(1.0, type: type), norm_x)
-
-    # First non-zero element (use argmax on mask to find it)
-    first_idx = Nx.argmax(mask)
-    first_elem = x[[first_idx]]
-
-    # Phase to avoid cancellation (works for real and complex): first_elem/|first_elem|
-    phase = first_elem / (Nx.abs(first_elem) + eps)
-    alpha = -phase * norm_x
-
-    # Create e1 (first unit vector in the masked subspace)
-    idx_range = Nx.iota({n}, type: {:s, 32})
-    e1 = Nx.select(idx_range == first_idx, Nx.tensor(1.0, type: type), Nx.tensor(0.0, type: type))
-
-    # v = x - alpha * e1 (only in masked region)
-    v = Nx.select(mask, x - alpha * e1, Nx.tensor(0.0, type: type))
-
-    # Normalize v in the masked region
-    v_norm = Nx.sqrt(Nx.sum(Nx.multiply(v, Nx.conjugate(v))))
-    # Convert v_norm to real for comparison (it should already be real, but make it explicit)
-    v_norm_real = Nx.abs(v_norm)
-    v = Nx.select(v_norm_real < eps, e1, v / (v_norm + eps))
-
-    # beta = 2 for normalized v
-    beta = Nx.tensor(2.0, type: type)
-
-    {v, beta}
   end
 
   defnp qr_algorithm(h, opts) do
@@ -361,7 +299,7 @@ defmodule Nx.LinAlg.Eig do
 
     eye = Nx.eye(n, type: type)
     [a, eye] = Nx.broadcast_vectors([a, eye])
-    v = a * Nx.tensor(0.0, type: type)
+    v = a * 0.0
 
     row_idx = Nx.iota({n}, type: {:s, 32})
     col_idx = row_idx
@@ -373,7 +311,7 @@ defmodule Nx.LinAlg.Eig do
         lambda = eigenvals[[k]]
         u = a - lambda * eye
 
-        vk = u[0] * Nx.tensor(0.0, type: type)
+        vk = u[0] * 0.0
         vk = Nx.put_slice(vk, [k], Nx.tensor([1.0], type: type))
 
         {vk, _} =
@@ -406,7 +344,7 @@ defmodule Nx.LinAlg.Eig do
 
     eye = Nx.eye(n, type: type)
     [a, eye] = Nx.broadcast_vectors([a, eye])
-    v = a * Nx.tensor(0.0, type: type)
+    v = a * 0.0
 
     row_idx = Nx.iota({n}, type: {:s, 32})
     col_idx = row_idx
@@ -418,7 +356,7 @@ defmodule Nx.LinAlg.Eig do
         lambda = eigenvals[[k]]
         l = a - lambda * eye
 
-        vk = l[0] * Nx.tensor(0.0, type: type)
+        vk = l[0] * 0.0
         vk = Nx.put_slice(vk, [k], Nx.tensor([1.0], type: type))
 
         {vk, _} =
