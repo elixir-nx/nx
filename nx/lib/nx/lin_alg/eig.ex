@@ -140,9 +140,6 @@ defmodule Nx.LinAlg.Eig do
               eigenvals = Nx.take(eigenvals, sort_idx)
               eigenvecs = Nx.take(eigenvecs, sort_idx, axis: 1)
 
-              # Optional: polish eigenvectors using fixed eigenvalues (do not change eigenvalues)
-              eigenvecs = polish_eigenvectors(a, eigenvals, eigenvecs, opts)
-
               {eigenvals, eigenvecs}
             end
           end
@@ -489,10 +486,9 @@ defmodule Nx.LinAlg.Eig do
         # Backward substitution for i = k-1 .. 0
         {v, _} =
           while {v, {i = k - 1, u, row_idx, col_idx, k}}, i >= 0 do
-            # mask over columns j: j > i and j <= k
+            # mask over columns j: j > i (all columns after i)
             mask_gt_i = Nx.greater(col_idx, i)
-            mask_le_k = Nx.less_equal(col_idx, k)
-            m = Nx.as_type(Nx.logical_and(mask_gt_i, mask_le_k), type)
+            m = Nx.as_type(mask_gt_i, type)
 
             row_u = u[i]
             # sum_j u[i,j] * v[j] over masked range using multiplicative mask
@@ -605,53 +601,6 @@ defmodule Nx.LinAlg.Eig do
       end
 
     v
-  end
-
-  # Polish eigenvectors in A-space with fixed eigenvalues using normal equations
-  defnp polish_eigenvectors(a, eigenvals, eigenvecs, opts) do
-    polish_eigenvectors_with_iters(a, eigenvals, eigenvecs, opts, 40)
-  end
-
-  # Variant with configurable iteration count for pre- or post-polish
-  defnp polish_eigenvectors_with_iters(a, eigenvals, eigenvecs, opts, iters) do
-    eps = opts[:eps]
-    {n, _} = Nx.shape(a)
-    type = Nx.type(a)
-
-    eye = Nx.eye(n, type: type)
-    [a, eye, eigenvals, eigenvecs] = Nx.broadcast_vectors([a, eye, eigenvals, eigenvecs])
-
-    {eigenvecs, _} =
-      while {eigenvecs, {k = 0, a, eye, eigenvals}}, k < n do
-        lambda = eigenvals[[k]]
-        v = eigenvecs[[.., k]]
-
-        a_shift = a - lambda * eye
-        ah = Nx.LinAlg.adjoint(a_shift)
-
-        {v, _} =
-          while {v, {iter = 0, a_shift, ah, eye}}, iter < iters do
-            b = Nx.dot(ah, [1], v, [0])
-            ah_a = Nx.dot(ah, a_shift)
-            mu = Nx.LinAlg.norm(ah_a) * 1.0e-5 + eps
-            nmat = ah_a + mu * eye
-            v_new = Nx.LinAlg.solve(nmat, b)
-            v_norm = Nx.LinAlg.norm(v_new)
-            v = Nx.select(Nx.abs(v_norm) > eps, v_new / v_norm, v)
-            {v, {iter + 1, a_shift, ah, eye}}
-          end
-
-        # Optional light re-orthogonalization against previously polished vectors
-        v = orthogonalize_vector(v, eigenvecs, k, eps)
-        v_norm = Nx.LinAlg.norm(v)
-        v = Nx.select(Nx.abs(v_norm) > eps, v / v_norm, v)
-
-        eigenvecs = Nx.put_slice(eigenvecs, [0, k], Nx.reshape(v, {n, 1}))
-
-        {eigenvecs, {k + 1, a, eye, eigenvals}}
-      end
-
-    eigenvecs
   end
 
   # Orthogonalize vector v against the first k columns of matrix eigenvecs

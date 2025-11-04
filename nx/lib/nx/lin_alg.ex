@@ -1265,15 +1265,10 @@ defmodule Nx.LinAlg do
         v = adjoint(vt)
         ut = adjoint(u)
 
-        # Ensure singular values are in a floating (real) type to avoid complex division issues
-        s = Nx.as_type(s, Nx.Type.to_floating(Nx.type(tensor)))
-        one = Nx.tensor(1.0, type: Nx.type(s))
-        zero = Nx.tensor(0.0, type: Nx.type(s))
-
         s_idx = Nx.abs(s) < opts[:eps]
-        adjusted_s = Nx.select(s_idx, one, s)
+        adjusted_s = Nx.select(s_idx, 1, s)
 
-        s_inv_matrix = Nx.select(s_idx, zero, one / adjusted_s)
+        s_inv_matrix = Nx.select(s_idx, 0, 1 / adjusted_s)
 
         sut = Nx.new_axis(s_inv_matrix, -1) * ut
         Nx.dot(v, sut)

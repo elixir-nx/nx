@@ -751,7 +751,11 @@ defmodule Nx.LinAlgTest do
       expected_eigenvals = Nx.tensor([3.0, 2.0, 1.0]) |> Nx.as_type({:c, 64})
       assert_all_close(Nx.abs(eigenvals), Nx.abs(expected_eigenvals), atol: 1.0e-2)
 
-      # Note: Eigenvector verification skipped for placeholder implementation
+      assert_all_close(
+        Nx.dot(t, eigenvecs),
+        Nx.dot(eigenvecs, Nx.make_diagonal(eigenvals)),
+        atol: 1.0e-2
+      )
     end
 
     test "computes eigenvalues and eigenvectors for upper triangular matrix" do
@@ -792,13 +796,19 @@ defmodule Nx.LinAlgTest do
       # 90-degree rotation matrix has purely imaginary eigenvalues ±i
       t = Nx.tensor([[0.0, -1.0], [1.0, 0.0]])
 
-      assert {eigenvals, eigenvecs} = Nx.LinAlg.eig(t)
+      assert {eigenvals, eigenvecs} = Nx.LinAlg.eig(t, balance: 0)
 
       # Both eigenvalues should have magnitude 1
       assert_all_close(Nx.abs(eigenvals), Nx.tensor([1.0, 1.0]), atol: 1.0e-3)
 
       # Verify they are complex conjugates (imaginary parts should sum to ~0)
       assert_all_close(Nx.sum(Nx.imag(eigenvals)), Nx.tensor(0.0), atol: 1.0e-3)
+
+      assert_all_close(
+        Nx.dot(t, eigenvecs),
+        Nx.dot(eigenvecs, Nx.make_diagonal(eigenvals)),
+        atol: 1.0e-2
+      )
     end
 
     test "works with batched matrices" do
@@ -811,10 +821,19 @@ defmodule Nx.LinAlgTest do
       assert {eigenvals, eigenvecs} = Nx.LinAlg.eig(t)
 
       # First batch: eigenvalues 2, 1
-      assert_all_close(Nx.abs(eigenvals[0]), Nx.tensor([2.0, 1.0]), atol: 1.0e-3)
+      assert_all_close(eigenvals[0], Nx.tensor([2.0, 1.0]), atol: 1.0e-3)
 
       # Second batch: eigenvalues 4, 3
-      assert_all_close(Nx.abs(eigenvals[1]), Nx.tensor([4.0, 3.0]), atol: 1.0e-3)
+      assert_all_close(eigenvals[1], Nx.tensor([4.0, 3.0]), atol: 1.0e-3)
+
+      eigenvals =
+        eigenvals |> Nx.vectorize([:x]) |> Nx.make_diagonal() |> Nx.devectorize(keep_names: false)
+
+      assert_all_close(
+        Nx.dot(t, [-1], [0], eigenvecs, [-2], [0]),
+        Nx.dot(eigenvecs, [-1], [0], eigenvals, [-2], [0]),
+        atol: 1.0e-3
+      )
     end
 
     test "works with vectorized matrices" do

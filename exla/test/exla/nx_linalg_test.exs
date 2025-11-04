@@ -73,7 +73,7 @@ defmodule EXLA.NxLinAlgTest do
     test "property: eigenvalue equation A*v = λ*v" do
       key = Nx.Random.key(System.unique_integer())
 
-      for _ <- 1..3, type <- [{:f, 32}, {:f, 64}], reduce: key do
+      for _ <- 1..3, type <- [{:f, 32}, {:f, 64}, {:c, 64}, {:c, 128}], reduce: key do
         key ->
           {base_q, key} = Nx.Random.uniform(key, -2, 2, shape: {2, 3, 3}, type: type)
           {q, _} = Nx.LinAlg.qr(base_q)
