@@ -718,8 +718,9 @@ defmodule Nx.Defn.Grad do
 
   defp grad(:sort, [t, opts], _ans, g) do
     idx = Nx.argsort(t, opts)
+    reverse_idx = Nx.argsort(idx, axis: opts[:axis], direction: :asc)
     take_along_opts = Keyword.take(opts, [:axis])
-    g = Nx.take_along_axis(g, idx, take_along_opts)
+    g = Nx.take_along_axis(g, reverse_idx, take_along_opts)
     [{t, g}]
   end
 
