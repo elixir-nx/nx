@@ -1,0 +1,279 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# Backend Comparison with Evaluator
+
+```elixir
+Mix.install([
+  # {:nx, "~> 0.7"}
+  {:nx, path: Path.join(__DIR__, "../..")},
+  # {:exla, "~> 0.7"}
+  {:exla, path: Path.join(__DIR__, "../../../exla")}
+])
+```
+
+## Introduction
+
+This guide demonstrates how to use `Nx.Defn.Evaluator` to compare the outputs of different backends. This is particularly useful for:
+
+* **Testing backend implementations** - Ensure different backends produce consistent results
+* **Debugging numerical differences** - Identify where backends diverge
+* **Validating optimizations** - Confirm that optimized backends match reference implementations
+
+The evaluator's `debug_options` feature saves each node's computation as an executable `.exs` file, making it easy to reconstruct and compare tensors across backends.
+
+## How It Works
+
+When you enable `debug_options` with a `save_path`, the evaluator:
+
+1. Saves each computation node as a separate `.exs` file
+2. Serializes tensors as executable `Nx.from_binary()` calls
+3. Preserves backend information, shape, type, and names
+4. Creates files that can be directly executed to reconstruct tensors
+
+This allows you to:
+
+* Run the same computation with different backends
+* Compare corresponding node outputs using `Nx.all_close/2`
+* Identify exactly where backends differ
+
+## Example: Simple Computation
+
+Let's define a simple computation to compare across backends:
+
+```elixir
+defmodule SimpleComputation do
+  import Nx.Defn
+
+  defn compute(x, y) do
+    a = Nx.add(x, y)
+    b = Nx.multiply(a, 2)
+    Nx.divide(b, 3)
+  end
+end
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+{:module, SimpleComputation, <<70, 79, 82, 49, 0, 0, 10, ...>>, true}
+```
+
+### Prepare Test Data
+
+```elixir
+# Create some test input
+x = Nx.tensor([1.0, 2.0, 3.0, 4.0])
+y = Nx.tensor([0.5, 1.5, 2.5, 3.5])
+
+IO.puts("Input tensors:")
+IO.inspect(x, label: "x")
+IO.inspect(y, label: "y")
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+Input tensors:
+x: #Nx.Tensor<
+  f32[4]
+  [1.0, 2.0, 3.0, 4.0]
+>
+y: #Nx.Tensor<
+  f32[4]
+  [0.5, 1.5, 2.5, 3.5]
+>
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  f32[4]
+  [0.5, 1.5, 2.5, 3.5]
+>
+```
+
+## Running with Backend A
+
+Let's run our computation with the first backend (BinaryBackend in this example, but could be any backend):
+
+```elixir
+# Clean up and create output directory
+File.rm_rf!("/tmp/backend_a")
+File.mkdir_p!("/tmp/backend_a")
+
+# Run computation with debug output enabled
+result_a = Nx.Defn.jit(
+  &SimpleComputation.compute/2,
+  compiler: Nx.Defn.Evaluator,
+  debug_options: [save_path: "/tmp/backend_a"]
+).(x, y)
+
+IO.puts("\n✅ Backend A completed")
+IO.inspect(result_a, label: "Result A")
+IO.puts("Backend: #{inspect(result_a.data.__struct__)}")
+
+# Show what files were generated
+files_a = File.ls!("/tmp/backend_a")
+IO.puts("\nGenerated #{length(files_a)} node files:")
+Enum.each(files_a, &IO.puts("  - #{&1}"))
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+
+✅ Backend A completed
+Result A: #Nx.Tensor<
+  f32[4]
+  [1.0, 2.3333332538604736, 3.6666667461395264, 5.0]
+>
+Backend: Nx.BinaryBackend
+
+Generated 5 node files:
+  - node__Reference_0_2972192348_3826778113_163860_.exs
+  - node__Reference_0_2972192348_3826778113_163864_.exs
+  - node__Reference_0_2972192348_3826778113_163863_.exs
+  - node__Reference_0_2972192348_3826778113_163859_.exs
+  - node__Reference_0_2972192348_3826778113_163862_.exs
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
+```
+
+## Examining the Output Files
+
+Let's look at what the `.exs` files contain:
+
+```elixir
+# Read and display one of the generated files
+example_file = File.ls!("/tmp/backend_a") |> List.last()
+content = File.read!(Path.join("/tmp/backend_a", example_file))
+
+IO.puts("=== Content of #{example_file} ===\n")
+IO.puts(content)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+=== Content of node__Reference_0_2972192348_3826778113_163862_.exs ===
+
+# Node ID: 0.2972192348.3826778113.163862
+# Operation: :add
+
+# Arguments:
+arg_0 = # <unevaluated expression>
+arg_1 = # <unevaluated expression>
+
+# Result:
+result = Nx.from_binary(<<0, 0, 192, 63, 0, 0, 96, 64, 0, 0, 176, 64, 0, 0, 240, 64>>, {:f, 32}, backend: {Nx.BinaryBackend, []}) |> Nx.reshape({4})
+
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
+```
+
+Notice the format:
+
+* **Node ID** - Unique identifier for this computation node
+* **Operation** - The operation being performed (e.g., `:add`, `:multiply`)
+* **Arguments** - Serialized input tensors or placeholders for unevaluated expressions
+* **Result** - Executable code that reconstructs the output tensor
+
+## Verifying Executability
+
+The result line is actual Elixir code that can be executed:
+
+```elixir
+# Extract and execute the result line
+result_line = content
+  |> String.split("\n")
+  |> Enum.find(&String.starts_with?(&1, "result = "))
+  |> String.replace("result = ", "")
+
+# Execute it to reconstruct the tensor
+{reconstructed, _} = Code.eval_string(result_line)
+
+IO.puts("✅ Successfully reconstructed tensor from .exs file!")
+IO.inspect(reconstructed, label: "Reconstructed tensor")
+IO.puts("\nProperties:")
+IO.puts("  Type: #{inspect(reconstructed.type)}")
+IO.puts("  Shape: #{inspect(reconstructed.shape)}")
+IO.puts("  Backend: #{inspect(reconstructed.data.__struct__)}")
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+✅ Successfully reconstructed tensor from .exs file!
+Reconstructed tensor: #Nx.Tensor<
+  f32[4]
+  [1.5, 3.5, 5.5, 7.5]
+>
+
+Properties:
+  Type: {:f, 32}
+  Shape: {4}
+  Backend: Nx.BinaryBackend
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
+```
+
+## Running with Backend B
+
+Now let's run the same computation with a second backend (simulated here, but you would use a different backend like EXLA):
+
+```elixir
+# Clean up and create output directory for backend B
+File.rm_rf!("/tmp/backend_b")
+File.mkdir_p!("/tmp/backend_b")
+
+Nx.default_backend(EXLA.Backend)
+
+# Run the same computation
+result_b = Nx.Defn.jit(
+  &SimpleComputation.compute/2,
+  compiler: Nx.Defn.Evaluator,
+  debug_options: [save_path: "/tmp/backend_b"]
+).(x, y)
+
+IO.puts("✅ Backend B completed")
+IO.inspect(result_b, label: "Result B")
+IO.puts("Backend: #{inspect(result_b.data.__struct__)}")
+
+files_b = File.ls!("/tmp/backend_b")
+IO.puts("\nGenerated #{length(files_b)} node files")
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+✅ Backend B completed
+Result B: #Nx.Tensor<
+  f32[4]
+  EXLA.Backend<host:0, 0.2972192348.3826909208.14069>
+  [1.0, 2.3333332538604736, 3.6666667461395264, 5.0]
+>
+Backend: EXLA.Backend
+
+Generated 5 node files
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
+```
+
+Now that the evaluator has created files for both backends, they executed and compared using Nx.all_close for example.
