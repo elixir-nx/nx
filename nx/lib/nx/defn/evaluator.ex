@@ -534,37 +534,112 @@ defmodule Nx.Defn.Evaluator do
     end
   end
 
-  defp format_node_info(%Expr{id: id, op: op, args: args}, res, inspect_limit) do
-    args =
-      Enum.map(
-        args,
-        &inspect(&1, custom_options: [print_id: true], limit: inspect_limit)
-      )
+  defp format_node_info(%Expr{id: id, op: op, args: args}, res, _inspect_limit) do
+    id_str = :erlang.ref_to_list(id) |> List.to_string() |> String.replace(["#Ref<", ">"], "")
 
-    result_str = inspect(res, limit: inspect_limit)
+    # Format args as documentation (pure comments)
+    args_code =
+      args
+      |> Enum.with_index()
+      |> Enum.map(fn {arg, idx} ->
+        serialized = safe_serialize_tensor(arg)
 
-    import Inspect.Algebra
+        # If it's a reference to another node or unevaluated, make it pure documentation
+        # If it's concrete data (like a number or serialized tensor), keep it with the value
+        if String.starts_with?(serialized, "#") do
+          "# arg_#{idx}: #{String.replace_prefix(serialized, "# ", "")}"
+        else
+          "# arg_#{idx} = #{serialized}"
+        end
+      end)
+      |> Enum.join("\n")
 
-    id = :erlang.ref_to_list(id) |> List.to_string() |> String.replace(["#Ref<", ">"], "")
+    # Format result as serialized tensor
+    result_code = "result = #{serialize_tensor(res)}"
 
-    concat([
-      "Node ID: #{id}",
-      line(),
-      "Operation: #{inspect(op)}",
-      line(),
-      concat(Enum.intersperse(["Args:" | args], line())),
-      line(),
-      "Result:",
-      line(),
-      result_str
-    ])
-    |> format(100)
-    |> IO.iodata_to_binary()
+    """
+    # Node ID: #{id_str}
+    # Operation: #{inspect(op)}
+
+    # Arguments:
+    #{args_code}
+
+    # Result:
+    #{result_code}
+    """
+  end
+
+  defp safe_serialize_tensor(value) do
+    try do
+      serialize_tensor(value)
+    rescue
+      _ -> "# <serialization error>"
+    end
+  end
+
+  defp serialize_tensor(%Nx.Tensor{data: %Expr{id: id}} = _tensor) when is_reference(id) do
+    # This is an unevaluated expression, not a concrete tensor
+    # Show the Node ID so users can find which file contains this tensor
+    id_str = :erlang.ref_to_list(id) |> List.to_string() |> String.replace(["#Ref<", ">"], "")
+    "# See Node ID: #{id_str}"
+  end
+
+  defp serialize_tensor(%Nx.Tensor{data: %Expr{}} = _tensor) do
+    # Expression without a valid reference ID
+    "# <unevaluated expression>"
+  end
+
+  defp serialize_tensor(%Nx.Tensor{} = tensor) do
+    # Get the backend information from the tensor's data
+    {backend, backend_opts} =
+      case tensor.data do
+        %backend_mod{} -> {backend_mod, []}
+        _ -> Nx.default_backend()
+      end
+
+    # Convert tensor to binary and get metadata
+    binary = Nx.to_binary(tensor)
+    type = tensor.type
+    shape = tensor.shape
+    names = tensor.names
+
+    # Format the binary as a binary literal
+    binary_str = inspect(binary, limit: :infinity)
+
+    # Build the executable Nx code
+    backend_str = "{#{inspect(backend)}, #{inspect(backend_opts)}}"
+
+    code = "Nx.from_binary(#{binary_str}, #{inspect(type)}, backend: #{backend_str})"
+
+    # Add reshape if needed (non-scalar)
+    code =
+      if shape != {} do
+        shape_str = inspect(shape)
+        code <> " |> Nx.reshape(#{shape_str})"
+      else
+        code
+      end
+
+    # Add rename if there are non-nil names
+    code =
+      if names != [] and Enum.any?(names, & &1 != nil) do
+        names_list = inspect(names)
+        code <> " |> Nx.rename(#{names_list})"
+      else
+        code
+      end
+
+    code
+  end
+
+  defp serialize_tensor(other) do
+    # For non-tensor values (numbers, tuples, etc.)
+    inspect(other)
   end
 
   defp save_node_info_to_file(save_path, id, node_info) do
     sanitized_id = inspect(id) |> String.replace(~r/[^a-zA-Z0-9_]/, "_")
-    file = Path.join(save_path, "node_#{sanitized_id}.txt")
+    file = Path.join(save_path, "node_#{sanitized_id}.exs")
     File.write!(file, node_info)
   end
 end
