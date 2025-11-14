@@ -152,26 +152,14 @@ Notice the format:
 * **Arguments** - List containing parameters and tensors as strings
 * **Result** - Executable code that reconstructs the output tensor from binary
 
-## Verifying Executability
+### Verifying Executability
 
-The result line is actual Elixir code that can be executed:
+Each `.exs` file is a self-contained Elixir script, so you can execute it directly:
 
 ```elixir
-# Extract and execute the result line
-result_line = content
-  |> String.split("\n")
-  |> Enum.find(&String.starts_with?(&1, "result = "))
-  |> String.replace("result = ", "")
+example_path = Path.join("/tmp/backend_a", example_file)
+Code.eval_file(example_path)
 
-# Execute it to reconstruct the tensor
-{reconstructed, _} = Code.eval_string(result_line)
-
-IO.puts("✅ Successfully reconstructed tensor from .exs file!")
-IO.inspect(reconstructed, label: "Reconstructed tensor")
-IO.puts("\nProperties:")
-IO.puts("  Type: #{inspect(reconstructed.type)}")
-IO.puts("  Shape: #{inspect(reconstructed.shape)}")
-IO.puts("  Backend: #{inspect(reconstructed.data.__struct__)}")
 ```
 
 ## Running with Backend B
