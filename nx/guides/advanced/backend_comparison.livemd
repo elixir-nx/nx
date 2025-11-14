@@ -1,13 +1,10 @@
-<!-- livebook:{"persist_outputs":true} -->
-
 # Backend Comparison with Evaluator
 
 ```elixir
 Mix.install([
   # {:nx, "~> 0.7"}
   {:nx, path: Path.join(__DIR__, "../..")},
-  # {:exla, "~> 0.7"}
-  {:exla, path: Path.join(__DIR__, "../../../exla")}
+  {:mimic, "~> 1.7"}
 ])
 ```
 
@@ -33,8 +30,41 @@ When you enable `debug_options` with a `save_path`, the evaluator:
 This allows you to:
 
 * Run the same computation with different backends
-* Compare corresponding node outputs using `Nx.all_close/2`
+* Compare corresponding node outputs — in this guide we'll be using `Nx.all_close/2`
 * Identify exactly where backends differ
+
+## Simulating Backend Differences with Mimic
+
+Instead of shipping a dedicated mock backend, we can use `Mimic.stub/3` to override individual callbacks on `Nx.BinaryBackend`. First we initialize `Mimic` and copy the binary backend so it can be stubbed safely. Then `add`, `multiply`, and `divide` are swapped to make the divergence easy to spot
+
+```elixir
+
+Mimic.copy(Nx.BinaryBackend)
+
+defmodule BackendSwaps do
+  def enable! do
+    Mimic.stub(Nx.BinaryBackend, :add, fn out, left, right ->
+      Nx.BinaryBackend.subtract(out, left, right)
+    end)
+
+    Mimic.stub(Nx.BinaryBackend, :multiply, fn out, left, right ->
+      Nx.BinaryBackend.add(out, left, right)
+    end)
+
+    Mimic.stub(Nx.BinaryBackend, :divide, fn out, left, right ->
+      Nx.BinaryBackend.add(out, left, right)
+    end)
+  end
+
+  def restore! do
+    for fun <- [:add, :multiply, :divide] do
+      Mimic.stub(Nx.BinaryBackend, fun, fn out, left, right ->
+        Mimic.call_original(Nx.BinaryBackend, fun, [out, left, right])
+      end)
+    end
+  end
+end
+```
 
 ## Example: Simple Computation
 
@@ -52,12 +82,6 @@ defmodule SimpleComputation do
 end
 ```
 
-<!-- livebook:{"output":true} -->
-
-```
-{:module, SimpleComputation, <<70, 79, 82, 49, 0, 0, 10, ...>>, true}
-```
-
 ### Prepare Test Data
 
 ```elixir
@@ -70,27 +94,16 @@ IO.inspect(x, label: "x")
 IO.inspect(y, label: "y")
 ```
 
-<!-- livebook:{"output":true} -->
+## Preparing the function for comparing
 
-```
-Input tensors:
-x: #Nx.Tensor<
-  f32[4]
-  [1.0, 2.0, 3.0, 4.0]
->
-y: #Nx.Tensor<
-  f32[4]
-  [0.5, 1.5, 2.5, 3.5]
->
-```
+In order to ensure the same `id` for each node in the graph while our function traverses it on both backends, we need to use `Nx.Defn.debug_expr/1` to pre-compile `SimpleComputation.compute/2`.
 
-<!-- livebook:{"output":true} -->
+This is a trick to make sure the same expression is passed on both `Nx.Defn.jit/2` calls and should not be used liberally.
 
-```
-#Nx.Tensor<
-  f32[4]
-  [0.5, 1.5, 2.5, 3.5]
->
+```elixir
+expr = Nx.Defn.debug_expr(&SimpleComputation.compute/2).(x, y)
+
+precompiled = fn _x, _y -> expr end
 ```
 
 ## Running with Backend A
@@ -104,7 +117,7 @@ File.mkdir_p!("/tmp/backend_a")
 
 # Run computation with debug output enabled
 result_a = Nx.Defn.jit(
-  &SimpleComputation.compute/2,
+  precompiled,
   compiler: Nx.Defn.Evaluator,
   debug_options: [save_path: "/tmp/backend_a"]
 ).(x, y)
@@ -117,31 +130,6 @@ IO.puts("Backend: #{inspect(result_a.data.__struct__)}")
 files_a = File.ls!("/tmp/backend_a")
 IO.puts("\nGenerated #{length(files_a)} node files:")
 Enum.each(files_a, &IO.puts("  - #{&1}"))
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-
-✅ Backend A completed
-Result A: #Nx.Tensor<
-  f32[4]
-  [1.0, 2.3333332538604736, 3.6666667461395264, 5.0]
->
-Backend: Nx.BinaryBackend
-
-Generated 5 node files:
-  - node__Reference_0_2972192348_3826778113_163860_.exs
-  - node__Reference_0_2972192348_3826778113_163864_.exs
-  - node__Reference_0_2972192348_3826778113_163863_.exs
-  - node__Reference_0_2972192348_3826778113_163859_.exs
-  - node__Reference_0_2972192348_3826778113_163862_.exs
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-:ok
 ```
 
 ## Examining the Output Files
@@ -157,35 +145,12 @@ IO.puts("=== Content of #{example_file} ===\n")
 IO.puts(content)
 ```
 
-<!-- livebook:{"output":true} -->
-
-```
-=== Content of node__Reference_0_2972192348_3826778113_163862_.exs ===
-
-# Node ID: 0.2972192348.3826778113.163862
-# Operation: :add
-
-# Arguments:
-arg_0 = # <unevaluated expression>
-arg_1 = # <unevaluated expression>
-
-# Result:
-result = Nx.from_binary(<<0, 0, 192, 63, 0, 0, 96, 64, 0, 0, 176, 64, 0, 0, 240, 64>>, {:f, 32}, backend: {Nx.BinaryBackend, []}) |> Nx.reshape({4})
-
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-:ok
-```
-
 Notice the format:
 
 * **Node ID** - Unique identifier for this computation node
-* **Operation** - The operation being performed (e.g., `:add`, `:multiply`)
-* **Arguments** - Serialized input tensors or placeholders for unevaluated expressions
-* **Result** - Executable code that reconstructs the output tensor
+* **Operation** - The operation being performed (e.g., `:add`, `:multiply`, `:parameter`)
+* **Arguments** - List containing parameters and tensors as strings
+* **Result** - Executable code that reconstructs the output tensor from binary
 
 ## Verifying Executability
 
@@ -209,44 +174,23 @@ IO.puts("  Shape: #{inspect(reconstructed.shape)}")
 IO.puts("  Backend: #{inspect(reconstructed.data.__struct__)}")
 ```
 
-<!-- livebook:{"output":true} -->
-
-```
-✅ Successfully reconstructed tensor from .exs file!
-Reconstructed tensor: #Nx.Tensor<
-  f32[4]
-  [1.5, 3.5, 5.5, 7.5]
->
-
-Properties:
-  Type: {:f, 32}
-  Shape: {4}
-  Backend: Nx.BinaryBackend
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-:ok
-```
-
 ## Running with Backend B
 
-Now let's run the same computation with a second backend (simulated here, but you would use a different backend like EXLA):
+Now let's run the same computation with the swapped operations. We leave `Nx` on its default backend, but temporarily enable the Mimic stubs so the evaluator will capture the modified behaviour.
 
 ```elixir
 # Clean up and create output directory for backend B
 File.rm_rf!("/tmp/backend_b")
 File.mkdir_p!("/tmp/backend_b")
 
-Nx.default_backend(EXLA.Backend)
+BackendSwaps.enable!()
 
-# Run the same computation
-result_b = Nx.Defn.jit(
-  &SimpleComputation.compute/2,
-  compiler: Nx.Defn.Evaluator,
-  debug_options: [save_path: "/tmp/backend_b"]
-).(x, y)
+result_b =
+  Nx.Defn.jit(
+    precompiled,
+    compiler: Nx.Defn.Evaluator,
+    debug_options: [save_path: "/tmp/backend_b"]
+  ).(x, y)
 
 IO.puts("✅ Backend B completed")
 IO.inspect(result_b, label: "Result B")
@@ -254,26 +198,70 @@ IO.puts("Backend: #{inspect(result_b.data.__struct__)}")
 
 files_b = File.ls!("/tmp/backend_b")
 IO.puts("\nGenerated #{length(files_b)} node files")
+
+BackendSwaps.restore!()
 ```
 
-<!-- livebook:{"output":true} -->
+## Comparing the Outputs
 
+Now we inspect the generated `.exs` files, compare every node, and then summarise matches and mismatches.
+
+```elixir
+IO.puts("Comparing outputs from .exs files")
+IO.puts(String.duplicate("-", 60))
+
+files_a = File.ls!("/tmp/backend_a") |> Enum.sort()
+files_b = File.ls!("/tmp/backend_b") |> Enum.sort()
+
+IO.puts("Backend A generated #{length(files_a)} files")
+IO.puts("Backend B generated #{length(files_b)} files")
+
+comparison =
+  Enum.zip_with(files_a, files_b, fn file_a, file_b ->
+    {tensor_a, bindings_a} = Code.eval_file(Path.join("/tmp/backend_a", file_a))
+    {tensor_b, _bindings_b} = Code.eval_file(Path.join("/tmp/backend_b", file_b))
+
+    op = Keyword.get(bindings_a, :operation)
+    match? = Nx.all_close(tensor_a, tensor_b, atol: 1.0e-6) |> Nx.to_number() == 1
+
+    %{
+      operation: op,
+      tensor_a: tensor_a,
+      tensor_b: tensor_b,
+      match?: match?,
+      file_a: file_a,
+      file_b: file_b
+    }
+  end)
+
+{matches, mismatches} = Enum.split_with(comparison, & &1.match?)
+
+IO.puts("\n Summary:")
+IO.puts(String.duplicate("-", 60))
+
+if Enum.any?(matches) do
+  IO.puts("✅ Matched nodes (#{length(matches)}):")
+
+  Enum.each(matches, fn match ->
+    IO.puts("  - #{match.operation} (#{match.file_a})")
+  end)
+else
+  IO.puts("\n❌ No nodes match!")
+end
+
+if Enum.any?(mismatches) do
+  IO.puts("\n❌ Mismatched nodes (#{length(mismatches)}):")
+
+  Enum.each(mismatches, fn mismatch ->
+    IO.puts("- #{mismatch.operation} (#{mismatch.file_a})")
+    IO.puts("Backend A")
+    IO.inspect(mismatch.tensor_a)
+    IO.puts("Backend B")    
+    IO.inspect(mismatch.tensor_b)
+  end)
+else
+  IO.puts("\n✅ All nodes match!")
+end
 ```
-✅ Backend B completed
-Result B: #Nx.Tensor<
-  f32[4]
-  EXLA.Backend<host:0, 0.2972192348.3826909208.14069>
-  [1.0, 2.3333332538604736, 3.6666667461395264, 5.0]
->
-Backend: EXLA.Backend
 
-Generated 5 node files
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-:ok
-```
-
-Now that the evaluator has created files for both backends, they executed and compared using Nx.all_close for example.
+With Mimic stubs in place, the evaluator’s debug artifacts clearly show where the divergence starts, making it straightforward to pinpoint inconsistent nodes between implementations, while the summary highlights both the matching and mismatching nodes.

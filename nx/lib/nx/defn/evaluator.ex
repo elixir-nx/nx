@@ -534,47 +534,41 @@ defmodule Nx.Defn.Evaluator do
     end
   end
 
-  defp format_node_info(%Expr{id: id, op: op, args: args}, res, _inspect_limit) do
+  defp format_node_info(%Expr{id: id, op: op, args: args}, res, inspect_limit) do
     id_str = :erlang.ref_to_list(id) |> List.to_string() |> String.replace(["#Ref<", ">"], "")
 
-    # Format args as documentation (pure comments)
+    inspect_opts =
+      case inspect_limit do
+        nil -> []
+        limit -> [limit: limit]
+      end
+
     args_code =
       args
-      |> Enum.with_index()
-      |> Enum.map(fn {arg, idx} ->
-        serialized = safe_serialize_tensor(arg)
+      |> Enum.map(fn arg ->
+        inspected =
+          arg
+          |> inspect(inspect_opts)
+          |> String.trim()
 
-        # If it's a reference to another node or unevaluated, make it pure documentation
-        # If it's concrete data (like a number or serialized tensor), keep it with the value
-        if String.starts_with?(serialized, "#") do
-          "# arg_#{idx}: #{String.replace_prefix(serialized, "# ", "")}"
-        else
-          "# arg_#{idx} = #{serialized}"
-        end
+        "  #{inspect(inspected)}"
       end)
-      |> Enum.join("\n")
+      |> Enum.join(",\n")
 
     # Format result as serialized tensor
     result_code = "result = #{serialize_tensor(res)}"
 
     """
-    # Node ID: #{id_str}
-    # Operation: #{inspect(op)}
+    node_id = "#{id_str}"
+    operation = "#{inspect(op)}"
 
-    # Arguments:
+    args = [
     #{args_code}
+    ]
 
     # Result:
     #{result_code}
     """
-  end
-
-  defp safe_serialize_tensor(value) do
-    try do
-      serialize_tensor(value)
-    rescue
-      _ -> "# <serialization error>"
-    end
   end
 
   defp serialize_tensor(%Nx.Tensor{data: %Expr{id: id}} = _tensor) when is_reference(id) do
@@ -622,7 +616,7 @@ defmodule Nx.Defn.Evaluator do
 
     # Add rename if there are non-nil names
     code =
-      if names != [] and Enum.any?(names, & &1 != nil) do
+      if names != [] and Enum.any?(names, &(&1 != nil)) do
         names_list = inspect(names)
         code <> " |> Nx.rename(#{names_list})"
       else
