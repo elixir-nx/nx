@@ -98,7 +98,7 @@ IO.inspect(y, label: "y")
 
 In order to ensure the same `id` for each node in the graph while our function traverses it on both backends, we need to use `Nx.Defn.debug_expr/1` to pre-compile `SimpleComputation.compute/2`.
 
-This is a trick to make sure the same expression is passed on both `Nx.Defn.jit/2` calls and should not be used liberally.
+This is a trick to make sure the same expression is passed on both `Nx.Defn.jit/2` calls and should not be used liberally elsewhere.
 
 ```elixir
 expr = Nx.Defn.debug_expr(&SimpleComputation.compute/2).(x, y)
