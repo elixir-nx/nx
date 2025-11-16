@@ -35,7 +35,7 @@ This allows you to:
 
 ## Simulating Backend Differences with Mimic
 
-Instead of shipping a dedicated mock backend, we can use `Mimic.stub/3` to override individual callbacks on `Nx.BinaryBackend`. First we initialize `Mimic` and copy the binary backend so it can be stubbed safely. Then `add`, `multiply`, and `divide` are swapped to make the divergence easy to spot
+For demonstration purposes, instead of defining an new incorrect backend, we can use `Mimic.stub/3` to override individual callbacks on `Nx.BinaryBackend`. We use `Mimic.copy(Nx.BinaryBackend)` so it can be stubbed correctly. Then `add`, `multiply`, and `divide` are swapped to force a divergence in implementation.
 
 ```elixir
 
