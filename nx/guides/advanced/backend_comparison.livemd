@@ -166,6 +166,8 @@ Code.eval_file(example_path)
 
 Now let's run the same computation with the swapped operations. We leave `Nx` on its default backend, but temporarily enable the Mimic stubs so the evaluator will capture the modified behaviour.
 
+In practice, this would be where we call a totally different backend to compare against the reference.
+
 ```elixir
 # Clean up and create output directory for backend B
 File.rm_rf!("/tmp/backend_b")
