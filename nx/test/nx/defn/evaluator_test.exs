@@ -775,7 +775,7 @@ defmodule Nx.Defn.EvaluatorTest do
       opts = [compiler: Nx.Defn.Evaluator, debug_options: [inspect_limit: 5]]
       output = ExUnit.CaptureIO.capture_io(fn -> debug_test_fun(x, y, opts) end)
 
-      node_id_regex = ~r/Node ID: (.*)/
+      node_id_regex = ~r/node_id = \"(.*)\"/
 
       assert [id0, id1, id2, id3, id4] =
                Regex.scan(node_id_regex, output, capture: :all_but_first)
@@ -788,90 +788,60 @@ defmodule Nx.Defn.EvaluatorTest do
         |> String.replace(id3, "::id3::")
         |> String.replace(id4, "::id4::")
 
-      assert output == """
-             Node ID: ::id0::
-             Operation: :parameter
-             Args:
-             0
-             Result:
-             #Nx.Tensor<
-               s32[2]
-               [1, 2]
-             >
-             Node ID: ::id1::
-             Operation: :parameter
-             Args:
-             1
-             Result:
-             #Nx.Tensor<
-               s32[2]
-               [3, 4]
-             >
-             Node ID: ::id2::
-             Operation: :add
-             Args:
-             #Nx.Tensor<
-               s32[2]
-             \s\s
-               Nx.Defn.Expr<::id0::>
-               parameter a:0   s32[2]
-             >
-             #Nx.Tensor<
-               s32[2]
-             \s\s
-               Nx.Defn.Expr<::id1::>
-               parameter a:1   s32[2]
-             >
-             Result:
-             #Nx.Tensor<
-               s32[2]
-               [4, 6]
-             >
-             Node ID: ::id3::
-             Operation: :multiply
-             Args:
-             #Nx.Tensor<
-               s32
-             \s\s
-               Nx.Defn.Expr
-               2
-             >
-             #Nx.Tensor<
-               s32[2]
-             \s\s
-               Nx.Defn.Expr<::id2::>
-               parameter a:0   s32[2]
-               parameter b:1   s32[2]
-               c = add a, b    s32[2]
-             >
-             Result:
-             #Nx.Tensor<
-               s32[2]
-               [8, 12]
-             >
-             Node ID: ::id4::
-             Operation: :subtract
-             Args:
-             #Nx.Tensor<
-               s32[2]
-             \s\s
-               Nx.Defn.Expr<::id3::>
-               parameter a:0       s32[2]
-               parameter b:1       s32[2]
-               c = add a, b        s32[2]
-               d = multiply 2, c   s32[2]
-             >
-             #Nx.Tensor<
-               s32
-             \s\s
-               Nx.Defn.Expr
-               1
-             >
-             Result:
-             #Nx.Tensor<
-               s32[2]
-               [7, 11]
-             >
+      assert output == ~S"""
+             node_id = "::id0::"
+             operation = :parameter
+
+             args = [
+               "0"
+             ]
+
+             # Result:
+             result = Nx.from_binary(<<1, 0, 0, 0, 2, 0, 0, 0>>, {:s, 32}, backend: {Nx.BinaryBackend, []}) |> Nx.reshape({2})
+
+             node_id = "::id1::"
+             operation = :parameter
+
+             args = [
+               "1"
+             ]
+
+             # Result:
+             result = Nx.from_binary(<<3, 0, 0, 0, 4, 0, 0, 0>>, {:s, 32}, backend: {Nx.BinaryBackend, []}) |> Nx.reshape({2})
+
+             node_id = "::id2::"
+             operation = :add
+
+             args = [
+               "#Nx.Tensor<\n  s32[2]\n  \n  Nx.Defn.Expr<::id0::>\n  parameter a:0   s32[2]\n>",
+               "#Nx.Tensor<\n  s32[2]\n  \n  Nx.Defn.Expr<::id1::>\n  parameter a:1   s32[2]\n>"
+             ]
+
+             # Result:
+             result = Nx.from_binary(<<4, 0, 0, 0, 6, 0, 0, 0>>, {:s, 32}, backend: {Nx.BinaryBackend, []}) |> Nx.reshape({2})
+
+             node_id = "::id3::"
+             operation = :multiply
+
+             args = [
+               "#Nx.Tensor<\n  s32\n  \n  Nx.Defn.Expr\n  2\n>",
+               "#Nx.Tensor<\n  s32[2]\n  \n  Nx.Defn.Expr<::id2::>\n  parameter a:0   s32[2]\n  parameter b:1   s32[2]\n  c = add a, b    s32[2]\n>"
+             ]
+
+             # Result:
+             result = Nx.from_binary(<<8, 0, 0, 0, 12, 0, 0, 0>>, {:s, 32}, backend: {Nx.BinaryBackend, []}) |> Nx.reshape({2})
+
+             node_id = "::id4::"
+             operation = :subtract
+
+             args = [
+               "#Nx.Tensor<\n  s32[2]\n  \n  Nx.Defn.Expr<::id3::>\n  parameter a:0       s32[2]\n  parameter b:1       s32[2]\n  c = add a, b        s32[2]\n  d = multiply 2, c   s32[2]\n>",
+               "#Nx.Tensor<\n  s32\n  \n  Nx.Defn.Expr\n  1\n>"
+             ]
+
+             # Result:
+             result = Nx.from_binary(<<7, 0, 0, 0, 11, 0, 0, 0>>, {:s, 32}, backend: {Nx.BinaryBackend, []}) |> Nx.reshape({2})
+
              """
     end
 
@@ -886,9 +856,9 @@ defmodule Nx.Defn.EvaluatorTest do
       files = File.ls!(tmp_dir)
       assert Enum.any?(files, &String.starts_with?(&1, "node_"))
       contents = Enum.map(files, &File.read!(Path.join(tmp_dir, &1)))
-      assert {[_], rest} = Enum.split_with(contents, &(&1 =~ "Operation: :add"))
-      assert {[_], rest} = Enum.split_with(rest, &(&1 =~ "Operation: :multiply"))
-      assert {[_], rest} = Enum.split_with(rest, &(&1 =~ "Operation: :subtract"))
+      assert {[_], rest} = Enum.split_with(contents, &(&1 =~ "operation = :add"))
+      assert {[_], rest} = Enum.split_with(rest, &(&1 =~ "operation = :multiply"))
+      assert {[_], rest} = Enum.split_with(rest, &(&1 =~ "operation = :subtract"))
       assert length(rest) == 2
     end
 
@@ -897,7 +867,7 @@ defmodule Nx.Defn.EvaluatorTest do
       opts = [compiler: Nx.Defn.Evaluator, debug_options: [inspect_limit: 5]]
       output = ExUnit.CaptureIO.capture_io(fn -> reuse_fun(x, opts) end)
 
-      node_id_regex = ~r/Node ID: (.*)/
+      node_id_regex = ~r/node_id = (.*)/
 
       assert [id0, id1, id2, id3] =
                Regex.scan(node_id_regex, output, capture: :all_but_first)
@@ -910,10 +880,10 @@ defmodule Nx.Defn.EvaluatorTest do
         |> String.replace(id3, "::id3::")
 
       # ensure that each node id is printed exactly once
-      assert output =~ ~r/.*(?:Node ID: ::id0::){1}.*/
-      assert output =~ ~r/.*(?:Node ID: ::id1::){1}.*/
-      assert output =~ ~r/.*(?:Node ID: ::id2::){1}.*/
-      assert output =~ ~r/.*(?:Node ID: ::id3::){1}.*/
+      assert output =~ ~r/.*(?:node_id = ::id0::){1}.*/
+      assert output =~ ~r/.*(?:node_id = ::id1::){1}.*/
+      assert output =~ ~r/.*(?:node_id = ::id2::){1}.*/
+      assert output =~ ~r/.*(?:node_id = ::id3::){1}.*/
     end
 
     test "respects inspect_limit" do
