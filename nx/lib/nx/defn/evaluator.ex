@@ -539,8 +539,8 @@ defmodule Nx.Defn.Evaluator do
 
     inspect_opts =
       case inspect_limit do
-        nil -> []
-        limit -> [limit: limit]
+        nil -> [custom_options: [print_id: true]]
+        limit -> [custom_options: [print_id: true], limit: limit]
       end
 
     args_code =

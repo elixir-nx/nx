@@ -775,7 +775,7 @@ defmodule Nx.Defn.EvaluatorTest do
       opts = [compiler: Nx.Defn.Evaluator, debug_options: [inspect_limit: 5]]
       output = ExUnit.CaptureIO.capture_io(fn -> debug_test_fun(x, y, opts) end)
 
-      node_id_regex = ~r/node_id = (.*)/
+      node_id_regex = ~r/node_id = \"(.*)\"/
 
       assert [id0, id1, id2, id3, id4] =
                Regex.scan(node_id_regex, output, capture: :all_but_first)
@@ -789,7 +789,7 @@ defmodule Nx.Defn.EvaluatorTest do
         |> String.replace(id4, "::id4::")
 
       assert output == ~S"""
-             node_id = ::id0::
+             node_id = "::id0::"
              operation = :parameter
 
              args = [
@@ -799,7 +799,7 @@ defmodule Nx.Defn.EvaluatorTest do
              # Result:
              result = Nx.from_binary(<<1, 0, 0, 0, 2, 0, 0, 0>>, {:s, 32}, backend: {Nx.BinaryBackend, []}) |> Nx.reshape({2})
 
-             node_id = ::id1::
+             node_id = "::id1::"
              operation = :parameter
 
              args = [
@@ -809,33 +809,33 @@ defmodule Nx.Defn.EvaluatorTest do
              # Result:
              result = Nx.from_binary(<<3, 0, 0, 0, 4, 0, 0, 0>>, {:s, 32}, backend: {Nx.BinaryBackend, []}) |> Nx.reshape({2})
 
-             node_id = ::id2::
+             node_id = "::id2::"
              operation = :add
 
              args = [
-               "#Nx.Tensor<\n  s32[2]\n  \n  Nx.Defn.Expr\n  parameter a:0   s32[2]\n>",
-               "#Nx.Tensor<\n  s32[2]\n  \n  Nx.Defn.Expr\n  parameter a:1   s32[2]\n>"
+               "#Nx.Tensor<\n  s32[2]\n  \n  Nx.Defn.Expr<::id0::>\n  parameter a:0   s32[2]\n>",
+               "#Nx.Tensor<\n  s32[2]\n  \n  Nx.Defn.Expr<::id1::>\n  parameter a:1   s32[2]\n>"
              ]
 
              # Result:
              result = Nx.from_binary(<<4, 0, 0, 0, 6, 0, 0, 0>>, {:s, 32}, backend: {Nx.BinaryBackend, []}) |> Nx.reshape({2})
 
-             node_id = ::id3::
+             node_id = "::id3::"
              operation = :multiply
 
              args = [
                "#Nx.Tensor<\n  s32\n  \n  Nx.Defn.Expr\n  2\n>",
-               "#Nx.Tensor<\n  s32[2]\n  \n  Nx.Defn.Expr\n  parameter a:0   s32[2]\n  parameter b:1   s32[2]\n  c = add a, b    s32[2]\n>"
+               "#Nx.Tensor<\n  s32[2]\n  \n  Nx.Defn.Expr<::id2::>\n  parameter a:0   s32[2]\n  parameter b:1   s32[2]\n  c = add a, b    s32[2]\n>"
              ]
 
              # Result:
              result = Nx.from_binary(<<8, 0, 0, 0, 12, 0, 0, 0>>, {:s, 32}, backend: {Nx.BinaryBackend, []}) |> Nx.reshape({2})
 
-             node_id = ::id4::
+             node_id = "::id4::"
              operation = :subtract
 
              args = [
-               "#Nx.Tensor<\n  s32[2]\n  \n  Nx.Defn.Expr\n  parameter a:0       s32[2]\n  parameter b:1       s32[2]\n  c = add a, b        s32[2]\n  d = multiply 2, c   s32[2]\n>",
+               "#Nx.Tensor<\n  s32[2]\n  \n  Nx.Defn.Expr<::id3::>\n  parameter a:0       s32[2]\n  parameter b:1       s32[2]\n  c = add a, b        s32[2]\n  d = multiply 2, c   s32[2]\n>",
                "#Nx.Tensor<\n  s32\n  \n  Nx.Defn.Expr\n  1\n>"
              ]
 
