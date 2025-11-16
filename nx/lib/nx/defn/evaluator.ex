@@ -535,7 +535,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp format_node_info(%Expr{id: id, op: op, args: args}, res, inspect_limit) do
-    id_str = :erlang.ref_to_list(id) |> List.to_string() |> String.replace(["#Ref<", ">"], "")
+    id_str = ref_to_string(id)
 
     inspect_opts =
       case inspect_limit do
@@ -560,7 +560,7 @@ defmodule Nx.Defn.Evaluator do
 
     """
     node_id = "#{id_str}"
-    operation = "#{inspect(op)}"
+    operation = #{inspect(op)}
 
     args = [
     #{args_code}
@@ -632,8 +632,15 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp save_node_info_to_file(save_path, id, node_info) do
-    sanitized_id = inspect(id) |> String.replace(~r/[^a-zA-Z0-9_]/, "_")
+    sanitized_id = id |> ref_to_string() |> String.replace(".", "_")
     file = Path.join(save_path, "node_#{sanitized_id}.exs")
     File.write!(file, node_info)
+  end
+
+  defp ref_to_string(id) when is_reference(id) do
+    id
+    |> :erlang.ref_to_list()
+    |> List.to_string()
+    |> String.replace(["#Ref<", ">"], "")
   end
 end
