@@ -616,7 +616,7 @@ defmodule Nx.Defn.Evaluator do
 
     # Add rename if there are non-nil names
     code =
-      if names != [] and Enum.any?(names, &(&1 != nil)) do
+      if Enum.any?(names, fn name -> not is_nil(name) end) do
         names_list = inspect(names)
         code <> " |> Nx.rename(#{names_list})"
       else
