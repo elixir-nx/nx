@@ -1020,6 +1020,68 @@ defmodule EXLA.MLIR.Value do
     "##{dialect}<#{enum_name} #{value}>"
   end
 
+  @doc """
+  Experimental: Send a tensor to a BEAM stream process via XLA FFI custom call.
+
+  This uses the `exla_beam_outfeed` custom call to send tensor data to a stream
+  process using `enif_send`, bypassing the traditional token-based outfeed mechanism.
+
+  ## Arguments
+
+    * `pid_tensor` - A u8 tensor containing the encoded PID (from EXLA.FFI.TermTensor)
+    * `payload` - The tensor to send to the stream
+
+  ## Returns
+
+  Returns a scalar u8 tensor with value 1 on success, 0 on failure.
+  """
+  def beam_outfeed(%Value{function: func}, pid_tensor, payload) do
+    operands = [pid_tensor, payload]
+    success_typespec = Typespec.tensor({:u, 8}, {})
+    result_types = typespecs_to_mlir_types([success_typespec])
+
+    attributes = [
+      call_target_name: attr_string("exla_beam_outfeed"),
+      api_version: attr_i32(4)
+    ]
+
+    op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes) |> one!()
+  end
+
+  @doc """
+  Experimental: Receive a tensor from a BEAM stream process via XLA FFI custom call.
+
+  This uses the `exla_beam_infeed` custom call to fetch tensor data from a stream
+  process using `nif_call`, bypassing the traditional token-based infeed mechanism.
+
+  Note: This is currently unimplemented on the C++ side and will return an error.
+
+  ## Arguments
+
+    * `pid_tensor` - A u8 tensor containing the encoded PID (from EXLA.FFI.TermTensor)
+    * `tag_tensor` - A u8 tensor containing the encoded tag (from EXLA.FFI.TermTensor)
+    * `payload_typespec` - The typespec of the tensor to receive
+    * `tag_typespec` - The typespec for the updated tag tensor
+
+  ## Returns
+
+  Returns `{payload, new_tag}`.
+  """
+  def beam_infeed(%Value{function: func}, pid_tensor, tag_tensor, payload_typespec, tag_typespec) do
+    operands = [pid_tensor, tag_tensor]
+    result_types = typespecs_to_mlir_types([payload_typespec, tag_typespec])
+
+    attributes = [
+      call_target_name: attr_string("exla_beam_infeed"),
+      api_version: attr_i32(4)
+    ]
+
+    [payload, new_tag] =
+      op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
+
+    {payload, new_tag}
+  end
+
   defp attr_struct(name, keyword_list) do
     content = Enum.map_join(keyword_list, ", ", fn {key, value} -> "#{key} = #{value}" end)
     "##{name}<#{content}>"
