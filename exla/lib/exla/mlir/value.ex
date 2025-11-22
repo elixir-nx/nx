@@ -832,6 +832,29 @@ defmodule EXLA.MLIR.Value do
     {p, l, u}
   end
 
+  @doc """
+  Builds a StableHLO `custom_call` that targets the EXLA Elixir callback bridge.
+
+  The `callback_id` is a small integer assigned by `EXLA.CallbackServer` that
+  identifies which Elixir function should be invoked when the host callback
+  runs. The native side is expected to read this id from the backend config
+  or attributes and route the callback accordingly.
+  """
+  def elixir_call([%Value{function: func} | _] = operands, callback_id, typespecs)
+      when is_integer(callback_id) and callback_id >= 0 do
+    result_types = typespecs_to_mlir_types(typespecs)
+
+    attributes = [
+      call_target_name: attr_string("exla_elixir_callback"),
+      api_version: attr_i32(4),
+      # We currently encode the callback id as a backend config string.
+      # The native handler should parse this value back into an integer.
+      backend_config: attr_string(Integer.to_string(callback_id))
+    ]
+
+    op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
+  end
+
   def get_tuple_element(%Value{function: func} = operand, index, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
     attributes = [index: attr_i32(index)]

@@ -521,6 +521,64 @@ get_per_device_memory(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client) {
 
 FINE_NIF(get_per_device_memory, 0);
 
+// Elixir callback bridge
+
+namespace {
+
+// Very small, CPU-only bridge that forwards callback requests from the XLA
+// host CustomCall to the Elixir dispatcher process.
+//
+// For Phase 1 we keep this intentionally simple:
+//   * Only single-output, single-replica computations are supported.
+//   * Arguments and results are transferred by value as host binaries.
+//   * Each request is synchronous: the CustomCall will block the XLA host
+//     thread until the Elixir side replies via `elixir_callback_reply/2`.
+//
+// This can be evolved later to support batching, more efficient tensor
+// encoding, and timeouts.
+
+struct ElixirCallbackRequest {
+  int64_t callback_id;
+  std::vector<ERL_NIF_TERM> args;
+  ERL_NIF_TERM reply_tag;
+};
+
+// Global state for the bridge. For simplicity we keep a single dispatcher
+// PID and use a monotonically increasing integer as reply_tag.
+struct ElixirCallbackBridgeState {
+  ErlNifPid dispatcher_pid;
+  std::atomic<int64_t> next_tag{1};
+};
+
+ElixirCallbackBridgeState *GetElixirCallbackBridgeState() {
+  static ElixirCallbackBridgeState *state = new ElixirCallbackBridgeState();
+  return state;
+}
+
+} // namespace
+
+std::tuple<fine::Ok<>, fine::Error<fine::Atom>>
+start_elixir_callback_bridge(ErlNifEnv *env, ErlNifPid dispatcher_pid) {
+  auto state = GetElixirCallbackBridgeState();
+  state->dispatcher_pid = dispatcher_pid;
+  return std::make_tuple(fine::Ok<>(), fine::Error<fine::Atom>());
+}
+
+FINE_NIF(start_elixir_callback_bridge, 0);
+
+std::tuple<fine::Ok<>, fine::Error<fine::Atom>>
+elixir_callback_reply(ErlNifEnv *env, int64_t reply_tag, fine::Term _payload) {
+  // For Phase 1 we do not implement a native waiting mechanism; instead the
+  // CustomCall handler calls directly into Elixir and returns immediately.
+  // This NIF exists only as a placeholder for future, more advanced bridges.
+  (void)env;
+  (void)reply_tag;
+  (void)_payload;
+  return std::make_tuple(fine::Ok<>(), fine::Error<fine::Atom>());
+}
+
+FINE_NIF(elixir_callback_reply, 0);
+
 // Logging
 
 fine::Ok<> start_log_sink(ErlNifEnv *env, ErlNifPid logger_pid) {

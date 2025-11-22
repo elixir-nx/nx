@@ -1,10 +1,12 @@
-defmodule EXLA.Defn.ElixirCallEvaluatorTest do
+defmodule EXLA.Defn.ElixirCallEXLATest do
   use ExUnit.Case, async: true
   import Nx.Defn
   import Nx.Testing
 
+  @moduletag :exla
+
   setup do
-    Nx.Defn.default_options(compiler: Nx.Defn.Evaluator)
+    Nx.Defn.default_options(compiler: EXLA)
     Nx.default_backend(EXLA.Backend)
     :ok
   end
@@ -17,7 +19,7 @@ defmodule EXLA.Defn.ElixirCallEvaluatorTest do
     end)
   end
 
-  test "elixir_call with single output" do
+  test "elixir_call with single output on EXLA CPU" do
     x = Nx.iota({5})
     y = add_offset(x)
 
@@ -40,7 +42,7 @@ defmodule EXLA.Defn.ElixirCallEvaluatorTest do
     Nx.add(a, b)
   end
 
-  test "elixir_call with tuple output" do
+  test "elixir_call with tuple output on EXLA CPU" do
     x = Nx.tensor([1, 2, 3])
     y = split_and_sum(x)
 
@@ -49,12 +51,20 @@ defmodule EXLA.Defn.ElixirCallEvaluatorTest do
     assert_equal(y, expected)
   end
 
-  test "works when using EXLA compiler directly" do
-    x = Nx.tensor([1, 2, 3])
-    y = EXLA.jit_apply(&split_and_sum/1, [x])
+  test "elixir_call errors when result shape does not match template" do
+    defn bad_callback(x) do
+      out = %{x | type: Nx.Type.to_floating(x.type)}
 
-    fx = Nx.as_type(x, :f32)
-    expected = Nx.add(Nx.multiply(fx, 2.0), Nx.add(fx, 1.0))
-    assert_equal(y, expected)
+      Nx.elixir_call(out, [x], fn _t ->
+        # Wrong shape on purpose
+        Nx.tensor([1.0, 2.0, 3.0])
+      end)
+    end
+
+    x = Nx.iota({2})
+
+    assert_raise ArgumentError, ~r/expected the elixir_call function to match/, fn ->
+      bad_callback(x)
+    end
   end
 end

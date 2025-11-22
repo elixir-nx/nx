@@ -547,6 +547,42 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
+         :elixir_call,
+         %T{data: %Expr{args: [in_args, fun]}} = expr,
+         %{client: %EXLA.Client{platform: :host}} = state,
+         cache
+       ) do
+    {tensor_args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
+
+    {call_args, cache} =
+      Enum.map_reduce(tensor_args, cache, fn arg, cache ->
+        recur_operator(arg, state, cache) |> unwrap_single_tensor!()
+      end)
+
+    callback_id = EXLA.CallbackServer.register(fun, Nx.to_template(expr))
+    typespecs = container_to_typespecs(expr)
+
+    results =
+      Value.elixir_call(call_args, callback_id, typespecs)
+
+    {wrap_tuple_result(results, expr), cache}
+  end
+
+  defp cached_recur_operator(
+         :elixir_call,
+         _expr,
+         %{client: %EXLA.Client{platform: platform}},
+         cache
+       ) do
+    raise """
+    Nx.elixir_call/3 is currently only supported for EXLA CPU (platform: :host),
+    but the active EXLA client is configured for platform #{inspect(platform)}.
+    Please run on the :host client or wait for future segmentation-based support.
+    """
+    |> then(fn _ -> {nil, cache} end)
+  end
+
+  defp cached_recur_operator(
          :lu,
          %T{
            data: %Expr{args: [{p_expr, l_expr, u_expr}, %{type: {type_kind, _}} = tensor, _opts]}
@@ -1207,10 +1243,6 @@ defmodule EXLA.Defn do
     comp = sort_computation(op, type, arg_typespecs, state)
 
     EXLA.Lib.argsort(state.builder, tensor, dimension, stable, comp, ans.type)
-  end
-
-  defp to_operator(:elixir_call, _, _, _) do
-    raise "Nx.elixir_call/3 is not supported yet. Use Nx.Defn.Evaluator as your compiler."
   end
 
   defp fft(exla_op, [%Value{} = tensor, opts], %{type: type} = ans, state) do
