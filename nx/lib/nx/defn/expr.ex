@@ -393,11 +393,13 @@ defmodule Nx.Defn.Expr do
 
     case out do
       t when is_struct(t, Nx.Tensor) ->
-        expr(t, context, :elixir_call, [in_args, fun])
+        out_template = Nx.to_template(t)
+        expr(t, context, :elixir_call, [in_args, fun, out_template])
 
       tuple when is_tuple(tuple) ->
         out_template = tuple_out(tuple_size(tuple))
-        expr_node = expr(out_template, context, :elixir_call, [in_args, fun])
+        user_template = Nx.to_template(tuple)
+        expr_node = expr(out_template, context, :elixir_call, [in_args, fun, user_template])
         tuple(expr_node, Tuple.to_list(tuple))
     end
   end

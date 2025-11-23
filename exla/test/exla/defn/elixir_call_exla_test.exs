@@ -51,19 +51,19 @@ defmodule EXLA.Defn.ElixirCallEXLATest do
     assert_equal(y, expected)
   end
 
+  defn bad_callback(x) do
+    out = %{x | type: Nx.Type.to_floating(x.type)}
+
+    Nx.elixir_call(out, [x], fn _t ->
+      # Wrong shape on purpose
+      Nx.tensor([1.0, 2.0, 3.0])
+    end)
+  end
+
   test "elixir_call errors when result shape does not match template" do
-    defn bad_callback(x) do
-      out = %{x | type: Nx.Type.to_floating(x.type)}
-
-      Nx.elixir_call(out, [x], fn _t ->
-        # Wrong shape on purpose
-        Nx.tensor([1.0, 2.0, 3.0])
-      end)
-    end
-
     x = Nx.iota({2})
 
-    assert_raise ArgumentError, ~r/expected the elixir_call function to match/, fn ->
+    assert_raise RuntimeError, ~r/elixir callback returned error/, fn ->
       bad_callback(x)
     end
   end

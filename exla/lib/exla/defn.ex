@@ -548,22 +548,33 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :elixir_call,
-         %T{data: %Expr{args: [in_args, fun]}} = expr,
+         %T{data: %Expr{args: [in_args, fun, out_template]}} = expr,
          %{client: %EXLA.Client{platform: :host}} = state,
          cache
        ) do
-    {tensor_args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
+    {tensor_args, _opts} = Enum.split_while(in_args, &(not is_list(&1)))
 
     {call_args, cache} =
       Enum.map_reduce(tensor_args, cache, fn arg, cache ->
         recur_operator(arg, state, cache) |> unwrap_single_tensor!()
       end)
 
-    callback_id = EXLA.CallbackServer.register(fun, Nx.to_template(expr))
-    typespecs = container_to_typespecs(expr)
+    static_args = Enum.drop(in_args, length(tensor_args))
+
+    callback_id = EXLA.CallbackServer.register(fun, out_template, static_args)
+    typespecs = container_to_typespecs(out_template)
+
+    # Pass callback id as an extra scalar s64 operand at the end so that the
+    # native handler can retrieve it without relying on backend_config attrs.
+    callback_id_typespec = Typespec.tensor({:s, 64}, {})
+
+    callback_id_value =
+      Value.constant(state.builder, [callback_id], callback_id_typespec)
+
+    operands = call_args ++ [callback_id_value]
 
     results =
-      Value.elixir_call(call_args, callback_id, typespecs)
+      Value.elixir_call(operands, typespecs)
 
     {wrap_tuple_result(results, expr), cache}
   end
@@ -1928,14 +1939,25 @@ defmodule EXLA.Defn do
   end
 
   defp container_to_typespecs(container) do
-    [container]
+    containers =
+      if is_list(container) do
+        container
+      else
+        [container]
+      end
+
+    containers
+    |> Enum.reject(&is_function/1)
     |> Nx.Defn.Composite.flatten_list()
     |> Enum.flat_map(fn
       %Nx.Tensor{type: {:tuple, _}, data: %{args: values}} ->
         Enum.flat_map(values, &container_to_typespecs/1)
 
-      t ->
+      %Nx.Tensor{} = t ->
         [Typespec.tensor(t.type, t.shape)]
+
+      _other ->
+        []
     end)
   end
 

@@ -193,7 +193,7 @@ defmodule Nx.Defn.Tree do
   end
 
   def apply_args(%T{data: %Expr{op: :elixir_call, args: args}}, _type, acc, fun) do
-    [in_args, callback] = args
+    [in_args, callback, out_template] = args
 
     {in_args, acc} =
       Enum.map_reduce(in_args, acc, fn t, acc ->
@@ -204,7 +204,7 @@ defmodule Nx.Defn.Tree do
         end
       end)
 
-    {[in_args, callback], acc}
+    {[in_args, callback, out_template], acc}
   end
 
   def apply_args(%T{data: %Expr{op: :token, args: [token]}}, _type, acc, fun) do

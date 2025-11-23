@@ -2,12 +2,15 @@
 #include <stdexcept>
 #include <string>
 #include <tuple>
+#include <unordered_map>
+#include <cstring>
 
 #include "exla_client.h"
 #include "exla_cuda.h"
 #include "exla_log_sink.h"
 #include "exla_mlir.h"
 #include "exla_nif_util.h"
+#include "elixir_callback_bridge.h"
 #include "ipc.h"
 #include "mlir/IR/MLIRContext.h"
 #include "stablehlo/dialect/ChloOps.h"
@@ -525,29 +528,19 @@ FINE_NIF(get_per_device_memory, 0);
 
 namespace {
 
-// Very small, CPU-only bridge that forwards callback requests from the XLA
-// host CustomCall to the Elixir dispatcher process.
-//
-// For Phase 1 we keep this intentionally simple:
-//   * Only single-output, single-replica computations are supported.
-//   * Arguments and results are transferred by value as host binaries.
-//   * Each request is synchronous: the CustomCall will block the XLA host
-//     thread until the Elixir side replies via `elixir_callback_reply/2`.
-//
-// This can be evolved later to support batching, more efficient tensor
-// encoding, and timeouts.
-
-struct ElixirCallbackRequest {
-  int64_t callback_id;
-  std::vector<ERL_NIF_TERM> args;
-  ERL_NIF_TERM reply_tag;
+struct ElixirCallbackPending {
+  std::mutex mu;
+  std::condition_variable cv;
+  bool done = false;
+  ElixirCallbackResult result;
 };
 
-// Global state for the bridge. For simplicity we keep a single dispatcher
-// PID and use a monotonically increasing integer as reply_tag.
 struct ElixirCallbackBridgeState {
   ErlNifPid dispatcher_pid;
+  bool dispatcher_set = false;
   std::atomic<int64_t> next_tag{1};
+  std::mutex mu;
+  std::unordered_map<int64_t, std::shared_ptr<ElixirCallbackPending>> pending;
 };
 
 ElixirCallbackBridgeState *GetElixirCallbackBridgeState() {
@@ -555,29 +548,258 @@ ElixirCallbackBridgeState *GetElixirCallbackBridgeState() {
   return state;
 }
 
+// Map ffi::DataType to a Nx-style {atom, bits} pair used on the Elixir side.
+std::pair<ERL_NIF_TERM, ERL_NIF_TERM>
+EncodeNxType(ErlNifEnv *env, xla::ffi::DataType dtype) {
+  const char *atom = nullptr;
+  int bits = 0;
+
+  switch (dtype) {
+  case xla::ffi::PRED:
+    atom = "u";
+    bits = 8;
+    break;
+  case xla::ffi::S8:
+    atom = "s";
+    bits = 8;
+    break;
+  case xla::ffi::S16:
+    atom = "s";
+    bits = 16;
+    break;
+  case xla::ffi::S32:
+    atom = "s";
+    bits = 32;
+    break;
+  case xla::ffi::S64:
+    atom = "s";
+    bits = 64;
+    break;
+  case xla::ffi::U8:
+    atom = "u";
+    bits = 8;
+    break;
+  case xla::ffi::U16:
+    atom = "u";
+    bits = 16;
+    break;
+  case xla::ffi::U32:
+    atom = "u";
+    bits = 32;
+    break;
+  case xla::ffi::U64:
+    atom = "u";
+    bits = 64;
+    break;
+  case xla::ffi::F16:
+    atom = "f";
+    bits = 16;
+    break;
+  case xla::ffi::F32:
+    atom = "f";
+    bits = 32;
+    break;
+  case xla::ffi::F64:
+    atom = "f";
+    bits = 64;
+    break;
+  case xla::ffi::BF16:
+    atom = "bf";
+    bits = 16;
+    break;
+  case xla::ffi::C64:
+    atom = "c";
+    bits = 64;
+    break;
+  case xla::ffi::C128:
+    atom = "c";
+    bits = 128;
+    break;
+  default:
+    atom = "f";
+    bits = 32;
+    break;
+  }
+
+  ERL_NIF_TERM atom_term = enif_make_atom(env, atom);
+  ERL_NIF_TERM bits_term = enif_make_int(env, bits);
+  return {atom_term, bits_term};
+}
+
 } // namespace
 
-std::tuple<fine::Ok<>, fine::Error<fine::Atom>>
+fine::Ok<>
 start_elixir_callback_bridge(ErlNifEnv *env, ErlNifPid dispatcher_pid) {
+  (void)env;
   auto state = GetElixirCallbackBridgeState();
   state->dispatcher_pid = dispatcher_pid;
-  return std::make_tuple(fine::Ok<>(), fine::Error<fine::Atom>());
+  state->dispatcher_set = true;
+  return fine::Ok();
 }
 
 FINE_NIF(start_elixir_callback_bridge, 0);
 
-std::tuple<fine::Ok<>, fine::Error<fine::Atom>>
-elixir_callback_reply(ErlNifEnv *env, int64_t reply_tag, fine::Term _payload) {
-  // For Phase 1 we do not implement a native waiting mechanism; instead the
-  // CustomCall handler calls directly into Elixir and returns immediately.
-  // This NIF exists only as a placeholder for future, more advanced bridges.
-  (void)env;
-  (void)reply_tag;
-  (void)_payload;
-  return std::make_tuple(fine::Ok<>(), fine::Error<fine::Atom>());
+fine::Ok<>
+elixir_callback_reply(ErlNifEnv *env, int64_t reply_tag, fine::Term payload) {
+  DeliverElixirCallbackReply(env, reply_tag, payload);
+  return fine::Ok();
 }
 
 FINE_NIF(elixir_callback_reply, 0);
+
+void SetElixirCallbackDispatcher(ErlNifPid dispatcher_pid) {
+  auto state = GetElixirCallbackBridgeState();
+  state->dispatcher_pid = dispatcher_pid;
+  state->dispatcher_set = true;
+}
+
+void DeliverElixirCallbackReply(ErlNifEnv *env, int64_t reply_tag,
+                                fine::Term payload) {
+  auto state = GetElixirCallbackBridgeState();
+
+  std::shared_ptr<ElixirCallbackPending> pending;
+  {
+    std::lock_guard<std::mutex> lock(state->mu);
+    auto it = state->pending.find(reply_tag);
+    if (it == state->pending.end()) {
+      return;
+    }
+    pending = it->second;
+  }
+
+  ElixirCallbackResult result;
+
+  int arity = 0;
+  const ERL_NIF_TERM *tuple = nullptr;
+  ERL_NIF_TERM term = payload;
+
+  if (!enif_get_tuple(env, term, &arity, &tuple) || arity != 2) {
+    result.ok = false;
+    result.error = "invalid callback reply payload, expected {status, value}";
+  } else {
+    char atom_buf[16];
+    if (enif_get_atom(env, tuple[0], atom_buf, sizeof(atom_buf),
+                      ERL_NIF_LATIN1) &&
+        strcmp(atom_buf, "ok") == 0) {
+      // tuple[1] is a list of binaries representing outputs.
+      ERL_NIF_TERM list = tuple[1];
+      ERL_NIF_TERM head, tail;
+
+      while (enif_get_list_cell(env, list, &head, &tail)) {
+        ErlNifBinary bin;
+        if (!enif_inspect_binary(env, head, &bin)) {
+          result.ok = false;
+          result.error = "invalid binary in callback reply";
+          break;
+        }
+
+        ElixirCallbackTensor tensor;
+        tensor.dtype = xla::ffi::DataType::INVALID;
+        tensor.dims = {};
+        tensor.data.assign(bin.data, bin.data + bin.size);
+        result.outputs.push_back(std::move(tensor));
+
+        list = tail;
+      }
+
+      if (result.error.empty()) {
+        result.ok = true;
+      }
+    } else {
+      result.ok = false;
+      result.error = "elixir callback returned error";
+    }
+  }
+
+  {
+    std::lock_guard<std::mutex> lock(pending->mu);
+    pending->result = std::move(result);
+    pending->done = true;
+  }
+
+  pending->cv.notify_one();
+
+  {
+    std::lock_guard<std::mutex> lock(state->mu);
+    state->pending.erase(reply_tag);
+  }
+}
+
+ElixirCallbackResult
+CallElixirCallback(int64_t callback_id,
+                   const std::vector<ElixirCallbackTensor> &inputs) {
+  auto state = GetElixirCallbackBridgeState();
+
+  if (!state->dispatcher_set) {
+    ElixirCallbackResult res;
+    res.ok = false;
+    res.error = "EXLA elixir callback dispatcher is not set";
+    return res;
+  }
+
+  auto pending = std::make_shared<ElixirCallbackPending>();
+
+  int64_t tag = state->next_tag.fetch_add(1, std::memory_order_relaxed);
+
+  {
+    std::lock_guard<std::mutex> lock(state->mu);
+    state->pending.emplace(tag, pending);
+  }
+
+  ErlNifEnv *msg_env = enif_alloc_env();
+
+  // Encode arguments as [{bin, {type, bits}, shape_list}, ...]
+  std::vector<ERL_NIF_TERM> args_terms;
+  args_terms.reserve(inputs.size());
+
+  for (const auto &tensor : inputs) {
+    ERL_NIF_TERM bin_term;
+    unsigned char *bin_data =
+        enif_make_new_binary(msg_env, tensor.data.size(), &bin_term);
+    if (tensor.data.size() > 0) {
+      memcpy(bin_data, tensor.data.data(), tensor.data.size());
+    }
+
+    auto [type_atom, bits_term] = EncodeNxType(msg_env, tensor.dtype);
+
+    ERL_NIF_TERM type_tuple =
+        enif_make_tuple2(msg_env, type_atom, bits_term);
+
+    std::vector<ERL_NIF_TERM> dim_terms;
+    dim_terms.reserve(tensor.dims.size());
+    for (auto d : tensor.dims) {
+      dim_terms.push_back(enif_make_int64(msg_env, d));
+    }
+
+    ERL_NIF_TERM shape_list =
+        enif_make_list_from_array(msg_env, dim_terms.data(),
+                                  dim_terms.size());
+
+    ERL_NIF_TERM arg_tuple =
+        enif_make_tuple3(msg_env, bin_term, type_tuple, shape_list);
+
+    args_terms.push_back(arg_tuple);
+  }
+
+  ERL_NIF_TERM args_list =
+      enif_make_list_from_array(msg_env, args_terms.data(),
+                                args_terms.size());
+
+  ERL_NIF_TERM tag_term = enif_make_int64(msg_env, tag);
+  ERL_NIF_TERM cb_term = enif_make_int64(msg_env, callback_id);
+
+  ERL_NIF_TERM msg =
+      enif_make_tuple4(msg_env, enif_make_atom(msg_env, "exla_elixir_call"),
+                       cb_term, args_list, tag_term);
+
+  enif_send(msg_env, &state->dispatcher_pid, msg_env, msg);
+  enif_free_env(msg_env);
+
+  std::unique_lock<std::mutex> lock(pending->mu);
+  pending->cv.wait(lock, [&pending] { return pending->done; });
+
+  return pending->result;
+}
 
 // Logging
 

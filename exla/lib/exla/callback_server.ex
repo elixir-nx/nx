@@ -38,7 +38,10 @@ defmodule EXLA.CallbackServer do
 
   @type t :: %__MODULE__{
           next_id: non_neg_integer(),
-          callbacks: %{callback_id() => {fun(), Nx.t() | tuple()}}
+          # We store the original function, its output template, and any
+          # static (non-tensor) arguments that should always be appended to
+          # the decoded tensor arguments coming from native.
+          callbacks: %{callback_id() => {fun(), Nx.t() | tuple(), [term()]}}
         }
 
   ## Public API
@@ -54,15 +57,16 @@ defmodule EXLA.CallbackServer do
   end
 
   @doc """
-  Registers a callback function and its output template, returning a callback id.
+  Registers a callback function, its output template, and static arguments, returning a callback id.
 
-  The same `{fun, out_template}` pair will always return the same id for the
-  lifetime of this VM. This id is what the EXLA compiler should encode into
-  the host `CustomCall` so the native side can reference the right callback.
+  The same `{fun, out_template, static_args}` triple will always return the
+  same id for the lifetime of this VM. This id is what the EXLA compiler
+  encodes into the host `CustomCall` so the native side can reference the
+  right callback.
   """
-  @spec register(fun(), Nx.t() | tuple()) :: callback_id()
-  def register(fun, out_template) when is_function(fun) do
-    GenServer.call(__MODULE__, {:register, fun, out_template})
+  @spec register(fun(), Nx.t() | tuple(), [term()]) :: callback_id()
+  def register(fun, out_template, static_args) when is_function(fun) and is_list(static_args) do
+    GenServer.call(__MODULE__, {:register, fun, out_template, static_args})
   end
 
   ## GenServer callbacks
@@ -85,8 +89,8 @@ defmodule EXLA.CallbackServer do
   end
 
   @impl true
-  def handle_call({:register, fun, out_template}, _from, %__MODULE__{} = state) do
-    key = {fun, Nx.to_template(out_template)}
+  def handle_call({:register, fun, out_template, static_args}, _from, %__MODULE__{} = state) do
+    key = {fun, Nx.to_template(out_template), static_args}
 
     {id, state} =
       case find_existing_id(state.callbacks, key) do
@@ -95,19 +99,22 @@ defmodule EXLA.CallbackServer do
 
         :error ->
           id = state.next_id
-          callbacks = Map.put(state.callbacks, id, {fun, Nx.to_template(out_template)})
-          {%{state | callbacks: callbacks, next_id: id + 1}.next_id - 1, %{state | callbacks: callbacks, next_id: id + 1}}
+          callbacks = Map.put(state.callbacks, id, {fun, Nx.to_template(out_template), static_args})
+          {%{state | callbacks: callbacks, next_id: id + 1}.next_id - 1,
+           %{state | callbacks: callbacks, next_id: id + 1}}
       end
 
     {:reply, id, state}
   end
 
   @impl true
-  def handle_info({:exla_elixir_call, callback_id, args, reply_tag}, %__MODULE__{} = state) do
+  def handle_info({:exla_elixir_call, callback_id, args_spec, reply_tag}, %__MODULE__{} = state) do
     case Map.fetch(state.callbacks, callback_id) do
-      {:ok, {fun, out_template}} ->
+      {:ok, {fun, out_template, static_args}} ->
         reply_payload =
-          run_callback(fun, args, out_template)
+          args_spec
+          |> decode_args()
+          |> run_callback(fun, static_args, out_template)
           |> encode_reply()
 
         send_reply(reply_tag, reply_payload)
@@ -137,10 +144,12 @@ defmodule EXLA.CallbackServer do
     end)
   end
 
-  defp run_callback(fun, args, out_template) do
+  defp run_callback({:error, reason}, _fun, _static_args, _out_template), do: {:error, reason}
+
+  defp run_callback({:ok, tensor_args}, fun, static_args, out_template) do
     result =
       try do
-        apply(fun, args)
+        apply(fun, tensor_args ++ static_args)
       rescue
         exception ->
           {:error, {:exception, exception, __STACKTRACE__}}
@@ -155,7 +164,7 @@ defmodule EXLA.CallbackServer do
 
       value ->
         case ensure_compatible(value, out_template) do
-          {:ok, tensor_or_tuple} -> {:ok, tensor_or_tuple}
+          {:ok, compatible} -> {:ok, compatible}
           {:error, reason} -> {:error, reason}
         end
     end
@@ -189,8 +198,42 @@ defmodule EXLA.CallbackServer do
 
   defp ensure_compatible(left, right), do: {:error, {:invalid_result, left, right}}
 
-  defp encode_reply({:ok, value}), do: {:ok, value}
+  defp decode_args(args_spec) when is_list(args_spec) do
+    result =
+      Enum.reduce_while(args_spec, {:ok, []}, fn {bin, {type, bits}, shape}, {:ok, acc} ->
+        try do
+          tensor =
+            bin
+            |> Nx.from_binary({type, bits})
+            |> Nx.reshape(List.to_tuple(shape))
+
+          {:cont, {:ok, [tensor | acc]}}
+        rescue
+          exception ->
+            {:halt, {:error, {:decode_failed, exception}}}
+        end
+      end)
+
+    case result do
+      {:ok, tensors} -> {:ok, Enum.reverse(tensors)}
+      {:error, _} = error -> error
+    end
+  end
+
+  defp decode_args(other), do: {:error, {:invalid_args_spec, other}}
+
+  defp encode_reply({:ok, value}), do: {:ok, encode_outputs(value)}
   defp encode_reply({:error, reason}), do: {:error, reason}
+
+  defp encode_outputs(%Nx.Tensor{} = tensor) do
+    [Nx.to_binary(tensor)]
+  end
+
+  defp encode_outputs(tuple) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.map(&Nx.to_binary/1)
+  end
 
   defp send_reply(reply_tag, payload) do
     try do

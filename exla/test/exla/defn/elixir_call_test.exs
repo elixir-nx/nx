@@ -4,7 +4,6 @@ defmodule EXLA.Defn.ElixirCallEvaluatorTest do
   import Nx.Testing
 
   setup do
-    Nx.Defn.default_options(compiler: Nx.Defn.Evaluator)
     Nx.default_backend(EXLA.Backend)
     :ok
   end
