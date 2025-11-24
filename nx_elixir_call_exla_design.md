@@ -340,5 +340,136 @@ After Phase 1 is solid on CPU, we extend support to all EXLA devices (CPU/GPU) v
 8. **Extend EXLA to allow callbacks under segmentation** when using GPU clients.
 9. Iterate on compiler-side heuristics to decide when callbacks can be compiled away vs split.
 
+### 8. Phase 1 – Intended vs Implemented (Status Summary)
 
+This section records where the **current implementation** matches or intentionally diverges from the original Phase 1 plan, so future work can see what is done vs still open.
 
+#### 8.1 Public API (`Nx.elixir_call/3`)
+
+- **Intended (this doc, §4.1)**:
+  - Shape: `Nx.elixir_call(args, fun_or_mfa, opts \\ [])`.
+  - Explicit `output_template` / `output_spec` passed via `opts`.
+- **Implemented (Nx 0.10 + EXLA 0.10)**:
+  - Shape: `Nx.elixir_call(output_template, args, fun)`.
+    - `output_template` is the **first argument**, not an option.
+    - `args` is a list of runtime arguments (tensors + static values).
+    - `fun` is a plain Elixir function; we don’t support MFA in Phase 1.
+  - `Nx.Defn.Expr.elixir_call/3`:
+    - For tensor output: stores `:elixir_call` node with args `[in_args, fun, out_template]`, where `out_template = Nx.to_template(output)`.
+    - For tuple output: builds an internal tuple-shaped template (`tuple_out/1`) plus a **user template** (also passed as `out_template`) so EXLA sees the per-element shapes/dtypes.
+  - Rationale: keeping `output_template` as a *value argument* made the IR and EXLA lowering simpler and closer to existing `defn` conventions.
+
+#### 8.2 IR Representation (`Nx.Defn.Expr` / `Nx.Defn.Graph`)
+
+- **Intended (§4.2)**:
+  - `{:elixir_call, meta, args}` with `meta` carrying:
+    - `callback_id`, `fun_or_mfa`, `output_spec`, etc.
+- **Implemented**:
+  - `Expr` op is still `:elixir_call`, but:
+    - We **do not** store `callback_id` in `meta`; it is managed solely by EXLA.
+    - Arguments are `[in_args, fun, out_template]`.
+    - Shape/type inference for the node uses `out_template` via the existing template machinery.
+  - `Nx.Defn.Tree.apply_args/4` and `Nx.Defn.Evaluator.compute_cache/4` / `eval_apply/4` were updated to be aware of the `out_template` third arg but largely **ignore it** at runtime (it is for compilation only).
+
+#### 8.3 EXLA Lowering to StableHLO `CustomCall`
+
+- **Intended (§4.3)**:
+  - `CustomCall("exla_elixir_callback")` with:
+    - Result types from `output_spec`.
+    - Attributes:
+      - `callback_id` (string/int).
+      - Possibly encoded `output_spec`.
+- **Implemented**:
+  - We lower to a `stablehlo.custom_call` with:
+    - `call_target_name = "exla_elixir_callback"`.
+    - `api_version = 4` (typed FFI).
+    - **No `backend_config` or dictionary attributes** for callback id.
+  - Instead of encoding `callback_id` as an attribute, we:
+    - Append a scalar S64 operand at the **end of the operand list** carrying `callback_id`.
+    - Register a typed FFI handler that:
+      - Interprets the last operand as the callback id.
+      - Treats the remaining operands as regular tensor arguments.
+  - Result types are derived from the `out_template`:
+    - `container_to_typespecs(out_template)` produces one `EXLA.Typespec` per tensor (including tuple elements).
+
+#### 8.4 Native Bridge & Callback Registry
+
+- **Intended (§4.4–4.5)**:
+  - Per-run mapping `callback_id → {fun_or_mfa, output_spec}`.
+  - Bridge using `RunRef`, `CallbackRequest`, `CallbackResult`, per-run state.
+- **Implemented**:
+  - We use a **global, process-wide `EXLA.CallbackServer`**:
+    - Maps `callback_id (integer)` → `{fun, out_template, static_args}`.
+    - Reuses ids when the same `{fun, out_template, static_args}` triple is registered again.
+  - The C++ bridge maintains:
+    - A global `ElixirCallbackBridgeState` with:
+      - `dispatcher_pid`, `next_tag`, and a `pending` map from `reply_tag` to a small `ElixirCallbackPending` object (`std::mutex`, `std::condition_variable`, `ElixirCallbackResult`).
+  - The **bridge thread** concept is realized as:
+    - The host `CustomCall` handler runs on an XLA-controlled thread.
+    - It **blocks natively** on a `std::condition_variable` associated with a `reply_tag` until the BEAM side replies via `EXLA.NIF.elixir_callback_reply/2`.
+  - There is currently **no per-run `RunRef`**; callbacks are effectively global to the VM.
+
+#### 8.5 Elixir Dispatcher (`EXLA.CallbackServer`)
+
+- **Intended (§4.6)**:
+  - Dedicated dispatcher process keyed by `(run_ref, callback_id)`.
+  - Messages like `{:exla_elixir_call, run_ref, callback_id, args_bin, reply_tag}`.
+- **Implemented**:
+  - `EXLA.CallbackServer` is a `GenServer` with:
+    - `callbacks :: %{callback_id => {fun, out_template, static_args}}`.
+  - Native side sends:
+    - `{:exla_elixir_call, callback_id, args_spec, reply_tag}`.
+    - `args_spec` is a list of `{bin, {type_atom, bits}, shape_list}` tuples.
+  - Dispatcher logic:
+    - Decodes `args_spec` into `Nx.Tensor`s (`Nx.from_binary/3` + `Nx.reshape/2`).
+    - Appends `static_args` captured at registration time.
+    - Executes the callback function with `[tensor_args ++ static_args]`.
+    - Validates the result against `out_template`:
+      - Tuple size check + per-element shape/dtype/names check.
+
+#### 8.6 Error Handling & Mapping
+
+- **Intended (§4.7)**:
+  - Shape/dtype validation vs `output_spec`.
+  - Clear errors; possibly mapping to `ArgumentError` or similar.
+- **Implemented (Phase 1)**:
+  - `EXLA.CallbackServer.ensure_compatible/2`:
+    - Returns `{:ok, value}` on success.
+    - Returns tagged errors:
+      - `{:error, {:shape_mismatch, left, right}}`.
+      - `{:error, {:invalid_result, left, right}}` for non-tensors/tuples.
+  - `encode_reply/1` maps internal error tuples to **typed error payloads**:
+    - Shape mismatch / invalid result:
+      - Encoded as `{:error, {:argument_error, message_binary}}` where the message mirrors `Nx.ensure_call_compatible!/2`, e.g.
+        - `"expected the elixir_call function to match the given output template ..., got: ..."`
+    - Decode failures, invalid args spec, unknown callback id, user exceptions, throws, exits:
+      - Encoded as `{:error, {:runtime_error, message_binary}}` with descriptive text (`"Elixir callback raised: ..."`, etc.).
+  - Native `DeliverElixirCallbackReply`:
+    - For `{:ok, binaries}`, fills result buffers.
+    - For `{:error, {kind_atom, message_binary}}`:
+      - Uses the **message** as `result.error` string returned to XLA.
+  - As a result:
+    - From the user’s point of view, `Nx.elixir_call/3` under EXLA now fails with:
+      - `RuntimeError` carrying a **descriptive, Nx-style message** (e.g. shape mismatch) instead of the generic `"elixir callback returned error"`.
+    - We do **not** currently raise `ArgumentError` directly from EXLA runs; everything surfaces as `RuntimeError` with a rich message, which tests explicitly assert.
+
+#### 8.7 Timeouts & Robustness
+
+- **Intended (§4.7, Timeouts)**:
+  - Optional per-callback timeout.
+  - Native side aborts run on timeout.
+- **Implemented**:
+  - **No timeouts yet**:
+    - The host `CustomCall` waits indefinitely on `condition_variable` for the reply.
+    - If the Elixir dispatcher never replies, the XLA run will hang.
+  - This is an explicit **TODO** for future hardening; the design here still stands, but is not yet implemented.
+
+#### 8.8 Phase 2 – Not Implemented Yet
+
+All of §5 (segmentation and cross-device support) remains **design only**:
+
+- `elixir_call` is **not yet used as a segmentation boundary** in `Nx.Defn.Graph`.
+- There is no multi-stage orchestration for GPU/TPU plus CPU callbacks.
+- Callbacks are only allowed on the **EXLA host (CPU) client**, and we eagerly raise if the client platform is not `:host`.
+
+This section should be updated again once segmentation and GPU support are implemented.

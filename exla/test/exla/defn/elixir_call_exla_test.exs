@@ -63,7 +63,7 @@ defmodule EXLA.Defn.ElixirCallEXLATest do
   test "elixir_call errors when result shape does not match template" do
     x = Nx.iota({2})
 
-    assert_raise RuntimeError, ~r/elixir callback returned error/, fn ->
+    assert_raise RuntimeError, ~r/expected the elixir_call function to match the given output template/, fn ->
       bad_callback(x)
     end
   end

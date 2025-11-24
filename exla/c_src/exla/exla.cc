@@ -706,8 +706,26 @@ void DeliverElixirCallbackReply(ErlNifEnv *env, int64_t reply_tag,
         result.ok = true;
       }
     } else {
+      // Error reply: tuple[1] is expected to be {kind_atom, message :: binary}
       result.ok = false;
-      result.error = "elixir callback returned error";
+      ERL_NIF_TERM err_term = tuple[1];
+
+      int err_arity = 0;
+      const ERL_NIF_TERM *err_tuple = nullptr;
+      if (enif_get_tuple(env, err_term, &err_arity, &err_tuple) &&
+          err_arity == 2) {
+        // We ignore the kind atom for now (e.g. :argument_error or
+        // :runtime_error) and use only the message as the XLA error text.
+        ErlNifBinary msg_bin;
+        if (enif_inspect_binary(env, err_tuple[1], &msg_bin)) {
+          result.error.assign(reinterpret_cast<const char *>(msg_bin.data),
+                              msg_bin.size);
+        } else {
+          result.error = "elixir callback returned error";
+        }
+      } else {
+        result.error = "elixir callback returned error";
+      }
     }
   }
 
