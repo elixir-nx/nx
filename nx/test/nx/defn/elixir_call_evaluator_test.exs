@@ -46,4 +46,19 @@ defmodule Nx.Defn.ElixirCallEvaluatorTest do
     expected = Nx.add(Nx.multiply(fx, 2.0), Nx.add(fx, 1.0))
     assert expected == y
   end
+
+  defn invalid_order(x) do
+    out = %{x | type: Nx.Type.to_floating(x.type)}
+
+    Nx.elixir_call(out, [[offset: 10.0], x], fn opts, t ->
+      Nx.add(Nx.as_type(t, :f32), opts[:offset])
+    end)
+  end
+
+  test "elixir_call enforces tensor arguments before lists" do
+    message = ~r|Nx.elixir_call/3 expects all tensor arguments to appear before any static arguments, but got|
+    assert_raise ArgumentError, message, fn ->
+      invalid_order(Nx.iota({2}))
+    end
+  end
 end

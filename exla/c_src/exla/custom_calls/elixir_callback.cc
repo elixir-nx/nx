@@ -18,10 +18,8 @@ ffi::Error exla_elixir_callback_impl(ffi::RemainingArgs args,
                       "exla_elixir_callback expects at least one argument");
   }
 
-  // The last argument is a scalar S64 tensor carrying the callback id.
-  size_t id_index = args.size() - 1;
-
-  auto id_buf_or = args.get<ffi::AnyBuffer>(id_index);
+  // The first argument is a scalar S64 tensor carrying the callback id.
+  auto id_buf_or = args.get<ffi::AnyBuffer>(0);
   if (!id_buf_or) {
     return id_buf_or.error();
   }
@@ -41,7 +39,7 @@ ffi::Error exla_elixir_callback_impl(ffi::RemainingArgs args,
   std::vector<exla::ElixirCallbackTensor> inputs;
   inputs.reserve(args.size() - 1);
 
-  for (size_t i = 0; i < id_index; ++i) {
+  for (size_t i = 1; i < args.size(); ++i) {
     auto maybe_buf_or = args.get<ffi::AnyBuffer>(i);
     if (!maybe_buf_or) {
       return maybe_buf_or.error();

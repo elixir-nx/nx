@@ -1,16 +1,17 @@
+#include <cstring>
 #include <fine.hpp>
 #include <stdexcept>
+#include <stdio.h>
 #include <string>
 #include <tuple>
 #include <unordered_map>
-#include <cstring>
 
+#include "elixir_callback_bridge.h"
 #include "exla_client.h"
 #include "exla_cuda.h"
 #include "exla_log_sink.h"
 #include "exla_mlir.h"
 #include "exla_nif_util.h"
-#include "elixir_callback_bridge.h"
 #include "ipc.h"
 #include "mlir/IR/MLIRContext.h"
 #include "stablehlo/dialect/ChloOps.h"
@@ -549,8 +550,8 @@ ElixirCallbackBridgeState *GetElixirCallbackBridgeState() {
 }
 
 // Map ffi::DataType to a Nx-style {atom, bits} pair used on the Elixir side.
-std::pair<ERL_NIF_TERM, ERL_NIF_TERM>
-EncodeNxType(ErlNifEnv *env, xla::ffi::DataType dtype) {
+std::pair<ERL_NIF_TERM, ERL_NIF_TERM> EncodeNxType(ErlNifEnv *env,
+                                                   xla::ffi::DataType dtype) {
   const char *atom = nullptr;
   int bits = 0;
 
@@ -628,8 +629,8 @@ EncodeNxType(ErlNifEnv *env, xla::ffi::DataType dtype) {
 
 } // namespace
 
-fine::Ok<>
-start_elixir_callback_bridge(ErlNifEnv *env, ErlNifPid dispatcher_pid) {
+fine::Ok<> start_elixir_callback_bridge(ErlNifEnv *env,
+                                        ErlNifPid dispatcher_pid) {
   (void)env;
   auto state = GetElixirCallbackBridgeState();
   state->dispatcher_pid = dispatcher_pid;
@@ -639,19 +640,13 @@ start_elixir_callback_bridge(ErlNifEnv *env, ErlNifPid dispatcher_pid) {
 
 FINE_NIF(start_elixir_callback_bridge, 0);
 
-fine::Ok<>
-elixir_callback_reply(ErlNifEnv *env, int64_t reply_tag, fine::Term payload) {
+fine::Ok<> elixir_callback_reply(ErlNifEnv *env, int64_t reply_tag,
+                                 fine::Term payload) {
   DeliverElixirCallbackReply(env, reply_tag, payload);
   return fine::Ok();
 }
 
-FINE_NIF(elixir_callback_reply, 0);
-
-void SetElixirCallbackDispatcher(ErlNifPid dispatcher_pid) {
-  auto state = GetElixirCallbackBridgeState();
-  state->dispatcher_pid = dispatcher_pid;
-  state->dispatcher_set = true;
-}
+FINE_NIF(elixir_callback_reply, ERL_NIF_DIRTY_JOB_IO_BOUND);
 
 void DeliverElixirCallbackReply(ErlNifEnv *env, int64_t reply_tag,
                                 fine::Term payload) {
@@ -766,7 +761,7 @@ CallElixirCallback(int64_t callback_id,
 
   ErlNifEnv *msg_env = enif_alloc_env();
 
-  // Encode arguments as [{bin, {type, bits}, shape_list}, ...]
+  // Encode arguments as [{bin, {type, bits}, shape_tuple}, ...]
   std::vector<ERL_NIF_TERM> args_terms;
   args_terms.reserve(inputs.size());
 
@@ -780,8 +775,7 @@ CallElixirCallback(int64_t callback_id,
 
     auto [type_atom, bits_term] = EncodeNxType(msg_env, tensor.dtype);
 
-    ERL_NIF_TERM type_tuple =
-        enif_make_tuple2(msg_env, type_atom, bits_term);
+    ERL_NIF_TERM type_tuple = enif_make_tuple2(msg_env, type_atom, bits_term);
 
     std::vector<ERL_NIF_TERM> dim_terms;
     dim_terms.reserve(tensor.dims.size());
@@ -789,19 +783,22 @@ CallElixirCallback(int64_t callback_id,
       dim_terms.push_back(enif_make_int64(msg_env, d));
     }
 
-    ERL_NIF_TERM shape_list =
-        enif_make_list_from_array(msg_env, dim_terms.data(),
-                                  dim_terms.size());
+    ERL_NIF_TERM shape_tuple;
+    if (dim_terms.empty()) {
+      shape_tuple = enif_make_tuple(msg_env, 0);
+    } else {
+      shape_tuple = enif_make_tuple_from_array(msg_env, dim_terms.data(),
+                                               dim_terms.size());
+    }
 
     ERL_NIF_TERM arg_tuple =
-        enif_make_tuple3(msg_env, bin_term, type_tuple, shape_list);
+        enif_make_tuple3(msg_env, bin_term, type_tuple, shape_tuple);
 
     args_terms.push_back(arg_tuple);
   }
 
   ERL_NIF_TERM args_list =
-      enif_make_list_from_array(msg_env, args_terms.data(),
-                                args_terms.size());
+      enif_make_list_from_array(msg_env, args_terms.data(), args_terms.size());
 
   ERL_NIF_TERM tag_term = enif_make_int64(msg_env, tag);
   ERL_NIF_TERM cb_term = enif_make_int64(msg_env, callback_id);

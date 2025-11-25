@@ -353,10 +353,13 @@ This section records where the **current implementation** matches or intentional
   - Shape: `Nx.elixir_call(output_template, args, fun)`.
     - `output_template` is the **first argument**, not an option.
     - `args` is a list of runtime arguments (tensors + static values).
+      - Inside `defn`, we require all non-list (tensor) arguments to appear
+        before any list argument; the first list marks the start of the static
+        tail that is replayed verbatim on the BEAM side.
     - `fun` is a plain Elixir function; we don’t support MFA in Phase 1.
   - `Nx.Defn.Expr.elixir_call/3`:
     - For tensor output: stores `:elixir_call` node with args `[in_args, fun, out_template]`, where `out_template = Nx.to_template(output)`.
-    - For tuple output: builds an internal tuple-shaped template (`tuple_out/1`) plus a **user template** (also passed as `out_template`) so EXLA sees the per-element shapes/dtypes.
+    - For tuple output: builds an internal tuple-shaped template (`tuple_out/1`) plus a `user_template = Nx.to_template(tuple)` that is passed as the third argument.
   - Rationale: keeping `output_template` as a *value argument* made the IR and EXLA lowering simpler and closer to existing `defn` conventions.
 
 #### 8.2 IR Representation (`Nx.Defn.Expr` / `Nx.Defn.Graph`)

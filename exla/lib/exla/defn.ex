@@ -552,14 +552,12 @@ defmodule EXLA.Defn do
          %{client: %EXLA.Client{platform: :host}} = state,
          cache
        ) do
-    {tensor_args, _opts} = Enum.split_while(in_args, &(not is_list(&1)))
+    {tensor_args, static_args} = Enum.split_while(in_args, &(not is_list(&1)))
 
     {call_args, cache} =
       Enum.map_reduce(tensor_args, cache, fn arg, cache ->
         recur_operator(arg, state, cache) |> unwrap_single_tensor!()
       end)
-
-    static_args = Enum.drop(in_args, length(tensor_args))
 
     callback_id = EXLA.CallbackServer.register(fun, out_template, static_args)
     typespecs = container_to_typespecs(out_template)
@@ -571,7 +569,7 @@ defmodule EXLA.Defn do
     callback_id_value =
       Value.constant(state.builder, [callback_id], callback_id_typespec)
 
-    operands = call_args ++ [callback_id_value]
+    operands = [callback_id_value | call_args]
 
     results =
       Value.elixir_call(operands, typespecs)
@@ -583,14 +581,13 @@ defmodule EXLA.Defn do
          :elixir_call,
          _expr,
          %{client: %EXLA.Client{platform: platform}},
-         cache
+         _cache
        ) do
     raise """
     Nx.elixir_call/3 is currently only supported for EXLA CPU (platform: :host),
     but the active EXLA client is configured for platform #{inspect(platform)}.
     Please run on the :host client or wait for future segmentation-based support.
     """
-    |> then(fn _ -> {nil, cache} end)
   end
 
   defp cached_recur_operator(

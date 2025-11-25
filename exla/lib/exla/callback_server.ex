@@ -79,11 +79,7 @@ defmodule EXLA.CallbackServer do
     # fail silently so that the rest of the system continues to work. This
     # allows developing the Elixir side and the native side independently.
     _ =
-      try do
-        EXLA.NIF.start_elixir_callback_bridge(self())
-      rescue
-        _ -> :ok
-      end
+      EXLA.NIF.start_elixir_callback_bridge(self())
 
     {:ok, %__MODULE__{}}
   end
@@ -92,19 +88,16 @@ defmodule EXLA.CallbackServer do
   def handle_call({:register, fun, out_template, static_args}, _from, %__MODULE__{} = state) do
     key = {fun, Nx.to_template(out_template), static_args}
 
-    {id, state} =
-      case find_existing_id(state.callbacks, key) do
-        {:ok, id} ->
-          {id, state}
+    case find_existing_id(state.callbacks, key) do
+      {:ok, id} ->
+        {:reply, id, state}
 
-        :error ->
-          id = state.next_id
-          callbacks = Map.put(state.callbacks, id, {fun, Nx.to_template(out_template), static_args})
-          {%{state | callbacks: callbacks, next_id: id + 1}.next_id - 1,
-           %{state | callbacks: callbacks, next_id: id + 1}}
-      end
-
-    {:reply, id, state}
+      :error ->
+        id = state.next_id
+        state = put_in(state.callbacks[id], {fun, Nx.to_template(out_template), static_args})
+        state = %{state | next_id: id + 1}
+        {:reply, id, state}
+    end
   end
 
   @impl true
@@ -205,7 +198,7 @@ defmodule EXLA.CallbackServer do
           tensor =
             bin
             |> Nx.from_binary({type, bits})
-            |> Nx.reshape(List.to_tuple(shape))
+            |> Nx.reshape(shape)
 
           {:cont, {:ok, [tensor | acc]}}
         rescue

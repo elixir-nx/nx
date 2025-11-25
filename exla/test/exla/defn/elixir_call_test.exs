@@ -1,4 +1,4 @@
-defmodule EXLA.Defn.ElixirCallEvaluatorTest do
+defmodule EXLA.Defn.ElixirCallTest do
   use ExUnit.Case, async: true
   import Nx.Defn
   import Nx.Testing
@@ -46,6 +46,25 @@ defmodule EXLA.Defn.ElixirCallEvaluatorTest do
     fx = Nx.as_type(x, :f32)
     expected = Nx.add(Nx.multiply(fx, 2.0), Nx.add(fx, 1.0))
     assert_equal(y, expected)
+  end
+
+  defn bad_callback(x) do
+    out = %{x | type: Nx.Type.to_floating(x.type)}
+
+    Nx.elixir_call(out, [x], fn _t ->
+      # Wrong shape on purpose
+      Nx.tensor([1.0, 2.0, 3.0])
+    end)
+  end
+
+  test "elixir_call errors when result shape does not match template" do
+    x = Nx.iota({2})
+
+    assert_raise RuntimeError,
+                 ~r/expected the elixir_call function to match the given output template/,
+                 fn ->
+                   bad_callback(x)
+                 end
   end
 
   test "works when using EXLA compiler directly" do

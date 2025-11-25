@@ -24,9 +24,6 @@ struct ElixirCallbackResult {
   std::vector<ElixirCallbackTensor> outputs;
 };
 
-// Registers the Elixir dispatcher process that will receive callback requests.
-void SetElixirCallbackDispatcher(ErlNifPid dispatcher_pid);
-
 // Called from the Elixir side to deliver a reply for a given callback tag.
 void DeliverElixirCallbackReply(ErlNifEnv *env, int64_t reply_tag,
                                 fine::Term payload);

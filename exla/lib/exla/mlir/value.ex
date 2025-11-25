@@ -837,14 +837,16 @@ defmodule EXLA.MLIR.Value do
 
   The `callback_id` is a small integer assigned by `EXLA.CallbackServer` that
   identifies which Elixir function should be invoked when the host callback
-  runs. It is passed as an extra scalar S64 tensor operand (last argument) to
-  the custom call.
+  runs. It is passed as an extra scalar S64 tensor operand (first argument) to
+  the custom call so the native handler can load it before touching any tensor
+  payloads.
   """
   def elixir_call([%Value{function: func} | _] = operands, typespecs) do
     result_types = typespecs_to_mlir_types(typespecs)
 
     attributes = [
       call_target_name: attr_string("exla_elixir_callback"),
+      # api_version 4 enables the typed FFI API used by our callback handler.
       api_version: attr_i32(4)
     ]
 

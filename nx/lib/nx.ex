@@ -2207,6 +2207,14 @@ defmodule Nx do
   Inside `defn`, this builds an expression node understood by compilers.
   Outside `defn` or on backends without special support, it executes `fun`
   directly and validates the result matches the template.
+
+  ## Argument ordering
+
+  When called inside `defn`, all tensor arguments must be placed **before**
+  any list arguments. Lists (including keyword lists) are treated as static
+  Elixir data that is appended to the callback at runtime, while the leading
+  non-list arguments are compiled as tensors and shipped to the target
+  backend. Passing a tensor after a list argument raises an error.
   """
   @doc type: :backend
   def elixir_call(output, args, fun) when is_list(args) and is_function(fun) do

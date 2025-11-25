@@ -388,6 +388,8 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def elixir_call(out, in_args, fun) do
+    ensure_tensor_args_prefix!(in_args)
+
     {tensor_args, _opts} = Enum.split_while(in_args, &(not is_list(&1)))
     [%T{data: %Expr{context: context}} | _] = Enum.map(tensor_args, &to_expr/1)
 
@@ -401,6 +403,15 @@ defmodule Nx.Defn.Expr do
         user_template = Nx.to_template(tuple)
         expr_node = expr(out_template, context, :elixir_call, [in_args, fun, user_template])
         tuple(expr_node, Tuple.to_list(tuple))
+    end
+  end
+
+  defp ensure_tensor_args_prefix!(args) do
+    {_tensor_prefix, static_suffix} = Enum.split_while(args, &is_struct(&1, Nx.Tensor))
+
+    if Enum.any?(static_suffix, &is_struct(&1, Nx.Tensor)) do
+      raise ArgumentError,
+            "Nx.elixir_call/3 expects all tensor arguments to appear before any static arguments, but got: #{inspect(args)}"
     end
   end
 
