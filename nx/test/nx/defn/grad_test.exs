@@ -3035,6 +3035,32 @@ defmodule Nx.Defn.GradTest do
       )
     end
 
+    defn grad_sum_slice_sort(t) do
+      grad(
+        t,
+        fn t ->
+          t
+          |> Nx.sort(direction: :desc)
+          |> Nx.slice_along_axis(2, 3, axis: 0)
+          |> Nx.sum()
+        end
+      )
+    end
+
+    defn grad_sum_slice_chain_sort(t) do
+      grad(
+        t,
+        fn t ->
+          t
+          |> Nx.pow(2)
+          |> Nx.sort(direction: :desc)
+          |> Nx.slice_along_axis(2, 3, axis: 0)
+          |> Nx.cos()
+          |> Nx.sum()
+        end
+      )
+    end
+
     defn grad_sum_sort_power(t) do
       grad(
         t,
@@ -3083,6 +3109,27 @@ defmodule Nx.Defn.GradTest do
 
       assert Nx.tensor([-2.3156426, 0.2850931, 4.370079, -3.1148152]) ==
                grad_sum_log_power_sort_cos(Nx.tensor([4, 3, 2, 1]), [])
+    end
+
+    test "computes gradient with slicing" do
+      t = Nx.tensor([4.0, 8.0, 15.0, 16.0, 23.0, 42.0])
+      result = grad_sum_slice_sort(t)
+      assert result == Nx.tensor([0.0, 1.0, 1.0, 1.0, 0.0, 0.0])
+    end
+
+    test "computes gradient with slicing and chain rule" do
+      t = Nx.tensor([4.0, 8.0, 15.0, 16.0, 23.0, 42.0])
+
+      definition =
+        t
+        |> Nx.pow(2)
+        |> Nx.sin()
+        |> Nx.multiply(-2)
+        |> Nx.multiply(t)
+
+      mask = Nx.tensor([0, 1, 1, 1, 0, 0])
+      expected = Nx.select(mask, definition, 0)
+      assert expected == grad_sum_slice_chain_sort(t)
     end
 
     test "computes gradient along axis" do

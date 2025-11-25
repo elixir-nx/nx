@@ -37,12 +37,18 @@ defmodule Nx.Defn.Graph do
   Splits the received Nx.Defn.Expr into stages based on each tensor.
 
   `expr_split_fn` is a function that receives an `Nx.Tensor` containing an `Nx.Defn.Expr`
-  and returns `true` when a split must happen, and `false` otherwise.
+  and returns one of:
+
+  * `:before` - creates a stage that computes all arguments to the current node,
+    then creates parameters for those arguments in subsequent stages
+  * `:after` - creates a stage that computes the current node and outputs it
+  * `:both` - applies both `:before` and `:after` in sequence, creating stages for dependencies and the target operation
+  * `:none` - no split occurs
 
   ## Examples
 
       iex> expr = Nx.Defn.debug_expr(fn x, y -> x |> Nx.negate() |> Nx.sin() |> Nx.cos() |> Nx.add(y) end).(1, 2)
-      iex> [stage0, stage1] = Nx.Defn.Graph.split(expr, fn %Nx.Tensor{data: %Nx.Defn.Expr{op: op}} -> op == :cos end)
+      iex> [stage0, stage1] = Nx.Defn.Graph.split(expr, fn %Nx.Tensor{data: %Nx.Defn.Expr{op: op}} -> if op == :cos, do: :before, else: :none end)
       iex> {out0} = stage0.expr
       iex> out0
       #Nx.Tensor<
@@ -65,7 +71,13 @@ defmodule Nx.Defn.Graph do
       >
   """
   def split(expr, expr_split_fn) when is_function(expr_split_fn, 1) do
-    {chain, _, _} = __split__(expr, nil, fn node, acc -> {expr_split_fn.(node), acc} end)
+    normalized_fn = fn node, acc ->
+      decision = expr_split_fn.(node)
+      normalized_decision = normalize_split_decision(decision)
+      {normalized_decision, acc}
+    end
+
+    {chain, _, _} = __split__(expr, nil, normalized_fn)
     chain
   end
 
@@ -73,8 +85,13 @@ defmodule Nx.Defn.Graph do
   Splits the received Nx.Defn.Expr into stages based on each tensor and the accumulator.
 
   `expr_split_fn` is a function that receives an `Nx.Tensor` and the accumulator,
-  returning `{true, new_acc}` when a split must happen, and `{false, new_acc}`
-  otherwise.
+  returning `{decision, new_acc}` where `decision` is one of:
+
+  * `:before` - creates a stage that computes all arguments to the current node,
+    then creates parameters for those arguments in subsequent stages
+  * `:after` - creates a stage that computes the current node and outputs it
+  * `:both` - applies both `:before` and `:after` in sequence, creating stages for dependencies and the target operation
+  * `:none` - no split occurs
 
   The decision to split is made based on the expression and the accumulator.
   This allows for more complex decisions to be made, such as splitting every 3 operations as in the example below.
@@ -82,14 +99,32 @@ defmodule Nx.Defn.Graph do
       # Count operations and split every 3 operations
       split_fn = fn _tensor, count ->
         new_count = count + 1
-        {count > 0 and rem(new_count, 3) == 0, new_count}
+        decision = if count > 0 and rem(new_count, 3) == 0, do: :before, else: :none
+        {decision, new_count}
       end
 
       stages = Nx.Defn.Graph.split(expr, 0, split_fn)
   """
   def split(expr, initial_acc, expr_split_fn) when is_function(expr_split_fn, 2) do
-    {chain, _, _} = __split__(expr, initial_acc, expr_split_fn)
+    normalized_fn = fn node, acc ->
+      {decision, new_acc} = expr_split_fn.(node, acc)
+      normalized_decision = normalize_split_decision(decision)
+      {normalized_decision, new_acc}
+    end
+
+    {chain, _, _} = __split__(expr, initial_acc, normalized_fn)
     chain
+  end
+
+  # Normalizes split decisions
+  defp normalize_split_decision(:before), do: :before
+  defp normalize_split_decision(:after), do: :after
+  defp normalize_split_decision(:both), do: :both
+  defp normalize_split_decision(:none), do: :none
+
+  defp normalize_split_decision(other) do
+    raise ArgumentError,
+          "Invalid split decision: #{inspect(other)}. Expected :before, :after, :both, or :none"
   end
 
   @doc """
@@ -130,12 +165,27 @@ defmodule Nx.Defn.Graph do
 
   @doc false
   def __split__(expr, initial_acc, expr_split_fn) do
+    # Normalize the callback to handle both old and new formats
+    normalized_fn = fn node, acc ->
+      result = expr_split_fn.(node, acc)
+
+      case result do
+        {decision, new_acc} ->
+          # New format: {decision, new_acc}
+          {normalize_split_decision(decision), new_acc}
+
+        decision when is_boolean(decision) or decision in [:before, :after, :both, :none] ->
+          # Old format: just the decision (for arity-1 callbacks wrapped by split/2)
+          {normalize_split_decision(decision), acc}
+      end
+    end
+
     # state.expression_chain is a reverse accumulation of the stages and
     # snapshots of the state at each one so that we can properly remap parameters for each stage.
     state = %{
       expression_chain: [],
       nodes_to_replace: %{},
-      expr_split_fn: expr_split_fn,
+      expr_split_fn: normalized_fn,
       split_acc: initial_acc,
       # args is a map of id -> {stage_id, output_container_position}
       args: %{}
@@ -243,16 +293,24 @@ defmodule Nx.Defn.Graph do
             {args, {cache, state}} = Nx.Defn.Tree.apply_args(ans, {cache, state}, &eval/2)
 
             # Then check if we should split based on this node
-            {should_split?, new_acc} = state.expr_split_fn.(ans, state.split_acc)
+            {split_decision, new_acc} = state.expr_split_fn.(ans, state.split_acc)
             state = %{state | split_acc: new_acc}
 
-            if should_split? do
-              # Use the already processed args for splitting
-              split_expr_with_args(ans, args, {cache, state})
-            else
-              # Apply the operation with the processed args
-              ans = put_in(ans.data.args, args)
-              {ans, {Map.put(cache, ans.data.id, ans), state}}
+            case split_decision do
+              :none ->
+                # No split - apply the operation with the processed args
+                ans = put_in(ans.data.args, args)
+                {ans, {Map.put(cache, ans.data.id, ans), state}}
+
+              :before ->
+                # Use the already processed args for splitting
+                split_before(ans, args, {cache, state})
+
+              :after ->
+                split_after(ans, args, {cache, state})
+
+              :both ->
+                split_both(ans, args, {cache, state})
             end
         end
     end
@@ -262,7 +320,7 @@ defmodule Nx.Defn.Graph do
     {other, {cache, state}}
   end
 
-  defp split_expr_with_args(expr, args, {cache, state}) do
+  defp split_before(expr, args, {cache, state}) do
     # We need to save this so that each previous stage
     # isn't affected by following ones
     nodes_to_replace = state.nodes_to_replace
@@ -374,6 +432,76 @@ defmodule Nx.Defn.Graph do
     cache = Map.put(cache, result_expr.data.id, result_expr)
 
     {result_expr, {cache, state}}
+  end
+
+  defp split_after(expr, args, {cache, state}) do
+    # For :after mode, we create a stage that computes the current node
+    nodes_to_replace = state.nodes_to_replace
+    stage_id = make_ref()
+
+    # The stage computes the current expression with its original args
+    new_expr = put_in(expr.data.args, args)
+    stage_expr = {new_expr}
+
+    # Create a parameter that represents the output of this stage
+    result_param = Expr.parameter(new_expr, map_size(state.args))
+
+    # Update state to track this stage output
+    state = %{
+      state
+      | args: Map.put(state.args, result_param.data.id, {stage_id, 0}),
+        nodes_to_replace: Map.put(state.nodes_to_replace, new_expr.data.id, result_param)
+    }
+
+    state =
+      update_in(
+        state.expression_chain,
+        &[
+          {stage_id, stage_expr, nodes_to_replace}
+          | &1
+        ]
+      )
+
+    cache = Map.put(cache, result_param.data.id, result_param)
+
+    {result_param, {cache, state}}
+  end
+
+  defp split_both(expr, args, {cache, state}) do
+    # For :both mode, we need to check if split_before would create intermediate computations
+    # We use the same logic as split_before to determine this
+
+    tensor_args =
+      Enum.reduce(args, [], fn
+        %T{data: %Expr{op: :parameter}}, acc -> acc
+        %T{} = tensor_expr, acc -> [tensor_expr | acc]
+        _, acc -> acc
+      end)
+
+    # Check if split_before would create a meaningful stage or just a parameter wrapper
+    has_intermediate_computations =
+      case {tensor_args, expr.data.op} do
+        # No tensor args means no intermediate computations
+        {[], _} -> false
+        # Metadata operations always create meaningful stages
+        {_, :metadata} -> true
+        # Non-empty tensor_args means intermediate computations
+        {_non_empty, _} -> true
+      end
+
+    case has_intermediate_computations do
+      false ->
+        # No intermediate computations - skip :before and go straight to :after
+        split_after(expr, args, {cache, state})
+
+      true ->
+        # There are intermediate computations - do :before then :after
+        {before_result, {cache, state}} = split_before(expr, args, {cache, state})
+
+        # Now apply :after to the before_result
+        # The before_result should be the new_expr with parameterized args
+        split_after(before_result, before_result.data.args, {cache, state})
+    end
   end
 
   defp eval_apply(:parameter, %T{data: %Expr{id: id, args: [idx]}} = expr, {cache, state}) do
