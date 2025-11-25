@@ -8,12 +8,18 @@ defmodule EXLA.Defn.ElixirCallTest do
     :ok
   end
 
+  defp add_offset_callback(t, opts) do
+    t
+    |> Nx.as_type(:f32)
+    # TODO: if we run on the same device there will be a problem due to the device locking.
+    |> Nx.backend_transfer({EXLA.Backend, client: :host, device_id: 1})
+    |> Nx.add(opts[:offset]) |> dbg(structs: false)
+  end
+
   defn add_offset(x) do
     out = %{x | type: Nx.Type.to_floating(x.type)}
 
-    Nx.elixir_call(out, [x, [offset: 10.0]], fn t, opts ->
-      Nx.add(Nx.as_type(t, :f32), opts[:offset])
-    end)
+    Nx.elixir_call(out, [x, [offset: 10.0]], &add_offset_callback/2)
   end
 
   test "elixir_call with single output" do
