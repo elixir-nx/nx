@@ -550,81 +550,17 @@ ElixirCallbackBridgeState *GetElixirCallbackBridgeState() {
 }
 
 // Map ffi::DataType to a Nx-style {atom, bits} pair used on the Elixir side.
-std::pair<ERL_NIF_TERM, ERL_NIF_TERM> EncodeNxType(ErlNifEnv *env,
-                                                   xla::ffi::DataType dtype) {
-  const char *atom = nullptr;
-  int bits = 0;
-
-  switch (dtype) {
-  case xla::ffi::PRED:
-    atom = "u";
-    bits = 8;
-    break;
-  case xla::ffi::S8:
-    atom = "s";
-    bits = 8;
-    break;
-  case xla::ffi::S16:
-    atom = "s";
-    bits = 16;
-    break;
-  case xla::ffi::S32:
-    atom = "s";
-    bits = 32;
-    break;
-  case xla::ffi::S64:
-    atom = "s";
-    bits = 64;
-    break;
-  case xla::ffi::U8:
-    atom = "u";
-    bits = 8;
-    break;
-  case xla::ffi::U16:
-    atom = "u";
-    bits = 16;
-    break;
-  case xla::ffi::U32:
-    atom = "u";
-    bits = 32;
-    break;
-  case xla::ffi::U64:
-    atom = "u";
-    bits = 64;
-    break;
-  case xla::ffi::F16:
-    atom = "f";
-    bits = 16;
-    break;
-  case xla::ffi::F32:
-    atom = "f";
-    bits = 32;
-    break;
-  case xla::ffi::F64:
-    atom = "f";
-    bits = 64;
-    break;
-  case xla::ffi::BF16:
-    atom = "bf";
-    bits = 16;
-    break;
-  case xla::ffi::C64:
-    atom = "c";
-    bits = 64;
-    break;
-  case xla::ffi::C128:
-    atom = "c";
-    bits = 128;
-    break;
-  default:
-    atom = "f";
-    bits = 32;
-    break;
+std::optional<std::pair<ERL_NIF_TERM, ERL_NIF_TERM>>
+EncodeNxType(ErlNifEnv *env, xla::ffi::DataType dtype) {
+  if (auto primitive = exla::PrimitiveTypeFromFfiDataType(dtype)) {
+    if (auto info = exla::PrimitiveTypeToNxTypeInfo(*primitive)) {
+      ERL_NIF_TERM atom_term = enif_make_atom(env, info->atom_name);
+      ERL_NIF_TERM bits_term = enif_make_int(env, info->bits);
+      return std::make_pair(atom_term, bits_term);
+    }
   }
 
-  ERL_NIF_TERM atom_term = enif_make_atom(env, atom);
-  ERL_NIF_TERM bits_term = enif_make_int(env, bits);
-  return {atom_term, bits_term};
+  return std::nullopt;
 }
 
 } // namespace
@@ -647,6 +583,22 @@ fine::Ok<> elixir_callback_reply(ErlNifEnv *env, int64_t reply_tag,
 }
 
 FINE_NIF(elixir_callback_reply, ERL_NIF_DIRTY_JOB_IO_BOUND);
+
+fine::Ok<> clear_elixir_callback_bridge(ErlNifEnv *env,
+                                        ErlNifPid dispatcher_pid) {
+  (void)env;
+  auto state = GetElixirCallbackBridgeState();
+
+  if (state->dispatcher_set &&
+      std::memcmp(&state->dispatcher_pid, &dispatcher_pid, sizeof(ErlNifPid)) ==
+          0) {
+    state->dispatcher_set = false;
+  }
+
+  return fine::Ok();
+}
+
+FINE_NIF(clear_elixir_callback_bridge, 0);
 
 void DeliverElixirCallbackReply(ErlNifEnv *env, int64_t reply_tag,
                                 fine::Term payload) {
@@ -740,7 +692,7 @@ void DeliverElixirCallbackReply(ErlNifEnv *env, int64_t reply_tag,
 
 ElixirCallbackResult
 CallElixirCallback(int64_t callback_id,
-                   const std::vector<ElixirCallbackTensor> &inputs) {
+                   const std::vector<ElixirCallbackArg> &inputs) {
   auto state = GetElixirCallbackBridgeState();
 
   if (!state->dispatcher_set) {
@@ -761,21 +713,37 @@ CallElixirCallback(int64_t callback_id,
 
   ErlNifEnv *msg_env = enif_alloc_env();
 
-  // Encode arguments as [{bin, {type, bits}, shape_tuple}, ...]
+  // Encode arguments as [{bin, {type, bits}, shape_tuple}, ...]. We currently
+  // send plain binaries because the BEAM callback needs to own the data
+  // lifetime.
   std::vector<ERL_NIF_TERM> args_terms;
   args_terms.reserve(inputs.size());
 
   for (const auto &tensor : inputs) {
     ERL_NIF_TERM bin_term;
     unsigned char *bin_data =
-        enif_make_new_binary(msg_env, tensor.data.size(), &bin_term);
-    if (tensor.data.size() > 0) {
-      memcpy(bin_data, tensor.data.data(), tensor.data.size());
+        enif_make_new_binary(msg_env, tensor.size_bytes, &bin_term);
+    if (tensor.size_bytes > 0) {
+      memcpy(bin_data, tensor.data, tensor.size_bytes);
     }
 
-    auto [type_atom, bits_term] = EncodeNxType(msg_env, tensor.dtype);
+    auto type_tuple_or = EncodeNxType(msg_env, tensor.dtype);
+    if (!type_tuple_or.has_value()) {
+      enif_free_env(msg_env);
+      {
+        std::lock_guard<std::mutex> lock(state->mu);
+        state->pending.erase(tag);
+      }
 
-    ERL_NIF_TERM type_tuple = enif_make_tuple2(msg_env, type_atom, bits_term);
+      ElixirCallbackResult res;
+      res.ok = false;
+      res.error = "unsupported tensor type in EXLA callback argument";
+      return res;
+    }
+
+    auto type_info = type_tuple_or.value();
+    ERL_NIF_TERM type_tuple =
+        enif_make_tuple2(msg_env, type_info.first, type_info.second);
 
     std::vector<ERL_NIF_TERM> dim_terms;
     dim_terms.reserve(tensor.dims.size());

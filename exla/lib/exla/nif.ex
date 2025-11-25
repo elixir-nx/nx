@@ -80,6 +80,7 @@ defmodule EXLA.NIF do
 
   # Elixir callback bridge (Phase 1: CPU-only, simple APIs)
   def start_elixir_callback_bridge(_dispatcher_pid), do: err!()
+  def clear_elixir_callback_bridge(_dispatcher_pid), do: err!()
   def elixir_callback_reply(_reply_tag, _payload), do: err!()
 
   defp err!(), do: :erlang.nif_error(:undef)

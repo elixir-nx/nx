@@ -18,6 +18,13 @@ struct ElixirCallbackTensor {
   std::vector<uint8_t> data;
 };
 
+struct ElixirCallbackArg {
+  xla::ffi::DataType dtype;
+  std::vector<int64_t> dims;
+  const uint8_t *data = nullptr;
+  size_t size_bytes = 0;
+};
+
 struct ElixirCallbackResult {
   bool ok = false;
   std::string error;
@@ -38,8 +45,9 @@ void DeliverElixirCallbackReply(ErlNifEnv *env, int64_t reply_tag,
 //
 // It returns an ElixirCallbackResult that either contains a list of output
 // tensors (on success) or an error message.
-ElixirCallbackResult CallElixirCallback(int64_t callback_id,
-                                        const std::vector<ElixirCallbackTensor> &inputs);
+ElixirCallbackResult
+CallElixirCallback(int64_t callback_id,
+                   const std::vector<ElixirCallbackArg> &inputs);
 
 } // namespace exla
 

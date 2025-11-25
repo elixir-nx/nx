@@ -35,8 +35,8 @@ ffi::Error exla_elixir_callback_impl(ffi::RemainingArgs args,
   int64_t callback_id = id_buf.reinterpret_data<int64_t>()[0];
 
   // Collect all remaining input tensors (excluding callback id) into
-  // lightweight payloads.
-  std::vector<exla::ElixirCallbackTensor> inputs;
+  // lightweight payload views.
+  std::vector<exla::ElixirCallbackArg> inputs;
   inputs.reserve(args.size() - 1);
 
   for (size_t i = 1; i < args.size(); ++i) {
@@ -47,17 +47,14 @@ ffi::Error exla_elixir_callback_impl(ffi::RemainingArgs args,
 
     ffi::AnyBuffer buf = *maybe_buf_or;
 
-    exla::ElixirCallbackTensor tensor;
+    exla::ElixirCallbackArg tensor;
     tensor.dtype = buf.element_type();
 
     auto dims = buf.dimensions();
     tensor.dims.assign(dims.begin(), dims.end());
 
-    size_t size_bytes = buf.size_bytes();
-    tensor.data.resize(size_bytes);
-    if (size_bytes > 0) {
-      std::memcpy(tensor.data.data(), buf.untyped_data(), size_bytes);
-    }
+    tensor.data = reinterpret_cast<const uint8_t *>(buf.untyped_data());
+    tensor.size_bytes = buf.size_bytes();
 
     inputs.push_back(std::move(tensor));
   }

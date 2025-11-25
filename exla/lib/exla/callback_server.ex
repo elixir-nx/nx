@@ -74,14 +74,18 @@ defmodule EXLA.CallbackServer do
   @impl true
   def init(:ok) do
     # Inform native side that this process is the dispatcher for elixir callbacks.
-    #
-    # If the NIF has not implemented `start_elixir_callback_bridge/1` yet, we
-    # fail silently so that the rest of the system continues to work. This
-    # allows developing the Elixir side and the native side independently.
-    _ =
-      EXLA.NIF.start_elixir_callback_bridge(self())
+    _ = EXLA.NIF.start_elixir_callback_bridge(self())
 
     {:ok, %__MODULE__{}}
+  end
+
+  @impl true
+  def terminate(_reason, _state) do
+    try do
+      EXLA.NIF.clear_elixir_callback_bridge(self())
+    rescue
+      _ -> :ok
+    end
   end
 
   @impl true
