@@ -548,20 +548,6 @@ static ElixirCallbackBridgeState *GetElixirCallbackBridgeState() {
   return state;
 }
 
-// Map ffi::DataType to a Nx-style {atom, bits} pair used on the Elixir side.
-std::optional<std::pair<ERL_NIF_TERM, ERL_NIF_TERM>>
-EncodeNxType(ErlNifEnv *env, xla::ffi::DataType dtype) {
-  if (auto primitive = exla::PrimitiveTypeFromFfiDataType(dtype)) {
-    if (auto info = exla::PrimitiveTypeToNxTypeInfo(*primitive)) {
-      ERL_NIF_TERM atom_term = enif_make_atom(env, info->atom_name);
-      ERL_NIF_TERM bits_term = enif_make_int(env, info->bits);
-      return std::make_pair(atom_term, bits_term);
-    }
-  }
-
-  return std::nullopt;
-}
-
 } // namespace
 
 fine::Ok<> start_elixir_callback_bridge(ErlNifEnv *env,
@@ -695,9 +681,8 @@ CallElixirCallback(int64_t callback_id,
 
   ErlNifEnv *msg_env = enif_alloc_env();
 
-  // Encode arguments as [{bin, {type, bits}, shape_tuple}, ...]. We currently
-  // send plain binaries because the BEAM callback needs to own the data
-  // lifetime.
+  // Encode arguments as [{bin, %EXLA.Typespec{}}, ...]. We currently send
+  // plain binaries because the BEAM callback needs to own the data lifetime.
   std::vector<ERL_NIF_TERM> args_terms;
   args_terms.reserve(inputs.size());
 
@@ -709,36 +694,12 @@ CallElixirCallback(int64_t callback_id,
       memcpy(bin_data, tensor.data, tensor.size_bytes);
     }
 
-    auto type_tuple_or = EncodeNxType(msg_env, tensor.dtype);
-    if (!type_tuple_or.has_value()) {
-      enif_free_env(msg_env);
+    // Build an %EXLA.Typespec{} directly from the ffi::DataType and dims via
+    // Fine's encoder defined in exla_nif_util.h.
+    ERL_NIF_TERM typespec_term =
+        fine::encode(msg_env, std::make_tuple(tensor.dtype, tensor.dims));
 
-      ElixirCallbackResult res;
-      res.ok = false;
-      res.error = "unsupported tensor type in EXLA callback argument";
-      return res;
-    }
-
-    auto type_info = type_tuple_or.value();
-    ERL_NIF_TERM type_tuple =
-        enif_make_tuple2(msg_env, type_info.first, type_info.second);
-
-    std::vector<ERL_NIF_TERM> dim_terms;
-    dim_terms.reserve(tensor.dims.size());
-    for (auto d : tensor.dims) {
-      dim_terms.push_back(enif_make_int64(msg_env, d));
-    }
-
-    ERL_NIF_TERM shape_tuple;
-    if (dim_terms.empty()) {
-      shape_tuple = enif_make_tuple(msg_env, 0);
-    } else {
-      shape_tuple = enif_make_tuple_from_array(msg_env, dim_terms.data(),
-                                               dim_terms.size());
-    }
-
-    ERL_NIF_TERM arg_tuple =
-        enif_make_tuple3(msg_env, bin_term, type_tuple, shape_tuple);
+    ERL_NIF_TERM arg_tuple = enif_make_tuple2(msg_env, bin_term, typespec_term);
 
     args_terms.push_back(arg_tuple);
   }

@@ -94,4 +94,143 @@ template <> struct Decoder<std::vector<uint8_t>> {
   }
 };
 
+// Define encoding for {ffi_dtype, dims} into %EXLA.Typespec{} term. This is
+// used by the Elixir callback bridge to surface type and shape information
+// about callback arguments to the Elixir side.
+template <>
+struct Encoder<std::tuple<xla::ffi::DataType, std::vector<int64_t>>> {
+  static ERL_NIF_TERM
+  encode(ErlNifEnv *env,
+         const std::tuple<xla::ffi::DataType, std::vector<int64_t>> &spec) {
+    const xla::ffi::DataType &dtype = std::get<0>(spec);
+    const std::vector<int64_t> &dims = std::get<1>(spec);
+
+    ERL_NIF_TERM keys[] = {
+        fine::encode(env, fine::Atom("__struct__")),
+        fine::encode(env, fine::Atom("type")),
+        fine::encode(env, fine::Atom("shape")),
+    };
+
+    ERL_NIF_TERM values[] = {
+        fine::encode(env, fine::Atom("Elixir.EXLA.Typespec")),
+        encode_type(env, dtype),
+        encode_shape(env, dtype, dims),
+    };
+
+    ERL_NIF_TERM map;
+    if (!enif_make_map_from_arrays(env, keys, values, 3, &map)) {
+      throw std::runtime_error("encode: failed to make a map");
+    }
+
+    return map;
+  }
+
+private:
+  static ERL_NIF_TERM encode_type(ErlNifEnv *env, xla::ffi::DataType dtype) {
+    using DT = xla::ffi::DataType;
+
+    // Tokens are encoded as the atom :token with empty shape.
+    if (dtype == DT::TOKEN) {
+      return fine::encode(env, fine::Atom("token"));
+    }
+
+    std::optional<fine::Atom> type_name;
+    std::optional<uint64_t> type_size;
+
+    switch (dtype) {
+    case DT::PRED:
+      type_name = fine::Atom("pred");
+      type_size = 8;
+      break;
+
+    case DT::U8:
+      type_name = fine::Atom("u");
+      type_size = 8;
+      break;
+    case DT::U16:
+      type_name = fine::Atom("u");
+      type_size = 16;
+      break;
+    case DT::U32:
+      type_name = fine::Atom("u");
+      type_size = 32;
+      break;
+    case DT::U64:
+      type_name = fine::Atom("u");
+      type_size = 64;
+      break;
+
+    case DT::S8:
+      type_name = fine::Atom("s");
+      type_size = 8;
+      break;
+    case DT::S16:
+      type_name = fine::Atom("s");
+      type_size = 16;
+      break;
+    case DT::S32:
+      type_name = fine::Atom("s");
+      type_size = 32;
+      break;
+    case DT::S64:
+      type_name = fine::Atom("s");
+      type_size = 64;
+      break;
+
+    case DT::F16:
+      type_name = fine::Atom("f");
+      type_size = 16;
+      break;
+    case DT::F32:
+      type_name = fine::Atom("f");
+      type_size = 32;
+      break;
+    case DT::F64:
+      type_name = fine::Atom("f");
+      type_size = 64;
+      break;
+
+    case DT::BF16:
+      type_name = fine::Atom("bf");
+      type_size = 16;
+      break;
+
+    case DT::C64:
+      type_name = fine::Atom("c");
+      type_size = 64;
+      break;
+    case DT::C128:
+      type_name = fine::Atom("c");
+      type_size = 128;
+      break;
+
+    default:
+      break;
+    }
+
+    if (type_name && type_size) {
+      return fine::encode(
+          env, std::make_tuple(type_name.value(), type_size.value()));
+    }
+
+    throw std::invalid_argument("encode failed, unexpected ffi::DataType");
+  }
+
+  static ERL_NIF_TERM encode_shape(ErlNifEnv *env, xla::ffi::DataType dtype,
+                                   const std::vector<int64_t> &dims) {
+    if (dtype == xla::ffi::DataType::TOKEN) {
+      return enif_make_tuple(env, 0);
+    }
+
+    std::vector<ERL_NIF_TERM> dim_terms;
+    dim_terms.reserve(dims.size());
+
+    for (auto d : dims) {
+      dim_terms.push_back(fine::encode<int64_t>(env, d));
+    }
+
+    return enif_make_tuple_from_array(env, dim_terms.data(), dim_terms.size());
+  }
+};
+
 } // namespace fine

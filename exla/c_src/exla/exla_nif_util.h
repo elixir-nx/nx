@@ -6,7 +6,6 @@
 
 #include "mlir/IR/Types.h"
 #include "stablehlo/dialect/StablehloOps.h"
-#include "xla/ffi/api/ffi.h"
 #include "xla/shape.h"
 #include "xla/shape_util.h"
 
@@ -29,187 +28,6 @@ static auto type = fine::Atom("type");
 static auto u = fine::Atom("u");
 static auto warning = fine::Atom("warning");
 } // namespace atoms
-
-struct NxTypeInfo {
-  const char *atom_name;
-  const fine::Atom *atom_ref;
-  uint64_t bits;
-
-  fine::Atom atom() const {
-    if (atom_ref) {
-      return *atom_ref;
-    }
-    return fine::Atom(atom_name);
-  }
-};
-
-inline std::optional<NxTypeInfo>
-PrimitiveTypeToNxTypeInfo(xla::PrimitiveType type) {
-  switch (type) {
-  case xla::PRED:
-    return NxTypeInfo{"pred", &atoms::pred, 8};
-  case xla::S2:
-    return NxTypeInfo{"s", &atoms::s, 2};
-  case xla::S4:
-    return NxTypeInfo{"s", &atoms::s, 4};
-  case xla::S8:
-    return NxTypeInfo{"s", &atoms::s, 8};
-  case xla::S16:
-    return NxTypeInfo{"s", &atoms::s, 16};
-  case xla::S32:
-    return NxTypeInfo{"s", &atoms::s, 32};
-  case xla::S64:
-    return NxTypeInfo{"s", &atoms::s, 64};
-  case xla::U2:
-    return NxTypeInfo{"u", &atoms::u, 2};
-  case xla::U4:
-    return NxTypeInfo{"u", &atoms::u, 4};
-  case xla::U8:
-    return NxTypeInfo{"u", &atoms::u, 8};
-  case xla::U16:
-    return NxTypeInfo{"u", &atoms::u, 16};
-  case xla::U32:
-    return NxTypeInfo{"u", &atoms::u, 32};
-  case xla::U64:
-    return NxTypeInfo{"u", &atoms::u, 64};
-  case xla::F8E4M3FN:
-  case xla::F8E5M2:
-    return NxTypeInfo{"f", &atoms::f, 8};
-  case xla::F16:
-    return NxTypeInfo{"f", &atoms::f, 16};
-  case xla::BF16:
-    return NxTypeInfo{"bf", &atoms::bf, 16};
-  case xla::F32:
-    return NxTypeInfo{"f", &atoms::f, 32};
-  case xla::F64:
-    return NxTypeInfo{"f", &atoms::f, 64};
-  case xla::C64:
-    return NxTypeInfo{"c", &atoms::c, 64};
-  case xla::C128:
-    return NxTypeInfo{"c", &atoms::c, 128};
-  default:
-    return std::nullopt;
-  }
-}
-
-inline std::optional<xla::PrimitiveType>
-PrimitiveTypeFromFfiDataType(xla::ffi::DataType dtype) {
-  switch (dtype) {
-  case xla::ffi::PRED:
-    return xla::PRED;
-  case xla::ffi::S2:
-    return xla::S2;
-  case xla::ffi::S4:
-    return xla::S4;
-  case xla::ffi::S8:
-    return xla::S8;
-  case xla::ffi::S16:
-    return xla::S16;
-  case xla::ffi::S32:
-    return xla::S32;
-  case xla::ffi::S64:
-    return xla::S64;
-  case xla::ffi::U2:
-    return xla::U2;
-  case xla::ffi::U4:
-    return xla::U4;
-  case xla::ffi::U8:
-    return xla::U8;
-  case xla::ffi::U16:
-    return xla::U16;
-  case xla::ffi::U32:
-    return xla::U32;
-  case xla::ffi::U64:
-    return xla::U64;
-  case xla::ffi::F8E4M3FN:
-    return xla::F8E4M3FN;
-  case xla::ffi::F8E5M2:
-    return xla::F8E5M2;
-  case xla::ffi::F16:
-    return xla::F16;
-  case xla::ffi::BF16:
-    return xla::BF16;
-  case xla::ffi::F32:
-    return xla::F32;
-  case xla::ffi::F64:
-    return xla::F64;
-  case xla::ffi::C64:
-    return xla::C64;
-  case xla::ffi::C128:
-    return xla::C128;
-  default:
-    return std::nullopt;
-  }
-}
-
-inline std::optional<xla::PrimitiveType>
-PrimitiveTypeFromMlirElement(const mlir::Type &element_type) {
-  if (element_type.isSignlessInteger(1)) {
-    return xla::PRED;
-  }
-
-  if (auto integer_type = mlir::dyn_cast<mlir::IntegerType>(element_type)) {
-    int width = integer_type.getWidth();
-    if (integer_type.isUnsigned()) {
-      switch (width) {
-      case 2:
-        return xla::U2;
-      case 4:
-        return xla::U4;
-      case 8:
-        return xla::U8;
-      case 16:
-        return xla::U16;
-      case 32:
-        return xla::U32;
-      case 64:
-        return xla::U64;
-      }
-    } else {
-      switch (width) {
-      case 2:
-        return xla::S2;
-      case 4:
-        return xla::S4;
-      case 8:
-        return xla::S8;
-      case 16:
-        return xla::S16;
-      case 32:
-        return xla::S32;
-      case 64:
-        return xla::S64;
-      }
-    }
-  } else if (element_type.isBF16()) {
-    return xla::BF16;
-  } else if (auto float_type = mlir::dyn_cast<mlir::FloatType>(element_type)) {
-    int width = float_type.getWidth();
-    switch (width) {
-    case 8:
-      return xla::F8E4M3FN;
-    case 16:
-      return xla::F16;
-    case 32:
-      return xla::F32;
-    case 64:
-      return xla::F64;
-    }
-  } else if (auto complex_type =
-                 mlir::dyn_cast<mlir::ComplexType>(element_type)) {
-    auto inner = complex_type.getElementType();
-    if (auto float_type = mlir::dyn_cast<mlir::FloatType>(inner)) {
-      switch (float_type.getWidth()) {
-      case 32:
-        return xla::C64;
-      case 64:
-        return xla::C128;
-      }
-    }
-  }
-
-  return std::nullopt;
-}
 } // namespace exla
 
 namespace fine {
@@ -358,17 +176,46 @@ private:
       return fine::encode(env, exla::atoms::token);
     }
 
+    std::optional<fine::Atom> type_name;
+    std::optional<uint64_t> type_size;
+
     if (mlir::isa<mlir::RankedTensorType>(type)) {
       auto tensor_type = mlir::cast<mlir::RankedTensorType>(type);
       auto element_type = tensor_type.getElementType();
-      if (auto primitive = exla::PrimitiveTypeFromMlirElement(element_type)) {
-        if (auto info = exla::PrimitiveTypeToNxTypeInfo(*primitive)) {
-          return fine::encode(env, std::make_tuple(info->atom(), info->bits));
+
+      if (element_type.isSignlessInteger(1)) {
+        type_name = exla::atoms::pred;
+        type_size = 8;
+      } else if (auto integer_type =
+                     mlir::dyn_cast<mlir::IntegerType>(element_type)) {
+        if (integer_type.isUnsigned()) {
+          type_name = exla::atoms::u;
+        } else {
+          type_name = exla::atoms::s;
         }
+
+        type_size = integer_type.getWidth();
+      } else if (element_type.isBF16()) {
+        type_name = exla::atoms::bf;
+        type_size = 16;
+      } else if (auto float_type =
+                     mlir::dyn_cast<mlir::FloatType>(element_type)) {
+        type_name = exla::atoms::f;
+        type_size = float_type.getWidth();
+      } else if (auto complex_type =
+                     mlir::dyn_cast<mlir::ComplexType>(element_type)) {
+        auto element_type = complex_type.getElementType();
+        type_name = exla::atoms::c;
+        type_size = mlir::cast<mlir::FloatType>(element_type).getWidth() * 2;
       }
     }
 
-    throw std::invalid_argument("encode failed, unexpected mlir type");
+    if (type_name) {
+      return fine::encode(
+          env, std::make_tuple(type_name.value(), type_size.value()));
+    } else {
+      throw std::invalid_argument("encode failed, unexpected mlir type");
+    }
   }
 
   static ERL_NIF_TERM encode_shape(ErlNifEnv *env, const mlir::Type &type) {
