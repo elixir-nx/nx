@@ -62,7 +62,7 @@ void DeliverElixirCallbackReply(
 // Synchronously calls the Elixir callback identified by `callback_id` with the
 // given tensor arguments. This function:
 //
-//   * Allocates a unique reply_tag
+//   * Allocates a unique ElixirCallbackPending resource
 //   * Sends a message to the dispatcher via enif_send/3
 //   * Blocks the calling native thread until the reply arrives via
 //     DeliverElixirCallbackReply/3
