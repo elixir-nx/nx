@@ -6,9 +6,10 @@
 #include <string>
 #include <vector>
 
+#include "exla_nif_util.h"
+#include "xla/ffi/api/ffi.h"
 #include <erl_nif.h>
 #include <fine.hpp>
-#include "xla/ffi/api/ffi.h"
 
 namespace exla {
 
@@ -105,17 +106,13 @@ struct Encoder<std::tuple<xla::ffi::DataType, std::vector<int64_t>>> {
     const xla::ffi::DataType &dtype = std::get<0>(spec);
     const std::vector<int64_t> &dims = std::get<1>(spec);
 
-    ERL_NIF_TERM keys[] = {
-        fine::encode(env, fine::Atom("__struct__")),
-        fine::encode(env, fine::Atom("type")),
-        fine::encode(env, fine::Atom("shape")),
-    };
+    ERL_NIF_TERM keys[] = {fine::encode(env, exla::atoms::__struct__),
+                           fine::encode(env, exla::atoms::type),
+                           fine::encode(env, exla::atoms::shape)};
 
-    ERL_NIF_TERM values[] = {
-        fine::encode(env, fine::Atom("Elixir.EXLA.Typespec")),
-        encode_type(env, dtype),
-        encode_shape(env, dtype, dims),
-    };
+    ERL_NIF_TERM values[] = {fine::encode(env, exla::atoms::ElixirEXLATypespec),
+                             encode_type(env, dtype),
+                             encode_shape(env, dtype, dims)};
 
     ERL_NIF_TERM map;
     if (!enif_make_map_from_arrays(env, keys, values, 3, &map)) {
@@ -131,7 +128,7 @@ private:
 
     // Tokens are encoded as the atom :token with empty shape.
     if (dtype == DT::TOKEN) {
-      return fine::encode(env, fine::Atom("token"));
+      return fine::encode(env, exla::atoms::token);
     }
 
     std::optional<fine::Atom> type_name;
@@ -139,68 +136,68 @@ private:
 
     switch (dtype) {
     case DT::PRED:
-      type_name = fine::Atom("pred");
+      type_name = exla::atoms::pred;
       type_size = 8;
       break;
 
     case DT::U8:
-      type_name = fine::Atom("u");
+      type_name = exla::atoms::u;
       type_size = 8;
       break;
     case DT::U16:
-      type_name = fine::Atom("u");
+      type_name = exla::atoms::u;
       type_size = 16;
       break;
     case DT::U32:
-      type_name = fine::Atom("u");
+      type_name = exla::atoms::u;
       type_size = 32;
       break;
     case DT::U64:
-      type_name = fine::Atom("u");
+      type_name = exla::atoms::u;
       type_size = 64;
       break;
 
     case DT::S8:
-      type_name = fine::Atom("s");
+      type_name = exla::atoms::s;
       type_size = 8;
       break;
     case DT::S16:
-      type_name = fine::Atom("s");
+      type_name = exla::atoms::s;
       type_size = 16;
       break;
     case DT::S32:
-      type_name = fine::Atom("s");
+      type_name = exla::atoms::s;
       type_size = 32;
       break;
     case DT::S64:
-      type_name = fine::Atom("s");
+      type_name = exla::atoms::s;
       type_size = 64;
       break;
 
     case DT::F16:
-      type_name = fine::Atom("f");
+      type_name = exla::atoms::f;
       type_size = 16;
       break;
     case DT::F32:
-      type_name = fine::Atom("f");
+      type_name = exla::atoms::f;
       type_size = 32;
       break;
     case DT::F64:
-      type_name = fine::Atom("f");
+      type_name = exla::atoms::f;
       type_size = 64;
       break;
 
     case DT::BF16:
-      type_name = fine::Atom("bf");
+      type_name = exla::atoms::bf;
       type_size = 16;
       break;
 
     case DT::C64:
-      type_name = fine::Atom("c");
+      type_name = exla::atoms::c;
       type_size = 64;
       break;
     case DT::C128:
-      type_name = fine::Atom("c");
+      type_name = exla::atoms::c;
       type_size = 128;
       break;
 
