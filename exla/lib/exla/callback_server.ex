@@ -294,9 +294,9 @@ defmodule EXLA.CallbackServer do
     |> Enum.map(&Nx.to_binary/1)
   end
 
-  defp send_reply(reply_tag, payload) do
+  defp send_reply(reply_tag, {status, result}) do
     try do
-      EXLA.NIF.elixir_callback_reply(reply_tag, payload)
+      EXLA.NIF.elixir_callback_reply(reply_tag, status, result)
     rescue
       _ ->
         Logger.error(

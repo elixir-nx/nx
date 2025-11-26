@@ -34,6 +34,12 @@ FINE_RESOURCE(exla::MLIRModule);
 FINE_RESOURCE(exla::MLIRFunction);
 FINE_RESOURCE(exla::ElixirCallbackPending);
 
+// Opaque handle type used only so Elixir can keep the bridge alive via a
+// Fine resource. It carries no data; the real bridge state is the singleton
+// ElixirCallbackBridgeState below.
+struct ElixirCallbackBridgeHandle {};
+FINE_RESOURCE(ElixirCallbackBridgeHandle);
+
 // MLIR Functions
 
 fine::ResourcePtr<ExlaBuffer> decode_exla_buffer(ErlNifEnv *env,
@@ -571,8 +577,8 @@ FINE_NIF(start_elixir_callback_bridge, 0);
 fine::Ok<>
 elixir_callback_reply(ErlNifEnv *env,
                       fine::ResourcePtr<ElixirCallbackPending> pending,
-                      fine::Term payload) {
-  DeliverElixirCallbackReply(env, pending, payload);
+                      fine::Atom status, fine::Term result) {
+  DeliverElixirCallbackReply(env, pending, status, result);
   return fine::Ok();
 }
 
@@ -595,84 +601,77 @@ FINE_NIF(clear_elixir_callback_bridge, 0);
 
 // Allocate and return a Fine resource handle associated with the bridge.
 // This lets Elixir hold a reference (e.g., in EXLA.CallbackServer state) so
-// the bridge lifetime is attached to that process. The actual per-callback
-// pending resources are created independently for each call.
-fine::ResourcePtr<ElixirCallbackPending>
+// the bridge lifetime is attached to that process. Per-callback pending
+// resources are created independently for each call.
+fine::ResourcePtr<ElixirCallbackBridgeHandle>
 acquire_elixir_callback_bridge(ErlNifEnv *env) {
   (void)env;
-  return fine::make_resource<ElixirCallbackPending>();
+  return fine::make_resource<ElixirCallbackBridgeHandle>();
 }
 
 FINE_NIF(acquire_elixir_callback_bridge, 0);
 
 void DeliverElixirCallbackReply(
     ErlNifEnv *env, fine::ResourcePtr<ElixirCallbackPending> pending,
-    fine::Term payload) {
-  ElixirCallbackResult result;
+    fine::Atom status, fine::Term result_term) {
+  ElixirCallbackResult cb_result;
 
-  int arity = 0;
-  const ERL_NIF_TERM *tuple = nullptr;
-  ERL_NIF_TERM term = payload;
+  if (status == "ok") {
+    // Successful reply: result_term is a list of binaries that we decode into
+    // raw byte vectors via Fine and copy directly into the registered output
+    // buffers.
+    try {
+      auto payloads =
+          fine::decode<std::vector<std::vector<uint8_t>>>(env, result_term);
 
-  if (!enif_get_tuple(env, term, &arity, &tuple) || arity != 2) {
-    result.ok = false;
-    result.error = "invalid callback reply payload, expected {status, value}";
-  } else {
-    char atom_buf[16];
-    if (enif_get_atom(env, tuple[0], atom_buf, sizeof(atom_buf),
-                      ERL_NIF_LATIN1) &&
-        strcmp(atom_buf, "ok") == 0) {
-      // tuple[1] is a list of binaries representing outputs.
-      ERL_NIF_TERM list = tuple[1];
-      ERL_NIF_TERM head, tail;
+      std::lock_guard<std::mutex> lock(pending->mu);
 
-      while (enif_get_list_cell(env, list, &head, &tail)) {
-        ErlNifBinary bin;
-        if (!enif_inspect_binary(env, head, &bin)) {
-          result.ok = false;
-          result.error = "invalid binary in callback reply";
-          break;
-        }
-
-        ElixirCallbackTensor tensor;
-        tensor.dtype = xla::ffi::DataType::INVALID;
-        tensor.dims = {};
-        tensor.data.assign(bin.data, bin.data + bin.size);
-        result.outputs.push_back(std::move(tensor));
-
-        list = tail;
-      }
-
-      if (result.error.empty()) {
-        result.ok = true;
-      }
-    } else {
-      // Error reply: tuple[1] is expected to be {kind_atom, message :: binary}
-      result.ok = false;
-      ERL_NIF_TERM err_term = tuple[1];
-
-      int err_arity = 0;
-      const ERL_NIF_TERM *err_tuple = nullptr;
-      if (enif_get_tuple(env, err_term, &err_arity, &err_tuple) &&
-          err_arity == 2) {
-        // We ignore the kind atom for now (e.g. :argument_error or
-        // :runtime_error) and use only the message as the XLA error text.
-        ErlNifBinary msg_bin;
-        if (enif_inspect_binary(env, err_tuple[1], &msg_bin)) {
-          result.error.assign(reinterpret_cast<const char *>(msg_bin.data),
-                              msg_bin.size);
-        } else {
-          result.error = "elixir callback returned error";
-        }
+      if (payloads.size() != pending->outputs.size()) {
+        cb_result.ok = false;
+        cb_result.error =
+            "mismatched number of callback outputs vs registered buffers";
       } else {
-        result.error = "elixir callback returned error";
+        cb_result.ok = true;
+
+        for (size_t i = 0; i < payloads.size(); ++i) {
+          const auto &bytes = payloads[i];
+          auto &out_buf = pending->outputs[i];
+
+          if (bytes.size() != out_buf.size) {
+            cb_result.ok = false;
+            cb_result.error =
+                "callback returned binary of unexpected size for result buffer";
+            break;
+          }
+
+          if (out_buf.size > 0) {
+            std::memcpy(out_buf.data, bytes.data(), out_buf.size);
+          }
+        }
       }
+    } catch (const std::exception &e) {
+      cb_result.ok = false;
+      cb_result.error =
+          std::string("failed to decode Elixir callback outputs: ") + e.what();
+    }
+  } else {
+    // Error reply: result_term is expected to be {kind_atom, message :: binary}
+    cb_result.ok = false;
+
+    try {
+      auto decoded =
+          fine::decode<std::tuple<fine::Atom, ErlNifBinary>>(env, result_term);
+      ErlNifBinary msg_bin = std::get<1>(decoded);
+      cb_result.error.assign(reinterpret_cast<const char *>(msg_bin.data),
+                             msg_bin.size);
+    } catch (const std::exception &) {
+      cb_result.error = "elixir callback returned error";
     }
   }
 
   {
     std::lock_guard<std::mutex> lock(pending->mu);
-    pending->result = std::move(result);
+    pending->result = std::move(cb_result);
     pending->done = true;
   }
 
@@ -681,7 +680,8 @@ void DeliverElixirCallbackReply(
 
 ElixirCallbackResult
 CallElixirCallback(int64_t callback_id,
-                   const std::vector<ElixirCallbackArg> &inputs) {
+                   const std::vector<ElixirCallbackArg> &inputs,
+                   const std::vector<ElixirCallbackOutputBuffer> &outputs) {
   auto state = GetElixirCallbackBridgeState();
 
   if (!state->dispatcher_set) {
@@ -691,7 +691,7 @@ CallElixirCallback(int64_t callback_id,
     return res;
   }
 
-  auto pending = fine::make_resource<ElixirCallbackPending>();
+  auto pending = fine::make_resource<ElixirCallbackPending>(outputs);
 
   ErlNifEnv *msg_env = enif_alloc_env();
 

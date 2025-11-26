@@ -59,22 +59,11 @@ ffi::Error exla_elixir_callback_impl(ffi::RemainingArgs args,
     inputs.push_back(std::move(tensor));
   }
 
-  // Call back into Elixir through the bridge.
-  exla::ElixirCallbackResult result =
-      exla::CallElixirCallback(callback_id, inputs);
+  // Prepare output buffer descriptors so the callback bridge can write results
+  // directly into the final destination buffers.
+  std::vector<exla::ElixirCallbackOutputBuffer> outputs;
+  outputs.reserve(rets.size());
 
-  if (!result.ok) {
-    return ffi::Error(ffi::ErrorCode::kInternal, result.error);
-  }
-
-  if (result.outputs.size() != rets.size()) {
-    return ffi::Error(
-        ffi::ErrorCode::kInternal,
-        "mismatched number of callback outputs vs custom_call results");
-  }
-
-  // Copy returned binaries into the result buffers. We rely on the Elixir side
-  // (Nx.elixir_call/3) to have already validated shapes and dtypes.
   for (size_t i = 0; i < rets.size(); ++i) {
     auto maybe_ret_or = rets.get<ffi::AnyBuffer>(i);
     if (!maybe_ret_or) {
@@ -84,20 +73,21 @@ ffi::Error exla_elixir_callback_impl(ffi::RemainingArgs args,
     ffi::Result<ffi::AnyBuffer> ret = *maybe_ret_or;
     ffi::AnyBuffer out = *ret;
 
-    const auto &payload = result.outputs[i];
+    exla::ElixirCallbackOutputBuffer buf;
+    buf.data = static_cast<uint8_t *>(out.untyped_data());
+    buf.size = ffi::ByteWidth(out.element_type()) *
+               static_cast<size_t>(out.element_count());
 
-    size_t expected =
-        ffi::ByteWidth(out.element_type()) * out.element_count();
+    outputs.push_back(buf);
+  }
 
-    if (payload.data.size() != expected) {
-      return ffi::Error(
-          ffi::ErrorCode::kInternal,
-          "callback returned binary of unexpected size for result buffer");
-    }
+  // Call back into Elixir through the bridge. On success, the bridge writes
+  // results directly into the provided output buffers.
+  exla::ElixirCallbackResult result =
+      exla::CallElixirCallback(callback_id, inputs, outputs);
 
-    if (expected > 0) {
-      std::memcpy(out.untyped_data(), payload.data.data(), expected);
-    }
+  if (!result.ok) {
+    return ffi::Error(ffi::ErrorCode::kInternal, result.error);
   }
 
   return ffi::Error::Success();
