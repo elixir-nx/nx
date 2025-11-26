@@ -23,8 +23,7 @@
 
 namespace exla {
 
-using callback_bridge::ElixirCallbackBridgeHandle;
-using callback_bridge::ElixirCallbackPending;
+using callback_bridge::Pending;
 
 FINE_RESOURCE(llvm::StdThreadPool);
 FINE_RESOURCE(mlir::MLIRContext);
@@ -35,8 +34,7 @@ FINE_RESOURCE(exla::ExlaBuffer);
 FINE_RESOURCE(exla::ExlaExecutable);
 FINE_RESOURCE(exla::MLIRModule);
 FINE_RESOURCE(exla::MLIRFunction);
-FINE_RESOURCE(ElixirCallbackPending);
-FINE_RESOURCE(ElixirCallbackBridgeHandle);
+FINE_RESOURCE(Pending);
 
 // MLIR Functions
 
@@ -532,7 +530,6 @@ FINE_NIF(get_per_device_memory, 0);
 
 // Elixir callback bridge NIF registrations
 
-using callback_bridge::acquire_elixir_callback_bridge;
 using callback_bridge::clear_elixir_callback_bridge;
 using callback_bridge::elixir_callback_reply;
 using callback_bridge::start_elixir_callback_bridge;
@@ -540,7 +537,6 @@ using callback_bridge::start_elixir_callback_bridge;
 FINE_NIF(start_elixir_callback_bridge, 0);
 FINE_NIF(elixir_callback_reply, ERL_NIF_DIRTY_JOB_IO_BOUND);
 FINE_NIF(clear_elixir_callback_bridge, 0);
-FINE_NIF(acquire_elixir_callback_bridge, 0);
 
 // Logging
 

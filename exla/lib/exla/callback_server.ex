@@ -34,21 +34,14 @@ defmodule EXLA.CallbackServer do
   @type callback_id :: non_neg_integer()
 
   defstruct next_id: 1,
-            callbacks: %{},
-            # Opaque handle to the native elixir callback bridge so its
-            # lifetime is tied to this server process.
-            bridge_ref: nil
+            callbacks: %{}
 
   @type t :: %__MODULE__{
           next_id: non_neg_integer(),
           # We store the original function, its output template, and any
           # static (non-tensor) arguments that should always be appended to
           # the decoded tensor arguments coming from native.
-          callbacks: %{callback_id() => {fun(), Nx.t() | tuple(), [term()]}},
-          # Native bridge resource. We don't use it directly in Elixir, but
-          # holding a reference here ensures the native bridge stays alive
-          # as long as this server does.
-          bridge_ref: term()
+          callbacks: %{callback_id() => {fun(), Nx.t() | tuple(), [term()]}}
         }
 
   ## Public API
@@ -81,11 +74,9 @@ defmodule EXLA.CallbackServer do
   @impl true
   def init(:ok) do
     # Inform native side that this process is the dispatcher for elixir callbacks
-    # and acquire a bridge resource so its lifetime is attached to this server.
     _ = EXLA.NIF.start_elixir_callback_bridge(self())
-    bridge_ref = EXLA.NIF.acquire_elixir_callback_bridge()
 
-    {:ok, %__MODULE__{bridge_ref: bridge_ref}}
+    {:ok, %__MODULE__{}}
   end
 
   @impl true

@@ -6,36 +6,36 @@ namespace exla {
 
 namespace callback_bridge {
 
-struct ElixirCallbackBridgeState {
+struct BridgeState {
   ErlNifPid dispatcher_pid;
   bool dispatcher_set = false;
 };
 
-ElixirCallbackBridgeState *GetElixirCallbackBridgeState() {
-  static ElixirCallbackBridgeState *state = new ElixirCallbackBridgeState();
+BridgeState *GetBridgeState() {
+  static BridgeState *state = new BridgeState();
   return state;
 }
 
 fine::Ok<> start_elixir_callback_bridge(ErlNifEnv *env,
                                         ErlNifPid dispatcher_pid) {
   (void)env;
-  auto state = GetElixirCallbackBridgeState();
+  auto state = GetBridgeState();
   state->dispatcher_pid = dispatcher_pid;
   state->dispatcher_set = true;
   return fine::Ok();
 }
 
-fine::Ok<> elixir_callback_reply(
-    ErlNifEnv *env, fine::ResourcePtr<ElixirCallbackPending> pending,
-    fine::Atom status, fine::Term result) {
-  DeliverElixirCallbackReply(env, pending, status, result);
+fine::Ok<> elixir_callback_reply(ErlNifEnv *env,
+                                 fine::ResourcePtr<Pending> pending,
+                                 fine::Atom status, fine::Term result) {
+  deliver_reply(env, pending, status, result);
   return fine::Ok();
 }
 
 fine::Ok<> clear_elixir_callback_bridge(ErlNifEnv *env,
                                         ErlNifPid dispatcher_pid) {
   (void)env;
-  auto state = GetElixirCallbackBridgeState();
+  auto state = GetBridgeState();
 
   if (state->dispatcher_set &&
       std::memcmp(&state->dispatcher_pid, &dispatcher_pid, sizeof(ErlNifPid)) ==
@@ -46,16 +46,9 @@ fine::Ok<> clear_elixir_callback_bridge(ErlNifEnv *env,
   return fine::Ok();
 }
 
-fine::ResourcePtr<ElixirCallbackBridgeHandle>
-acquire_elixir_callback_bridge(ErlNifEnv *env) {
-  (void)env;
-  return fine::make_resource<ElixirCallbackBridgeHandle>();
-}
-
-void DeliverElixirCallbackReply(
-    ErlNifEnv *env, fine::ResourcePtr<ElixirCallbackPending> pending,
-    fine::Atom status, fine::Term result_term) {
-  ElixirCallbackResult cb_result;
+void deliver_reply(ErlNifEnv *env, fine::ResourcePtr<Pending> pending,
+                   fine::Atom status, fine::Term result_term) {
+  Result cb_result;
 
   if (status == "ok") {
     // Successful reply: result_term is a list of binaries that we decode into
@@ -119,19 +112,18 @@ void DeliverElixirCallbackReply(
   pending->cv.notify_one();
 }
 
-ElixirCallbackResult InvokeElixirCallback(
-    int64_t callback_id, const std::vector<ElixirCallbackArg> &inputs,
-    const std::vector<ElixirCallbackOutputBuffer> &outputs) {
-  auto state = GetElixirCallbackBridgeState();
+Result InvokeElixirCallback(int64_t callback_id, const std::vector<Arg> &inputs,
+                            const std::vector<OutputBuffer> &outputs) {
+  auto state = GetBridgeState();
 
   if (!state->dispatcher_set) {
-    ElixirCallbackResult res;
+    Result res;
     res.ok = false;
     res.error = "EXLA elixir callback dispatcher is not set";
     return res;
   }
 
-  auto pending = fine::make_resource<ElixirCallbackPending>(outputs);
+  auto pending = fine::make_resource<Pending>(outputs);
 
   ErlNifEnv *msg_env = enif_alloc_env();
 

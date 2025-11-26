@@ -78,13 +78,10 @@ defmodule EXLA.NIF do
   def reset_peak_memory(_client), do: err!()
   def get_per_device_memory(_client), do: err!()
 
-  # Elixir callback bridge (Phase 1: CPU-only, simple APIs)
+  # Elixir callback bridge
   def start_elixir_callback_bridge(_dispatcher_pid), do: err!()
   def clear_elixir_callback_bridge(_dispatcher_pid), do: err!()
   def elixir_callback_reply(_reply_tag, _status, _result), do: err!()
-
-  # Bridge resource handle so EXLA.CallbackServer can keep the bridge alive.
-  def acquire_elixir_callback_bridge(), do: err!()
 
   defp err!(), do: :erlang.nif_error(:undef)
 end

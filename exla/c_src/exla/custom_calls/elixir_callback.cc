@@ -36,7 +36,7 @@ ffi::Error exla_elixir_callback_impl(ffi::RemainingArgs args,
 
   // Collect all remaining input tensors (excluding callback id) into
   // lightweight payload views.
-  std::vector<exla::ElixirCallbackArg> inputs;
+  std::vector<exla::callback_bridge::Arg> inputs;
   inputs.reserve(args.size() - 1);
 
   for (size_t i = 1; i < args.size(); ++i) {
@@ -47,7 +47,7 @@ ffi::Error exla_elixir_callback_impl(ffi::RemainingArgs args,
 
     ffi::AnyBuffer buf = *maybe_buf_or;
 
-    exla::ElixirCallbackArg tensor;
+    exla::callback_bridge::Arg tensor;
     tensor.dtype = buf.element_type();
 
     auto dims = buf.dimensions();
@@ -61,7 +61,7 @@ ffi::Error exla_elixir_callback_impl(ffi::RemainingArgs args,
 
   // Prepare output buffer descriptors so the callback bridge can write results
   // directly into the final destination buffers.
-  std::vector<exla::ElixirCallbackOutputBuffer> outputs;
+  std::vector<exla::callback_bridge::OutputBuffer> outputs;
   outputs.reserve(rets.size());
 
   for (size_t i = 0; i < rets.size(); ++i) {
@@ -73,7 +73,7 @@ ffi::Error exla_elixir_callback_impl(ffi::RemainingArgs args,
     ffi::Result<ffi::AnyBuffer> ret = *maybe_ret_or;
     ffi::AnyBuffer out = *ret;
 
-    exla::ElixirCallbackOutputBuffer buf;
+    exla::callback_bridge::OutputBuffer buf;
     buf.data = static_cast<uint8_t *>(out.untyped_data());
     buf.size = ffi::ByteWidth(out.element_type()) *
                static_cast<size_t>(out.element_count());
@@ -83,7 +83,7 @@ ffi::Error exla_elixir_callback_impl(ffi::RemainingArgs args,
 
   // Call back into Elixir through the bridge. On success, the bridge writes
   // results directly into the provided output buffers.
-  exla::ElixirCallbackResult result =
+  exla::callback_bridge::Result result =
       exla::callback_bridge::InvokeElixirCallback(callback_id, inputs, outputs);
 
   if (!result.ok) {

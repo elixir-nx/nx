@@ -13,7 +13,9 @@
 
 namespace exla {
 
-struct ElixirCallbackArg {
+namespace callback_bridge {
+
+struct Arg {
   xla::ffi::DataType dtype;
   std::vector<int64_t> dims;
   const uint8_t *data = nullptr;
@@ -21,78 +23,65 @@ struct ElixirCallbackArg {
 };
 
 // Result of an Elixir callback. On success, data has already been copied into
-// the pre-registered output buffers held by ElixirCallbackPending, so we only
+// the pre-registered output buffers held by Pending, so we only
 // need to track success or an error message here.
-struct ElixirCallbackResult {
+struct Result {
   bool ok = false;
   std::string error;
 };
 
 // Host-side description of an output buffer that should receive the callback
 // result for a given output index.
-struct ElixirCallbackOutputBuffer {
+struct OutputBuffer {
   uint8_t *data = nullptr;
   size_t size = 0;
 };
 
-namespace callback_bridge {
-
-// Opaque handle type used only so Elixir can keep the bridge alive via a
-// Fine resource. It carries no data; the real bridge state is stored
-// internally in the bridge implementation.
-struct ElixirCallbackBridgeHandle {};
-
 // Per-callback pending state used to synchronize between the XLA host thread
 // and the Elixir-side dispatcher. This is exposed as a Fine resource so we
 // can pass it as an opaque handle in messages instead of using integer tags.
-struct ElixirCallbackPending {
+struct Pending {
   // Constructor used on the host callback path where we pre-register the
   // destination buffers for each output.
-  explicit ElixirCallbackPending(
-      std::vector<ElixirCallbackOutputBuffer> outputs)
+  explicit Pending(std::vector<OutputBuffer> outputs)
       : outputs(std::move(outputs)) {}
 
   std::mutex mu;
   std::condition_variable cv;
   bool done = false;
-  ElixirCallbackResult result;
-  std::vector<ElixirCallbackOutputBuffer> outputs;
+  Result result;
+  std::vector<OutputBuffer> outputs;
 };
 
 // Called from the Elixir side to deliver a reply for a given pending handle.
 // We receive the reply as a status atom (e.g. :ok or :error) and a result
 // term. For the :ok case the result is a list of binaries that we decode as
 // ElixirCallbackTensor outputs via Fine's decoding machinery.
-void DeliverElixirCallbackReply(
-    ErlNifEnv *env, fine::ResourcePtr<ElixirCallbackPending> pending,
-    fine::Atom status, fine::Term result);
+void deliver_reply(ErlNifEnv *env, fine::ResourcePtr<Pending> pending,
+                   fine::Atom status, fine::Term result);
 
 // Synchronously calls the Elixir callback identified by `callback_id` with the
 // given tensor arguments. This function:
 //
-//   * Allocates a unique ElixirCallbackPending resource
+//   * Allocates a unique Pending resource
 //   * Sends a message to the dispatcher via enif_send/3
 //   * Blocks the calling native thread until the reply arrives via
-//     DeliverElixirCallbackReply/3
+//     deliver_reply/3
 //
-// It returns an ElixirCallbackResult that either indicates success (data has
+// It returns an Result that either indicates success (data has
 // been written into the registered output buffers) or an error message.
-ElixirCallbackResult InvokeElixirCallback(
-    int64_t callback_id, const std::vector<ElixirCallbackArg> &inputs,
-    const std::vector<ElixirCallbackOutputBuffer> &outputs);
+Result InvokeElixirCallback(int64_t callback_id, const std::vector<Arg> &inputs,
+                            const std::vector<OutputBuffer> &outputs);
 
 fine::Ok<> start_elixir_callback_bridge(ErlNifEnv *env,
                                         ErlNifPid dispatcher_pid);
 
-fine::Ok<> elixir_callback_reply(
-    ErlNifEnv *env, fine::ResourcePtr<ElixirCallbackPending> pending,
-    fine::Atom status, fine::Term result);
+fine::Ok<> elixir_callback_reply(ErlNifEnv *env,
+                                 fine::ResourcePtr<Pending> pending,
+                                 fine::Atom status, fine::Term result);
 
 fine::Ok<> clear_elixir_callback_bridge(ErlNifEnv *env,
                                         ErlNifPid dispatcher_pid);
-
-fine::ResourcePtr<ElixirCallbackBridgeHandle>
-acquire_elixir_callback_bridge(ErlNifEnv *env);
 
 } // namespace callback_bridge
 
