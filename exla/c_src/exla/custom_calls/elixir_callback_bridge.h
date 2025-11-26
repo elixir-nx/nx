@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "exla_nif_util.h"
+#include "../exla_nif_util.h"
 #include "xla/ffi/api/ffi.h"
 #include <erl_nif.h>
 #include <fine.hpp>
@@ -34,6 +34,13 @@ struct ElixirCallbackOutputBuffer {
   uint8_t *data = nullptr;
   size_t size = 0;
 };
+
+namespace callback_bridge {
+
+// Opaque handle type used only so Elixir can keep the bridge alive via a
+// Fine resource. It carries no data; the real bridge state is stored
+// internally in the bridge implementation.
+struct ElixirCallbackBridgeHandle {};
 
 // Per-callback pending state used to synchronize between the XLA host thread
 // and the Elixir-side dispatcher. This is exposed as a Fine resource so we
@@ -70,10 +77,24 @@ void DeliverElixirCallbackReply(
 //
 // It returns an ElixirCallbackResult that either indicates success (data has
 // been written into the registered output buffers) or an error message.
-ElixirCallbackResult
-InvokeElixirCallback(int64_t callback_id,
-                     const std::vector<ElixirCallbackArg> &inputs,
-                     const std::vector<ElixirCallbackOutputBuffer> &outputs);
+ElixirCallbackResult InvokeElixirCallback(
+    int64_t callback_id, const std::vector<ElixirCallbackArg> &inputs,
+    const std::vector<ElixirCallbackOutputBuffer> &outputs);
+
+fine::Ok<> start_elixir_callback_bridge(ErlNifEnv *env,
+                                        ErlNifPid dispatcher_pid);
+
+fine::Ok<> elixir_callback_reply(
+    ErlNifEnv *env, fine::ResourcePtr<ElixirCallbackPending> pending,
+    fine::Atom status, fine::Term result);
+
+fine::Ok<> clear_elixir_callback_bridge(ErlNifEnv *env,
+                                        ErlNifPid dispatcher_pid);
+
+fine::ResourcePtr<ElixirCallbackBridgeHandle>
+acquire_elixir_callback_bridge(ErlNifEnv *env);
+
+} // namespace callback_bridge
 
 } // namespace exla
 
@@ -231,3 +252,5 @@ private:
 };
 
 } // namespace fine
+
+

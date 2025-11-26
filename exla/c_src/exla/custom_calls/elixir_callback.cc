@@ -1,4 +1,4 @@
-#include "../elixir_callback_bridge.h"
+#include "elixir_callback_bridge.h"
 
 #include <cstring>
 #include <vector>
@@ -84,7 +84,7 @@ ffi::Error exla_elixir_callback_impl(ffi::RemainingArgs args,
   // Call back into Elixir through the bridge. On success, the bridge writes
   // results directly into the provided output buffers.
   exla::ElixirCallbackResult result =
-      exla::CallElixirCallback(callback_id, inputs, outputs);
+      exla::callback_bridge::InvokeElixirCallback(callback_id, inputs, outputs);
 
   if (!result.ok) {
     return ffi::Error(ffi::ErrorCode::kInternal, result.error);
