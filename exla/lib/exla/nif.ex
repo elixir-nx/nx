@@ -83,5 +83,8 @@ defmodule EXLA.NIF do
   def clear_elixir_callback_bridge(_dispatcher_pid), do: err!()
   def elixir_callback_reply(_reply_tag, _payload), do: err!()
 
+  # Bridge resource handle so EXLA.CallbackServer can keep the bridge alive.
+  def acquire_elixir_callback_bridge(), do: err!()
+
   defp err!(), do: :erlang.nif_error(:undef)
 end

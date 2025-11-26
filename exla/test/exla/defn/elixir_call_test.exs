@@ -11,9 +11,7 @@ defmodule EXLA.Defn.ElixirCallTest do
   defp add_offset_callback(t, opts) do
     t
     |> Nx.as_type(:f32)
-    # TODO: if we run on the same device there will be a problem due to the device locking.
-    |> Nx.backend_transfer({EXLA.Backend, client: :host, device_id: 1})
-    |> Nx.add(opts[:offset]) |> dbg(structs: false)
+    |> Nx.add(opts[:offset])
   end
 
   defn add_offset(x) do

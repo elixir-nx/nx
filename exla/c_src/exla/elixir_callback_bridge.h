@@ -1,6 +1,8 @@
 #pragma once
 
+#include <condition_variable>
 #include <cstdint>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -31,9 +33,20 @@ struct ElixirCallbackResult {
   std::vector<ElixirCallbackTensor> outputs;
 };
 
-// Called from the Elixir side to deliver a reply for a given callback tag.
-void DeliverElixirCallbackReply(ErlNifEnv *env, int64_t reply_tag,
-                                fine::Term payload);
+// Per-callback pending state used to synchronize between the XLA host thread
+// and the Elixir-side dispatcher. This is exposed as a Fine resource so we
+// can pass it as an opaque handle in messages instead of using integer tags.
+struct ElixirCallbackPending {
+  std::mutex mu;
+  std::condition_variable cv;
+  bool done = false;
+  ElixirCallbackResult result;
+};
+
+// Called from the Elixir side to deliver a reply for a given pending handle.
+void DeliverElixirCallbackReply(
+    ErlNifEnv *env, fine::ResourcePtr<ElixirCallbackPending> pending,
+    fine::Term payload);
 
 // Synchronously calls the Elixir callback identified by `callback_id` with the
 // given tensor arguments. This function:

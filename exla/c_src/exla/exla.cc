@@ -32,6 +32,7 @@ FINE_RESOURCE(exla::ExlaBuffer);
 FINE_RESOURCE(exla::ExlaExecutable);
 FINE_RESOURCE(exla::MLIRModule);
 FINE_RESOURCE(exla::MLIRFunction);
+FINE_RESOURCE(exla::ElixirCallbackPending);
 
 // MLIR Functions
 
@@ -529,22 +530,14 @@ FINE_NIF(get_per_device_memory, 0);
 
 namespace {
 
-struct ElixirCallbackPending {
-  std::mutex mu;
-  std::condition_variable cv;
-  bool done = false;
-  ElixirCallbackResult result;
-};
-
 struct ElixirCallbackBridgeState {
   ErlNifPid dispatcher_pid;
   bool dispatcher_set = false;
-  std::atomic<int64_t> next_tag{1};
-  std::mutex mu;
-  std::unordered_map<int64_t, std::shared_ptr<ElixirCallbackPending>> pending;
 };
 
-ElixirCallbackBridgeState *GetElixirCallbackBridgeState() {
+// We keep a single global bridge state, but expose it as a Fine resource so
+// Elixir code can tie its lifetime to EXLA.CallbackServer.
+static ElixirCallbackBridgeState *GetElixirCallbackBridgeState() {
   static ElixirCallbackBridgeState *state = new ElixirCallbackBridgeState();
   return state;
 }
@@ -567,7 +560,6 @@ EncodeNxType(ErlNifEnv *env, xla::ffi::DataType dtype) {
 
 fine::Ok<> start_elixir_callback_bridge(ErlNifEnv *env,
                                         ErlNifPid dispatcher_pid) {
-  (void)env;
   auto state = GetElixirCallbackBridgeState();
   state->dispatcher_pid = dispatcher_pid;
   state->dispatcher_set = true;
@@ -576,9 +568,11 @@ fine::Ok<> start_elixir_callback_bridge(ErlNifEnv *env,
 
 FINE_NIF(start_elixir_callback_bridge, 0);
 
-fine::Ok<> elixir_callback_reply(ErlNifEnv *env, int64_t reply_tag,
-                                 fine::Term payload) {
-  DeliverElixirCallbackReply(env, reply_tag, payload);
+fine::Ok<>
+elixir_callback_reply(ErlNifEnv *env,
+                      fine::ResourcePtr<ElixirCallbackPending> pending,
+                      fine::Term payload) {
+  DeliverElixirCallbackReply(env, pending, payload);
   return fine::Ok();
 }
 
@@ -586,7 +580,6 @@ FINE_NIF(elixir_callback_reply, ERL_NIF_DIRTY_JOB_IO_BOUND);
 
 fine::Ok<> clear_elixir_callback_bridge(ErlNifEnv *env,
                                         ErlNifPid dispatcher_pid) {
-  (void)env;
   auto state = GetElixirCallbackBridgeState();
 
   if (state->dispatcher_set &&
@@ -600,20 +593,21 @@ fine::Ok<> clear_elixir_callback_bridge(ErlNifEnv *env,
 
 FINE_NIF(clear_elixir_callback_bridge, 0);
 
-void DeliverElixirCallbackReply(ErlNifEnv *env, int64_t reply_tag,
-                                fine::Term payload) {
-  auto state = GetElixirCallbackBridgeState();
+// Allocate and return a Fine resource handle associated with the bridge.
+// This lets Elixir hold a reference (e.g., in EXLA.CallbackServer state) so
+// the bridge lifetime is attached to that process. The actual per-callback
+// pending resources are created independently for each call.
+fine::ResourcePtr<ElixirCallbackPending>
+acquire_elixir_callback_bridge(ErlNifEnv *env) {
+  (void)env;
+  return fine::make_resource<ElixirCallbackPending>();
+}
 
-  std::shared_ptr<ElixirCallbackPending> pending;
-  {
-    std::lock_guard<std::mutex> lock(state->mu);
-    auto it = state->pending.find(reply_tag);
-    if (it == state->pending.end()) {
-      return;
-    }
-    pending = it->second;
-  }
+FINE_NIF(acquire_elixir_callback_bridge, 0);
 
+void DeliverElixirCallbackReply(
+    ErlNifEnv *env, fine::ResourcePtr<ElixirCallbackPending> pending,
+    fine::Term payload) {
   ElixirCallbackResult result;
 
   int arity = 0;
@@ -683,11 +677,6 @@ void DeliverElixirCallbackReply(ErlNifEnv *env, int64_t reply_tag,
   }
 
   pending->cv.notify_one();
-
-  {
-    std::lock_guard<std::mutex> lock(state->mu);
-    state->pending.erase(reply_tag);
-  }
 }
 
 ElixirCallbackResult
@@ -702,14 +691,7 @@ CallElixirCallback(int64_t callback_id,
     return res;
   }
 
-  auto pending = std::make_shared<ElixirCallbackPending>();
-
-  int64_t tag = state->next_tag.fetch_add(1, std::memory_order_relaxed);
-
-  {
-    std::lock_guard<std::mutex> lock(state->mu);
-    state->pending.emplace(tag, pending);
-  }
+  auto pending = fine::make_resource<ElixirCallbackPending>();
 
   ErlNifEnv *msg_env = enif_alloc_env();
 
@@ -730,10 +712,6 @@ CallElixirCallback(int64_t callback_id,
     auto type_tuple_or = EncodeNxType(msg_env, tensor.dtype);
     if (!type_tuple_or.has_value()) {
       enif_free_env(msg_env);
-      {
-        std::lock_guard<std::mutex> lock(state->mu);
-        state->pending.erase(tag);
-      }
 
       ElixirCallbackResult res;
       res.ok = false;
@@ -768,14 +746,18 @@ CallElixirCallback(int64_t callback_id,
   ERL_NIF_TERM args_list =
       enif_make_list_from_array(msg_env, args_terms.data(), args_terms.size());
 
-  ERL_NIF_TERM tag_term = enif_make_int64(msg_env, tag);
+  ERL_NIF_TERM pending_term = fine::encode(msg_env, pending);
   ERL_NIF_TERM cb_term = enif_make_int64(msg_env, callback_id);
 
   ERL_NIF_TERM msg =
       enif_make_tuple4(msg_env, enif_make_atom(msg_env, "exla_elixir_call"),
-                       cb_term, args_list, tag_term);
+                       cb_term, args_list, pending_term);
 
-  enif_send(msg_env, &state->dispatcher_pid, msg_env, msg);
+  // Use the dispatcher pid registered via start_elixir_callback_bridge/1.
+  // Calling enif_whereis_pid from this non-scheduler thread is unsafe and
+  // was causing a segfault.
+  ErlNifPid dispatcher_pid = state->dispatcher_pid;
+  enif_send(msg_env, &dispatcher_pid, msg_env, msg);
   enif_free_env(msg_env);
 
   std::unique_lock<std::mutex> lock(pending->mu);
