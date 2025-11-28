@@ -55,8 +55,7 @@ void deliver_reply(ErlNifEnv *env, fine::ResourcePtr<Pending> pending,
     // raw byte vectors via Fine and copy directly into the registered output
     // buffers.
     try {
-      auto payloads =
-          fine::decode<std::vector<std::vector<uint8_t>>>(env, result_term);
+      auto payloads = fine::decode<std::vector<ErlNifBinary>>(env, result_term);
 
       std::lock_guard<std::mutex> lock(pending->mu);
 
@@ -68,10 +67,10 @@ void deliver_reply(ErlNifEnv *env, fine::ResourcePtr<Pending> pending,
         cb_result.ok = true;
 
         for (size_t i = 0; i < payloads.size(); ++i) {
-          const auto &bytes = payloads[i];
+          const ErlNifBinary &bytes = payloads[i];
           auto &out_buf = pending->outputs[i];
 
-          if (bytes.size() != out_buf.size) {
+          if (bytes.size != out_buf.size) {
             cb_result.ok = false;
             cb_result.error =
                 "callback returned binary of unexpected size for result buffer";
@@ -79,7 +78,7 @@ void deliver_reply(ErlNifEnv *env, fine::ResourcePtr<Pending> pending,
           }
 
           if (out_buf.size > 0) {
-            std::memcpy(out_buf.data, bytes.data(), out_buf.size);
+            std::memcpy(out_buf.data, bytes.data, out_buf.size);
           }
         }
       }

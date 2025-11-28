@@ -89,22 +89,6 @@ fine::Ok<> clear_elixir_callback_bridge(ErlNifEnv *env,
 
 namespace fine {
 
-// Decode a binary term into a raw byte vector. We only care about the payload
-// bytes; dtype and shape are validated on the Elixir side.
-template <> struct Decoder<std::vector<uint8_t>> {
-  static std::vector<uint8_t> decode(ErlNifEnv *env, const ERL_NIF_TERM &term) {
-    ErlNifBinary bin;
-    if (!enif_inspect_binary(env, term, &bin)) {
-      throw std::invalid_argument(
-          "decode failed, expected binary for callback output");
-    }
-
-    std::vector<uint8_t> bytes;
-    bytes.assign(bin.data, bin.data + bin.size);
-    return bytes;
-  }
-};
-
 // Define encoding for {ffi_dtype, dims} into %EXLA.Typespec{} term. This is
 // used by the Elixir callback bridge to surface type and shape information
 // about callback arguments to the Elixir side.
