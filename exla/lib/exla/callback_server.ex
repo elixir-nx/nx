@@ -231,7 +231,7 @@ defmodule EXLA.CallbackServer do
       "expected the elixir_call function to match the given output template " <>
         "#{inspect(right)}, got: #{inspect(left)}"
 
-    {:error, {:argument_error, :erlang.binary_to_term(:erlang.term_to_binary(msg))}}
+    {:error, {:argument_error, msg}}
   end
 
   # Callback returned something that isn't a tensor/tuple matching the template.
@@ -240,43 +240,43 @@ defmodule EXLA.CallbackServer do
       "expected the elixir_call function to return a value compatible with the output " <>
         "template #{inspect(right)}, got: #{inspect(left)}"
 
-    {:error, {:argument_error, :erlang.binary_to_term(:erlang.term_to_binary(msg))}}
+    {:error, {:argument_error, msg}}
   end
 
   # Argument decoding failures.
   defp encode_reply({:error, {:decode_failed, exception}}) do
     msg = Exception.message(exception)
     msg = "failed to decode Elixir callback arguments: #{msg}"
-    {:error, {:runtime_error, :erlang.binary_to_term(:erlang.term_to_binary(msg))}}
+    {:error, {:runtime_error, msg}}
   end
 
   defp encode_reply({:error, {:invalid_args_spec, other}}) do
     msg = "invalid args_spec for Elixir callback: #{inspect(other)}"
-    {:error, {:runtime_error, :erlang.binary_to_term(:erlang.term_to_binary(msg))}}
+    {:error, {:runtime_error, msg}}
   end
 
   # Unknown callback id from native.
   defp encode_reply({:error, :unknown_callback}) do
     msg = "unknown EXLA elixir_call callback id"
-    {:error, {:runtime_error, :erlang.binary_to_term(:erlang.term_to_binary(msg))}}
+    {:error, {:runtime_error, msg}}
   end
 
   # User-raised exceptions.
   defp encode_reply({:error, {:exception, exception, _stack}}) do
     msg = Exception.message(exception)
     msg = "Elixir callback raised: #{msg}"
-    {:error, {:runtime_error, :erlang.binary_to_term(:erlang.term_to_binary(msg))}}
+    {:error, {:runtime_error, msg}}
   end
 
   # Catches other error tuples (throws, exits, etc).
   defp encode_reply({:error, {kind, reason}}) do
     msg = "Elixir callback #{kind}: #{inspect(reason)}"
-    {:error, {:runtime_error, :erlang.binary_to_term(:erlang.term_to_binary(msg))}}
+    {:error, {:runtime_error, msg}}
   end
 
   defp encode_reply({:error, reason}) do
     msg = "Elixir callback error: #{inspect(reason)}"
-    {:error, {:runtime_error, :erlang.binary_to_term(:erlang.term_to_binary(msg))}}
+    {:error, {:runtime_error, msg}}
   end
 
   defp encode_outputs(%Nx.Tensor{} = tensor) do
