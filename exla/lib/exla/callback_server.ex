@@ -106,26 +106,33 @@ defmodule EXLA.CallbackServer do
 
   @impl true
   def handle_info({:exla_elixir_call, callback_id, args_spec, reply_tag}, %__MODULE__{} = state) do
-    case Map.fetch(state.callbacks, callback_id) do
-      {:ok, {fun, out_template, arg_template, opts}} ->
-        reply_payload =
-          args_spec
-          |> decode_args(arg_template)
-          |> run_callback(fun, opts, out_template)
-          |> encode_reply()
+    reply_payload =
+      try do
+        case Map.fetch(state.callbacks, callback_id) do
+          {:ok, {fun, out_template, arg_template, opts}} ->
+            args_spec
+            |> decode_args(arg_template)
+            |> run_callback(fun, opts, out_template)
+            |> encode_reply()
 
-        send_reply(reply_tag, reply_payload)
+          :error ->
+            Logger.error(
+              "EXLA.CallbackServer received callback id #{inspect(callback_id)} that is not registered"
+            )
 
-        {:noreply, state}
+            encode_reply({:error, :unknown_callback})
+        end
+      rescue
+        exception ->
+          msg = Exception.message(exception)
+          encode_reply({:error, {:runtime_error, "Elixir callback server crashed: " <> msg}})
+      catch
+        kind, reason ->
+          encode_reply({:error, {:runtime_error, "Elixir callback server #{kind}: #{inspect(reason)}"}})
+      end
 
-      :error ->
-        Logger.error(
-          "EXLA.CallbackServer received callback id #{inspect(callback_id)} that is not registered"
-        )
-
-        send_reply(reply_tag, {:error, :unknown_callback})
-        {:noreply, state}
-    end
+    send_reply(reply_tag, reply_payload)
+    {:noreply, state}
   end
 
   def handle_info(other, state) do
