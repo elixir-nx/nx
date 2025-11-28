@@ -128,42 +128,32 @@ Result InvokeElixirCallback(int64_t callback_id, const std::vector<Arg> &inputs,
 
   // Encode arguments as [{bin, %EXLA.Typespec{}}, ...]. We currently send
   // plain binaries because the BEAM callback needs to own the data lifetime.
-  std::vector<ERL_NIF_TERM> args_terms;
+  std::vector<std::tuple<fine::Term,
+                         std::tuple<xla::ffi::DataType, std::vector<int64_t>>>>
+      args_terms;
   args_terms.reserve(inputs.size());
 
   for (const auto &tensor : inputs) {
-    ERL_NIF_TERM bin_term;
-    unsigned char *bin_data =
-        enif_make_new_binary(msg_env, tensor.size_bytes, &bin_term);
-    if (tensor.size_bytes > 0) {
-      memcpy(bin_data, tensor.data, tensor.size_bytes);
-    }
+    fine::Term bin_term = fine::make_new_binary(
+        msg_env, reinterpret_cast<const char *>(tensor.data),
+        tensor.size_bytes);
 
     // Build an %EXLA.Typespec{} directly from the ffi::DataType and dims via
     // Fine's encoder defined in exla_nif_util.h.
-    ERL_NIF_TERM typespec_term =
-        fine::encode(msg_env, std::make_tuple(tensor.dtype, tensor.dims));
-
-    ERL_NIF_TERM arg_tuple = enif_make_tuple2(msg_env, bin_term, typespec_term);
+    auto arg_tuple =
+        std::make_tuple(bin_term, std::make_tuple(tensor.dtype, tensor.dims));
 
     args_terms.push_back(arg_tuple);
   }
 
-  ERL_NIF_TERM args_list =
-      enif_make_list_from_array(msg_env, args_terms.data(), args_terms.size());
-
-  ERL_NIF_TERM pending_term = fine::encode(msg_env, pending);
-  ERL_NIF_TERM cb_term = enif_make_int64(msg_env, callback_id);
-
-  ERL_NIF_TERM msg =
-      enif_make_tuple4(msg_env, enif_make_atom(msg_env, "exla_elixir_call"),
-                       cb_term, args_list, pending_term);
+  auto msg = std::make_tuple(fine::Atom("exla_elixir_call"), callback_id,
+                             args_terms, pending);
 
   // Use the dispatcher pid registered via start_elixir_callback_bridge/1.
   // Calling enif_whereis_pid from this non-scheduler thread is unsafe and
   // was causing a segfault.
   ErlNifPid dispatcher_pid = state->dispatcher_pid;
-  enif_send(msg_env, &dispatcher_pid, msg_env, msg);
+  enif_send(msg_env, &dispatcher_pid, msg_env, fine::encode(msg_env, msg));
   enif_free_env(msg_env);
 
   std::unique_lock<std::mutex> lock(pending->mu);
