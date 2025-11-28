@@ -94,9 +94,13 @@ void deliver_reply(ErlNifEnv *env, fine::ResourcePtr<Pending> pending,
     try {
       auto decoded =
           fine::decode<std::tuple<fine::Atom, ErlNifBinary>>(env, result_term);
+      fine::Atom kind = std::get<0>(decoded);
       ErlNifBinary msg_bin = std::get<1>(decoded);
-      cb_result.error.assign(reinterpret_cast<const char *>(msg_bin.data),
-                             msg_bin.size);
+
+      cb_result.error =
+          "elixir callback returned " + kind.to_string() + ": " +
+          std::string(reinterpret_cast<const char *>(msg_bin.data),
+                      msg_bin.size);
     } catch (const std::exception &) {
       cb_result.error = "elixir callback returned error";
     }
