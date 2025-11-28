@@ -17,7 +17,7 @@ defmodule EXLA.Defn.ElixirCallTest do
   defn add_offset(x) do
     out = %{x | type: Nx.Type.to_floating(x.type)}
 
-    Nx.elixir_call(out, [x, [offset: 10.0]], &add_offset_callback/2)
+    Nx.elixir_call(out, x, [offset: 10.0], &add_offset_callback/2)
   end
 
   test "elixir_call with single output" do
@@ -36,7 +36,7 @@ defmodule EXLA.Defn.ElixirCallTest do
     out_template = {out0, out1}
 
     {a, b} =
-      Nx.elixir_call(out_template, [fx], fn t ->
+      Nx.elixir_call(out_template, fx, fn t ->
         {Nx.multiply(t, 2.0), Nx.add(t, 1.0)}
       end)
 
@@ -55,7 +55,7 @@ defmodule EXLA.Defn.ElixirCallTest do
   defn bad_callback(x) do
     out = %{x | type: Nx.Type.to_floating(x.type)}
 
-    Nx.elixir_call(out, [x], fn _t ->
+    Nx.elixir_call(out, x, fn _t ->
       # Wrong shape on purpose
       Nx.tensor([1.0, 2.0, 3.0])
     end)
@@ -78,5 +78,22 @@ defmodule EXLA.Defn.ElixirCallTest do
     fx = Nx.as_type(x, :f32)
     expected = Nx.add(Nx.multiply(fx, 2.0), Nx.add(fx, 1.0))
     assert_equal(y, expected)
+  end
+
+  def add_and_subtract_callback({x, y}) do
+    {Nx.add(x, y), Nx.subtract(x, y)}
+  end
+
+  defn add_and_subtract(x, y) do
+    Nx.elixir_call({x, x}, {x, y}, &add_and_subtract_callback/1)
+  end
+
+  test "elixir_call with tuple input" do
+    x = Nx.tensor([1, 2, 3])
+    y = Nx.tensor([4, 5, 6])
+    assert {add, sub} = add_and_subtract(x, y)
+
+    assert_equal(add, Nx.add(x, y))
+    assert_equal(sub, Nx.subtract(x, y))
   end
 end

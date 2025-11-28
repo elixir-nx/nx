@@ -193,18 +193,11 @@ defmodule Nx.Defn.Tree do
   end
 
   def apply_args(%T{data: %Expr{op: :elixir_call, args: args}}, _type, acc, fun) do
-    [in_args, callback, out_template] = args
+    [tensor_expr, callback_opts, callback, out_template] = args
 
-    {in_args, acc} =
-      Enum.map_reduce(in_args, acc, fn t, acc ->
-        if is_list(t) do
-          {t, acc}
-        else
-          Composite.traverse(t, acc, fun)
-        end
-      end)
+    {tensor_expr, acc} = Composite.traverse(tensor_expr, acc, fun)
 
-    {[in_args, callback, out_template], acc}
+    {[tensor_expr, callback_opts, callback, out_template], acc}
   end
 
   def apply_args(%T{data: %Expr{op: :token, args: [token]}}, _type, acc, fun) do

@@ -12,7 +12,7 @@ defmodule Torchx.Defn.ElixirCallEvaluatorTest do
   defn add_offset(x) do
     out = %{x | type: Nx.Type.to_floating(x.type)}
 
-    Nx.elixir_call(out, [x, [offset: 10.0]], fn t, opts ->
+    Nx.elixir_call(out, x, [offset: 10.0], fn t, opts ->
       Nx.add(Nx.as_type(t, :f32), opts[:offset])
     end)
   end
@@ -33,7 +33,7 @@ defmodule Torchx.Defn.ElixirCallEvaluatorTest do
     out_template = {out0, out1}
 
     {a, b} =
-      Nx.elixir_call(out_template, [fx], fn t ->
+      Nx.elixir_call(out_template, fx, fn t ->
         {Nx.multiply(t, 2.0), Nx.add(t, 1.0)}
       end)
 

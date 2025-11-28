@@ -548,18 +548,25 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :elixir_call,
-         %T{data: %Expr{args: [in_args, fun, out_template]}} = expr,
+         %T{data: %Expr{args: [tensor_expr, opts, fun, out_template]}} = expr,
          %{client: %EXLA.Client{platform: :host}} = state,
          cache
        ) do
-    {tensor_args, static_args} = Enum.split_while(in_args, &(not is_list(&1)))
+    # Flatten the tensor_or_container expression into its tensor leaves so we
+    # can compile each as an independent operand to the host callback.
+    tensor_exprs = Composite.flatten_list([tensor_expr])
 
-    {call_args, cache} =
-      Enum.map_reduce(tensor_args, cache, fn arg, cache ->
+    {arg_values, cache} =
+      Enum.map_reduce(tensor_exprs, cache, fn arg, cache ->
         recur_operator(arg, state, cache) |> unwrap_single_tensor!()
       end)
 
-    callback_id = EXLA.CallbackServer.register(fun, out_template, static_args)
+    # Build a template container for the tensor_or_container argument so the
+    # callback server can reconstruct the full structure from a flat list of
+    # decoded tensors.
+    arg_template = Nx.to_template(tensor_expr)
+
+    callback_id = EXLA.CallbackServer.register(fun, out_template, arg_template, opts)
     typespecs = container_to_typespecs(out_template)
 
     # Pass callback id as an extra scalar s64 operand at the end so that the
@@ -569,7 +576,7 @@ defmodule EXLA.Defn do
     callback_id_value =
       Value.constant(state.builder, [callback_id], callback_id_typespec)
 
-    operands = [callback_id_value | call_args]
+    operands = [callback_id_value | arg_values]
 
     results =
       Value.elixir_call(operands, typespecs)

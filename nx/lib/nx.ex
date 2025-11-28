@@ -2197,48 +2197,48 @@ defmodule Nx do
   end
 
   @doc """
-  Invokes an Elixir function from within defn.
+  Invokes an Elixir function from within `defn`.
 
   This function allows integrating arbitrary Elixir code into `defn` graphs.
   It receives an output template (a tensor or a tuple of tensors) that
-  specifies the expected shapes, types, and names of the result, a list of
-  arguments to pass to the Elixir function, and the function itself.
+  specifies the expected shapes, types, and names of the result, a tensor
+  or tensor container argument, optional Elixir options, and the function
+  itself.
 
   Inside `defn`, this builds an expression node understood by compilers.
   Outside `defn` or on backends without special support, it executes `fun`
   directly and validates the result matches the template.
-
-  ## Argument ordering
-
-  When called inside `defn`, all tensor arguments must be placed **before**
-  any list arguments. Lists (including keyword lists) are treated as static
-  Elixir data that is appended to the callback at runtime, while the leading
-  non-list arguments are compiled as tensors and shipped to the target
-  backend. Passing a tensor after a list argument raises an error.
   """
   @doc type: :backend
-  def elixir_call(output, args, fun) when is_list(args) and is_function(fun) do
+  def elixir_call(output, tensor_or_container, fun) when is_function(fun, 1) do
+    elixir_call(output, tensor_or_container, [], fn value, _opts -> fun.(value) end)
+  end
+
+  def elixir_call(output, tensor_or_container, opts, fun)
+      when is_list(opts) and is_function(fun, 2) do
     {:arity, arity} = Function.info(fun, :arity)
-    num_args = length(args)
 
-    if arity != num_args do
+    if arity != 2 do
       raise ArgumentError,
-            "expected #{arity} arguments, got #{num_args}"
+            "expected elixir_call callback to have arity 2, got #{arity}"
     end
 
-    backend = Nx.Shared.list_impl!(args)
+    # Outside defn, we execute the callback directly or via the backend if it
+    # provides a specialized implementation. We resolve the backend from all
+    # tensors inside the container to support tuple/map containers.
+    tensors = Nx.Defn.Composite.flatten_list([tensor_or_container])
+    backend = Nx.Shared.list_impl!(tensors)
 
-    cond do
-      function_exported?(backend, :elixir_call, 3) ->
-        output
-        |> backend.elixir_call(args, fun)
-        |> ensure_call_compatible!(output)
+    result =
+      cond do
+        function_exported?(backend, :elixir_call, 4) ->
+          backend.elixir_call(output, tensor_or_container, opts, fun)
 
-      true ->
-        fun
-        |> apply(args)
-        |> ensure_call_compatible!(output)
-    end
+        true ->
+          fun.(tensor_or_container, opts)
+      end
+
+    ensure_call_compatible!(result, output)
   end
 
   defp ensure_call_compatible!(left, right) when tuple_size(left) == tuple_size(right) do

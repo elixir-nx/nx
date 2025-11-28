@@ -41,7 +41,7 @@ defmodule Nx.Defn.Expr do
 
     * `attach_token(token(%Nx.Defn.Token{}), expr)`
 
-    * `elixir_call(name, args, fun)`
+    * `elixir_call(out, tensor_or_container, opts, fun)`
 
   `defn` compilers must handle said nodes accordingly.
   """
@@ -387,31 +387,31 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def elixir_call(out, in_args, fun) do
-    ensure_tensor_args_prefix!(in_args)
+  def elixir_call(out, tensor_or_container, opts, fun) when is_function(fun, 2) do
+    # Convert the entire tensor_or_container into an expression container,
+    # preserving its structure but ensuring all tensors are Expr-backed.
+    tensor_expr =
+      Composite.traverse(tensor_or_container, fn
+        %T{} = t -> to_expr(t)
+        other -> other
+      end)
 
-    {tensor_args, _opts} = Enum.split_while(in_args, &(not is_list(&1)))
-    [%T{data: %Expr{context: context}} | _] = Enum.map(tensor_args, &to_expr/1)
+    # Grab context from the first tensor in the flattened container.
+    [%T{data: %Expr{context: context}} | _] =
+      Composite.flatten_list([tensor_expr])
 
     case out do
       t when is_struct(t, Nx.Tensor) ->
         out_template = Nx.to_template(t)
-        expr(t, context, :elixir_call, [in_args, fun, out_template])
+        expr(t, context, :elixir_call, [tensor_expr, opts, fun, out_template])
 
       tuple when is_tuple(tuple) ->
         out_template = tuple_out(tuple_size(tuple))
         user_template = Nx.to_template(tuple)
-        expr_node = expr(out_template, context, :elixir_call, [in_args, fun, user_template])
+        expr_node =
+          expr(out_template, context, :elixir_call, [tensor_expr, opts, fun, user_template])
+
         tuple(expr_node, Tuple.to_list(tuple))
-    end
-  end
-
-  defp ensure_tensor_args_prefix!(args) do
-    {_tensor_prefix, static_suffix} = Enum.split_while(args, &is_struct(&1, Nx.Tensor))
-
-    if Enum.any?(static_suffix, &is_struct(&1, Nx.Tensor)) do
-      raise ArgumentError,
-            "Nx.elixir_call/3 expects all tensor arguments to appear before any static arguments, but got: #{inspect(args)}"
     end
   end
 

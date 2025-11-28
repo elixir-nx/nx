@@ -175,13 +175,8 @@ defmodule Nx.Defn.Evaluator do
     Map.put(cache, [:optional | id], optional_expr_cache)
   end
 
-  defp compute_cache(:elixir_call, %{data: %Expr{args: args}}, state, cache) do
-    [in_args, _fun, _out_template] = args
-
-    Enum.reduce(in_args, cache, fn
-      t, cache when is_list(t) -> cache
-      t, cache -> compute_cache(t, state, cache)
-    end)
+  defp compute_cache(:elixir_call, %{data: %Expr{args: [tensor_expr, _opts, _fun, _out]}}, state, cache) do
+    compute_cache(tensor_expr, state, cache)
   end
 
   defp compute_cache(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, cache) do
@@ -442,18 +437,17 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval_apply(
          :elixir_call,
-         %{data: %Expr{args: [in_args, fun, _out_template]}} = expr,
+         %{data: %Expr{args: [tensor_expr, opts, fun, _out_template]}} = expr,
          state,
          caches
        ) do
-    {tensor_args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
-    {evaluated_tensors, caches} = Enum.map_reduce(tensor_args, caches, &eval(&1, state, &2))
-    backend = Nx.Shared.list_impl!(evaluated_tensors)
+    {tensor_value, caches} = eval(tensor_expr, state, caches)
+    backend = Nx.Shared.list_impl!([tensor_value])
 
     if backend == Nx.Defn.Expr do
       {expr, caches}
     else
-      {apply(fun, evaluated_tensors ++ opts), caches}
+      {fun.(tensor_value, opts), caches}
     end
   end
 

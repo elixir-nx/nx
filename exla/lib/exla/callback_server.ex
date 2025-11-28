@@ -57,16 +57,16 @@ defmodule EXLA.CallbackServer do
   end
 
   @doc """
-  Registers a callback function, its output template, and static arguments, returning a callback id.
+  Registers a callback function, its output template, argument template, and options,
+  returning a callback id.
 
-  The same `{fun, out_template, static_args}` triple will always return the
-  same id for the lifetime of this VM. This id is what the EXLA compiler
-  encodes into the host `CustomCall` so the native side can reference the
-  right callback.
+  The same `{fun, out_template, arg_template, opts}` quadruple will always return the
+  same id for the lifetime of this VM. This id is what the EXLA compiler encodes into
+  the host `CustomCall` so the native side can reference the right callback.
   """
-  @spec register(fun(), Nx.t() | tuple(), [term()]) :: callback_id()
-  def register(fun, out_template, static_args) when is_function(fun) and is_list(static_args) do
-    GenServer.call(__MODULE__, {:register, fun, out_template, static_args})
+  @spec register(fun(), Nx.t() | tuple(), term(), [term()]) :: callback_id()
+  def register(fun, out_template, arg_template, opts) when is_function(fun) and is_list(opts) do
+    GenServer.call(__MODULE__, {:register, fun, out_template, arg_template, opts})
   end
 
   ## GenServer callbacks
@@ -89,8 +89,8 @@ defmodule EXLA.CallbackServer do
   end
 
   @impl true
-  def handle_call({:register, fun, out_template, static_args}, _from, %__MODULE__{} = state) do
-    key = {fun, Nx.to_template(out_template), static_args}
+  def handle_call({:register, fun, out_template, arg_template, opts}, _from, %__MODULE__{} = state) do
+    key = {fun, out_template, arg_template, opts}
 
     case find_existing_id(state.callbacks, key) do
       {:ok, id} ->
@@ -98,7 +98,7 @@ defmodule EXLA.CallbackServer do
 
       :error ->
         id = state.next_id
-        state = put_in(state.callbacks[id], {fun, Nx.to_template(out_template), static_args})
+        state = put_in(state.callbacks[id], {fun, out_template, arg_template, opts})
         state = %{state | next_id: id + 1}
         {:reply, id, state}
     end
@@ -107,11 +107,11 @@ defmodule EXLA.CallbackServer do
   @impl true
   def handle_info({:exla_elixir_call, callback_id, args_spec, reply_tag}, %__MODULE__{} = state) do
     case Map.fetch(state.callbacks, callback_id) do
-      {:ok, {fun, out_template, static_args}} ->
+      {:ok, {fun, out_template, arg_template, opts}} ->
         reply_payload =
           args_spec
-          |> decode_args()
-          |> run_callback(fun, static_args, out_template)
+          |> decode_args(arg_template)
+          |> run_callback(fun, opts, out_template)
           |> encode_reply()
 
         send_reply(reply_tag, reply_payload)
@@ -141,12 +141,12 @@ defmodule EXLA.CallbackServer do
     end)
   end
 
-  defp run_callback({:error, reason}, _fun, _static_args, _out_template), do: {:error, reason}
+  defp run_callback({:error, reason}, _fun, _opts, _out_template), do: {:error, reason}
 
-  defp run_callback({:ok, tensor_args}, fun, static_args, out_template) do
+  defp run_callback({:ok, tensor_args}, fun, opts, out_template) do
     result =
       try do
-        apply(fun, tensor_args ++ static_args)
+        fun.(tensor_args, opts)
       rescue
         exception ->
           {:error, {:exception, exception, __STACKTRACE__}}
@@ -195,7 +195,7 @@ defmodule EXLA.CallbackServer do
 
   defp ensure_compatible(left, right), do: {:error, {:invalid_result, left, right}}
 
-  defp decode_args(args_spec) when is_list(args_spec) do
+  defp decode_args(args_spec, arg_template) when is_list(args_spec) do
     result =
       Enum.reduce_while(args_spec, {:ok, []}, fn
         {bin, %EXLA.Typespec{type: type, shape: shape}}, {:ok, acc} ->
@@ -216,12 +216,16 @@ defmodule EXLA.CallbackServer do
       end)
 
     case result do
-      {:ok, tensors} -> {:ok, Enum.reverse(tensors)}
-      {:error, _} = error -> error
+      {:ok, tensors} ->
+        tensors = Enum.reverse(tensors)
+        materialize_args(arg_template, tensors)
+
+      {:error, _} = error ->
+        error
     end
   end
 
-  defp decode_args(other), do: {:error, {:invalid_args_spec, other}}
+  defp decode_args(other, _arg_template), do: {:error, {:invalid_args_spec, other}}
 
   defp encode_reply({:ok, value}), do: {:ok, encode_outputs(value)}
 
@@ -277,6 +281,22 @@ defmodule EXLA.CallbackServer do
   defp encode_reply({:error, reason}) do
     msg = "Elixir callback error: #{inspect(reason)}"
     {:error, {:runtime_error, msg}}
+  end
+
+  defp materialize_args(arg_template, tensors) do
+    {container, remaining} =
+      Nx.Defn.Composite.traverse(arg_template, tensors, fn
+        %Nx.Tensor{} = _template, [next | rest] ->
+          {next, rest}
+
+        other, acc ->
+          {other, acc}
+      end)
+
+    case remaining do
+      [] -> {:ok, container}
+      _ -> {:error, {:invalid_args_spec, :extra_values}}
+    end
   end
 
   defp encode_outputs(%Nx.Tensor{} = tensor) do
