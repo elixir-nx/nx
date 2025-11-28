@@ -160,40 +160,13 @@ defmodule EXLA.CallbackServer do
         error
 
       value ->
-        case ensure_compatible(value, out_template) do
-          {:ok, compatible} -> {:ok, compatible}
-          {:error, reason} -> {:error, reason}
+        if Nx.compatible?(value, out_template) do
+          {:ok, value}
+        else
+          {:error, {:shape_mismatch, value, out_template}}
         end
     end
   end
-
-  defp ensure_compatible(left, right) when is_tuple(left) and is_tuple(right) do
-    if tuple_size(left) == tuple_size(right) do
-      [Tuple.to_list(left), Tuple.to_list(right)]
-      |> Enum.zip_with(fn [l, r] ->
-        case ensure_compatible(l, r) do
-          {:ok, _} -> :ok
-          {:error, reason} -> throw({:error, reason})
-        end
-      end)
-
-      {:ok, left}
-    else
-      {:error, {:mismatched_tuple_size, left, right}}
-    end
-  catch
-    {:error, reason} -> {:error, reason}
-  end
-
-  defp ensure_compatible(%Nx.Tensor{} = left, %Nx.Tensor{} = right) do
-    if left.shape == right.shape and left.type == right.type and left.names == right.names do
-      {:ok, left}
-    else
-      {:error, {:shape_mismatch, left, right}}
-    end
-  end
-
-  defp ensure_compatible(left, right), do: {:error, {:invalid_result, left, right}}
 
   defp decode_args(args_spec, arg_template) when is_list(args_spec) do
     result =
