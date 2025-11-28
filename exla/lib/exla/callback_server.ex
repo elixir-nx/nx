@@ -272,13 +272,9 @@ defmodule EXLA.CallbackServer do
     end
   end
 
-  defp encode_outputs(%Nx.Tensor{} = tensor) do
-    [Nx.to_binary(tensor)]
-  end
-
-  defp encode_outputs(tuple) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
+  defp encode_outputs(container) do
+    [container]
+    |> Nx.Defn.Composite.flatten_list()
     |> Enum.map(&Nx.to_binary/1)
   end
 

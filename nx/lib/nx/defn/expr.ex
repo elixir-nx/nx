@@ -1423,6 +1423,31 @@ defmodule Nx.Defn.Expr do
           expr(out_template, context, :elixir_call, [tensor_expr, static_argument, fun, user_template])
 
         tuple(expr_node, Tuple.to_list(tuple))
+
+      container ->
+        user_template = Nx.to_template(container)
+
+        leaf_templates = Composite.flatten_list([user_template])
+        leaf_count = length(leaf_templates)
+
+        root =
+          expr(
+            tuple_out(leaf_count),
+            context,
+            :elixir_call,
+            [tensor_expr, static_argument, fun, user_template]
+          )
+
+        {container_expr, _} =
+          Composite.traverse(user_template, {0, root}, fn
+            %T{} = template, {i, root} ->
+              {expr(template, context, :elem, [root, i]), {i + 1, root}}
+
+            other, acc ->
+              {other, acc}
+          end)
+
+        container_expr
     end
   end
 

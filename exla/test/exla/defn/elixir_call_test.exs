@@ -5,6 +5,7 @@ defmodule EXLA.Defn.ElixirCallTest do
 
   setup do
     Nx.default_backend(EXLA.Backend)
+    Nx.Defn.default_options(compiler: EXLA)
     :ok
   end
 
@@ -117,5 +118,43 @@ defmodule EXLA.Defn.ElixirCallTest do
     assert_equal(sub, Nx.subtract(x, y))
 
     assert_receive {:add_and_subtract_with_opts, ^ref}
+  end
+
+  defn return_as_container(x, y, template_fun, container_fun) do
+    Nx.elixir_call(template_fun.(x, y), {x, y}, container_fun)
+  end
+
+  test "elixir_call with container output" do
+    x = Nx.tensor([1, 2, 3])
+    y = Nx.tensor([4, 5, 6])
+
+    ref = make_ref()
+    pid = self()
+    container_fun = fn {x, y} ->
+      send(pid, {:container_fun, ref})
+      {x, y}
+    end
+
+    template_fun = fn x, y -> {x, y} end
+
+    assert {x_res, y_res} = return_as_container(x, y, template_fun, container_fun)
+    assert_equal(x_res, x)
+    assert_equal(y_res, y)
+    assert_receive {:container_fun, ^ref}
+
+    ref = make_ref()
+
+    container_fun = fn {x, y} ->
+      send(pid, {:container_fun, ref})
+      %{x: x, y: y}
+    end
+
+    template_fun = fn x, y -> %{x: x, y: y} end
+
+    assert result = return_as_container(x, y, template_fun, container_fun)
+    assert %{x: _, y: _} = result
+    assert_equal(result.x, x)
+    assert_equal(result.y, y)
+    assert_receive {:container_fun, ^ref}
   end
 end

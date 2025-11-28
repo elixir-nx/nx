@@ -2242,22 +2242,13 @@ defmodule Nx do
     ensure_call_compatible!(result, output)
   end
 
-  defp ensure_call_compatible!(left, right) when tuple_size(left) == tuple_size(right) do
-    [Tuple.to_list(left), Tuple.to_list(right)]
-    |> Enum.zip_with(fn [l, r] -> ensure_call_compatible!(l, r) end)
-
-    left
-  end
-
-  defp ensure_call_compatible!(
-         %{shape: shape, type: type, names: names} = left,
-         %{shape: shape, type: type, names: names}
-       ),
-       do: left
-
   defp ensure_call_compatible!(left, right) do
-    raise ArgumentError,
-          "expected the elixir_call function to match the given output template #{inspect(right)}, got: #{inspect(left)}"
+    if Nx.compatible?(left, right) do
+      left
+    else
+      raise ArgumentError,
+            "expected the elixir_call function to match the given output template #{inspect(right)}, got: #{inspect(left)}"
+    end
   end
 
   defp chunk([], data, type) do
