@@ -92,32 +92,8 @@ namespace fine {
 // Define encoding for {ffi_dtype, dims} into %EXLA.Typespec{} term. This is
 // used by the Elixir callback bridge to surface type and shape information
 // about callback arguments to the Elixir side.
-template <>
-struct Encoder<std::tuple<xla::ffi::DataType, std::vector<int64_t>>> {
-  static ERL_NIF_TERM
-  encode(ErlNifEnv *env,
-         const std::tuple<xla::ffi::DataType, std::vector<int64_t>> &spec) {
-    const xla::ffi::DataType &dtype = std::get<0>(spec);
-    const std::vector<int64_t> &dims = std::get<1>(spec);
-
-    ERL_NIF_TERM keys[] = {fine::encode(env, exla::atoms::__struct__),
-                           fine::encode(env, exla::atoms::type),
-                           fine::encode(env, exla::atoms::shape)};
-
-    ERL_NIF_TERM values[] = {fine::encode(env, exla::atoms::ElixirEXLATypespec),
-                             encode_type(env, dtype),
-                             encode_shape(env, dtype, dims)};
-
-    ERL_NIF_TERM map;
-    if (!enif_make_map_from_arrays(env, keys, values, 3, &map)) {
-      throw std::runtime_error("encode: failed to make a map");
-    }
-
-    return map;
-  }
-
-private:
-  static ERL_NIF_TERM encode_type(ErlNifEnv *env, xla::ffi::DataType dtype) {
+template <> struct Encoder<xla::ffi::DataType> {
+  static ERL_NIF_TERM encode(ErlNifEnv *env, const xla::ffi::DataType &dtype) {
     using DT = xla::ffi::DataType;
 
     // Tokens are encoded as the atom :token with empty shape.
@@ -204,23 +180,7 @@ private:
           env, std::make_tuple(type_name.value(), type_size.value()));
     }
 
-    throw std::invalid_argument("encode failed, unexpected ffi::DataType");
-  }
-
-  static ERL_NIF_TERM encode_shape(ErlNifEnv *env, xla::ffi::DataType dtype,
-                                   const std::vector<int64_t> &dims) {
-    if (dtype == xla::ffi::DataType::TOKEN) {
-      return enif_make_tuple(env, 0);
-    }
-
-    std::vector<ERL_NIF_TERM> dim_terms;
-    dim_terms.reserve(dims.size());
-
-    for (auto d : dims) {
-      dim_terms.push_back(fine::encode<int64_t>(env, d));
-    }
-
-    return enif_make_tuple_from_array(env, dim_terms.data(), dim_terms.size());
+    throw std::invalid_argument("encode failed, unexpected xla::ffi::DataType");
   }
 };
 

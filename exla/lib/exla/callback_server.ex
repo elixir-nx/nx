@@ -198,12 +198,12 @@ defmodule EXLA.CallbackServer do
   defp decode_args(args_spec, arg_template) when is_list(args_spec) do
     result =
       Enum.reduce_while(args_spec, {:ok, []}, fn
-        {bin, %EXLA.Typespec{type: type, shape: shape}}, {:ok, acc} ->
+        {bin, {type, shape_list}}, {:ok, acc} ->
           try do
             tensor =
               bin
               |> Nx.from_binary(type)
-              |> Nx.reshape(shape)
+              |> Nx.reshape(List.to_tuple(shape_list))
 
             {:cont, {:ok, [tensor | acc]}}
           rescue

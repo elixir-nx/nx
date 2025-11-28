@@ -154,8 +154,10 @@ Result InvokeElixirCallback(int64_t callback_id, const std::vector<Arg> &inputs,
                              args_terms, pending);
 
   // Use the dispatcher pid registered via start_elixir_callback_bridge/1.
-  // Calling enif_whereis_pid from this non-scheduler thread is unsafe and
-  // was causing a segfault.
+  // We still are within the NIF thread that started the computation,
+  // but we don't know its env, therefore we cannot use enif_whereis_pid.
+  // enif_whereis_pid can be called with NULL, but only from non-ERTS
+  // threads, and doing so here results in a segfault.
   ErlNifPid dispatcher_pid = state->dispatcher_pid;
   enif_send(msg_env, &dispatcher_pid, msg_env, fine::encode(msg_env, msg));
   enif_free_env(msg_env);
