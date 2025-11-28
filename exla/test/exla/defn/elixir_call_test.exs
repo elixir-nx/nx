@@ -96,4 +96,26 @@ defmodule EXLA.Defn.ElixirCallTest do
     assert_equal(add, Nx.add(x, y))
     assert_equal(sub, Nx.subtract(x, y))
   end
+
+  def add_and_subtract_with_opts_callback({x, y}, {ref, pid}) do
+    send(pid, {:add_and_subtract_with_opts, ref})
+    {Nx.add(x, y), Nx.subtract(x, y)}
+  end
+
+  defn add_and_subtract_with_opts(x, y, opts) do
+    Nx.elixir_call({x, x}, {x, y}, {opts[:ref], opts[:pid]}, &add_and_subtract_with_opts_callback/2)
+  end
+
+  test "elixir_call with non-list second argument" do
+    x = Nx.tensor([1, 2, 3])
+    y = Nx.tensor([4, 5, 6])
+    ref = make_ref()
+
+    assert {add, sub} = add_and_subtract_with_opts(x, y, ref: ref, pid: self())
+
+    assert_equal(add, Nx.add(x, y))
+    assert_equal(sub, Nx.subtract(x, y))
+
+    assert_receive {:add_and_subtract_with_opts, ^ref}
+  end
 end

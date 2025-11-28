@@ -60,13 +60,13 @@ defmodule EXLA.CallbackServer do
   Registers a callback function, its output template, argument template, and options,
   returning a callback id.
 
-  The same `{fun, out_template, arg_template, opts}` quadruple will always return the
+  The same `{fun, out_template, arg_template, static_arguments}` quadruple will always return the
   same id for the lifetime of this VM. This id is what the EXLA compiler encodes into
   the host `CustomCall` so the native side can reference the right callback.
   """
   @spec register(fun(), Nx.t() | tuple(), term(), [term()]) :: callback_id()
-  def register(fun, out_template, arg_template, opts) when is_function(fun) and is_list(opts) do
-    GenServer.call(__MODULE__, {:register, fun, out_template, arg_template, opts})
+  def register(fun, out_template, arg_template, static_arguments) when is_function(fun) do
+    GenServer.call(__MODULE__, {:register, fun, out_template, arg_template, static_arguments})
   end
 
   ## GenServer callbacks

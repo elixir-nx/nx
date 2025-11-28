@@ -386,35 +386,6 @@ defmodule Nx.Defn.Expr do
     end
   end
 
-  @impl true
-  def elixir_call(out, tensor_or_container, opts, fun) when is_function(fun, 2) do
-    # Convert the entire tensor_or_container into an expression container,
-    # preserving its structure but ensuring all tensors are Expr-backed.
-    tensor_expr =
-      Composite.traverse(tensor_or_container, fn
-        %T{} = t -> to_expr(t)
-        other -> other
-      end)
-
-    # Grab context from the first tensor in the flattened container.
-    [%T{data: %Expr{context: context}} | _] =
-      Composite.flatten_list([tensor_expr])
-
-    case out do
-      t when is_struct(t, Nx.Tensor) ->
-        out_template = Nx.to_template(t)
-        expr(t, context, :elixir_call, [tensor_expr, opts, fun, out_template])
-
-      tuple when is_tuple(tuple) ->
-        out_template = tuple_out(tuple_size(tuple))
-        user_template = Nx.to_template(tuple)
-        expr_node =
-          expr(out_template, context, :elixir_call, [tensor_expr, opts, fun, user_template])
-
-        tuple(expr_node, Tuple.to_list(tuple))
-    end
-  end
-
   ## Nx.Defn AST callbacks
 
   @doc false
@@ -1422,6 +1393,37 @@ defmodule Nx.Defn.Expr do
     end
 
     context || acc
+  end
+
+  @doc """
+  Helper for defining an :elixir_call expression node.
+  """
+  def elixir_call(out, tensor_or_container, static_argument, fun) when is_function(fun, 2) do
+    # Convert the entire tensor_or_container into an expression container,
+    # preserving its structure but ensuring all tensors are Expr-backed.
+    tensor_expr =
+      Composite.traverse(tensor_or_container, fn
+        %T{} = t -> to_expr(t)
+        other -> other
+      end)
+
+    # Grab context from the first tensor in the flattened container.
+    [%T{data: %Expr{context: context}} | _] =
+      Composite.flatten_list([tensor_expr])
+
+    case out do
+      t when is_struct(t, Nx.Tensor) ->
+        out_template = Nx.to_template(t)
+        expr(t, context, :elixir_call, [tensor_expr, static_argument, fun, out_template])
+
+      tuple when is_tuple(tuple) ->
+        out_template = tuple_out(tuple_size(tuple))
+        user_template = Nx.to_template(tuple)
+        expr_node =
+          expr(out_template, context, :elixir_call, [tensor_expr, static_argument, fun, user_template])
+
+        tuple(expr_node, Tuple.to_list(tuple))
+    end
   end
 
   ## Constant helpers and related optimizations

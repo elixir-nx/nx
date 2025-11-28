@@ -141,17 +141,6 @@ defmodule Nx.Backend do
   fallback to the default implementation.
   """
   @callback optional(atom, [term], fun) :: tensor
-
-  @doc """
-  Invoked to execute a generic Elixir callback from within `defn`.
-
-  The backend may choose how to execute it. For example, EXLA can lower
-  to a custom_call that interacts with Erlang/Elixir via C; pure CPU
-  backends may call the function directly.
-  """
-  @callback elixir_call(out :: tensor | tuple, tensor_or_container :: term, keyword, fun) ::
-              tensor
-
   @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: tensor
   @callback cholesky(out :: tensor, tensor) :: tensor
   @callback eigh({eigenvals :: tensor, eigenvecs :: tensor}, tensor, keyword) :: tensor
@@ -172,7 +161,6 @@ defmodule Nx.Backend do
 
   @optional_callbacks [
     optional: 3,
-    elixir_call: 4,
     solve: 3,
     determinant: 2,
     logical_not: 2,

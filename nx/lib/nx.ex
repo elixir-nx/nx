@@ -2202,8 +2202,11 @@ defmodule Nx do
   This function allows integrating arbitrary Elixir code into `defn` graphs.
   It receives an output template (a tensor or a tuple of tensors) that
   specifies the expected shapes, types, and names of the result, a tensor
-  or tensor container argument, optional Elixir options, and the function
+  or tensor container argument, and an optional static argument, and the function
   itself.
+
+  The `static_argument` will be passed through the Elixir processes to the callback function
+  along with the executable Nx code.
 
   Inside `defn`, this builds an expression node understood by compilers.
   Outside `defn` or on backends without special support, it executes `fun`
@@ -2214,8 +2217,8 @@ defmodule Nx do
     elixir_call(output, tensor_or_container, [], fn value, _opts -> fun.(value) end)
   end
 
-  def elixir_call(output, tensor_or_container, opts, fun)
-      when is_list(opts) and is_function(fun, 2) do
+  def elixir_call(output, tensor_or_container, static_argument, fun)
+      when is_function(fun, 2) do
     {:arity, arity} = Function.info(fun, :arity)
 
     if arity != 2 do
@@ -2230,12 +2233,10 @@ defmodule Nx do
     backend = Nx.Shared.list_impl!(tensors)
 
     result =
-      cond do
-        function_exported?(backend, :elixir_call, 4) ->
-          backend.elixir_call(output, tensor_or_container, opts, fun)
-
-        true ->
-          fun.(tensor_or_container, opts)
+      if backend == Nx.Defn.Expr do
+          backend.elixir_call(output, tensor_or_container, static_argument, fun)
+      else
+          fun.(tensor_or_container, static_argument)
       end
 
     ensure_call_compatible!(result, output)

@@ -437,7 +437,7 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval_apply(
          :elixir_call,
-         %{data: %Expr{args: [tensor_expr, opts, fun, _out_template]}} = expr,
+         %{data: %Expr{args: [tensor_expr, static_argument, fun, _out_template]}} = expr,
          state,
          caches
        ) do
@@ -447,7 +447,7 @@ defmodule Nx.Defn.Evaluator do
     if backend == Nx.Defn.Expr do
       {expr, caches}
     else
-      {fun.(tensor_value, opts), caches}
+      {fun.(tensor_value, static_argument), caches}
     end
   end
 
