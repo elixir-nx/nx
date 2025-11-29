@@ -122,13 +122,10 @@ defmodule EXLA.CallbackServer do
 
             encode_reply({:error, :unknown_callback})
         end
-      rescue
-        exception ->
-          msg = Exception.message(exception)
-          encode_reply({:error, {:runtime_error, "Elixir callback server crashed: " <> msg}})
       catch
         kind, reason ->
-          encode_reply({:error, {:runtime_error, "Elixir callback server #{kind}: #{inspect(reason)}"}})
+          formatted = Exception.format(kind, reason, __STACKTRACE__)
+          encode_reply({:error, {:runtime_error, "Elixir callback server crashed: #{formatted}"}})
       end
 
     send_reply(reply_tag, reply_payload)
