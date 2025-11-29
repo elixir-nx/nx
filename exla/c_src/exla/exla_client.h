@@ -65,7 +65,10 @@ public:
   using RunResult = std::vector<RunReplicaResult>;
 
   ExlaExecutable(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
-                 absl::optional<std::string> fingerprint, ExlaClient *client);
+                 absl::optional<std::string> fingerprint, ExlaClient *client,
+                 absl::optional<ErlNifPid> callback_server_pid);
+
+  ~ExlaExecutable();
 
   xla::PjRtLoadedExecutable *executable() { return executable_.get(); }
 
@@ -80,6 +83,7 @@ private:
   std::unique_ptr<xla::PjRtLoadedExecutable> executable_;
   absl::optional<std::string> fingerprint_;
   ExlaClient *client_;
+  absl::optional<ErlNifPid> callback_server_pid_;
 };
 
 class ExlaClient {
@@ -95,7 +99,8 @@ public:
   tsl::StatusOr<fine::ResourcePtr<ExlaExecutable>>
   Compile(mlir::ModuleOp computation, std::vector<xla::Shape> argument_layouts,
           xla::ExecutableBuildOptions &options,
-          bool compile_portable_executable);
+          bool compile_portable_executable,
+          absl::optional<ErlNifPid> callback_server_pid);
 
   tsl::StatusOr<fine::ResourcePtr<ExlaBuffer>>
   BufferFromBinary(ERL_NIF_TERM binary_term, xla::Shape &shape, int device_id);

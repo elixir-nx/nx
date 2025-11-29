@@ -1,8 +1,12 @@
+#include <cstring>
 #include <fine.hpp>
 #include <stdexcept>
+#include <stdio.h>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 
+#include "custom_calls/elixir_callback_bridge.h"
 #include "exla_client.h"
 #include "exla_cuda.h"
 #include "exla_log_sink.h"
@@ -19,6 +23,8 @@
 
 namespace exla {
 
+using callback_bridge::Pending;
+
 FINE_RESOURCE(llvm::StdThreadPool);
 FINE_RESOURCE(mlir::MLIRContext);
 FINE_RESOURCE(mlir::Value);
@@ -28,6 +34,7 @@ FINE_RESOURCE(exla::ExlaBuffer);
 FINE_RESOURCE(exla::ExlaExecutable);
 FINE_RESOURCE(exla::MLIRModule);
 FINE_RESOURCE(exla::MLIRFunction);
+FINE_RESOURCE(Pending);
 
 // MLIR Functions
 
@@ -196,7 +203,8 @@ fine::ResourcePtr<ExlaExecutable>
 mlir_compile(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
              fine::ResourcePtr<MLIRModule> module,
              std::vector<xla::Shape> argument_layouts, int64_t num_replicas,
-             int64_t num_partitions, bool use_spmd, int64_t device_id) {
+             int64_t num_partitions, bool use_spmd, int64_t device_id,
+             fine::Term callback_server_pid_term) {
   auto build_options = xla::ExecutableBuildOptions();
 
   build_options.set_num_replicas(num_replicas);
@@ -209,8 +217,21 @@ mlir_compile(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
     build_options.set_device_ordinal(device_id);
   }
 
+  // Decode the optional callback server pid. If the term is a pid, we convert
+  // it to an ErlNifPid; otherwise we treat it as "no pid" (e.g. nil).
+  absl::optional<ErlNifPid> pid_opt;
+  ERL_NIF_TERM pid_term = callback_server_pid_term;
+
+  if (enif_is_pid(env, pid_term)) {
+    ErlNifPid pid;
+    if (enif_get_local_pid(env, pid_term, &pid)) {
+      pid_opt = pid;
+    }
+  }
+
   return unwrap(client->Compile(module->module(), argument_layouts,
-                                build_options, compile_portable_executable));
+                                build_options, compile_portable_executable,
+                                pid_opt));
 }
 
 FINE_NIF(mlir_compile, ERL_NIF_DIRTY_JOB_CPU_BOUND);
@@ -520,6 +541,16 @@ get_per_device_memory(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client) {
 }
 
 FINE_NIF(get_per_device_memory, 0);
+
+// Elixir callback bridge NIF registrations
+
+using callback_bridge::clear_elixir_callback_bridge;
+using callback_bridge::elixir_callback_reply;
+using callback_bridge::start_elixir_callback_bridge;
+
+FINE_NIF(start_elixir_callback_bridge, 0);
+FINE_NIF(elixir_callback_reply, ERL_NIF_DIRTY_JOB_IO_BOUND);
+FINE_NIF(clear_elixir_callback_bridge, 0);
 
 // Logging
 

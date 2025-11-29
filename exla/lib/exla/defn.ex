@@ -39,36 +39,59 @@ defmodule EXLA.Defn do
   def __compile__(key, vars, fun, options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
     debug? = Keyword.get(compile_options, :debug, false)
-    callback = &to_computation(&1, &2, &3, &4, &5, compile_options)
 
-    {executable, {used_inputs, outputs, outfeed, _input_typespecs?}} =
-      compile(key, vars, fun, compile_options, 0, [], callback)
+    # We start the callback server regardless if it's needed
+    # as it's relatively cheap to start it.
+    callback_server_pid =
+      case DynamicSupervisor.start_child(EXLA.CallbackServer.Supervisor, {EXLA.CallbackServer, []}) do
+        {:ok, pid} -> pid
+        {:error, reason} -> raise "Failed to start EXLA.CallbackServer: #{inspect(reason)}"
+      end
 
-    if compile_options[:module_compilation] == :to_mlir do
-      throw({:mlir_module, executable.ref, MapSet.new(Map.keys(used_inputs)), outputs})
-    end
+    try do
+      callback = &to_computation(&1, &2, &3, &4, &5, compile_options, callback_server_pid)
 
-    fn [args] ->
-      {time, lock} =
-        :timer.tc(fn ->
-          EXLA.Defn.Lock.lock(run_key(executable))
-        end)
+      {executable, {used_inputs, outputs, outfeed, _input_typespecs?}} =
+        compile(key, vars, fun, compile_options, 0, [], callback, callback_server_pid)
 
-      debug? && Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
+      if compile_options[:module_compilation] == :to_mlir do
+        throw({:mlir_module, executable.ref, MapSet.new(Map.keys(used_inputs)), outputs})
+      end
 
-      {time, res} =
-        :timer.tc(fn ->
-          maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options)
-        end)
+      fn [args] ->
+        {time, lock} =
+          :timer.tc(fn ->
+            EXLA.Defn.Lock.lock(run_key(executable))
+          end)
 
-      debug? &&
-        Logger.debug("EXLA execution on device #{executable.device_id} in #{us_to_ms(time)}ms")
+        debug? && Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
 
-      res
+        {time, res} =
+          :timer.tc(fn ->
+            maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options)
+          end)
+
+        debug? &&
+          Logger.debug("EXLA execution on device #{executable.device_id} in #{us_to_ms(time)}ms")
+
+        res
+      end
+    catch
+      kind, reason ->
+        DynamicSupervisor.terminate_child(EXLA.CallbackServer.Supervisor, callback_server_pid)
+        :erlang.raise(kind, reason, __STACKTRACE__)
     end
   end
 
-  defp to_computation(%Function{} = function, expr, used_typespecs, outfeed, client, options) do
+  defp to_computation(
+         %Function{} = function,
+         expr,
+         used_typespecs,
+         outfeed,
+         client,
+         options,
+         callback_server_pid
+       ) do
     params =
       Enum.zip_with(used_typespecs, Function.get_arguments(function), fn {pos, _typespec}, arg ->
         {pos, arg}
@@ -83,7 +106,8 @@ defmodule EXLA.Defn do
       precision: Keyword.get(options, :precision, :default),
       builder: function,
       params: Map.new(params ++ outfeed.infeeds),
-      scope_ids: Tree.scope_ids(expr)
+      scope_ids: Tree.scope_ids(expr),
+      callback_server_pid: callback_server_pid
     }
 
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
@@ -138,7 +162,16 @@ defmodule EXLA.Defn do
 
   ## Compile
 
-  defp compile(key, vars, fun, options, used_buffers, used_inputs, to_computation) do
+  defp compile(
+         key,
+         vars,
+         fun,
+         options,
+         used_buffers,
+         used_inputs,
+         to_computation,
+         callback_server_pid
+       ) do
     {cache, options} = Keyword.pop(options, :cache, true)
     {hooks, options} = Keyword.pop(options, :hooks, %{})
     {debug?, options} = Keyword.pop(options, :debug, false)
@@ -234,6 +267,8 @@ defmodule EXLA.Defn do
 
               expr = Nx.Defn.Composite.traverse(expr || fun.(vars), &Nx.devectorize/1)
               outfeed = to_computation.(builder, expr, inputs_and_typespecs, outfeed, client)
+
+              options = Keyword.put(options, :callback_server_pid, callback_server_pid)
 
               {xla_time, executable} =
                 :timer.tc(fn ->
@@ -544,6 +579,51 @@ defmodule EXLA.Defn do
       result = Value.call(state.builder, call_args, call_body, typespecs)
       {wrap_tuple_result(result, expr), cache}
     end
+  end
+
+  defp cached_recur_operator(
+         :elixir_call,
+         %T{data: %Expr{id: id, args: [tensor_expr, opts, fun, out_template]}} = expr,
+         %{client: %EXLA.Client{platform: :host}, callback_server_pid: callback_server_pid} =
+           state,
+         cache
+       ) do
+    # Flatten the tensor_or_container expression into its tensor leaves so we
+    # can compile each as an independent operand to the host callback.
+    tensor_exprs = Composite.flatten_list([tensor_expr])
+
+    {arg_values, cache} =
+      Enum.map_reduce(tensor_exprs, cache, fn arg, cache ->
+        recur_operator(arg, state, cache) |> unwrap_single_tensor!()
+      end)
+
+    # Build a template container for the tensor_or_container argument so the
+    # callback server can reconstruct the full structure from a flat list of
+    # decoded tensors.
+    arg_template = Nx.to_template(tensor_expr)
+
+    :ok =
+      EXLA.CallbackServer.register(callback_server_pid, id, fun, out_template, arg_template, opts)
+
+    typespecs = container_to_typespecs(out_template)
+
+    results =
+      Value.elixir_call(arg_values, typespecs, callback_server_pid, id)
+
+    {wrap_tuple_result(results, expr), cache}
+  end
+
+  defp cached_recur_operator(
+         :elixir_call,
+         _expr,
+         %{client: %EXLA.Client{platform: platform}},
+         _cache
+       ) do
+    raise """
+    Nx.elixir_call/3 is currently only supported for EXLA CPU (platform: :host),
+    but the active EXLA client is configured for platform #{inspect(platform)}.
+    Please run on the :host client or wait for future segmentation-based support.
+    """
   end
 
   defp cached_recur_operator(

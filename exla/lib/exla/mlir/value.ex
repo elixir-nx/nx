@@ -832,6 +832,71 @@ defmodule EXLA.MLIR.Value do
     {p, l, u}
   end
 
+  @doc """
+  Builds a StableHLO `custom_call` that targets the EXLA Elixir callback bridge.
+
+  The `callback_id` is typically the underlying `Nx.Defn.Expr` id of the
+  `:elixir_call` node. It is encoded as a binary (via `:erlang.term_to_binary/1`)
+  and then represented as a list of 64-bit words in the custom call attributes,
+  similar to how we encode the callback server PID.
+  """
+  def elixir_call(
+        [%Value{function: func} | _] = operands,
+        typespecs,
+        callback_server_pid,
+        callback_id
+      ) do
+    result_types = typespecs_to_mlir_types(typespecs)
+
+    {callback_server_pid_words, callback_server_pid_size} =
+      term_to_int64_list(callback_server_pid)
+
+    {callback_id_words, callback_id_size} =
+      term_to_int64_list(callback_id)
+
+    attributes = [
+      call_target_name: attr_string("exla_elixir_callback"),
+      # api_version 4 enables the typed FFI API used by our callback handler.
+      api_version: attr_i32(4),
+      backend_config:
+        attr_dict(
+          callback_id: attr_array_i64_elements(callback_id_words),
+          callback_id_size: attr_ui64(callback_id_size),
+          callback_server_pid: attr_array_i64_elements(callback_server_pid_words),
+          callback_server_pid_size: attr_ui64(callback_server_pid_size)
+        )
+    ]
+
+    op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
+  end
+
+  defp term_to_int64_list(term) do
+    bin = :erlang.term_to_binary(term)
+    size = byte_size(bin)
+
+    # Zero-pad the binary so its size is a multiple of 8 and it can be
+    # represented as a list of 64-bit words.
+    pad =
+      case rem(size, 8) do
+        0 -> 0
+        r -> 8 - r
+      end
+
+    padded_bin =
+      if pad == 0 do
+        bin
+      else
+        bin <> :binary.copy(<<0>>, pad)
+      end
+
+    words =
+      for <<x::unsigned-native-64 <- padded_bin>> do
+        x
+      end
+
+    {words, size}
+  end
+
   def get_tuple_element(%Value{function: func} = operand, index, typespec) do
     result_types = typespecs_to_mlir_types([typespec])
     attributes = [index: attr_i32(index)]
@@ -994,6 +1059,7 @@ defmodule EXLA.MLIR.Value do
 
   defp attr_i32(number), do: "#{number} : i32"
   defp attr_i64(number), do: "#{number} : i64"
+  defp attr_ui64(number), do: "#{number} : ui64"
 
   defp attr_padding(padding) do
     list = Enum.flat_map(padding, &Tuple.to_list/1)
@@ -1023,6 +1089,11 @@ defmodule EXLA.MLIR.Value do
   defp attr_struct(name, keyword_list) do
     content = Enum.map_join(keyword_list, ", ", fn {key, value} -> "#{key} = #{value}" end)
     "##{name}<#{content}>"
+  end
+
+  defp attr_dict(keyword_list) do
+    content = Enum.map_join(keyword_list, ", ", fn {key, value} -> "#{key} = #{value}" end)
+    "{#{content}}"
   end
 
   defp join_list(list) do

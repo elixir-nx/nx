@@ -4,10 +4,10 @@
 #include <fine.hpp>
 #include <tuple>
 
-#include "xla/shape.h"
-#include "xla/shape_util.h"
 #include "mlir/IR/Types.h"
 #include "stablehlo/dialect/StablehloOps.h"
+#include "xla/shape.h"
+#include "xla/shape_util.h"
 
 namespace exla {
 

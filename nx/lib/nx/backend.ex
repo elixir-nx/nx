@@ -141,7 +141,6 @@ defmodule Nx.Backend do
   fallback to the default implementation.
   """
   @callback optional(atom, [term], fun) :: tensor
-
   @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: tensor
   @callback cholesky(out :: tensor, tensor) :: tensor
   @callback eigh({eigenvals :: tensor, eigenvecs :: tensor}, tensor, keyword) :: tensor

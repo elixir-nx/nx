@@ -37,7 +37,8 @@ defmodule EXLA.NIF do
         _num_replicas,
         _num_partitions,
         _use_spmd,
-        _device_id
+        _device_id,
+        _callback_server_pid
       ),
       do: err!()
 
@@ -77,6 +78,11 @@ defmodule EXLA.NIF do
   def get_peak_memory(_client), do: err!()
   def reset_peak_memory(_client), do: err!()
   def get_per_device_memory(_client), do: err!()
+
+  # Elixir callback bridge
+  def start_elixir_callback_bridge(_dispatcher_pid), do: err!()
+  def clear_elixir_callback_bridge(_dispatcher_pid), do: err!()
+  def elixir_callback_reply(_reply_tag, _status, _result), do: err!()
 
   defp err!(), do: :erlang.nif_error(:undef)
 end

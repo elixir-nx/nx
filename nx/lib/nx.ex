@@ -2196,6 +2196,89 @@ defmodule Nx do
     list
   end
 
+  @doc """
+  Invokes an Elixir function from within `defn`.
+
+  This function allows integrating arbitrary Elixir code into `defn` graphs.
+  It receives an output template (a tensor or a tuple of tensors) that
+  specifies the expected shapes, types, and names of the result, a tensor
+  or tensor container argument, and an optional static argument, and the function
+  itself.
+
+  The `static_argument` will be passed through the Elixir processes to the callback function
+  along with the executable Nx code.
+
+  Tensors passed to the callback function are in the same backend as the inputs in the case
+  of `Nx.Defn.Evaluator` invocations. For other compilers, it is generally expected that
+  the tensors will be provided as `Nx.BinaryBackend` tensors.
+
+  ## Examples
+
+  While most code inside `defn` is restricted, `elixir_call/4` allows you
+  to perform arbitrary Elixir operations, such as message passing:
+
+      iex> pid = self()
+      iex> x = Nx.tensor([1, 2, 3])
+      iex> out = Nx.template({3}, {:s, 32})
+      iex> _ =
+      ...>   Nx.elixir_call(out, x, fn t ->
+      ...>     send(pid, {:sum, Enum.sum(Nx.to_flat_list(t))})
+      ...>     t
+      ...>   end)
+      iex> receive do {:sum, value} -> value end
+      6
+
+  You can also use the `static_argument` to pass non-tensor metadata to
+  your callback while still validating the tensor result against a template:
+
+      iex> pid = self()
+      iex> x = Nx.tensor([1, 2, 3])
+      iex> y = Nx.tensor([4, 5, 6])
+      iex> out = %{x: x, y: y}
+      iex> _ =
+      ...>   Nx.elixir_call(out, {x, y}, [pid: pid], fn {a, b}, opts ->
+      ...>     send(opts[:pid], {:dot, Nx.to_number(Nx.dot(a, b))})
+      ...>     %{x: a, y: b}
+      ...>   end)
+      iex> receive do {:dot, value} -> value end
+      32
+
+  Inside `defn`, this builds an expression node understood by compilers.
+  Outside `defn` or on backends without special support, it executes `fun`
+  directly and validates the result matches the template.
+  """
+  @doc type: :backend
+  def elixir_call(output, tensor_or_container, fun) when is_function(fun, 1) do
+    elixir_call(output, tensor_or_container, [], fn value, _opts -> fun.(value) end)
+  end
+
+  def elixir_call(output, tensor_or_container, static_argument, fun)
+      when is_function(fun, 2) do
+    # Outside defn, we execute the callback directly or via the backend if it
+    # provides a specialized implementation. We resolve the backend from all
+    # tensors inside the container to support tuple/map containers.
+    tensors = Nx.Defn.Composite.flatten_list([tensor_or_container])
+    backend = Nx.Shared.list_impl!(tensors)
+
+    result =
+      if backend == Nx.Defn.Expr do
+        backend.elixir_call(output, tensor_or_container, static_argument, fun)
+      else
+        fun.(tensor_or_container, static_argument)
+      end
+
+    ensure_call_compatible!(result, output)
+  end
+
+  defp ensure_call_compatible!(left, right) do
+    if Nx.compatible?(left, right) do
+      left
+    else
+      raise ArgumentError,
+            "expected the elixir_call function to match the given output template #{inspect(right)}, got: #{inspect(left)}"
+    end
+  end
+
   defp chunk([], data, type) do
     match_types [type] do
       <<match!(head, 0), tail::binary>> = data

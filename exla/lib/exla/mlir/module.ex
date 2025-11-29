@@ -92,6 +92,7 @@ defmodule EXLA.MLIR.Module do
       ) do
     num_replicas = Keyword.get(options, :num_replicas, 1)
     num_partitions = Keyword.get(options, :num_partitions, 1)
+    callback_server_pid = Keyword.get(options, :callback_server_pid, nil)
 
     # JAX comments say SPMD can lead to subtle bugs so they only enable
     # when strictly necessary, which is when num_partitions is greater than 1.
@@ -118,7 +119,8 @@ defmodule EXLA.MLIR.Module do
             num_replicas,
             num_partitions,
             use_spmd,
-            device_id
+            device_id,
+            callback_server_pid
           )
       end
 
