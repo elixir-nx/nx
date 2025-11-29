@@ -104,7 +104,12 @@ defmodule EXLA.Defn.ElixirCallTest do
   end
 
   defn add_and_subtract_with_opts(x, y, opts) do
-    Nx.elixir_call({x, x}, {x, y}, {opts[:ref], opts[:pid]}, &add_and_subtract_with_opts_callback/2)
+    Nx.elixir_call(
+      {x, x},
+      {x, y},
+      {opts[:ref], opts[:pid]},
+      &add_and_subtract_with_opts_callback/2
+    )
   end
 
   test "elixir_call with non-list second argument" do
@@ -130,6 +135,7 @@ defmodule EXLA.Defn.ElixirCallTest do
 
     ref = make_ref()
     pid = self()
+
     container_fun = fn {x, y} ->
       send(pid, {:container_fun, ref})
       {x, y}

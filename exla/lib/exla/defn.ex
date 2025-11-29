@@ -77,7 +77,15 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp to_computation(%Function{} = function, expr, used_typespecs, outfeed, client, options, callback_server_pid) do
+  defp to_computation(
+         %Function{} = function,
+         expr,
+         used_typespecs,
+         outfeed,
+         client,
+         options,
+         callback_server_pid
+       ) do
     params =
       Enum.zip_with(used_typespecs, Function.get_arguments(function), fn {pos, _typespec}, arg ->
         {pos, arg}
@@ -148,7 +156,16 @@ defmodule EXLA.Defn do
 
   ## Compile
 
-  defp compile(key, vars, fun, options, used_buffers, used_inputs, to_computation, callback_server_pid) do
+  defp compile(
+         key,
+         vars,
+         fun,
+         options,
+         used_buffers,
+         used_inputs,
+         to_computation,
+         callback_server_pid
+       ) do
     {cache, options} = Keyword.pop(options, :cache, true)
     {hooks, options} = Keyword.pop(options, :hooks, %{})
     {debug?, options} = Keyword.pop(options, :debug, false)
@@ -561,7 +578,8 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(
          :elixir_call,
          %T{data: %Expr{args: [tensor_expr, opts, fun, out_template]}} = expr,
-         %{client: %EXLA.Client{platform: :host}, callback_server_pid: callback_server_pid} = state,
+         %{client: %EXLA.Client{platform: :host}, callback_server_pid: callback_server_pid} =
+           state,
          cache
        ) do
     # Flatten the tensor_or_container expression into its tensor leaves so we
@@ -578,7 +596,9 @@ defmodule EXLA.Defn do
     # decoded tensors.
     arg_template = Nx.to_template(tensor_expr)
 
-    callback_id = EXLA.CallbackServer.register(callback_server_pid, fun, out_template, arg_template, opts)
+    callback_id =
+      EXLA.CallbackServer.register(callback_server_pid, fun, out_template, arg_template, opts)
+
     typespecs = container_to_typespecs(out_template)
 
     results =

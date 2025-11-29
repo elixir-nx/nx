@@ -65,8 +65,12 @@ defmodule EXLA.CallbackServer do
   the host `CustomCall` so the native side can reference the right callback.
   """
   @spec register(pid(), fun(), Nx.t() | tuple(), term(), [term()]) :: callback_id()
-  def register(callback_server_pid, fun, out_template, arg_template, static_arguments) when is_function(fun) do
-    GenServer.call(callback_server_pid, {:register, fun, out_template, arg_template, static_arguments})
+  def register(callback_server_pid, fun, out_template, arg_template, static_arguments)
+      when is_function(fun) do
+    GenServer.call(
+      callback_server_pid,
+      {:register, fun, out_template, arg_template, static_arguments}
+    )
   end
 
   ## GenServer callbacks
@@ -89,7 +93,11 @@ defmodule EXLA.CallbackServer do
   end
 
   @impl true
-  def handle_call({:register, fun, out_template, arg_template, opts}, _from, %__MODULE__{} = state) do
+  def handle_call(
+        {:register, fun, out_template, arg_template, opts},
+        _from,
+        %__MODULE__{} = state
+      ) do
     key = {fun, out_template, arg_template, opts}
 
     case find_existing_id(state.callbacks, key) do
@@ -177,33 +185,10 @@ defmodule EXLA.CallbackServer do
   end
 
   defp decode_args(args_spec, arg_template) when is_list(args_spec) do
-    result =
-      Enum.reduce_while(args_spec, {:ok, []}, fn
-        {bin, {type, shape_list}}, {:ok, acc} ->
-          try do
-            tensor =
-              bin
-              |> Nx.from_binary(type)
-              |> Nx.reshape(List.to_tuple(shape_list))
-
-            {:cont, {:ok, [tensor | acc]}}
-          rescue
-            exception ->
-              {:halt, {:error, {:decode_failed, exception}}}
-          end
-
-        other, _acc ->
-          {:halt, {:error, {:invalid_args_spec, other}}}
-      end)
-
-    case result do
-      {:ok, tensors} ->
-        tensors = Enum.reverse(tensors)
-        materialize_args(arg_template, tensors)
-
-      {:error, _} = error ->
-        error
-    end
+    materialize_args(arg_template, args_spec)
+  catch
+    {:error, reason} ->
+      {:error, reason}
   end
 
   defp decode_args(other, _arg_template), do: {:error, {:invalid_args_spec, other}}
@@ -264,11 +249,20 @@ defmodule EXLA.CallbackServer do
     {:error, {:runtime_error, msg}}
   end
 
-  defp materialize_args(arg_template, tensors) do
+  defp materialize_args(arg_template, args_spec) do
     {container, remaining} =
-      Nx.Defn.Composite.traverse(arg_template, tensors, fn
-        %Nx.Tensor{} = _template, [next | rest] ->
-          {next, rest}
+      Nx.Defn.Composite.traverse(arg_template, args_spec, fn
+        %Nx.Tensor{} = template, [{bin, {type, shape_list}} | rest] ->
+          decoded =
+            bin
+            |> Nx.from_binary(type)
+            |> Nx.reshape(List.to_tuple(shape_list))
+
+          if Nx.compatible?(decoded, template) do
+            {decoded, rest}
+          else
+            throw({:error, {:shape_mismatch, decoded, template}})
+          end
 
         other, acc ->
           {other, acc}

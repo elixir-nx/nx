@@ -839,7 +839,12 @@ defmodule EXLA.MLIR.Value do
   identifies which Elixir function should be invoked when the host callback
   runs. It is passed as an extra scalar ui64 attribute.
   """
-  def elixir_call([%Value{function: func} | _] = operands, typespecs, callback_server_pid, callback_id) do
+  def elixir_call(
+        [%Value{function: func} | _] = operands,
+        typespecs,
+        callback_server_pid,
+        callback_id
+      ) do
     result_types = typespecs_to_mlir_types(typespecs)
 
     pid_bin = :erlang.term_to_binary(callback_server_pid)
@@ -869,11 +874,12 @@ defmodule EXLA.MLIR.Value do
       call_target_name: attr_string("exla_elixir_callback"),
       # api_version 4 enables the typed FFI API used by our callback handler.
       api_version: attr_i32(4),
-      backend_config: attr_dict(
-        callback_id: attr_ui64(callback_id),
-        callback_server_pid: attr_array_i64_elements(callback_server_pid_words),
-        callback_server_pid_size: attr_ui64(pid_size)
-      )
+      backend_config:
+        attr_dict(
+          callback_id: attr_ui64(callback_id),
+          callback_server_pid: attr_array_i64_elements(callback_server_pid_words),
+          callback_server_pid_size: attr_ui64(pid_size)
+        )
     ]
 
     op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
