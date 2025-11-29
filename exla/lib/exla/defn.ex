@@ -48,32 +48,42 @@ defmodule EXLA.Defn do
         {:error, reason} -> raise "Failed to start EXLA.CallbackServer: #{inspect(reason)}"
       end
 
-    callback = &to_computation(&1, &2, &3, &4, &5, compile_options, callback_server_pid)
+    try do
+      callback = &to_computation(&1, &2, &3, &4, &5, compile_options, callback_server_pid)
 
-    {executable, {used_inputs, outputs, outfeed, _input_typespecs?}} =
-      compile(key, vars, fun, compile_options, 0, [], callback, callback_server_pid)
+      {executable, {used_inputs, outputs, outfeed, _input_typespecs?}} =
+        compile(key, vars, fun, compile_options, 0, [], callback, callback_server_pid)
 
-    if compile_options[:module_compilation] == :to_mlir do
-      throw({:mlir_module, executable.ref, MapSet.new(Map.keys(used_inputs)), outputs})
-    end
+      if compile_options[:module_compilation] == :to_mlir do
+        throw({:mlir_module, executable.ref, MapSet.new(Map.keys(used_inputs)), outputs})
+      end
 
-    fn [args] ->
-      {time, lock} =
-        :timer.tc(fn ->
-          EXLA.Defn.Lock.lock(run_key(executable))
-        end)
+      fn [args] ->
+        {time, lock} =
+          :timer.tc(fn ->
+            EXLA.Defn.Lock.lock(run_key(executable))
+          end)
 
-      debug? && Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
+        debug? && Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
 
-      {time, res} =
-        :timer.tc(fn ->
-          maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options)
-        end)
+        {time, res} =
+          :timer.tc(fn ->
+            maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options)
+          end)
 
-      debug? &&
-        Logger.debug("EXLA execution on device #{executable.device_id} in #{us_to_ms(time)}ms")
+        debug? &&
+          Logger.debug("EXLA execution on device #{executable.device_id} in #{us_to_ms(time)}ms")
 
-      res
+        res
+      end
+    rescue
+      e ->
+        EXLA.CallbackServer.Supervisor.terminate_callback_server(callback_server_pid)
+        reraise e, __STACKTRACE__
+    catch
+      kind, reason ->
+        EXLA.CallbackServer.Supervisor.terminate_callback_server(callback_server_pid)
+        :erlang.raise(kind, reason, __STACKTRACE__)
     end
   end
 
