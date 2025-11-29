@@ -2214,7 +2214,7 @@ defmodule Nx do
 
   > #### Device locks {: .warning}
   >
-  > `runtime_call` will generally operate on tensors allocated on a given physical device, such as a GPU.
+  > `runtime_call/4` will generally operate on tensors allocated on a given physical device, such as a GPU.
   > For example, EXLA will have one or more CPU clients.
   >
   > When calling other Nx computations from within the callback, these other computations cannot operate
@@ -2222,7 +2222,7 @@ defmodule Nx do
 
   > #### Backend transfers {: .warning}
   >
-  > When executing a `runtime_call` in `Nx.Defn.Evaluator`, the tensors should not be transferred with `Nx.backend_transfer/2`,
+  > When executing a `runtime_call/4` in `Nx.Defn.Evaluator`, the tensors should not be transferred with `Nx.backend_transfer/2`,
   > because the values passed might still be used in the rest of the computation. If needed, you can use `Nx.backend_copy/2` to another backend instead.
 
   ## Examples
