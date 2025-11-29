@@ -1,4 +1,4 @@
-defmodule Nx.Defn.ElixirCallEvaluatorTest do
+defmodule Nx.Defn.RuntimeCallEvaluatorTest do
   use ExUnit.Case, async: true
   import Nx.Defn
 
@@ -10,12 +10,12 @@ defmodule Nx.Defn.ElixirCallEvaluatorTest do
   defn add_offset(x) do
     out = %{x | type: Nx.Type.to_floating(x.type)}
 
-    Nx.elixir_call(out, x, [offset: 10.0], fn t, opts ->
+    Nx.runtime_call(out, x, [offset: 10.0], fn t, opts ->
       Nx.add(Nx.as_type(t, :f32), opts[:offset])
     end)
   end
 
-  test "elixir_call with single output" do
+  test "runtime_call with single output" do
     x = Nx.iota({5})
     y = add_offset(x)
 
@@ -31,14 +31,14 @@ defmodule Nx.Defn.ElixirCallEvaluatorTest do
     out_template = {out0, out1}
 
     {a, b} =
-      Nx.elixir_call(out_template, fx, fn t ->
+      Nx.runtime_call(out_template, fx, fn t ->
         {Nx.multiply(t, 2.0), Nx.add(t, 1.0)}
       end)
 
     Nx.add(a, b)
   end
 
-  test "elixir_call with tuple output" do
+  test "runtime_call with tuple output" do
     x = Nx.tensor([1, 2, 3])
     y = split_and_sum(x)
 
@@ -48,10 +48,10 @@ defmodule Nx.Defn.ElixirCallEvaluatorTest do
   end
 
   defn return_as_container(x, y, template_fun, container_fun) do
-    Nx.elixir_call(template_fun.(x, y), {x, y}, container_fun)
+    Nx.runtime_call(template_fun.(x, y), {x, y}, container_fun)
   end
 
-  test "elixir_call with container output" do
+  test "runtime_call with container output" do
     x = Nx.tensor([1, 2, 3])
     y = Nx.tensor([4, 5, 6])
 

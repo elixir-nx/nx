@@ -122,7 +122,7 @@ defmodule Nx.Defn.Grad do
     acc
   end
 
-  defp parents_args(:elixir_call, _expr, _id, acc, _parent_vectorized_names) do
+  defp parents_args(:runtime_call, _expr, _id, acc, _parent_vectorized_names) do
     acc
   end
 

@@ -41,7 +41,7 @@ defmodule Nx.Defn.Expr do
 
     * `attach_token(token(%Nx.Defn.Token{}), expr)`
 
-    * `elixir_call(out, tensor_or_container, opts, fun)`
+    * `runtime_call(out, tensor_or_container, opts, fun)`
 
   `defn` compilers must handle said nodes accordingly.
   """
@@ -1396,9 +1396,9 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc """
-  Helper for defining an :elixir_call expression node.
+  Helper for defining an :runtime_call expression node.
   """
-  def elixir_call(out, tensor_or_container, static_argument, fun) when is_function(fun, 2) do
+  def runtime_call(out, tensor_or_container, static_argument, fun) when is_function(fun, 2) do
     # Convert the entire tensor_or_container into an expression container,
     # preserving its structure but ensuring all tensors are Expr-backed.
     tensor_expr =
@@ -1414,14 +1414,14 @@ defmodule Nx.Defn.Expr do
     case out do
       t when is_struct(t, Nx.Tensor) ->
         out_template = Nx.to_template(t)
-        expr(t, context, :elixir_call, [tensor_expr, static_argument, fun, out_template])
+        expr(t, context, :runtime_call, [tensor_expr, static_argument, fun, out_template])
 
       tuple when is_tuple(tuple) ->
         out_template = tuple_out(tuple_size(tuple))
         user_template = Nx.to_template(tuple)
 
         expr_node =
-          expr(out_template, context, :elixir_call, [
+          expr(out_template, context, :runtime_call, [
             tensor_expr,
             static_argument,
             fun,
@@ -1440,7 +1440,7 @@ defmodule Nx.Defn.Expr do
           expr(
             tuple_out(leaf_count),
             context,
-            :elixir_call,
+            :runtime_call,
             [tensor_expr, static_argument, fun, user_template]
           )
 

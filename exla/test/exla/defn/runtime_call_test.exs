@@ -1,4 +1,4 @@
-defmodule EXLA.Defn.ElixirCallTest do
+defmodule EXLA.Defn.RuntimeCallTest do
   use ExUnit.Case, async: true
   import Nx.Defn
   import Nx.Testing
@@ -18,10 +18,10 @@ defmodule EXLA.Defn.ElixirCallTest do
   defn add_offset(x) do
     out = %{x | type: Nx.Type.to_floating(x.type)}
 
-    Nx.elixir_call(out, x, [offset: 10.0], &add_offset_callback/2)
+    Nx.runtime_call(out, x, [offset: 10.0], &add_offset_callback/2)
   end
 
-  test "elixir_call with single output" do
+  test "runtime_call with single output" do
     x = Nx.iota({5})
     y = add_offset(x)
 
@@ -37,14 +37,14 @@ defmodule EXLA.Defn.ElixirCallTest do
     out_template = {out0, out1}
 
     {a, b} =
-      Nx.elixir_call(out_template, fx, fn t ->
+      Nx.runtime_call(out_template, fx, fn t ->
         {Nx.multiply(t, 2.0), Nx.add(t, 1.0)}
       end)
 
     Nx.add(a, b)
   end
 
-  test "elixir_call with tuple output" do
+  test "runtime_call with tuple output" do
     x = Nx.tensor([1, 2, 3])
     y = split_and_sum(x)
 
@@ -56,17 +56,17 @@ defmodule EXLA.Defn.ElixirCallTest do
   defn bad_callback(x) do
     out = %{x | type: Nx.Type.to_floating(x.type)}
 
-    Nx.elixir_call(out, x, fn _t ->
+    Nx.runtime_call(out, x, fn _t ->
       # Wrong shape on purpose
       Nx.tensor([1.0, 2.0, 3.0])
     end)
   end
 
-  test "elixir_call errors when result shape does not match template" do
+  test "runtime_call errors when result shape does not match template" do
     x = Nx.iota({2})
 
     assert_raise RuntimeError,
-                 ~r/expected the elixir_call function to match the given output template/,
+                 ~r/expected the runtime_call function to match the given output template/,
                  fn ->
                    bad_callback(x)
                  end
@@ -86,10 +86,10 @@ defmodule EXLA.Defn.ElixirCallTest do
   end
 
   defn add_and_subtract(x, y) do
-    Nx.elixir_call({x, x}, {x, y}, &add_and_subtract_callback/1)
+    Nx.runtime_call({x, x}, {x, y}, &add_and_subtract_callback/1)
   end
 
-  test "elixir_call with tuple input" do
+  test "runtime_call with tuple input" do
     x = Nx.tensor([1, 2, 3])
     y = Nx.tensor([4, 5, 6])
     assert {add, sub} = add_and_subtract(x, y)
@@ -104,7 +104,7 @@ defmodule EXLA.Defn.ElixirCallTest do
   end
 
   defn add_and_subtract_with_opts(x, y, opts) do
-    Nx.elixir_call(
+    Nx.runtime_call(
       {x, x},
       {x, y},
       {opts[:ref], opts[:pid]},
@@ -112,7 +112,7 @@ defmodule EXLA.Defn.ElixirCallTest do
     )
   end
 
-  test "elixir_call with non-list second argument" do
+  test "runtime_call with non-list second argument" do
     x = Nx.tensor([1, 2, 3])
     y = Nx.tensor([4, 5, 6])
     ref = make_ref()
@@ -126,10 +126,10 @@ defmodule EXLA.Defn.ElixirCallTest do
   end
 
   defn return_as_container(x, y, template_fun, container_fun) do
-    Nx.elixir_call(template_fun.(x, y), {x, y}, container_fun)
+    Nx.runtime_call(template_fun.(x, y), {x, y}, container_fun)
   end
 
-  test "elixir_call with container output" do
+  test "runtime_call with container output" do
     x = Nx.tensor([1, 2, 3])
     y = Nx.tensor([4, 5, 6])
 

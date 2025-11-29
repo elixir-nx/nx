@@ -1,6 +1,6 @@
 defmodule EXLA.CallbackServer do
   @moduledoc """
-  Dispatcher and registry for `Nx.elixir_call/3` callbacks used by EXLA.
+  Dispatcher and registry for `Nx.runtime_call/3` callbacks used by EXLA.
 
   This server has two responsibilities:
 
@@ -10,16 +10,16 @@ defmodule EXLA.CallbackServer do
 
   The native side is expected to:
 
-    * Lower `:elixir_call` nodes to a CPU-only host `CustomCall` named
-      `"exla_elixir_callback"` with a callback id encoded in its attributes.
+    * Lower `:runtime_call` nodes to a CPU-only host `CustomCall` named
+      `"exla_runtime_callback"` with a callback id encoded in its attributes.
 
     * Run a bridge thread that sends messages of the form:
 
-          {:exla_elixir_call, callback_id :: term(), args :: [Nx.Tensor.t()], reply_tag :: term()}
+          {:exla_runtime_call, callback_id :: term(), args :: [Nx.Tensor.t()], reply_tag :: term()}
 
       to this process and waits on a native future associated with `reply_tag`.
 
-    * Provide a NIF `EXLA.NIF.elixir_callback_reply/2` that completes the
+    * Provide a NIF `EXLA.NIF.runtime_callback_reply/2` that completes the
       native future when we send the reply back.
   """
 
@@ -42,7 +42,7 @@ defmodule EXLA.CallbackServer do
   Starts the callback server and registers it as the EXLA dispatcher process.
 
   The EXLA NIF is notified of the dispatcher PID so it can route
-  `:exla_elixir_call` messages to this process.
+  `:exla_runtime_call` messages to this process.
   """
   def start_link(_init_arg) do
     GenServer.start_link(__MODULE__, :ok)
@@ -51,7 +51,7 @@ defmodule EXLA.CallbackServer do
   @doc """
   Registers a callback function, its output template, argument template, and options.
 
-  The `id` is typically the underlying `Nx.Defn.Expr` id of the `:elixir_call`
+  The `id` is typically the underlying `Nx.Defn.Expr` id of the `:runtime_call`
   node, which the EXLA compiler also encodes into the host `CustomCall` so the
   native side can reference the right callback.
   """
@@ -69,7 +69,7 @@ defmodule EXLA.CallbackServer do
   @impl true
   def init(:ok) do
     # Inform native side that this process is the dispatcher for elixir callbacks
-    _ = EXLA.NIF.start_elixir_callback_bridge(self())
+    _ = EXLA.NIF.start_runtime_callback_bridge(self())
 
     {:ok, %__MODULE__{}}
   end
@@ -77,7 +77,7 @@ defmodule EXLA.CallbackServer do
   @impl true
   def terminate(_reason, _state) do
     try do
-      EXLA.NIF.clear_elixir_callback_bridge(self())
+      EXLA.NIF.clear_runtime_callback_bridge(self())
     rescue
       _ -> :ok
     end
@@ -94,7 +94,7 @@ defmodule EXLA.CallbackServer do
   end
 
   @impl true
-  def handle_info({:exla_elixir_call, callback_id, args_spec, reply_tag}, %__MODULE__{} = state) do
+  def handle_info({:exla_runtime_call, callback_id, args_spec, reply_tag}, %__MODULE__{} = state) do
     reply_payload =
       try do
         case Map.fetch(state.callbacks, callback_id) do
@@ -121,7 +121,7 @@ defmodule EXLA.CallbackServer do
     {:noreply, state}
   end
 
-  def handle_info(:exla_elixir_call_executable_dropped, state) do
+  def handle_info(:exla_runtime_call_executable_dropped, state) do
     {:stop, :normal, state}
   end
 
@@ -173,7 +173,7 @@ defmodule EXLA.CallbackServer do
   # Shape mismatch between callback result and output template.
   defp encode_reply({:error, {:shape_mismatch, left, right}}) do
     msg =
-      "expected the elixir_call function to match the given output template " <>
+      "expected the runtime_call function to match the given output template " <>
         "#{inspect(right)}, got: #{inspect(left)}"
 
     {:error, {:argument_error, msg}}
@@ -182,7 +182,7 @@ defmodule EXLA.CallbackServer do
   # Callback returned something that isn't a tensor/tuple matching the template.
   defp encode_reply({:error, {:invalid_result, left, right}}) do
     msg =
-      "expected the elixir_call function to return a value compatible with the output " <>
+      "expected the runtime_call function to return a value compatible with the output " <>
         "template #{inspect(right)}, got: #{inspect(left)}"
 
     {:error, {:argument_error, msg}}
@@ -202,7 +202,7 @@ defmodule EXLA.CallbackServer do
 
   # Unknown callback id from native.
   defp encode_reply({:error, :unknown_callback}) do
-    msg = "unknown EXLA elixir_call callback id"
+    msg = "unknown EXLA runtime_call callback id"
     {:error, {:runtime_error, msg}}
   end
 
@@ -257,7 +257,7 @@ defmodule EXLA.CallbackServer do
 
   defp send_reply(reply_tag, {status, result}) do
     try do
-      EXLA.NIF.elixir_callback_reply(reply_tag, status, result)
+      EXLA.NIF.runtime_callback_reply(reply_tag, status, result)
     rescue
       _ ->
         Logger.error(

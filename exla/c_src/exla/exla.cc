@@ -6,7 +6,7 @@
 #include <tuple>
 #include <unordered_map>
 
-#include "custom_calls/elixir_callback_bridge.h"
+#include "custom_calls/runtime_callback_bridge.h"
 #include "exla_client.h"
 #include "exla_cuda.h"
 #include "exla_log_sink.h"
@@ -544,13 +544,13 @@ FINE_NIF(get_per_device_memory, 0);
 
 // Elixir callback bridge NIF registrations
 
-using callback_bridge::clear_elixir_callback_bridge;
-using callback_bridge::elixir_callback_reply;
-using callback_bridge::start_elixir_callback_bridge;
+using callback_bridge::clear_runtime_callback_bridge;
+using callback_bridge::runtime_callback_reply;
+using callback_bridge::start_runtime_callback_bridge;
 
-FINE_NIF(start_elixir_callback_bridge, 0);
-FINE_NIF(elixir_callback_reply, ERL_NIF_DIRTY_JOB_IO_BOUND);
-FINE_NIF(clear_elixir_callback_bridge, 0);
+FINE_NIF(start_runtime_callback_bridge, 0);
+FINE_NIF(runtime_callback_reply, ERL_NIF_DIRTY_JOB_IO_BOUND);
+FINE_NIF(clear_runtime_callback_bridge, 0);
 
 // Logging
 

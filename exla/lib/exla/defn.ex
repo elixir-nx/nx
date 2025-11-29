@@ -582,7 +582,7 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-         :elixir_call,
+         :runtime_call,
          %T{data: %Expr{id: id, args: [tensor_expr, opts, fun, out_template]}} = expr,
          %{client: %EXLA.Client{platform: :host}, callback_server_pid: callback_server_pid} =
            state,
@@ -608,19 +608,19 @@ defmodule EXLA.Defn do
     typespecs = container_to_typespecs(out_template)
 
     results =
-      Value.elixir_call(arg_values, typespecs, callback_server_pid, id)
+      Value.runtime_call(arg_values, typespecs, callback_server_pid, id)
 
     {wrap_tuple_result(results, expr), cache}
   end
 
   defp cached_recur_operator(
-         :elixir_call,
+         :runtime_call,
          _expr,
          %{client: %EXLA.Client{platform: platform}},
          _cache
        ) do
     raise """
-    Nx.elixir_call/3 is currently only supported for EXLA CPU (platform: :host),
+    Nx.runtime_call/3 is currently only supported for EXLA CPU (platform: :host),
     but the active EXLA client is configured for platform #{inspect(platform)}.
     Please run on the :host client or wait for future segmentation-based support.
     """

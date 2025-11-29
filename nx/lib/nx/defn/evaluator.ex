@@ -176,7 +176,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp compute_cache(
-         :elixir_call,
+         :runtime_call,
          %{data: %Expr{args: [tensor_expr, _opts, _fun, _out]}},
          state,
          cache
@@ -441,14 +441,14 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp eval_apply(
-         :elixir_call,
+         :runtime_call,
          %{data: %Expr{args: [tensor_expr, static_argument, fun, out_template]}},
          state,
          caches
        ) do
     {tensor_value, caches} = composite_eval(tensor_expr, state, caches)
     result = fun.(tensor_value, static_argument)
-    {reshape_elixir_call_result(result, out_template), caches}
+    {reshape_runtime_call_result(result, out_template), caches}
   end
 
   defp eval_apply(op, %{vectorized_axes: [_ | _]} = ans, _state, _caches) do
@@ -486,20 +486,20 @@ defmodule Nx.Defn.Evaluator do
     {value, [cache | caches]}
   end
 
-  defp reshape_elixir_call_result(result, %Nx.Tensor{} = template) do
+  defp reshape_runtime_call_result(result, %Nx.Tensor{} = template) do
     # Single-tensor output: just ensure compatibility with the template.
     if not Nx.compatible?(template, result) do
-      raise "expected the elixir_call function to match the given output template"
+      raise "expected the runtime_call function to match the given output template"
     end
 
     result
   end
 
-  defp reshape_elixir_call_result(result, template_container) do
+  defp reshape_runtime_call_result(result, template_container) do
     # Container (tuple/map/etc) output: we expect the callback to return
     # a container with the same flattened tensor leaves as the template.
     if not Nx.compatible?(result, template_container) do
-      raise "expected the elixir_call function to match the given output template"
+      raise "expected the runtime_call function to match the given output template"
     end
 
     result_leaves = Composite.flatten_list([result])

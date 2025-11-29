@@ -80,9 +80,9 @@ defmodule EXLA.NIF do
   def get_per_device_memory(_client), do: err!()
 
   # Elixir callback bridge
-  def start_elixir_callback_bridge(_dispatcher_pid), do: err!()
-  def clear_elixir_callback_bridge(_dispatcher_pid), do: err!()
-  def elixir_callback_reply(_reply_tag, _status, _result), do: err!()
+  def start_runtime_callback_bridge(_dispatcher_pid), do: err!()
+  def clear_runtime_callback_bridge(_dispatcher_pid), do: err!()
+  def runtime_callback_reply(_reply_tag, _status, _result), do: err!()
 
   defp err!(), do: :erlang.nif_error(:undef)
 end
