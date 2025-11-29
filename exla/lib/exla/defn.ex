@@ -1966,25 +1966,14 @@ defmodule EXLA.Defn do
   end
 
   defp container_to_typespecs(container) do
-    containers =
-      if is_list(container) do
-        container
-      else
-        [container]
-      end
-
-    containers
-    |> Enum.reject(&is_function/1)
+    [container]
     |> Nx.Defn.Composite.flatten_list()
     |> Enum.flat_map(fn
       %Nx.Tensor{type: {:tuple, _}, data: %{args: values}} ->
         Enum.flat_map(values, &container_to_typespecs/1)
 
-      %Nx.Tensor{} = t ->
+      t ->
         [Typespec.tensor(t.type, t.shape)]
-
-      _other ->
-        []
     end)
   end
 
