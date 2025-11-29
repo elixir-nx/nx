@@ -2212,6 +2212,19 @@ defmodule Nx do
   of `Nx.Defn.Evaluator` invocations. For other compilers, it is generally expected that
   the tensors will be provided as `Nx.BinaryBackend` tensors.
 
+  > #### Device locks {: .warning}
+  >
+  > `runtime_call` will generally operate on tensors allocated on a given physical device, such as a GPU.
+  > For example, EXLA will have one or more CPU clients.
+  >
+  > When calling other Nx computations from within the callback, these other computations cannot operate
+  > on the same device as this will result in a deadlock.
+
+  > #### Backend transfers {: .warning}
+  >
+  > When executing a `runtime_call` in `Nx.Defn.Evaluator`, the tensors should not be transferred with `Nx.backend_transfer/2`,
+  > because the values passed might still be used in the rest of the computation. If needed, you can use `Nx.backend_copy/2` to another backend instead.
+
   ## Examples
 
   While most code inside `defn` is restricted, `runtime_call/4` allows you
