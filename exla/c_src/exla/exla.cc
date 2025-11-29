@@ -203,7 +203,8 @@ fine::ResourcePtr<ExlaExecutable>
 mlir_compile(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
              fine::ResourcePtr<MLIRModule> module,
              std::vector<xla::Shape> argument_layouts, int64_t num_replicas,
-             int64_t num_partitions, bool use_spmd, int64_t device_id) {
+             int64_t num_partitions, bool use_spmd, int64_t device_id,
+             fine::Term callback_server_pid_term) {
   auto build_options = xla::ExecutableBuildOptions();
 
   build_options.set_num_replicas(num_replicas);
@@ -216,8 +217,21 @@ mlir_compile(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
     build_options.set_device_ordinal(device_id);
   }
 
+  // Decode the optional callback server pid. If the term is a pid, we convert
+  // it to an ErlNifPid; otherwise we treat it as "no pid" (e.g. nil).
+  absl::optional<ErlNifPid> pid_opt;
+  ERL_NIF_TERM pid_term = callback_server_pid_term;
+
+  if (enif_is_pid(env, pid_term)) {
+    ErlNifPid pid;
+    if (enif_get_local_pid(env, pid_term, &pid)) {
+      pid_opt = pid;
+    }
+  }
+
   return unwrap(client->Compile(module->module(), argument_layouts,
-                                build_options, compile_portable_executable));
+                                build_options, compile_portable_executable,
+                                pid_opt));
 }
 
 FINE_NIF(mlir_compile, ERL_NIF_DIRTY_JOB_CPU_BOUND);

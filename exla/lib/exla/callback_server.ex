@@ -135,6 +135,10 @@ defmodule EXLA.CallbackServer do
     {:noreply, state}
   end
 
+  def handle_info(:exla_elixir_call_executable_dropped, state) do
+    {:stop, :normal, state}
+  end
+
   def handle_info(other, state) do
     Logger.debug("EXLA.CallbackServer ignoring unexpected message: #{inspect(other)}")
     {:noreply, state}

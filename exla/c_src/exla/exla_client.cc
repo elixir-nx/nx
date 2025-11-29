@@ -97,9 +97,22 @@ ExlaBuffer::CopyToDevice(xla::PjRtDevice *dst_device) {
 
 ExlaExecutable::ExlaExecutable(
     std::unique_ptr<xla::PjRtLoadedExecutable> executable,
-    absl::optional<std::string> fingerprint, ExlaClient *client)
+    absl::optional<std::string> fingerprint, ExlaClient *client,
+    absl::optional<ErlNifPid> callback_server_pid)
     : executable_(std::move(executable)), fingerprint_(std::move(fingerprint)),
-      client_(client) {}
+      client_(client), callback_server_pid_(callback_server_pid) {}
+
+ExlaExecutable::~ExlaExecutable() {
+  if (callback_server_pid_.has_value()) {
+    ErlNifEnv *env = enif_alloc_env();
+    // Notify the callback server that this executable has been dropped so it
+    // can clean up any associated state.
+    ERL_NIF_TERM msg =
+        fine::encode(env, fine::Atom("exla_elixir_call_executable_dropped"));
+    enif_send(nullptr, &callback_server_pid_.value(), env, msg);
+    enif_free_env(env);
+  }
+}
 
 tsl::StatusOr<std::unique_ptr<xla::PjRtBuffer>>
 PjRtBufferFromBinary(xla::PjRtClient *client, ERL_NIF_TERM source_term,
@@ -391,13 +404,15 @@ ExlaClient::DeserializeExecutable(std::string deserialized_executable) {
   EXLA_ASSIGN_OR_RETURN(absl::optional<std::string> fingerprint,
                         ExecutableFingerprint(executable));
 
-  return fine::make_resource<ExlaExecutable>(std::move(executable),
-                                             std::move(fingerprint), this);
+  return fine::make_resource<ExlaExecutable>(
+      std::move(executable), std::move(fingerprint), this,
+      /*callback_server_pid=*/absl::nullopt);
 }
 
 tsl::StatusOr<fine::ResourcePtr<ExlaExecutable>> ExlaClient::Compile(
     mlir::ModuleOp module, std::vector<xla::Shape> argument_layouts,
-    xla::ExecutableBuildOptions &options, bool compile_portable_executable) {
+    xla::ExecutableBuildOptions &options, bool compile_portable_executable,
+    absl::optional<ErlNifPid> callback_server_pid) {
   std::vector<xla::Shape> layouts;
   layouts.reserve(argument_layouts.size());
   for (auto shape : argument_layouts) {
@@ -419,8 +434,8 @@ tsl::StatusOr<fine::ResourcePtr<ExlaExecutable>> ExlaClient::Compile(
   EXLA_ASSIGN_OR_RETURN(absl::optional<std::string> fingerprint,
                         ExecutableFingerprint(executable));
 
-  return fine::make_resource<ExlaExecutable>(std::move(executable),
-                                             std::move(fingerprint), this);
+  return fine::make_resource<ExlaExecutable>(
+      std::move(executable), std::move(fingerprint), this, callback_server_pid);
 }
 
 tsl::Status ExlaClient::TransferToInfeed(ErlNifEnv *env,

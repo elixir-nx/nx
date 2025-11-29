@@ -3,7 +3,6 @@ defmodule EXLA.CallbackServer.Supervisor do
 
   use DynamicSupervisor
 
-  @impl true
   def start_link(init_arg) do
     DynamicSupervisor.start_link(__MODULE__, init_arg, name: __MODULE__)
   end
