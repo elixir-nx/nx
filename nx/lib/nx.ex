@@ -2219,12 +2219,6 @@ defmodule Nx do
 
   def elixir_call(output, tensor_or_container, static_argument, fun)
       when is_function(fun, 2) do
-    {:arity, arity} = Function.info(fun, :arity)
-
-    if arity != 2 do
-      raise ArgumentError,
-            "expected elixir_call callback to have arity 2, got #{arity}"
-    end
 
     # Outside defn, we execute the callback directly or via the backend if it
     # provides a specialized implementation. We resolve the backend from all
