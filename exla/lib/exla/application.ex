@@ -23,7 +23,7 @@ defmodule EXLA.Application do
       EXLA.Defn.Lock,
       EXLA.Defn.LockedCache,
       {Task.Supervisor, name: EXLA.Defn.TaskSupervisor},
-      EXLA.CallbackServer
+      EXLA.CallbackServer.Supervisor
     ]
 
     Supervisor.start_link(children, name: __MODULE__, strategy: :one_for_one)

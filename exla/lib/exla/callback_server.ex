@@ -53,7 +53,7 @@ defmodule EXLA.CallbackServer do
   `:exla_elixir_call` messages to this process.
   """
   def start_link(_init_arg) do
-    GenServer.start_link(__MODULE__, :ok, name: __MODULE__)
+    GenServer.start_link(__MODULE__, :ok)
   end
 
   @doc """
@@ -64,9 +64,9 @@ defmodule EXLA.CallbackServer do
   same id for the lifetime of this VM. This id is what the EXLA compiler encodes into
   the host `CustomCall` so the native side can reference the right callback.
   """
-  @spec register(fun(), Nx.t() | tuple(), term(), [term()]) :: callback_id()
-  def register(fun, out_template, arg_template, static_arguments) when is_function(fun) do
-    GenServer.call(__MODULE__, {:register, fun, out_template, arg_template, static_arguments})
+  @spec register(pid(), fun(), Nx.t() | tuple(), term(), [term()]) :: callback_id()
+  def register(callback_server_pid, fun, out_template, arg_template, static_arguments) when is_function(fun) do
+    GenServer.call(callback_server_pid, {:register, fun, out_template, arg_template, static_arguments})
   end
 
   ## GenServer callbacks

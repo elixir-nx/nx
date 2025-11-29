@@ -11,35 +11,16 @@ namespace ffi = xla::ffi;
 
 namespace {
 
-ffi::Error exla_elixir_callback_impl(ffi::RemainingArgs args,
-                                     ffi::RemainingRets rets) {
-  if (args.size() == 0) {
-    return ffi::Error(ffi::ErrorCode::kInvalidArgument,
-                      "exla_elixir_callback expects at least one argument");
-  }
-
-  // The first argument is a scalar S64 tensor carrying the callback id.
-  auto id_buf_or = args.get<ffi::AnyBuffer>(0);
-  if (!id_buf_or) {
-    return id_buf_or.error();
-  }
-
-  ffi::AnyBuffer id_buf = *id_buf_or;
-
-  if (id_buf.element_count() != 1 ||
-      id_buf.element_type() != ffi::DataType::S64) {
-    return ffi::Error(ffi::ErrorCode::kInvalidArgument,
-                      "exla_elixir_callback callback id must be scalar s64");
-  }
-
-  int64_t callback_id = id_buf.reinterpret_data<int64_t>()[0];
-
-  // Collect all remaining input tensors (excluding callback id) into
-  // lightweight payload views.
+ffi::Error
+exla_elixir_callback_impl(ffi::RemainingArgs args, uint64_t callback_id,
+                          ffi::Span<const int64_t> callback_server_pid_words,
+                          uint64_t callback_server_pid_size,
+                          ffi::RemainingRets rets) {
+  // Collect all input tensors into lightweight payload views.
   std::vector<exla::callback_bridge::Arg> inputs;
-  inputs.reserve(args.size() - 1);
+  inputs.reserve(args.size());
 
-  for (size_t i = 1; i < args.size(); ++i) {
+  for (size_t i = 0; i < args.size(); ++i) {
     auto maybe_buf_or = args.get<ffi::AnyBuffer>(i);
     if (!maybe_buf_or) {
       return maybe_buf_or.error();
@@ -84,7 +65,9 @@ ffi::Error exla_elixir_callback_impl(ffi::RemainingArgs args,
   // Call back into Elixir through the bridge. On success, the bridge writes
   // results directly into the provided output buffers.
   exla::callback_bridge::Result result =
-      exla::callback_bridge::InvokeElixirCallback(callback_id, inputs, outputs);
+      exla::callback_bridge::InvokeElixirCallback(
+          callback_id, callback_server_pid_words, callback_server_pid_size,
+          inputs, outputs);
 
   if (!result.ok) {
     return ffi::Error(ffi::ErrorCode::kInternal, result.error);
@@ -99,6 +82,9 @@ XLA_FFI_DEFINE_HANDLER_SYMBOL(
     exla_elixir_callback, exla_elixir_callback_impl,
     ffi::Ffi::Bind()
         .RemainingArgs()
+        .Attr<uint64_t>("callback_id")
+        .Attr<ffi::Span<const int64_t>>("callback_server_pid")
+        .Attr<uint64_t>("callback_server_pid_size")
         .RemainingRets());
 
 XLA_FFI_REGISTER_HANDLER(ffi::GetXlaFfiApi(), "exla_elixir_callback", "Host",

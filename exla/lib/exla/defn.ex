@@ -39,10 +39,19 @@ defmodule EXLA.Defn do
   def __compile__(key, vars, fun, options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
     debug? = Keyword.get(compile_options, :debug, false)
-    callback = &to_computation(&1, &2, &3, &4, &5, compile_options)
+
+    # We start the callback server regardless if it's needed
+    # as it's relatively cheap to start it.
+    callback_server_pid =
+      case EXLA.CallbackServer.Supervisor.start_callback_server() do
+        {:ok, pid} -> pid
+        {:error, reason} -> raise "Failed to start EXLA.CallbackServer: #{inspect(reason)}"
+      end
+
+    callback = &to_computation(&1, &2, &3, &4, &5, compile_options, callback_server_pid)
 
     {executable, {used_inputs, outputs, outfeed, _input_typespecs?}} =
-      compile(key, vars, fun, compile_options, 0, [], callback)
+      compile(key, vars, fun, compile_options, 0, [], callback, callback_server_pid)
 
     if compile_options[:module_compilation] == :to_mlir do
       throw({:mlir_module, executable.ref, MapSet.new(Map.keys(used_inputs)), outputs})
@@ -68,7 +77,7 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp to_computation(%Function{} = function, expr, used_typespecs, outfeed, client, options) do
+  defp to_computation(%Function{} = function, expr, used_typespecs, outfeed, client, options, callback_server_pid) do
     params =
       Enum.zip_with(used_typespecs, Function.get_arguments(function), fn {pos, _typespec}, arg ->
         {pos, arg}
@@ -83,7 +92,8 @@ defmodule EXLA.Defn do
       precision: Keyword.get(options, :precision, :default),
       builder: function,
       params: Map.new(params ++ outfeed.infeeds),
-      scope_ids: Tree.scope_ids(expr)
+      scope_ids: Tree.scope_ids(expr),
+      callback_server_pid: callback_server_pid
     }
 
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
@@ -138,7 +148,7 @@ defmodule EXLA.Defn do
 
   ## Compile
 
-  defp compile(key, vars, fun, options, used_buffers, used_inputs, to_computation) do
+  defp compile(key, vars, fun, options, used_buffers, used_inputs, to_computation, callback_server_pid) do
     {cache, options} = Keyword.pop(options, :cache, true)
     {hooks, options} = Keyword.pop(options, :hooks, %{})
     {debug?, options} = Keyword.pop(options, :debug, false)
@@ -234,6 +244,8 @@ defmodule EXLA.Defn do
 
               expr = Nx.Defn.Composite.traverse(expr || fun.(vars), &Nx.devectorize/1)
               outfeed = to_computation.(builder, expr, inputs_and_typespecs, outfeed, client)
+
+              options = Keyword.put(options, :callback_server_pid, callback_server_pid)
 
               {xla_time, executable} =
                 :timer.tc(fn ->
@@ -549,7 +561,7 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(
          :elixir_call,
          %T{data: %Expr{args: [tensor_expr, opts, fun, out_template]}} = expr,
-         %{client: %EXLA.Client{platform: :host}} = state,
+         %{client: %EXLA.Client{platform: :host}, callback_server_pid: callback_server_pid} = state,
          cache
        ) do
     # Flatten the tensor_or_container expression into its tensor leaves so we
@@ -566,20 +578,11 @@ defmodule EXLA.Defn do
     # decoded tensors.
     arg_template = Nx.to_template(tensor_expr)
 
-    callback_id = EXLA.CallbackServer.register(fun, out_template, arg_template, opts)
+    callback_id = EXLA.CallbackServer.register(callback_server_pid, fun, out_template, arg_template, opts)
     typespecs = container_to_typespecs(out_template)
 
-    # Pass callback id as an extra scalar s64 operand at the end so that the
-    # native handler can retrieve it without relying on backend_config attrs.
-    callback_id_typespec = Typespec.tensor({:s, 64}, {})
-
-    callback_id_value =
-      Value.constant(state.builder, [callback_id], callback_id_typespec)
-
-    operands = [callback_id_value | arg_values]
-
     results =
-      Value.elixir_call(operands, typespecs)
+      Value.elixir_call(arg_values, typespecs, callback_server_pid, callback_id)
 
     {wrap_tuple_result(results, expr), cache}
   end

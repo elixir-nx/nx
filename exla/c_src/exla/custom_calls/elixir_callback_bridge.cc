@@ -115,8 +115,12 @@ void deliver_reply(ErlNifEnv *env, fine::ResourcePtr<Pending> pending,
   pending->cv.notify_one();
 }
 
-Result InvokeElixirCallback(int64_t callback_id, const std::vector<Arg> &inputs,
-                            const std::vector<OutputBuffer> &outputs) {
+Result
+InvokeElixirCallback(uint64_t callback_id,
+                     xla::ffi::Span<const int64_t> callback_server_pid_words,
+                     uint64_t callback_server_pid_size,
+                     const std::vector<Arg> &inputs,
+                     const std::vector<OutputBuffer> &outputs) {
   auto state = GetBridgeState();
 
   if (!state->dispatcher_set) {
@@ -129,6 +133,37 @@ Result InvokeElixirCallback(int64_t callback_id, const std::vector<Arg> &inputs,
   auto pending = fine::make_resource<Pending>(outputs);
 
   ErlNifEnv *msg_env = enif_alloc_env();
+
+  // Reinterpret the 64-bit words as a contiguous byte buffer and use the
+  // original (unpadded) size when decoding the callback server pid term.
+  if (callback_server_pid_size >
+      callback_server_pid_words.size() * sizeof(int64_t)) {
+    Result res;
+    res.ok = false;
+    res.error = "inconsistent callback server pid size";
+    return res;
+  }
+
+  const unsigned char *pid_bytes = reinterpret_cast<const unsigned char *>(
+      callback_server_pid_words.begin());
+
+  ERL_NIF_TERM callback_server_pid_term;
+  if (!enif_binary_to_term(msg_env, pid_bytes, callback_server_pid_size,
+                           &callback_server_pid_term, 0)) {
+    Result res;
+    res.ok = false;
+    res.error = "failed to decode callback server pid term";
+    return res;
+  }
+
+  ErlNifPid callback_server_pid;
+  if (!enif_get_local_pid(msg_env, callback_server_pid_term,
+                          &callback_server_pid)) {
+    Result res;
+    res.ok = false;
+    res.error = "failed to decode callback server pid";
+    return res;
+  }
 
   // Encode arguments as [{bin, %EXLA.Typespec{}}, ...]. We currently send
   // plain binaries because the BEAM callback needs to own the data lifetime.
@@ -158,8 +193,7 @@ Result InvokeElixirCallback(int64_t callback_id, const std::vector<Arg> &inputs,
   // but we don't know its env, therefore we cannot use enif_whereis_pid.
   // enif_whereis_pid can be called with NULL, but only from non-ERTS
   // threads, and doing so here results in a segfault.
-  ErlNifPid dispatcher_pid = state->dispatcher_pid;
-  enif_send(msg_env, &dispatcher_pid, msg_env, fine::encode(msg_env, msg));
+  enif_send(msg_env, &callback_server_pid, msg_env, fine::encode(msg_env, msg));
   enif_free_env(msg_env);
 
   std::unique_lock<std::mutex> lock(pending->mu);
