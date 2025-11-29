@@ -76,10 +76,6 @@ defmodule EXLA.Defn do
 
         res
       end
-    rescue
-      e ->
-        DynamicSupervisor.terminate_child(EXLA.CallbackServer.Supervisor, callback_server_pid)
-        reraise e, __STACKTRACE__
     catch
       kind, reason ->
         DynamicSupervisor.terminate_child(EXLA.CallbackServer.Supervisor, callback_server_pid)
