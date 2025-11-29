@@ -46,4 +46,43 @@ defmodule Nx.Defn.ElixirCallEvaluatorTest do
     expected = Nx.add(Nx.multiply(fx, 2.0), Nx.add(fx, 1.0))
     assert expected == y
   end
+
+  defn return_as_container(x, y, template_fun, container_fun) do
+    Nx.elixir_call(template_fun.(x, y), {x, y}, container_fun)
+  end
+
+  test "elixir_call with container output" do
+    x = Nx.tensor([1, 2, 3])
+    y = Nx.tensor([4, 5, 6])
+
+    ref = make_ref()
+    pid = self()
+
+    container_fun = fn {x, y} ->
+      send(pid, {:container_fun, ref})
+      {x, y}
+    end
+
+    template_fun = fn x, y -> {x, y} end
+
+    assert {x_res, y_res} = return_as_container(x, y, template_fun, container_fun)
+    assert x_res == x
+    assert y_res == y
+    assert_receive {:container_fun, ^ref}
+
+    ref = make_ref()
+
+    container_fun = fn {x, y} ->
+      send(pid, {:container_fun, ref})
+      %{x: x, y: {%{key: y}, Nx.s32(1)}}
+    end
+
+    template_fun = fn x, y -> %{x: x, y: {%{key: y}, Nx.s32(1)}} end
+
+    assert result = return_as_container(x, y, template_fun, container_fun)
+    assert %{x: _, y: {%{key: _}, _}} = result
+    assert result.x == x
+    assert result.y == {%{key: y}, Nx.s32(1)}
+    assert_receive {:container_fun, ^ref}
+  end
 end

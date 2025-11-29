@@ -176,7 +176,7 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp compute_cache(:elixir_call, %{data: %Expr{args: [tensor_expr, _opts, _fun, _out]}}, state, cache) do
-    compute_cache(tensor_expr, state, cache)
+    composite_compute_cache(tensor_expr, state, cache)
   end
 
   defp compute_cache(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, cache) do
@@ -437,17 +437,18 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval_apply(
          :elixir_call,
-         %{data: %Expr{args: [tensor_expr, static_argument, fun, _out_template]}} = expr,
+         %{data: %Expr{args: [tensor_expr, static_argument, fun, out_template]}} = expr,
          state,
          caches
        ) do
-    {tensor_value, caches} = eval(tensor_expr, state, caches)
-    backend = Nx.Shared.list_impl!([tensor_value])
+    {tensor_value, caches} = composite_eval(tensor_expr, state, caches)
+    backend = Nx.Shared.list_impl!(Composite.flatten_list([tensor_value]))
 
     if backend == Nx.Defn.Expr do
       {expr, caches}
     else
-      {fun.(tensor_value, static_argument), caches}
+      result = fun.(tensor_value, static_argument)
+      {reshape_elixir_call_result(result, out_template), caches}
     end
   end
 
@@ -484,6 +485,28 @@ defmodule Nx.Defn.Evaluator do
   defp pop_cache!([cache | caches], key) do
     {value, cache} = Map.pop!(cache, key)
     {value, [cache | caches]}
+  end
+
+
+  defp reshape_elixir_call_result(result, %Nx.Tensor{} = template) do
+    # Single-tensor output: just ensure compatibility with the template.
+    if not Nx.compatible?(template, result) do
+      raise "expected the elixir_call function to match the given output template"
+    end
+
+    result
+  end
+
+  defp reshape_elixir_call_result(result, template_container) do
+    # Container (tuple/map/etc) output: we expect the callback to return
+    # a container with the same flattened tensor leaves as the template.
+    if not Nx.compatible?(result, template_container) do
+      raise "expected the elixir_call function to match the given output template"
+    end
+
+    result_leaves = Composite.flatten_list([result])
+
+    List.to_tuple(result_leaves)
   end
 
   ## Control flow helpers
