@@ -11,11 +11,11 @@ namespace ffi = xla::ffi;
 
 namespace {
 
-ffi::Error
-exla_elixir_callback_impl(ffi::RemainingArgs args, uint64_t callback_id,
-                          ffi::Span<const int64_t> callback_server_pid_words,
-                          uint64_t callback_server_pid_size,
-                          ffi::RemainingRets rets) {
+ffi::Error exla_elixir_callback_impl(
+    ffi::RemainingArgs args, ffi::Span<const int64_t> callback_id_words,
+    uint64_t callback_id_size,
+    ffi::Span<const int64_t> callback_server_pid_words,
+    uint64_t callback_server_pid_size, ffi::RemainingRets rets) {
   // Collect all input tensors into lightweight payload views.
   std::vector<exla::callback_bridge::Arg> inputs;
   inputs.reserve(args.size());
@@ -66,8 +66,8 @@ exla_elixir_callback_impl(ffi::RemainingArgs args, uint64_t callback_id,
   // results directly into the provided output buffers.
   exla::callback_bridge::Result result =
       exla::callback_bridge::InvokeElixirCallback(
-          callback_id, callback_server_pid_words, callback_server_pid_size,
-          inputs, outputs);
+          callback_id_words, callback_id_size, callback_server_pid_words,
+          callback_server_pid_size, inputs, outputs);
 
   if (!result.ok) {
     return ffi::Error(ffi::ErrorCode::kInternal, result.error);
@@ -82,7 +82,8 @@ XLA_FFI_DEFINE_HANDLER_SYMBOL(
     exla_elixir_callback, exla_elixir_callback_impl,
     ffi::Ffi::Bind()
         .RemainingArgs()
-        .Attr<uint64_t>("callback_id")
+        .Attr<ffi::Span<const int64_t>>("callback_id")
+        .Attr<uint64_t>("callback_id_size")
         .Attr<ffi::Span<const int64_t>>("callback_server_pid")
         .Attr<uint64_t>("callback_server_pid_size")
         .RemainingRets());

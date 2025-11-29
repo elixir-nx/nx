@@ -2208,6 +2208,10 @@ defmodule Nx do
   The `static_argument` will be passed through the Elixir processes to the callback function
   along with the executable Nx code.
 
+  Tensors passed to the callback function are in the same backend as the inputs in the case
+  of `Nx.Defn.Evaluator` invocations. For other compilers, it is generally expected that
+  the tensors will be provided as `Nx.BinaryBackend` tensors.
+
   ## Examples
 
   While most code inside `defn` is restricted, `elixir_call/4` allows you

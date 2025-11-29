@@ -4,10 +4,6 @@ defmodule EXLA.CallbackServer do
 
   This server has two responsibilities:
 
-    * Assign a stable integer callback id for each Elixir function + output
-      template pair that participates in `Nx.elixir_call/3` when using the
-      EXLA compiler.
-
     * Receive callback requests from the native EXLA bridge thread, execute
       the Elixir function, validate the result against the expected output
       template, and reply back to native through a NIF.
@@ -19,7 +15,7 @@ defmodule EXLA.CallbackServer do
 
     * Run a bridge thread that sends messages of the form:
 
-          {:exla_elixir_call, callback_id :: integer, args :: [Nx.Tensor.t()], reply_tag :: term()}
+          {:exla_elixir_call, callback_id :: term(), args :: [Nx.Tensor.t()], reply_tag :: term()}
 
       to this process and waits on a native future associated with `reply_tag`.
 
@@ -31,17 +27,13 @@ defmodule EXLA.CallbackServer do
 
   require Logger
 
-  @type callback_id :: non_neg_integer()
-
-  defstruct next_id: 1,
-            callbacks: %{}
+  defstruct callbacks: %{}
 
   @type t :: %__MODULE__{
-          next_id: non_neg_integer(),
           # We store the original function, its output template, and any
           # static (non-tensor) arguments that should always be appended to
           # the decoded tensor arguments coming from native.
-          callbacks: %{callback_id() => {fun(), Nx.t() | tuple(), [term()]}}
+          callbacks: %{term() => {fun(), Nx.t() | tuple(), [term()]}}
         }
 
   ## Public API
@@ -57,19 +49,18 @@ defmodule EXLA.CallbackServer do
   end
 
   @doc """
-  Registers a callback function, its output template, argument template, and options,
-  returning a callback id.
+  Registers a callback function, its output template, argument template, and options.
 
-  The same `{fun, out_template, arg_template, static_arguments}` quadruple will always return the
-  same id for the lifetime of this VM. This id is what the EXLA compiler encodes into
-  the host `CustomCall` so the native side can reference the right callback.
+  The `id` is typically the underlying `Nx.Defn.Expr` id of the `:elixir_call`
+  node, which the EXLA compiler also encodes into the host `CustomCall` so the
+  native side can reference the right callback.
   """
-  @spec register(pid(), fun(), Nx.t() | tuple(), term(), [term()]) :: callback_id()
-  def register(callback_server_pid, fun, out_template, arg_template, static_arguments)
+  @spec register(pid(), term(), fun(), Nx.t() | tuple(), term(), [term()]) :: :ok
+  def register(callback_server_pid, id, fun, out_template, arg_template, static_arguments)
       when is_function(fun) do
     GenServer.call(
       callback_server_pid,
-      {:register, fun, out_template, arg_template, static_arguments}
+      {:register, id, fun, out_template, arg_template, static_arguments}
     )
   end
 
@@ -94,22 +85,12 @@ defmodule EXLA.CallbackServer do
 
   @impl true
   def handle_call(
-        {:register, fun, out_template, arg_template, opts},
+        {:register, id, fun, out_template, arg_template, opts},
         _from,
         %__MODULE__{} = state
       ) do
-    key = {fun, out_template, arg_template, opts}
-
-    case find_existing_id(state.callbacks, key) do
-      {:ok, id} ->
-        {:reply, id, state}
-
-      :error ->
-        id = state.next_id
-        state = put_in(state.callbacks[id], {fun, out_template, arg_template, opts})
-        state = %{state | next_id: id + 1}
-        {:reply, id, state}
-    end
+    state = put_in(state.callbacks[id], {fun, out_template, arg_template, opts})
+    {:reply, :ok, state}
   end
 
   @impl true
@@ -150,12 +131,6 @@ defmodule EXLA.CallbackServer do
   end
 
   ## Internal helpers
-
-  defp find_existing_id(callbacks, key) do
-    Enum.reduce_while(callbacks, :error, fn {id, value}, _acc ->
-      if value == key, do: {:halt, {:ok, id}}, else: {:cont, :error}
-    end)
-  end
 
   defp run_callback({:error, reason}, _fun, _opts, _out_template), do: {:error, reason}
 

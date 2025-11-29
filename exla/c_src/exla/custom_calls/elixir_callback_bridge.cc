@@ -115,12 +115,11 @@ void deliver_reply(ErlNifEnv *env, fine::ResourcePtr<Pending> pending,
   pending->cv.notify_one();
 }
 
-Result
-InvokeElixirCallback(uint64_t callback_id,
-                     xla::ffi::Span<const int64_t> callback_server_pid_words,
-                     uint64_t callback_server_pid_size,
-                     const std::vector<Arg> &inputs,
-                     const std::vector<OutputBuffer> &outputs) {
+Result InvokeElixirCallback(
+    xla::ffi::Span<const int64_t> callback_id_words, uint64_t callback_id_size,
+    xla::ffi::Span<const int64_t> callback_server_pid_words,
+    uint64_t callback_server_pid_size, const std::vector<Arg> &inputs,
+    const std::vector<OutputBuffer> &outputs) {
   auto state = GetBridgeState();
 
   if (!state->dispatcher_set) {
@@ -135,12 +134,32 @@ InvokeElixirCallback(uint64_t callback_id,
   ErlNifEnv *msg_env = enif_alloc_env();
 
   // Reinterpret the 64-bit words as a contiguous byte buffer and use the
-  // original (unpadded) size when decoding the callback server pid term.
+  // original (unpadded) sizes when decoding the callback id and callback
+  // server pid terms.
+  if (callback_id_size > callback_id_words.size() * sizeof(int64_t)) {
+    Result res;
+    res.ok = false;
+    res.error = "inconsistent callback id size";
+    return res;
+  }
+
   if (callback_server_pid_size >
       callback_server_pid_words.size() * sizeof(int64_t)) {
     Result res;
     res.ok = false;
     res.error = "inconsistent callback server pid size";
+    return res;
+  }
+
+  const unsigned char *id_bytes =
+      reinterpret_cast<const unsigned char *>(callback_id_words.begin());
+
+  ERL_NIF_TERM callback_id_term;
+  if (!enif_binary_to_term(msg_env, id_bytes, callback_id_size,
+                           &callback_id_term, 0)) {
+    Result res;
+    res.ok = false;
+    res.error = "failed to decode callback id term";
     return res;
   }
 
@@ -185,8 +204,8 @@ InvokeElixirCallback(uint64_t callback_id,
     args_terms.push_back(arg_tuple);
   }
 
-  auto msg = std::make_tuple(fine::Atom("exla_elixir_call"), callback_id,
-                             args_terms, pending);
+  auto msg = std::make_tuple(fine::Atom("exla_elixir_call"),
+                             fine::Term(callback_id_term), args_terms, pending);
 
   // Use the dispatcher pid registered via start_elixir_callback_bridge/1.
   // We still are within the NIF thread that started the computation,

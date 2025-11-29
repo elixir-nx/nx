@@ -70,12 +70,11 @@ void deliver_reply(ErlNifEnv *env, fine::ResourcePtr<Pending> pending,
 //
 // It returns a Result that either indicates success (data has
 // been written into the registered output buffers) or an error message.
-Result
-InvokeElixirCallback(uint64_t callback_id,
-                     xla::ffi::Span<const int64_t> callback_server_pid_words,
-                     uint64_t callback_server_pid_size,
-                     const std::vector<Arg> &inputs,
-                     const std::vector<OutputBuffer> &outputs);
+Result InvokeElixirCallback(
+    xla::ffi::Span<const int64_t> callback_id_words, uint64_t callback_id_size,
+    xla::ffi::Span<const int64_t> callback_server_pid_words,
+    uint64_t callback_server_pid_size, const std::vector<Arg> &inputs,
+    const std::vector<OutputBuffer> &outputs);
 
 fine::Ok<> start_elixir_callback_bridge(ErlNifEnv *env,
                                         ErlNifPid dispatcher_pid);
