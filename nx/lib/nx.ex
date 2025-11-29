@@ -2219,7 +2219,6 @@ defmodule Nx do
 
   def elixir_call(output, tensor_or_container, static_argument, fun)
       when is_function(fun, 2) do
-
     # Outside defn, we execute the callback directly or via the backend if it
     # provides a specialized implementation. We resolve the backend from all
     # tensors inside the container to support tuple/map containers.
@@ -2228,9 +2227,9 @@ defmodule Nx do
 
     result =
       if backend == Nx.Defn.Expr do
-          backend.elixir_call(output, tensor_or_container, static_argument, fun)
+        backend.elixir_call(output, tensor_or_container, static_argument, fun)
       else
-          fun.(tensor_or_container, static_argument)
+        fun.(tensor_or_container, static_argument)
       end
 
     ensure_call_compatible!(result, output)

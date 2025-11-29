@@ -175,7 +175,12 @@ defmodule Nx.Defn.Evaluator do
     Map.put(cache, [:optional | id], optional_expr_cache)
   end
 
-  defp compute_cache(:elixir_call, %{data: %Expr{args: [tensor_expr, _opts, _fun, _out]}}, state, cache) do
+  defp compute_cache(
+         :elixir_call,
+         %{data: %Expr{args: [tensor_expr, _opts, _fun, _out]}},
+         state,
+         cache
+       ) do
     composite_compute_cache(tensor_expr, state, cache)
   end
 
@@ -437,19 +442,13 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval_apply(
          :elixir_call,
-         %{data: %Expr{args: [tensor_expr, static_argument, fun, out_template]}} = expr,
+         %{data: %Expr{args: [tensor_expr, static_argument, fun, out_template]}},
          state,
          caches
        ) do
     {tensor_value, caches} = composite_eval(tensor_expr, state, caches)
-    backend = Nx.Shared.list_impl!(Composite.flatten_list([tensor_value]))
-
-    if backend == Nx.Defn.Expr do
-      {expr, caches}
-    else
-      result = fun.(tensor_value, static_argument)
-      {reshape_elixir_call_result(result, out_template), caches}
-    end
+    result = fun.(tensor_value, static_argument)
+    {reshape_elixir_call_result(result, out_template), caches}
   end
 
   defp eval_apply(op, %{vectorized_axes: [_ | _]} = ans, _state, _caches) do
@@ -486,7 +485,6 @@ defmodule Nx.Defn.Evaluator do
     {value, cache} = Map.pop!(cache, key)
     {value, [cache | caches]}
   end
-
 
   defp reshape_elixir_call_result(result, %Nx.Tensor{} = template) do
     # Single-tensor output: just ensure compatibility with the template.

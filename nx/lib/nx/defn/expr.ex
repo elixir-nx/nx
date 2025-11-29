@@ -1419,8 +1419,14 @@ defmodule Nx.Defn.Expr do
       tuple when is_tuple(tuple) ->
         out_template = tuple_out(tuple_size(tuple))
         user_template = Nx.to_template(tuple)
+
         expr_node =
-          expr(out_template, context, :elixir_call, [tensor_expr, static_argument, fun, user_template])
+          expr(out_template, context, :elixir_call, [
+            tensor_expr,
+            static_argument,
+            fun,
+            user_template
+          ])
 
         tuple(expr_node, Tuple.to_list(tuple))
 
