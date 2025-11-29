@@ -836,11 +836,11 @@ defmodule EXLA.MLIR.Value do
   Builds a StableHLO `custom_call` that targets the EXLA Elixir callback bridge.
 
   The `callback_id` is typically the underlying `Nx.Defn.Expr` id of the
-  `:elixir_call` node. It is encoded as a binary (via `:erlang.term_to_binary/1`)
+  `:runtime_call` node. It is encoded as a binary (via `:erlang.term_to_binary/1`)
   and then represented as a list of 64-bit words in the custom call attributes,
   similar to how we encode the callback server PID.
   """
-  def elixir_call(
+  def runtime_call(
         [%Value{function: func} | _] = operands,
         typespecs,
         callback_server_pid,
@@ -855,7 +855,7 @@ defmodule EXLA.MLIR.Value do
       term_to_int64_list(callback_id)
 
     attributes = [
-      call_target_name: attr_string("exla_elixir_callback"),
+      call_target_name: attr_string("exla_runtime_callback"),
       # api_version 4 enables the typed FFI API used by our callback handler.
       api_version: attr_i32(4),
       backend_config:

@@ -56,7 +56,7 @@ struct Pending {
 // Called from the Elixir side to deliver a reply for a given pending handle.
 // We receive the reply as a status atom (e.g. :ok or :error) and a result
 // term. For the :ok case the result is a list of binaries that we decode as
-// ElixirCallbackTensor outputs via Fine's decoding machinery.
+// RuntimeCallbackTensor outputs via Fine's decoding machinery.
 void deliver_reply(ErlNifEnv *env, fine::ResourcePtr<Pending> pending,
                    fine::Atom status, fine::Term result);
 
@@ -70,21 +70,21 @@ void deliver_reply(ErlNifEnv *env, fine::ResourcePtr<Pending> pending,
 //
 // It returns a Result that either indicates success (data has
 // been written into the registered output buffers) or an error message.
-Result InvokeElixirCallback(
+Result InvokeRuntimeCallback(
     xla::ffi::Span<const int64_t> callback_id_words, uint64_t callback_id_size,
     xla::ffi::Span<const int64_t> callback_server_pid_words,
     uint64_t callback_server_pid_size, const std::vector<Arg> &inputs,
     const std::vector<OutputBuffer> &outputs);
 
-fine::Ok<> start_elixir_callback_bridge(ErlNifEnv *env,
-                                        ErlNifPid dispatcher_pid);
+fine::Ok<> start_runtime_callback_bridge(ErlNifEnv *env,
+                                         ErlNifPid dispatcher_pid);
 
-fine::Ok<> elixir_callback_reply(ErlNifEnv *env,
-                                 fine::ResourcePtr<Pending> pending,
-                                 fine::Atom status, fine::Term result);
+fine::Ok<> runtime_callback_reply(ErlNifEnv *env,
+                                  fine::ResourcePtr<Pending> pending,
+                                  fine::Atom status, fine::Term result);
 
-fine::Ok<> clear_elixir_callback_bridge(ErlNifEnv *env,
-                                        ErlNifPid dispatcher_pid);
+fine::Ok<> clear_runtime_callback_bridge(ErlNifEnv *env,
+                                         ErlNifPid dispatcher_pid);
 
 } // namespace callback_bridge
 

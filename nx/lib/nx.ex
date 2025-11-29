@@ -2214,14 +2214,14 @@ defmodule Nx do
 
   ## Examples
 
-  While most code inside `defn` is restricted, `elixir_call/4` allows you
+  While most code inside `defn` is restricted, `runtime_call/4` allows you
   to perform arbitrary Elixir operations, such as message passing:
 
       iex> pid = self()
       iex> x = Nx.tensor([1, 2, 3])
       iex> out = Nx.template({3}, {:s, 32})
       iex> _ =
-      ...>   Nx.elixir_call(out, x, fn t ->
+      ...>   Nx.runtime_call(out, x, fn t ->
       ...>     send(pid, {:sum, Enum.sum(Nx.to_flat_list(t))})
       ...>     t
       ...>   end)
@@ -2236,7 +2236,7 @@ defmodule Nx do
       iex> y = Nx.tensor([4, 5, 6])
       iex> out = %{x: x, y: y}
       iex> _ =
-      ...>   Nx.elixir_call(out, {x, y}, [pid: pid], fn {a, b}, opts ->
+      ...>   Nx.runtime_call(out, {x, y}, [pid: pid], fn {a, b}, opts ->
       ...>     send(opts[:pid], {:dot, Nx.to_number(Nx.dot(a, b))})
       ...>     %{x: a, y: b}
       ...>   end)
@@ -2248,11 +2248,11 @@ defmodule Nx do
   directly and validates the result matches the template.
   """
   @doc type: :backend
-  def elixir_call(output, tensor_or_container, fun) when is_function(fun, 1) do
-    elixir_call(output, tensor_or_container, [], fn value, _opts -> fun.(value) end)
+  def runtime_call(output, tensor_or_container, fun) when is_function(fun, 1) do
+    runtime_call(output, tensor_or_container, [], fn value, _opts -> fun.(value) end)
   end
 
-  def elixir_call(output, tensor_or_container, static_argument, fun)
+  def runtime_call(output, tensor_or_container, static_argument, fun)
       when is_function(fun, 2) do
     # Outside defn, we execute the callback directly or via the backend if it
     # provides a specialized implementation. We resolve the backend from all
@@ -2262,7 +2262,7 @@ defmodule Nx do
 
     result =
       if backend == Nx.Defn.Expr do
-        backend.elixir_call(output, tensor_or_container, static_argument, fun)
+        backend.runtime_call(output, tensor_or_container, static_argument, fun)
       else
         fun.(tensor_or_container, static_argument)
       end
@@ -2275,7 +2275,7 @@ defmodule Nx do
       left
     else
       raise ArgumentError,
-            "expected the elixir_call function to match the given output template #{inspect(right)}, got: #{inspect(left)}"
+            "expected the runtime_call function to match the given output template #{inspect(right)}, got: #{inspect(left)}"
     end
   end
 

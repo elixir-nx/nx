@@ -1,4 +1,4 @@
-#include "elixir_callback_bridge.h"
+#include "runtime_callback_bridge.h"
 
 #include <cstring>
 #include <vector>
@@ -11,7 +11,7 @@ namespace ffi = xla::ffi;
 
 namespace {
 
-ffi::Error exla_elixir_callback_impl(
+ffi::Error exla_runtime_callback_impl(
     ffi::RemainingArgs args, ffi::Span<const int64_t> callback_id_words,
     uint64_t callback_id_size,
     ffi::Span<const int64_t> callback_server_pid_words,
@@ -65,7 +65,7 @@ ffi::Error exla_elixir_callback_impl(
   // Call back into Elixir through the bridge. On success, the bridge writes
   // results directly into the provided output buffers.
   exla::callback_bridge::Result result =
-      exla::callback_bridge::InvokeElixirCallback(
+      exla::callback_bridge::InvokeRuntimeCallback(
           callback_id_words, callback_id_size, callback_server_pid_words,
           callback_server_pid_size, inputs, outputs);
 
@@ -79,7 +79,7 @@ ffi::Error exla_elixir_callback_impl(
 } // namespace
 
 XLA_FFI_DEFINE_HANDLER_SYMBOL(
-    exla_elixir_callback, exla_elixir_callback_impl,
+    exla_runtime_callback, exla_runtime_callback_impl,
     ffi::Ffi::Bind()
         .RemainingArgs()
         .Attr<ffi::Span<const int64_t>>("callback_id")
@@ -88,7 +88,5 @@ XLA_FFI_DEFINE_HANDLER_SYMBOL(
         .Attr<uint64_t>("callback_server_pid_size")
         .RemainingRets());
 
-XLA_FFI_REGISTER_HANDLER(ffi::GetXlaFfiApi(), "exla_elixir_callback", "Host",
-                         exla_elixir_callback);
-
-
+XLA_FFI_REGISTER_HANDLER(ffi::GetXlaFfiApi(), "exla_runtime_callback", "Host",
+                         exla_runtime_callback);

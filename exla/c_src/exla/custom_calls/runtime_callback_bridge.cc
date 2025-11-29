@@ -1,4 +1,4 @@
-#include "elixir_callback_bridge.h"
+#include "runtime_callback_bridge.h"
 
 #include <cstring>
 
@@ -16,8 +16,8 @@ BridgeState *GetBridgeState() {
   return state;
 }
 
-fine::Ok<> start_elixir_callback_bridge(ErlNifEnv *env,
-                                        ErlNifPid dispatcher_pid) {
+fine::Ok<> start_runtime_callback_bridge(ErlNifEnv *env,
+                                         ErlNifPid dispatcher_pid) {
   (void)env;
   auto state = GetBridgeState();
   state->dispatcher_pid = dispatcher_pid;
@@ -25,15 +25,15 @@ fine::Ok<> start_elixir_callback_bridge(ErlNifEnv *env,
   return fine::Ok();
 }
 
-fine::Ok<> elixir_callback_reply(ErlNifEnv *env,
-                                 fine::ResourcePtr<Pending> pending,
-                                 fine::Atom status, fine::Term result) {
+fine::Ok<> runtime_callback_reply(ErlNifEnv *env,
+                                  fine::ResourcePtr<Pending> pending,
+                                  fine::Atom status, fine::Term result) {
   deliver_reply(env, pending, status, result);
   return fine::Ok();
 }
 
-fine::Ok<> clear_elixir_callback_bridge(ErlNifEnv *env,
-                                        ErlNifPid dispatcher_pid) {
+fine::Ok<> clear_runtime_callback_bridge(ErlNifEnv *env,
+                                         ErlNifPid dispatcher_pid) {
   (void)env;
   auto state = GetBridgeState();
 
@@ -115,7 +115,7 @@ void deliver_reply(ErlNifEnv *env, fine::ResourcePtr<Pending> pending,
   pending->cv.notify_one();
 }
 
-Result InvokeElixirCallback(
+Result InvokeRuntimeCallback(
     xla::ffi::Span<const int64_t> callback_id_words, uint64_t callback_id_size,
     xla::ffi::Span<const int64_t> callback_server_pid_words,
     uint64_t callback_server_pid_size, const std::vector<Arg> &inputs,
@@ -204,10 +204,10 @@ Result InvokeElixirCallback(
     args_terms.push_back(arg_tuple);
   }
 
-  auto msg = std::make_tuple(fine::Atom("exla_elixir_call"),
+  auto msg = std::make_tuple(fine::Atom("exla_runtime_call"),
                              fine::Term(callback_id_term), args_terms, pending);
 
-  // Use the dispatcher pid registered via start_elixir_callback_bridge/1.
+  // Use the dispatcher pid registered via start_runtime_callback_bridge/1.
   // We still are within the NIF thread that started the computation,
   // but we don't know its env, therefore we cannot use enif_whereis_pid.
   // enif_whereis_pid can be called with NULL, but only from non-ERTS

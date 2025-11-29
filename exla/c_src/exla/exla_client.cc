@@ -108,7 +108,7 @@ ExlaExecutable::~ExlaExecutable() {
     // Notify the callback server that this executable has been dropped so it
     // can clean up any associated state.
     ERL_NIF_TERM msg =
-        fine::encode(env, fine::Atom("exla_elixir_call_executable_dropped"));
+        fine::encode(env, fine::Atom("exla_runtime_call_executable_dropped"));
     enif_send(nullptr, &callback_server_pid_.value(), env, msg);
     enif_free_env(env);
   }
