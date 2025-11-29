@@ -2208,6 +2208,37 @@ defmodule Nx do
   The `static_argument` will be passed through the Elixir processes to the callback function
   along with the executable Nx code.
 
+  ## Examples
+
+  While most code inside `defn` is restricted, `elixir_call/4` allows you
+  to perform arbitrary Elixir operations, such as message passing:
+
+      iex> pid = self()
+      iex> x = Nx.tensor([1, 2, 3])
+      iex> out = Nx.template({3}, {:s, 32})
+      iex> _ =
+      ...>   Nx.elixir_call(out, x, fn t ->
+      ...>     send(pid, {:sum, Enum.sum(Nx.to_flat_list(t))})
+      ...>     t
+      ...>   end)
+      iex> receive do {:sum, value} -> value end
+      6
+
+  You can also use the `static_argument` to pass non-tensor metadata to
+  your callback while still validating the tensor result against a template:
+
+      iex> pid = self()
+      iex> x = Nx.tensor([1, 2, 3])
+      iex> y = Nx.tensor([4, 5, 6])
+      iex> out = %{x: x, y: y}
+      iex> _ =
+      ...>   Nx.elixir_call(out, {x, y}, [pid: pid], fn {a, b}, opts ->
+      ...>     send(opts[:pid], {:dot, Nx.to_number(Nx.dot(a, b))})
+      ...>     %{x: a, y: b}
+      ...>   end)
+      iex> receive do {:dot, value} -> value end
+      32
+
   Inside `defn`, this builds an expression node understood by compilers.
   Outside `defn` or on backends without special support, it executes `fun`
   directly and validates the result matches the template.
