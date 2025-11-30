@@ -81,6 +81,16 @@ defmodule EXLA.Defn.RuntimeCallTest do
     assert_equal(y, expected)
   end
 
+  @tag :cuda_required
+  test "works when using EXLA compiler directly on CUDA" do
+    x = Nx.tensor([1, 2, 3])
+    y = EXLA.jit_apply(&split_and_sum/1, [x], client: :cuda)
+
+    fx = Nx.as_type(x, :f32)
+    expected = Nx.add(Nx.multiply(fx, 2.0), Nx.add(fx, 1.0))
+    assert_equal(y, expected)
+  end
+
   def add_and_subtract_callback({x, y}) do
     {Nx.add(x, y), Nx.subtract(x, y)}
   end

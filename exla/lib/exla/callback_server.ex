@@ -10,8 +10,10 @@ defmodule EXLA.CallbackServer do
 
   The native side is expected to:
 
-    * Lower `:runtime_call` nodes to a CPU-only host `CustomCall` named
+    * Lower `:runtime_call` nodes to a StableHLO `custom_call` named
       `"exla_runtime_callback"` with a callback id encoded in its attributes.
+      The underlying handler always executes on the host, even when the
+      compiled computation targets an accelerator such as CUDA or ROCm.
 
     * Run a bridge thread that sends messages of the form:
 

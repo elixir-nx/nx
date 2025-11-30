@@ -584,12 +584,13 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(
          :runtime_call,
          %T{data: %Expr{id: id, args: [tensor_expr, opts, fun, out_template]}} = expr,
-         %{client: %EXLA.Client{platform: :host}, callback_server_pid: callback_server_pid} =
+         %{client: %EXLA.Client{platform: platform}, callback_server_pid: callback_server_pid} =
            state,
          cache
-       ) do
+       )
+       when platform in [:host, :cuda] do
     # Flatten the tensor_or_container expression into its tensor leaves so we
-    # can compile each as an independent operand to the host callback.
+    # can compile each as an independent operand to the callback.
     tensor_exprs = Composite.flatten_list([tensor_expr])
 
     {arg_values, cache} =
@@ -620,9 +621,9 @@ defmodule EXLA.Defn do
          _cache
        ) do
     raise """
-    Nx.runtime_call/3 is currently only supported for EXLA CPU (platform: :host),
+    Nx.runtime_call/3 is currently only supported for EXLA CPU/GPU (platforms: :host, :cuda),
     but the active EXLA client is configured for platform #{inspect(platform)}.
-    Please run on the :host client or wait for future segmentation-based support.
+    Please run on one of the supported platforms or wait for future segmentation-based support.
     """
   end
 
