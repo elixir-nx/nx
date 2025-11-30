@@ -45,4 +45,12 @@ defmodule Torchx.DeviceTest do
       # assert_raise ArgumentError, fn -> Nx.backend_transfer(t) end
     end
   end
+
+  describe "indices_to_flatten" do
+    test "works" do
+      t = Nx.tensor([[1, 2], [3, 4]], backend: {TB, device: @device})
+      t2 = Nx.tensor([[2, 6], [3, 1]], backend: {TB, device: @device})
+      assert_equal Nx.window_scatter_max(t, t2, 0, {2, 3}), Nx.tensor([[0, 0, 0, 0, 6, 0], [0, 0, 2, 0, 0, 0], [0, 0, 3, 0, 0, 0], [0, 0, 0, 0, 0, 1]], backend: {TB, device: @device})
+    end
+  end
 end
