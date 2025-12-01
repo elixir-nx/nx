@@ -1403,6 +1403,84 @@ defmodule Nx.LinAlg do
   end
 
   @doc """
+  Calculates the eigenvalues and eigenvectors of batched square 2-D matrices.
+
+  Unlike `eigh/2`, this function works with general (non-Hermitian) matrices
+  and returns complex eigenvalues and eigenvectors even for real input matrices.
+
+  It returns `{eigenvals, eigenvecs}` where both are complex tensors.
+
+  Note: For Hermitian (or real symmetric) matrices, prefer using `eigh/2` as it
+  is more efficient and guarantees real eigenvalues.
+
+  ## Options
+
+    * `:max_iter` - `integer`. Defaults to `1_000`
+      Number of maximum iterations before stopping the decomposition
+
+    * `:eps` - `float`. Defaults to `1.0e-4`
+      Tolerance applied during the decomposition
+
+  Note not all options apply to all backends, as backends may have
+  specific optimizations that render these mechanisms unnecessary.
+
+  ## Examples
+
+  Diagonal matrix returns eigenvalues on the diagonal:
+
+  iex> {eigenvals, _} = Nx.LinAlg.eig(Nx.tensor([[1, 0], [0, 2]], type: :f32))
+  iex> Nx.all_close(Nx.sort(Nx.abs(eigenvals)), Nx.tensor([1.0, 2.0]), atol: 1.0e-3) |> Nx.to_number()
+  1
+
+  Upper triangular matrix:
+
+  iex> {eigenvals, _} = Nx.LinAlg.eig(Nx.tensor([[1, 1], [0, 2]], type: :f32))
+  iex> Nx.all_close(Nx.reduce_max(Nx.abs(eigenvals)), Nx.tensor(2.0), atol: 1.0e-3) |> Nx.to_number()
+  1
+
+  Rotation matrix (has complex eigenvalues; magnitudes ~1):
+
+  iex> {eigenvals, _} = Nx.LinAlg.eig(Nx.tensor([[0, -1], [1, 0]], type: :f32))
+  iex> Nx.all_close(Nx.sort(Nx.abs(eigenvals)), Nx.tensor([1.0, 1.0]), atol: 1.0e-3) |> Nx.to_number()
+  1
+
+  Batched matrices:
+
+  iex> t = Nx.tensor([[[1, 0], [0, 2]], [[3, 0], [0, 4]]], type: :f32)
+  iex> {eigenvals, _} = Nx.LinAlg.eig(t)
+  iex> expected = Nx.tensor([[2.0, 1.0], [4.0, 3.0]], type: :f32)
+  iex> Nx.all_close(Nx.abs(eigenvals), expected, atol: 1.0e-3) |> Nx.to_number()
+  1
+
+  ## Error cases
+
+      iex> Nx.LinAlg.eig(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
+      ** (ArgumentError) tensor must be a square matrix or a batch of square matrices, got shape: {2, 3}
+  """
+  def eig(tensor, opts \\ []) do
+    opts = keyword!(opts, max_iter: 1_000, eps: 1.0e-4)
+    %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
+    %T{type: type, shape: shape} = tensor = Nx.devectorize(tensor)
+
+    # Always output complex type for eigenvalues and eigenvectors
+    output_type = Nx.Type.to_complex(Nx.Type.to_floating(type))
+
+    {eigenvals_shape, eigenvecs_shape} = Nx.Shape.eig(shape)
+    rank = tuple_size(shape)
+
+    eigenvecs_name = List.duplicate(nil, rank)
+    eigenvals_name = tl(eigenvecs_name)
+
+    output =
+      {%{tensor | names: eigenvals_name, type: output_type, shape: eigenvals_shape},
+       %{tensor | names: eigenvecs_name, type: output_type, shape: eigenvecs_shape}}
+
+    :eig
+    |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.Eig.eig/2)
+    |> Nx.vectorize(vectorized_axes)
+  end
+
+  @doc """
   Calculates the Singular Value Decomposition of batched 2-D matrices.
 
   It returns `{u, s, vt}` where the elements of `s` are sorted
