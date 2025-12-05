@@ -65,11 +65,4 @@ defmodule EXLA.Sharding do
   def sharding(mesh_name, dim_shardings) do
     %TensorSharding{mesh_name: to_string(mesh_name), axes: dim_shardings}
   end
-
-  @doc """
-  Creates a fully replicated sharding specification (empty list for all dims).
-  """
-  def replicated(mesh_name, rank) do
-    %TensorSharding{mesh_name: to_string(mesh_name), axes: List.duplicate([], rank)}
-  end
 end
