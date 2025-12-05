@@ -28,6 +28,9 @@ defmodule EXLA.NIF do
   def mlir_op(_function, _op_name, _operands, _result_type, _attributes, _blocks), do: err!()
   def mlir_push_region(_function, _arg_types), do: err!()
   def mlir_pop_region(_function), do: err!()
+  def mlir_add_mesh(_module, _mesh_name, _axes), do: err!()
+  def mlir_set_arg_sharding(_function, _arg_index, _mesh_name, _dim_shardings), do: err!()
+  def mlir_set_result_sharding(_function, _result_index, _mesh_name, _dim_shardings), do: err!()
   def mlir_build(_function, _root), do: err!()
 
   def mlir_compile(
@@ -78,6 +81,8 @@ defmodule EXLA.NIF do
   def get_peak_memory(_client), do: err!()
   def reset_peak_memory(_client), do: err!()
   def get_per_device_memory(_client), do: err!()
+
+  def ensure_shardy_included(), do: err!()
 
   # Elixir callback bridge
   def start_runtime_callback_bridge(_dispatcher_pid), do: err!()

@@ -228,6 +228,9 @@ defmodule EXLA.Defn do
       outfeed = Outfeed.new(hooks, defined_hooks)
       comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
 
+      mesh = Keyword.get(options, :mesh)
+      input_shardings = Keyword.get(options, :input_shardings, [])
+
       {comp_time, {evaled, {xla_time, executable, inputs_and_typespecs, outfeed}}} =
         :timer.tc(fn ->
           comp_cache_fun.(comp_key, fn ->
@@ -254,6 +257,29 @@ defmodule EXLA.Defn do
               end)
 
             EXLA.MLIR.Module.new(comp_typespecs, out_typespecs, fn builder ->
+              # Add device mesh to module if provided
+              if mesh do
+                EXLA.MLIR.Module.add_mesh(builder.module, mesh)
+              end
+
+              if !mesh and input_shardings != [] do
+                raise ArgumentError, "input sharding configs provided but no device mesh was provided"
+              end
+
+              # Apply sharding annotations to function arguments if provided
+              if input_shardings != [] do
+                num_comp_args = length(comp_typespecs)
+
+                if length(input_shardings) != num_comp_args do
+                  raise ArgumentError,
+                        "expected #{num_comp_args} input sharding configs (one per argument), got #{length(input_shardings)}"
+                end
+
+                Enum.with_index(input_shardings, fn sharding, arg_index ->
+                  Function.set_arg_sharding(builder, arg_index, sharding)
+                end)
+              end
+
               # Only create the token when we know it will actually be
               # used, that is: streaming, lazy transfers or hooks
               outfeed =
@@ -269,6 +295,19 @@ defmodule EXLA.Defn do
               outfeed = to_computation.(builder, expr, inputs_and_typespecs, outfeed, client)
 
               options = Keyword.put(options, :callback_server_pid, callback_server_pid)
+
+              # Compute num_partitions from mesh and enable SPMD if mesh is provided
+              options =
+                if mesh do
+                  num_partitions =
+                    Enum.reduce(mesh.axes, 1, fn {_name, size}, acc -> acc * size end)
+
+                  options
+                  |> Keyword.put(:num_partitions, num_partitions)
+                  |> Keyword.put(:use_spmd, true)
+                else
+                  options
+                end
 
               {xla_time, executable} =
                 :timer.tc(fn ->
