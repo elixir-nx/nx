@@ -1,10 +1,13 @@
 fun = fn x, y -> {Nx.add(x, y), Nx.multiply(x, y)} end
-args = [Nx.iota({2, 2}), Nx.iota({2, 1})]
+args = [Nx.iota({8, 2}), Nx.iota({8, 1})]
 
-mesh = EXLA.Sharding.mesh("mesh", x: 2, y: 2)
+mesh = EXLA.Sharding.mesh("mesh", x: 4, y: 2)
 
-input_shardings = [EXLA.Sharding.sharding("mesh", [["x"], ["y"]]), EXLA.Sharding.sharding("mesh", [["x"], ["y"]])]
+input_shardings = [EXLA.Sharding.sharding("mesh", [["x"], ["y"]]), EXLA.Sharding.sharding("mesh", [["x"], []])]
+
+result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
+
+IO.puts(result.mlir_module)
 
 result = EXLA.jit_apply(fun, args, mesh: mesh, input_shardings: input_shardings)
-
 dbg(result)
