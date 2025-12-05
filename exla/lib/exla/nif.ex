@@ -81,8 +81,6 @@ defmodule EXLA.NIF do
   def reset_peak_memory(_client), do: err!()
   def get_per_device_memory(_client), do: err!()
 
-  def ensure_shardy_included(), do: err!()
-
   # Elixir callback bridge
   def start_runtime_callback_bridge(_dispatcher_pid), do: err!()
   def clear_runtime_callback_bridge(_dispatcher_pid), do: err!()
