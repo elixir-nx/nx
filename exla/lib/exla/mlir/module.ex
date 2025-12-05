@@ -130,7 +130,9 @@ defmodule EXLA.MLIR.Module do
       output_typespecs: return_typespecs,
       num_replicas: num_replicas,
       num_partitions: num_partitions,
-      device_id: device_id
+      device_id: device_id,
+      mesh: Keyword.get(options, :mesh),
+      input_shardings: Keyword.get(options, :input_shardings)
     }
   end
 

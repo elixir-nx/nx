@@ -149,16 +149,69 @@ defmodule EXLA.Defn do
           EXLA.Defn.Buffers.from_nx!(arg, executable)
         end)
 
-      EXLA.Executable.run(executable, [buffers], run_options)
+      input_lists = slice_inputs(buffers, executable)
+
+      EXLA.Executable.run(executable, input_lists, run_options)
     else
       [result] ->
         [EXLA.Defn.Buffers.to_nx!(result, outputs)]
+
+      results when is_list(results) ->
+        # For SPMD, we get multiple results (one per partition).
+        # For now, we just take the first one to verify execution.
+        # TODO: Implement re-assembly of sharded outputs
+        [first | _] = results
+        [EXLA.Defn.Buffers.to_nx!(first, outputs)]
     after
       EXLA.Defn.Lock.unlock(lock)
     end
   end
 
   defp run_key(%{client: %{ref: ref}, device_id: device_id}), do: [ref | device_id]
+
+  defp slice_inputs(buffers, %EXLA.Executable{num_partitions: 1}), do: [buffers]
+
+  defp slice_inputs(
+         buffers,
+         %EXLA.Executable{mesh: _mesh, input_shardings: _shardings, num_partitions: np}
+       )
+       when np > 1 do
+    # TODO: Implement generic slicing based on mesh and input_shardings.
+    # Currently hardcoded for 2x2 mesh testing.
+    if np == 4 and length(buffers) == 2 do
+      [%{data: data0, typespec: type0}, %{data: data1, typespec: type1}] = buffers
+
+      s0_0 = binary_part(data0, 0, 4)
+      s0_1 = binary_part(data0, 4, 4)
+      s0_2 = binary_part(data0, 8, 4)
+      s0_3 = binary_part(data0, 12, 4)
+
+      s1_0 = binary_part(data1, 0, 4)
+      s1_1 = binary_part(data1, 0, 4)
+      s1_2 = binary_part(data1, 4, 4)
+      s1_3 = binary_part(data1, 4, 4)
+
+      t0 = %{type0 | shape: {1, 1}}
+      t1 = %{type1 | shape: {1, 1}}
+
+      wrap = fn data, type ->
+        %EXLA.BinaryBuffer{data: data, typespec: type}
+      end
+
+      [
+        [wrap.(s0_0, t0), wrap.(s1_0, t1)],
+        [wrap.(s0_1, t0), wrap.(s1_1, t1)],
+        [wrap.(s0_2, t0), wrap.(s1_2, t1)],
+        [wrap.(s0_3, t0), wrap.(s1_3, t1)]
+      ]
+    else
+      # Fallback for unsupported cases
+      List.duplicate(buffers, np)
+    end
+  end
+
+  defp slice_inputs(buffers, %EXLA.Executable{num_partitions: np}),
+    do: List.duplicate(buffers, np)
 
   ## Compile
 

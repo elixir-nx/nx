@@ -152,15 +152,24 @@ PjRtBufferFromBinary(xla::PjRtClient *client, ERL_NIF_TERM source_term,
 tsl::StatusOr<std::vector<std::vector<xla::PjRtBuffer *>>> UnpackRunArguments(
     ErlNifEnv *env, ExlaExecutable::RunArguments arguments,
     std::vector<std::unique_ptr<xla::PjRtBuffer>> &transient_buffers,
-    ExlaClient *client, xla::DeviceAssignment device_assignment,
-    int device_id) {
+    ExlaClient *client, xla::DeviceAssignment device_assignment, int device_id,
+    int num_partitions) {
   std::vector<std::vector<xla::PjRtBuffer *>> arg_buffers;
   arg_buffers.reserve(arguments.size());
 
-  int replica = 0;
+  int index = 0;
 
   for (const auto &replica_arguments : arguments) {
-    auto device = device_id >= 0 ? device_id : device_assignment(replica, 0);
+    // For automatic SPMD: each input list goes to a different partition device
+    // device_assignment is (replica, partition) -> device
+    // With num_partitions > 1, we iterate through partitions (replica=0,
+    // partition=0..N-1) For replication, we iterate through replicas
+    // (replica=0..N-1, partition=0)
+    int replica = (num_partitions > 1) ? 0 : index;
+    int partition = (num_partitions > 1) ? index : 0;
+
+    auto device =
+        device_id >= 0 ? device_id : device_assignment(replica, partition);
 
     auto replica_buffers = std::vector<xla::PjRtBuffer *>();
     replica_buffers.reserve(replica_arguments.size());
@@ -200,7 +209,7 @@ tsl::StatusOr<std::vector<std::vector<xla::PjRtBuffer *>>> UnpackRunArguments(
 
     arg_buffers.push_back(std::move(replica_buffers));
 
-    replica++;
+    index++;
   }
 
   return arg_buffers;
@@ -216,7 +225,17 @@ UnpackResult(ErlNifEnv *env,
 
   for (int i = 0; i < result.size(); i++) {
     auto replica_results = std::vector<fine::ResourcePtr<ExlaBuffer>>();
-    int64_t device = device_id >= 0 ? device_id : device_assignment(i, 0);
+
+    int64_t device;
+    if (device_id >= 0) {
+      device = device_id;
+    } else if (device_assignment.computation_count() > 1) {
+      // SPMD: results correspond to partitions (replica 0, partition i)
+      device = device_assignment(0, i);
+    } else {
+      // Replication: results correspond to replicas (replica i, partition 0)
+      device = device_assignment(i, 0);
+    }
 
     for (auto &pjrt_buf : result.at(i)) {
       pjrt_buf->GetReadyFuture().Await();
@@ -266,20 +285,23 @@ ExlaExecutable::Run(ErlNifEnv *env, ExlaExecutable::RunArguments arguments,
   // a pmap, but in all other cases it will be equal to 1
   int num_replicas = executable_->num_replicas();
 
+  // the number of partitions is used for SPMD partitioning
+  int num_partitions = executable_->num_partitions();
+
   // input buffers are a list of lists, where each list maps to the args
   // to pass to one of the replicas in a computation, e.g. [replica_args1,
   // replica_args2, ...]
   std::vector<std::vector<xla::PjRtBuffer *>> input_buffers;
 
   // the device assignment is a 2d array which maps coordinates (replica,
-  // partition) to a device; or in this case just maps a replica to a device
+  // partition) to a device
   xla::DeviceAssignment device_assignment;
   if (client_->client()->platform_name() == "METAL") {
     device_assignment = xla::DeviceAssignment(1, 1);
   } else {
-    EXLA_ASSIGN_OR_RETURN(
-        device_assignment,
-        client_->client()->GetDefaultDeviceAssignment(num_replicas, 1));
+    EXLA_ASSIGN_OR_RETURN(device_assignment,
+                          client_->client()->GetDefaultDeviceAssignment(
+                              num_replicas, num_partitions));
   }
 
   // Buffers allocated from binaries for this specific run need to be
@@ -300,15 +322,20 @@ ExlaExecutable::Run(ErlNifEnv *env, ExlaExecutable::RunArguments arguments,
     EXLA_ASSIGN_OR_RETURN(input_buffers,
                           UnpackRunArguments(env, arguments, transient_buffers,
                                              client_, device_assignment,
-                                             device_id));
+                                             device_id, num_partitions));
   }
 
-  // at this point input buffers is a vector of arguments per replica
-  // and the size of that vector should equal the number of replicas in the
-  // executable, otherwise it is invalid
-  if (num_replicas != input_buffers.size()) {
-    return xla::InvalidArgument("Got %d replica arguments for %d replicas",
-                                input_buffers.size(), num_replicas);
+  // at this point input buffers is a vector of arguments per device
+  // For automatic SPMD: one input list per partition (num_partitions lists)
+  // For standard replication: one input list per replica (num_replicas lists)
+  // Each input list contains full unreplicated tensors; XLA slices based on
+  // sharding
+  int expected_lists = num_partitions > 1 ? num_partitions : num_replicas;
+  if (input_buffers.size() != expected_lists) {
+    return xla::InvalidArgument("Got %d argument lists, expected %d "
+                                "(num_replicas=%d, num_partitions=%d)",
+                                input_buffers.size(), expected_lists,
+                                num_replicas, num_partitions);
   }
 
   std::vector<std::vector<std::unique_ptr<xla::PjRtBuffer>>>
@@ -333,10 +360,9 @@ ExlaExecutable::Run(ErlNifEnv *env, ExlaExecutable::RunArguments arguments,
     // result buffers to unpack
     per_replica_results.push_back(std::move(portable_result));
   } else {
-    // no device ID is present, so it may be a replicated executable which means
-    // we need to use the replica execution path
-    // TODO: This now exposes a `returned_futures` API, does this make sense for
-    // us?
+    // no device ID is present, so it may be a replicated or SPMD executable
+    // For SPMD with num_partitions > 1, Execute handles partitioned execution
+    // using sharding annotations
     EXLA_ASSIGN_OR_RETURN(per_replica_results,
                           executable_->Execute(input_buffers, options));
   }
@@ -344,9 +370,15 @@ ExlaExecutable::Run(ErlNifEnv *env, ExlaExecutable::RunArguments arguments,
   // EXLA_ASSIGN_OR_RETURN(per_replica_results,
   // executable_->Execute(input_buffers, options));
 
-  // sanity check
-  if (per_replica_results.size() != num_replicas) {
-    return xla::FailedPrecondition("Invalid execution.");
+  // sanity check - for SPMD we get results per partition, for replication per
+  // replica
+  int expected_results = num_partitions > 1 ? num_partitions : num_replicas;
+  if (per_replica_results.size() != expected_results) {
+    return xla::FailedPrecondition(
+        "Invalid execution: got %d results, expected %d (num_replicas=%d, "
+        "num_partitions=%d)",
+        per_replica_results.size(), expected_results, num_replicas,
+        num_partitions);
   }
 
   // we need to unpack the results into Erlang terms, the result is a vector

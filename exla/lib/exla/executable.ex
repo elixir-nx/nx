@@ -7,7 +7,16 @@ defmodule EXLA.Executable do
   alias EXLA.{BinaryBuffer, DeviceBuffer}
 
   @enforce_keys [:client, :ref, :output_typespecs, :num_replicas, :num_partitions, :device_id]
-  defstruct [:client, :ref, :output_typespecs, :num_replicas, :num_partitions, :device_id]
+  defstruct [
+    :client,
+    :ref,
+    :output_typespecs,
+    :num_replicas,
+    :num_partitions,
+    :device_id,
+    :mesh,
+    :input_shardings
+  ]
 
   @doc """
   Runs the given executable with a list of lists as inputs and the given options.
@@ -45,7 +54,9 @@ defmodule EXLA.Executable do
         output_typespecs: output_typespecs,
         num_replicas: num_replicas,
         num_partitions: num_partitions,
-        device_id: device_id
+        device_id: device_id,
+        mesh: mesh,
+        input_shardings: input_shardings
       })
       when node(ref) == node() do
     serialized_exec =
@@ -58,7 +69,9 @@ defmodule EXLA.Executable do
       output_typespecs: output_typespecs,
       num_replicas: num_replicas,
       num_partitions: num_partitions,
-      device_id: device_id
+      device_id: device_id,
+      mesh: mesh,
+      input_shardings: input_shardings
     }
   end
 
@@ -85,6 +98,8 @@ defmodule EXLA.Executable do
       num_replicas: num_replicas,
       num_partitions: num_partitions,
       device_id: device_id,
+      mesh: Map.get(data, :mesh),
+      input_shardings: Map.get(data, :input_shardings),
       ref: ref,
       client: client
     }
