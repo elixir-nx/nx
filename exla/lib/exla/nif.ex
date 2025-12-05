@@ -30,7 +30,6 @@ defmodule EXLA.NIF do
   def mlir_pop_region(_function), do: err!()
   def mlir_add_mesh(_module, _mesh_name, _axes), do: err!()
   def mlir_set_arg_sharding(_function, _arg_index, _mesh_name, _dim_shardings), do: err!()
-  def mlir_set_result_sharding(_function, _result_index, _mesh_name, _dim_shardings), do: err!()
   def mlir_build(_function, _root), do: err!()
 
   def mlir_compile(

@@ -46,14 +46,4 @@ defmodule EXLA.MLIR.Function do
       }) do
     EXLA.NIF.mlir_set_arg_sharding(ref, arg_index, mesh, dims)
   end
-
-  @doc """
-  Sets sharding annotation for a function result.
-  """
-  def set_result_sharding(%Function{ref: ref}, result_index, %EXLA.Sharding.TensorSharding{
-        mesh_name: mesh,
-        axes: dims
-      }) do
-    EXLA.NIF.mlir_set_result_sharding(ref, result_index, mesh, dims)
-  end
 end
