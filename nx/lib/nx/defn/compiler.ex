@@ -74,9 +74,17 @@ defmodule Nx.Defn.Compiler do
   @callback __to_backend__(keyword) :: {module, keyword}
 
   @doc """
-  Callback for compilation.
+  Callback for compilation of a parallelizable computation.
 
-  Its main purpose is to compile a function for a given mesh.
+  Its main purpose is to compile a function for a given `Nx.Defn.Shard.Mesh`.
+
+  Receives an opaque `key` used for caching, a `mesh`, a list of `vars`
+  in `[vars]`, the function `fun` which builds a defn expression, a list of
+  argument lists in `args_list`, and the compiler options.
+
+  Using `[vars]` instead of a single `vars` allows the compiler to keep one
+  set of abstract parameters per shard or logical device in the mesh. This is useful
+  when the tensors are already divided into shards.
   """
   @callback __shard_jit__(
     key :: term,
