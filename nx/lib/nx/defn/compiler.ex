@@ -76,7 +76,7 @@ defmodule Nx.Defn.Compiler do
   @doc """
   Callback for compilation of a parallelizable computation.
 
-  Its main purpose is to compile a function for a given `Nx.Defn.Shard.Mesh`.
+  Its main purpose is to compile a function for a given `Nx.Defn.Mesh`.
 
   Receives an opaque `key` used for caching, a `mesh`, a list of `vars`
   in `[vars]`, the function `fun` which builds a defn expression, a list of
