@@ -849,6 +849,29 @@ defmodule Nx.Defn do
     :ok
   end
 
+  def shard_jit(fun, mesh, opts \\ []) when is_function(fun) and is_list(opts) do
+    wrap(fun, &shard_jit_apply(fun, mesh, &1, opts))
+  end
+
+  def shard_jit_apply(fun, mesh, args, opts \\ [])
+    when is_function(fun) and is_list(args) and is_list(opts) do
+  {on_conflict, opts} = Keyword.pop(opts, :on_conflict, :raise)
+
+    cond do
+      Nx.Defn.current() == nil ->
+        do_shard_jit_apply(fun, mesh, args, opts)
+
+      on_conflict == :raise ->
+        raise "cannot invoke Shard JITed function when there is a Shard JIT compilation happening"
+
+      on_conflict == :force ->
+        do_shard_jit_apply(fun, mesh, args, opts)
+
+      on_conflict == :reuse ->
+        apply(fun, args)
+    end
+end
+
   defp compile_error!(env, description) do
     raise CompileError, line: env.line, file: env.file, description: description
   end
