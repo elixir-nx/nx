@@ -144,6 +144,7 @@ defmodule Nx.Backend do
   @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: tensor
   @callback cholesky(out :: tensor, tensor) :: tensor
   @callback eigh({eigenvals :: tensor, eigenvecs :: tensor}, tensor, keyword) :: tensor
+  @callback eig({eigenvals :: tensor, eigenvecs :: tensor}, tensor, keyword) :: tensor
   @callback solve(out :: tensor, a :: tensor, b :: tensor) :: tensor
   @callback determinant(out :: tensor, t :: tensor) :: tensor
   @callback logical_not(out :: tensor, t :: tensor) :: tensor
@@ -171,6 +172,7 @@ defmodule Nx.Backend do
     cumulative_max: 3,
     all_close: 4,
     svd: 3,
+    eig: 3,
     top_k: 3,
     fft2: 3,
     ifft2: 3,
