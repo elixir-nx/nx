@@ -854,11 +854,11 @@ defmodule Nx.Defn do
   end
 
   def shard_jit_apply(fun, mesh, args, opts \\ [])
-    when is_function(fun) and is_list(args) and is_list(opts) do
-  {on_conflict, opts} = Keyword.pop(opts, :on_conflict, :raise)
+      when is_function(fun) and is_list(args) and is_list(opts) do
+    {on_conflict, opts} = Keyword.pop(opts, :on_conflict, :raise)
 
     cond do
-      Nx.Defn.current() == nil ->
+      Nx.Defn.Compiler.current() == nil ->
         do_shard_jit_apply(fun, mesh, args, opts)
 
       on_conflict == :raise ->
@@ -870,7 +870,14 @@ defmodule Nx.Defn do
       on_conflict == :reuse ->
         apply(fun, args)
     end
-end
+  end
+
+  defp do_shard_jit_apply(fun, mesh, args, opts) do
+    opts = prepare_options(opts)
+    {fun, params, _templates, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args)
+    [res] = Nx.Defn.Compiler.__shard_jit__(fun, mesh, params, [flatten], opts)
+    res
+  end
 
   defp compile_error!(env, description) do
     raise CompileError, line: env.line, file: env.file, description: description

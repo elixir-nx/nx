@@ -181,6 +181,10 @@ defmodule Nx.Defn.Compiler do
     {compiler, &runtime_fun(&1, fun, compiler), opts}
   end
 
+  defp prepare_options(fun, _mesh, opts) do # This is a placeholder for sharding implementation
+    prepare_options(fun, opts)
+  end
+
   defp runtime_fun(args, fun, compiler) do
     previous_backend = Process.put(Nx.Shared.backend_pdict_key(), {Nx.Defn.Expr, []})
     previous = Process.put(Nx.Defn.Compiler, compiler)
