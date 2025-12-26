@@ -181,10 +181,6 @@ defmodule Nx.Defn.Compiler do
     {compiler, &runtime_fun(&1, fun, compiler), opts}
   end
 
-  defp prepare_options(fun, _mesh, opts) do # This is a placeholder for sharding implementation
-    prepare_options(fun, opts)
-  end
-
   defp runtime_fun(args, fun, compiler) do
     previous_backend = Process.put(Nx.Shared.backend_pdict_key(), {Nx.Defn.Expr, []})
     previous = Process.put(Nx.Defn.Compiler, compiler)
@@ -297,7 +293,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   def __shard_jit__(fun, mesh, params, args_list, opts) do
-    {module, runtime_fun, opts} = prepare_options(fun, mesh, opts)
+    {module, runtime_fun, opts} = prepare_options(fun, opts)
     module.__shard_jit__(fun, mesh, params, runtime_fun, args_list, opts)
   rescue
     e in [UndefinedFunctionError] ->
