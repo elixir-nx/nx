@@ -293,7 +293,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   def __shard_jit__(fun, mesh, params, args_list, opts) do
-    {module, runtime_fun, opts} = prepare_options(fun, mesh, opts)
+    {module, runtime_fun, opts} = prepare_options(fun, opts)
     module.__shard_jit__(fun, mesh, params, runtime_fun, args_list, opts)
   rescue
     e in [UndefinedFunctionError] ->
