@@ -120,6 +120,12 @@ defmodule Torchx.Nx.RandomTest do
         Nx.Random.uniform_split(key, 0.0, 100.0, type: :bf16),
         Nx.tensor(43.0, type: :bf16)
       )
+    end
+
+    # MPS downgrades f64 to f32, so this test would fail
+    @tag :skip_on_mps
+    test "uniform f64 upcast" do
+      key = Nx.Random.key(44)
 
       # upcast
       assert_equal(

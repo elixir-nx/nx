@@ -61,18 +61,22 @@ defmodule Torchx.Backend do
 
   @impl true
   def constant(%T{shape: {}, type: type} = out, scalar, backend_options) do
+    device = device_option(backend_options)
+
     scalar
     |> constant_serialize_scalar()
-    |> Torchx.scalar_tensor(to_torch_type(type), device_option(backend_options))
+    |> Torchx.scalar_tensor(to_torch_type(type, device), device)
     |> to_nx(out)
   end
 
   def constant(%T{shape: shape, type: type} = out, scalar, backend_options) do
+    device = device_option(backend_options)
+
     shape
     |> Torchx.full(
       constant_serialize_scalar(scalar),
-      to_torch_type(type),
-      device_option(backend_options)
+      to_torch_type(type, device),
+      device
     )
     |> to_nx(out)
   end
@@ -85,26 +89,31 @@ defmodule Torchx.Backend do
     rank = tuple_size(shape)
     m = elem(shape, rank - 2)
     n = elem(shape, rank - 1)
+    device = device_option(backend_options)
 
     m
-    |> Torchx.eye(n, to_torch_type(type), device_option(backend_options))
+    |> Torchx.eye(n, to_torch_type(type, device), device)
     |> Torchx.broadcast_to(shape)
     |> to_nx(out)
   end
 
   @impl true
   def iota(%T{shape: {}, type: type} = out, nil, backend_options) do
-    Torchx.scalar_tensor(0.0, to_torch_type(type), device_option(backend_options))
+    device = device_option(backend_options)
+
+    Torchx.scalar_tensor(0.0, to_torch_type(type, device), device)
     |> to_nx(out)
   end
 
   def iota(%T{shape: shape, type: type} = out, nil, backend_options) do
+    device = device_option(backend_options)
+
     Torchx.arange(
       0,
       Nx.size(shape),
       1,
-      to_torch_type(type),
-      device_option(backend_options),
+      to_torch_type(type, device),
+      device,
       shape
     )
     |> to_nx(out)
@@ -112,15 +121,17 @@ defmodule Torchx.Backend do
 
   @impl true
   def iota(%T{shape: {n}, type: type} = out, 0, backend_options) do
-    Torchx.arange(0, n, 1, to_torch_type(type), device_option(backend_options)) |> to_nx(out)
+    device = device_option(backend_options)
+    Torchx.arange(0, n, 1, to_torch_type(type, device), device) |> to_nx(out)
   end
 
   def iota(%T{shape: shape, type: type} = out, axis, backend_options) do
     # gets the size of iota
     dim = elem(shape, axis)
+    device = device_option(backend_options)
 
     # build the iota in one dimension
-    aten = Torchx.arange(0, dim, 1, to_torch_type(type), device_option(backend_options))
+    aten = Torchx.arange(0, dim, 1, to_torch_type(type, device), device)
 
     # reshape the tensor above to be have shape where everything is 1, except for dim
     reshape = Tuple.duplicate(1, Nx.rank(shape)) |> put_elem(axis, dim)
@@ -202,20 +213,60 @@ defmodule Torchx.Backend do
     Torchx.to_device(from_nx(tensor), device_option(opts)) |> to_nx(tensor)
   end
 
-  def backend_copy(tensor, backend, opts) do
-    backend.from_binary(tensor, Torchx.to_blob(from_nx(tensor)), opts)
+  def backend_copy(%T{type: type} = tensor, backend, opts) do
+    {device, _} = from_nx(tensor)
+    blob = Torchx.to_blob(from_nx(tensor))
+
+    # When copying from Torchx to another backend, we need to adjust the tensor type
+    # if MPS downgraded it (f64->f32 or c128->c64)
+    adjusted_tensor =
+      case {type, device} do
+        {{:f, 64}, :mps} -> %{tensor | type: {:f, 32}}
+        {{:c, 128}, :mps} -> %{tensor | type: {:c, 64}}
+        _ -> tensor
+      end
+
+    backend.from_binary(adjusted_tensor, blob, opts)
   end
 
   @impl true
   def from_binary(%T{type: type, shape: shape} = out, binary, backend_options) do
-    binary
-    |> maybe_pad_binary(type)
+    device = device_option(backend_options)
+    torch_type = to_torch_type(type, device)
+
+    # Handle type downgrading for MPS - need to convert binary data format
+    {adjusted_binary, adjusted_type} =
+      case {type, torch_type, device} do
+        # f64 -> f32 downgrade on MPS: convert binary from float64 to float32
+        {{:f, 64}, :float, :mps} ->
+          converted = for <<x::float-64-native <- binary>>, into: <<>>, do: <<x::float-32-native>>
+          {converted, {:f, 32}}
+
+        # c128 -> c64 downgrade on MPS: convert binary from complex128 to complex64
+        {{:c, 128}, :complex, :mps} ->
+          converted =
+            for <<r::float-64-native, i::float-64-native <- binary>>,
+              into: <<>>,
+              do: <<r::float-32-native, i::float-32-native>>
+
+          {converted, {:c, 64}}
+
+        # No downgrade needed
+        _ ->
+          {binary, type}
+      end
+
+    # Adjust the output tensor type to match what was actually stored
+    adjusted_out = %{out | type: adjusted_type}
+
+    adjusted_binary
+    |> maybe_pad_binary(adjusted_type)
     |> Torchx.from_blob(
       shape,
-      to_torch_type(type),
-      device_option(backend_options)
+      torch_type,
+      device
     )
-    |> to_nx(out)
+    |> to_nx(adjusted_out)
   end
 
   defp maybe_pad_binary(bin, {:u, size}) when size in [16, 32] do
@@ -240,8 +291,11 @@ defmodule Torchx.Backend do
     do: Torchx.reshape(from_nx(t), shape) |> to_nx(out)
 
   @impl true
-  def as_type(%T{type: type} = out, %T{} = t),
-    do: from_nx(t) |> Torchx.to_type(to_torch_type(type)) |> bitmask(type) |> to_nx(out)
+  def as_type(%T{type: type} = out, %T{} = t) do
+    t_tx = from_nx(t)
+    device = device_from_ref(t_tx)
+    t_tx |> Torchx.to_type(to_torch_type(type, device)) |> bitmask(type) |> to_nx(out)
+  end
 
   @impl true
   def squeeze(out, %T{} = t, axes) do
@@ -329,10 +383,13 @@ defmodule Torchx.Backend do
         min(max(idx, 0), dim_size - len)
       end)
 
-    slice_tx = slice |> from_nx() |> Torchx.to_type(to_torch_type(out.type))
+    input_tx_typed =
+      input_tx |> Torchx.to_type(to_torch_type(out.type, device_from_ref(input_tx)))
 
-    input_tx
-    |> Torchx.to_type(to_torch_type(out.type))
+    slice_tx =
+      slice |> from_nx() |> Torchx.to_type(to_torch_type(out.type, device_from_ref(input_tx)))
+
+    input_tx_typed
     |> Torchx.put(start_indices, slice_tx)
     |> to_nx(out)
   end
@@ -433,10 +490,14 @@ defmodule Torchx.Backend do
     updates_tx =
       updates
       |> from_nx()
-      |> Torchx.to_type(to_torch_type(out.type))
+      |> then(fn result_tx ->
+        Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
+      end)
 
     tensor_tx
-    |> Torchx.to_type(to_torch_type(out.type))
+    |> then(fn result_tx ->
+      Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
+    end)
     |> Torchx.index_put(indices_tx, updates_tx, accumulate?)
     |> then(inverse_permutation_fn)
     |> to_nx(out)
@@ -461,7 +522,9 @@ defmodule Torchx.Backend do
     tensor
     |> from_nx()
     |> Torchx.argsort(stable, axis, is_descending)
-    |> Torchx.to_type(to_torch_type(out.type))
+    |> then(fn result_tx ->
+      Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
+    end)
     |> to_nx(out)
   end
 
@@ -472,7 +535,9 @@ defmodule Torchx.Backend do
       |> from_nx()
       |> Torchx.top_k(Keyword.fetch!(opts, :k))
 
-    indices = Torchx.to_type(indices, to_torch_type(out_indices.type))
+    {device, _} = indices
+
+    indices = Torchx.to_type(indices, to_torch_type(out_indices.type, device))
 
     {to_nx(values, out_values), to_nx(indices, out_indices)}
   end
@@ -495,7 +560,9 @@ defmodule Torchx.Backend do
     t
     |> from_nx()
     |> Torchx.sum(axes, keep_axes)
-    |> Torchx.to_type(to_torch_type(out.type))
+    |> then(fn result_tx ->
+      Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
+    end)
     |> to_nx(out)
   end
 
@@ -512,7 +579,9 @@ defmodule Torchx.Backend do
       end
 
     result
-    |> Torchx.to_type(to_torch_type(out.type))
+    |> then(fn result_tx ->
+      Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
+    end)
     |> to_nx(out)
   end
 
@@ -554,8 +623,10 @@ defmodule Torchx.Backend do
 
     # Torch raises a cryptic error if the types are different,
     # so we need to upcast the tensors to the merged type
-    type = a.type |> Nx.Type.merge(b.type) |> to_torch_type()
-    a_tx = a |> from_nx() |> Torchx.to_type(type)
+    {device, _} = a_tx = from_nx(a)
+
+    type = a.type |> Nx.Type.merge(b.type) |> to_torch_type(device)
+    a_tx = Torchx.to_type(a_tx, type)
     b_tx = b |> from_nx() |> Torchx.to_type(type)
 
     a_tx
@@ -602,9 +673,11 @@ defmodule Torchx.Backend do
 
   @impl true
   def determinant(out, tensor) do
+    {device, _} = from_nx(tensor)
+
     tensor
     |> from_nx()
-    |> Torchx.to_type(to_torch_type(out.type))
+    |> Torchx.to_type(to_torch_type(out.type, device))
     |> Torchx.determinant()
     |> to_nx(out)
   end
@@ -628,11 +701,15 @@ defmodule Torchx.Backend do
 
     if tie_break == :low do
       apply(Torchx, fun, [t_tx, axis, keep_axis])
-      |> Torchx.to_type(to_torch_type(out.type))
+      |> then(fn result_tx ->
+        Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
+      end)
       |> to_nx(out)
     else
       %{data: %{ref: {device, _}}, shape: shape} = t
-      scalar = Torchx.scalar_tensor(elem(shape, axis) - 1, to_torch_type(out.type), device)
+
+      scalar =
+        Torchx.scalar_tensor(elem(shape, axis) - 1, to_torch_type(out.type, device), device)
 
       flipped = Torchx.flip(t_tx, [axis])
 
@@ -640,7 +717,9 @@ defmodule Torchx.Backend do
 
       scalar
       |> Torchx.subtract(result)
-      |> Torchx.to_type(to_torch_type(out.type))
+      |> then(fn result_tx ->
+        Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
+      end)
       |> to_nx(out)
     end
   end
@@ -683,11 +762,15 @@ defmodule Torchx.Backend do
     if reverse do
       result
       |> Torchx.flip([axis])
-      |> Torchx.to_type(to_torch_type(out.type))
+      |> then(fn result_tx ->
+        Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
+      end)
       |> to_nx(out)
     else
       result
-      |> Torchx.to_type(to_torch_type(out.type))
+      |> then(fn result_tx ->
+        Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
+      end)
       |> to_nx(out)
     end
   end
@@ -710,7 +793,9 @@ defmodule Torchx.Backend do
 
       result
       |> bitmask(out.type)
-      |> Torchx.to_type(to_torch_type(out.type))
+      |> then(fn result_tx ->
+        Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
+      end)
       |> to_nx(out)
     end
   end
@@ -735,8 +820,11 @@ defmodule Torchx.Backend do
       {left, right} = maybe_upcast(l, r)
       {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
 
-      Torchx.unquote(op)(left_tx, right_tx)
-      |> Torchx.to_type(to_torch_type(out.type))
+      result_tx = Torchx.unquote(op)(left_tx, right_tx)
+      device = device_from_ref(result_tx)
+
+      result_tx
+      |> Torchx.to_type(to_torch_type(out.type, device))
       |> to_nx(out)
     end
   end
@@ -774,7 +862,7 @@ defmodule Torchx.Backend do
       # s64 numbers.
 
       max_s64_tx =
-        Nx.Constants.max_finite(:s64, backend: {Nx.BinaryBackend, device: device}) |> from_nx()
+        Nx.Constants.max_finite(:s64, backend: {Torchx.Backend, device: device}) |> from_nx()
 
       rest_tx = Torchx.subtract(left_tx, max_s64_tx)
 
@@ -787,17 +875,21 @@ defmodule Torchx.Backend do
           right_tx
         )
 
-      zero = Torchx.scalar_tensor(0, to_torch_type(l.type), device)
+      zero = Torchx.scalar_tensor(0, to_torch_type(l.type, device), device)
 
       left_tx
       |> Torchx.less(zero)
       |> Torchx.where(remainder_from_negative, remainder_from_positive)
-      |> Torchx.to_type(to_torch_type(out.type))
+      |> then(fn result_tx ->
+        Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
+      end)
       |> to_nx(out)
     else
       left_tx
       |> Torchx.fmod(right_tx)
-      |> Torchx.to_type(to_torch_type(out.type))
+      |> then(fn result_tx ->
+        Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
+      end)
       |> to_nx(out)
     end
   end
@@ -883,7 +975,9 @@ defmodule Torchx.Backend do
   def conjugate(out, tensor) do
     tensor
     |> from_nx()
-    |> Torchx.to_type(to_torch_type(out.type))
+    |> then(fn result_tx ->
+      Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
+    end)
     |> Torchx.conjugate()
     |> to_nx(out)
   end
@@ -1023,10 +1117,12 @@ defmodule Torchx.Backend do
 
   @impl true
   def eigh({eigenvals, eigenvecs}, tensor, _opts) do
+    {device, _} = from_nx(tensor)
+
     {q, r} =
       tensor
       |> from_nx()
-      |> Torchx.to_type(to_torch_type(eigenvecs.type))
+      |> Torchx.to_type(to_torch_type(eigenvecs.type, device))
       |> Torchx.eigh()
 
     {to_nx(q, eigenvals), to_nx(r, eigenvecs)}
@@ -1034,10 +1130,12 @@ defmodule Torchx.Backend do
 
   @impl true
   def qr({q_holder, r_holder}, tensor, opts) do
+    {device, _} = from_nx(tensor)
+
     {q, r} =
       tensor
       |> from_nx()
-      |> Torchx.to_type(to_torch_type(q_holder.type))
+      |> Torchx.to_type(to_torch_type(q_holder.type, device))
       |> Torchx.qr(opts[:mode] == :reduced)
 
     {to_nx(q, q_holder), to_nx(r, r_holder)}
@@ -1045,10 +1143,12 @@ defmodule Torchx.Backend do
 
   @impl true
   def svd({u_holder, s_holder, vt_holder}, tensor, opts) do
+    {device, _} = from_nx(tensor)
+
     {u, s, vt} =
       tensor
       |> from_nx()
-      |> Torchx.to_type(to_torch_type(u_holder.type))
+      |> Torchx.to_type(to_torch_type(u_holder.type, device))
       |> Torchx.svd(opts[:full_matrices?] == true)
 
     {to_nx(u, u_holder), to_nx(s, s_holder), to_nx(vt, vt_holder)}
@@ -1060,15 +1160,15 @@ defmodule Torchx.Backend do
         tensor,
         _opts
       ) do
-    out_type = to_torch_type(output_type)
+    {device, _} = tensor_ref = from_nx(tensor)
+    out_type = to_torch_type(output_type, device)
 
     {p_tx, l_tx, u_tx} =
-      tensor
-      |> from_nx()
+      tensor_ref
       |> Torchx.to_type(out_type)
       |> Torchx.lu()
 
-    p_type = to_torch_type(p_holder.type)
+    p_type = to_torch_type(p_holder.type, device)
 
     # p_type can be an integer type, but we can
     # demote the floating-point torch tensor
@@ -1088,24 +1188,31 @@ defmodule Torchx.Backend do
 
   @impl true
   def pad(out, tensor, constant, input_config) do
-    config =
-      input_config
-      |> Enum.map(fn {a, b, c} ->
-        if c < 0 do
-          raise ArgumentError, "{#{a}, #{b}, #{c}} padding is not supported"
-        end
+    # Handle empty padding config (no-op)
+    if input_config == [] do
+      tensor
+      |> from_nx()
+      |> to_nx(out)
+    else
+      config =
+        input_config
+        |> Enum.map(fn {a, b, c} ->
+          if c < 0 do
+            raise ArgumentError, "{#{a}, #{b}, #{c}} padding is not supported"
+          end
 
-        [max(a, 0), max(b, 0)]
-      end)
-      |> Enum.reverse()
-      |> List.flatten()
+          [max(a, 0), max(b, 0)]
+        end)
+        |> Enum.reverse()
+        |> List.flatten()
 
-    tensor
-    |> from_nx()
-    |> pad_internal(input_config)
-    |> slice_negative_padding(input_config)
-    |> Torchx.pad(from_nx(constant), config)
-    |> to_nx(out)
+      tensor
+      |> from_nx()
+      |> pad_internal(input_config)
+      |> slice_negative_padding(input_config)
+      |> Torchx.pad(from_nx(constant), config)
+      |> to_nx(out)
+    end
   end
 
   defp pad_internal(t_tx, input_config) do
@@ -1207,19 +1314,22 @@ defmodule Torchx.Backend do
         shape -> shape
       end
 
-    out_type = to_torch_type(out.type)
+    {device, _} = from_nx(a)
+    out_type = to_torch_type(out.type, device)
 
     a_tx =
       a
       |> from_nx()
-      |> Torchx.reshape(batched_a_shape)
       |> Torchx.to_type(out_type)
 
+    # Check for singular matrix before reshaping for batching
     check_singular_matrix(a_tx)
+
+    a_tx_batched = Torchx.reshape(a_tx, batched_a_shape)
 
     b_tx = b |> from_nx() |> Torchx.reshape(batched_b_shape) |> Torchx.to_type(out_type)
 
-    a_tx
+    a_tx_batched
     |> Torchx.triangular_solve(b_tx, transform == :transpose, upper)
     |> Torchx.reshape(out.shape)
     |> Torchx.to_nx()
@@ -1227,8 +1337,9 @@ defmodule Torchx.Backend do
 
   @impl true
   def solve(%T{type: type} = out, a, b) do
-    a_tx = a |> from_nx |> Torchx.to_type(to_torch_type(type))
-    b_tx = b |> from_nx |> Torchx.to_type(to_torch_type(type))
+    {device, _} = from_nx(a)
+    a_tx = a |> from_nx |> Torchx.to_type(to_torch_type(type, device))
+    b_tx = b |> from_nx |> Torchx.to_type(to_torch_type(type, device))
 
     check_singular_matrix(a_tx)
 
@@ -1240,14 +1351,27 @@ defmodule Torchx.Backend do
   defp check_singular_matrix(tensor) do
     {device, _} = tensor
 
-    type =
+    torch_type =
       tensor
       |> Torchx.scalar_type()
       |> from_torch_type()
       |> Nx.Type.to_real()
-      |> to_torch_type()
+      |> to_torch_type(device)
 
-    eps = Torchx.scalar_tensor(1.0e-10, type, device)
+    # Use appropriate epsilon for the precision level
+    # f32 has ~7 decimal digits of precision, f64 has ~15
+    # Use a more lenient epsilon to account for rounding in conversions
+    epsilon_value =
+      case torch_type do
+        # f32 - more lenient for downgraded f64
+        :float -> 1.0e-4
+        # f64
+        :double -> 1.0e-10
+        # default to f32 precision for other types
+        _ -> 1.0e-4
+      end
+
+    eps = Torchx.scalar_tensor(epsilon_value, torch_type, device)
 
     # We need to manually validate if the A tensor is singular
     # (i.e. the tensor has its determinant equal to 0)
@@ -1255,10 +1379,12 @@ defmodule Torchx.Backend do
     #
     # a non-zero eps value is chosen so we can account for possible rounding errors
     # in the determinant calculation
+
+    det = Torchx.determinant(tensor)
+    abs_det = Torchx.abs(det)
+
     is_singular =
-      tensor
-      |> Torchx.determinant()
-      |> Torchx.abs()
+      abs_det
       |> Torchx.less_equal(eps)
       |> Torchx.all()
       |> Torchx.to_nx()
@@ -1366,10 +1492,11 @@ defmodule Torchx.Backend do
 
     pad_config = flatten_padding(padding)
 
+    {device, _} = k_tx = from_nx(k)
+
     k_tx =
-      k
-      |> from_nx()
-      |> Torchx.to_type(to_torch_type(type))
+      k_tx
+      |> Torchx.to_type(to_torch_type(type, device))
       |> permute.(kernel_permutation)
 
     t
@@ -1377,7 +1504,7 @@ defmodule Torchx.Backend do
     |> permute.(input_permutation)
     |> pad_internal(input_inner_pads)
     |> pad_zero(pad_config)
-    |> Torchx.to_type(to_torch_type(type))
+    |> Torchx.to_type(to_torch_type(type, device))
     |> do_conv(k_tx, strides, kernel_dilation, feature_groups, type)
     |> permute.(output_permutation)
     |> to_nx(out)
@@ -1412,7 +1539,8 @@ defmodule Torchx.Backend do
     real_k = get_complex_component_tx(k_tx, k_shape, :real)
     imag_k = get_complex_component_tx(k_tx, k_shape, :imag)
 
-    real_type = type |> Nx.Type.to_real() |> to_torch_type()
+    {device, _} = k_tx
+    real_type = type |> Nx.Type.to_real() |> to_torch_type(device)
 
     real_part =
       Torchx.subtract(
@@ -1427,7 +1555,7 @@ defmodule Torchx.Backend do
         do_conv(imag_t, real_k, strides, kernel_dilation, feature_groups, real_type)
       )
 
-    i = Torchx.scalar_tensor({0.0, 1.0}, :complex, {device, -1})
+    i = Torchx.scalar_tensor({0.0, 1.0}, :complex, device)
 
     imag_part
     |> Torchx.multiply(i)
@@ -1511,8 +1639,6 @@ defmodule Torchx.Backend do
   end
 
   defp window_scatter_function(function, out, tensor, source, init_value, window_dims_tuple, opts) do
-    {device, _} = from_nx(tensor)
-
     unfold_flat = fn tensor ->
       {device, _} = t_tx = from_nx(tensor)
       window_dilations = List.duplicate(1, tuple_size(window_dims_tuple))
@@ -1526,7 +1652,7 @@ defmodule Torchx.Backend do
           window_dims_tuple,
           opts[:strides],
           window_dilations,
-          to_torch_type(out.type)
+          to_torch_type(out.type, device)
         )
         |> Torchx.to_nx()
 
@@ -1595,7 +1721,7 @@ defmodule Torchx.Backend do
         window_dims_tuple,
         opts[:strides],
         opts[:window_dilations],
-        to_torch_type(out.type)
+        to_torch_type(out.type, device)
       )
 
     axes =
@@ -1606,7 +1732,9 @@ defmodule Torchx.Backend do
     reduce_fun
     |> apply([t_tx, axes])
     |> Torchx.reshape(out.shape)
-    |> Torchx.to_type(to_torch_type(out.type))
+    |> then(fn result_tx ->
+      Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
+    end)
     |> to_nx(out)
   end
 
@@ -1670,7 +1798,7 @@ defmodule Torchx.Backend do
         do: <<x::size(output_size)-signed-native>>
 
     blob
-    |> Torchx.from_blob(out.shape, to_torch_type(out.type), device)
+    |> Torchx.from_blob(out.shape, to_torch_type(out.type, device), device)
     |> to_nx(out)
   end
 
@@ -1678,7 +1806,7 @@ defmodule Torchx.Backend do
   def bitcast(out, %T{data: %TB{ref: {device, _}}} = tensor) do
     tensor
     |> to_binary(Nx.size(tensor))
-    |> Torchx.from_blob(out.shape, to_torch_type(out.type), device)
+    |> Torchx.from_blob(out.shape, to_torch_type(out.type, device), device)
     |> to_nx(out)
   end
 
@@ -1727,7 +1855,19 @@ defmodule Torchx.Backend do
         device_ref
       end
 
-    %{t | data: %__MODULE__{ref: check_shape_and_type!(t_tx, shape, type)}}
+    # Adjust type if MPS downgraded it (f64->f32 or c128->c64)
+    adjusted_type =
+      case {type, device} do
+        {{:f, 64}, :mps} -> {:f, 32}
+        {{:c, 128}, :mps} -> {:c, 64}
+        _ -> type
+      end
+
+    %{
+      t
+      | type: adjusted_type,
+        data: %__MODULE__{ref: check_shape_and_type!(t_tx, shape, adjusted_type)}
+    }
   end
 
   @doc false
@@ -1745,7 +1885,14 @@ defmodule Torchx.Backend do
   def from_torch_type(:complex), do: {:c, 64}
   def from_torch_type(:complex_double), do: {:c, 128}
 
-  defp to_torch_type(nx_type, hint \\ "")
+  # Helper to extract device from a torchx tensor reference
+  defp device_from_ref({device, _ref}), do: device
+
+  # Convert Nx type to Torch type, with optional MPS downgrading
+  # MPS doesn't support f64 or c128, so we downgrade them
+  defp to_torch_type({:f, 64}, :mps), do: :float
+  defp to_torch_type({:c, 128}, :mps), do: :complex
+
   defp to_torch_type({:u, 2}, _), do: :byte
   defp to_torch_type({:u, 4}, _), do: :byte
   defp to_torch_type({:u, 8}, _), do: :byte
@@ -1767,27 +1914,35 @@ defmodule Torchx.Backend do
   defp to_torch_type({:c, 128}, _), do: :complex_double
 
   if Application.compile_env(:torchx, :check_shape_and_type, false) do
-    defp check_shape_and_type!(device_ref, shape, type) do
+    defp check_shape_and_type!({device, _} = device_ref, shape, type) do
       current_type = Torchx.scalar_type(device_ref) |> from_torch_type()
 
-      case {current_type, type} do
-        {{:s, 8}, {:s, qint}} when qint in [2, 4] ->
+      case {current_type, type, device} do
+        {{:s, 8}, {:s, qint}, _} when qint in [2, 4] ->
           :ok
 
-        {{:u, 8}, {:u, qint}} when qint in [2, 4] ->
+        {{:u, 8}, {:u, qint}, _} when qint in [2, 4] ->
           :ok
 
-        {{:s, 32}, {:u, 16}} ->
+        {{:s, 32}, {:u, 16}, _} ->
           :ok
 
-        {{:s, 64}, {:u, 32}} ->
+        {{:s, 64}, {:u, 32}, _} ->
           :ok
 
-        {{:s, 64}, {:u, 64}} ->
+        {{:s, 64}, {:u, 64}, _} ->
           :ok
 
-        _ when current_type != type ->
-          raise "type mismatch in Torchx: expected #{inspect(type)}, got: #{inspect(current_type)}. " <>
+        # MPS doesn't support f64, so it's downgraded to f32
+        {{:f, 32}, {:f, 64}, :mps} ->
+          :ok
+
+        # MPS doesn't support c128, so it's downgraded to c64
+        {{:c, 64}, {:c, 128}, :mps} ->
+          :ok
+
+        {ct, t, _} when ct != t ->
+          raise "type mismatch in Torchx: expected #{inspect(t)}, got: #{inspect(ct)}. " <>
                   "Please report this bug"
 
         _ ->
@@ -1815,8 +1970,8 @@ defmodule Torchx.Backend do
   defp to_typed_ref(tensor, expected_type, expected_type),
     do: tensor
 
-  defp to_typed_ref(tensor, _ref_type, expected_type),
-    do: Torchx.to_type(tensor, to_torch_type(expected_type))
+  defp to_typed_ref({device, _} = tensor, _ref_type, expected_type),
+    do: Torchx.to_type(tensor, to_torch_type(expected_type, device))
 
   defp device_option(nil), do: Torchx.default_device()
   defp device_option(backend_opts), do: backend_opts[:device] || Torchx.default_device()

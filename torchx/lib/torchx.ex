@@ -466,7 +466,9 @@ defmodule Torchx do
           ref
 
         {other_dev, ref} when is_tensor(other_dev, ref) ->
-          raise ArgumentError, "cannot perform operation across devices #{dev} and #{other_dev}"
+          # Auto-transfer tensor to target device
+          {^dev, new_ref} = Torchx.to_device({other_dev, ref}, dev)
+          new_ref
 
         bad_tensor ->
           raise ArgumentError, "expected a Torchx tensor, got: #{inspect(bad_tensor)}"
@@ -484,7 +486,9 @@ defmodule Torchx do
         {ref, dev}
 
       {dev, ref}, other_dev when is_tensor(dev, ref) ->
-        raise ArgumentError, "cannot perform operation across devices #{dev} and #{other_dev}"
+        # Auto-transfer tensor to target device
+        {^other_dev, new_ref} = Torchx.to_device({dev, ref}, other_dev)
+        {new_ref, other_dev}
 
       [{dev, ref} | _] = tensors, nil when is_tensor(dev, ref) ->
         prepare_tensors_list!(tensors, dev)

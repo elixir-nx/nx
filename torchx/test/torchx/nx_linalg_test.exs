@@ -49,6 +49,7 @@ defmodule Torchx.NxLinAlgTest do
       assert_all_close(result, Nx.tensor([1.33333337, -0.6666666, 2.6666667, -1.33333]))
     end
 
+    @tag :skip_on_mps
     test "base case 1D (f64)" do
       a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
       %{type: {:f, 64}} = result = Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]))
@@ -145,6 +146,7 @@ defmodule Torchx.NxLinAlgTest do
       assert_all_close(result, Nx.tensor([1.33333337, -0.6666666, 2.6666667, -1.33333]))
     end
 
+    @tag :skip_on_mps
     test "base case 1D (f64)" do
       a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
       %{type: {:f, 64}} = result = Nx.LinAlg.solve(a, Nx.tensor([1, 2, 1]))
@@ -185,6 +187,7 @@ defmodule Torchx.NxLinAlgTest do
   end
 
   describe "qr" do
+    @tag :skip_on_mps
     test "property" do
       for _ <- 1..10, type <- [{:f, 32}, {:c, 64}] do
         square = random_uniform({4, 4}, type: type)
@@ -202,6 +205,7 @@ defmodule Torchx.NxLinAlgTest do
       end
     end
 
+    @tag :skip_on_mps
     test "rectangular matrix" do
       t = Nx.tensor([[1.0, -1.0, 4.0], [1.0, 4.0, -2.0], [1.0, 4.0, 2.0], [1.0, -1.0, 0.0]])
       {q, r} = Nx.LinAlg.qr(t, mode: :reduced)
@@ -210,6 +214,7 @@ defmodule Torchx.NxLinAlgTest do
   end
 
   describe "lu" do
+    @tag :skip_on_mps
     test "property" do
       for _ <- 1..20, type <- [{:f, 32}, {:c, 64}] do
         a = random_uniform({3, 3}, type: type)
@@ -223,6 +228,7 @@ defmodule Torchx.NxLinAlgTest do
   end
 
   describe "eigh" do
+    @tag :skip_on_mps
     test "property" do
       for _ <- 1..20 do
         a = random_uniform({3, 3}) |> then(&Nx.add(&1, Nx.transpose(&1)))
