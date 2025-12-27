@@ -1528,13 +1528,15 @@ defmodule Torchx.Backend do
       |> then(unfold_flat)
       |> then(function)
 
+    {device, _} = from_nx(tensor)
+
     indices_to_flatten =
       tensor
       |> Nx.axes()
       |> Enum.map(fn axis ->
         tensor
         |> Nx.shape()
-        |> Nx.iota(axis: axis, backend: Torchx.Backend)
+        |> Nx.iota(axis: axis, backend: {Torchx.Backend, device: device})
         |> then(unfold_flat)
         |> Nx.take_along_axis(Nx.new_axis(arg_idx, -1), axis: -1)
       end)
