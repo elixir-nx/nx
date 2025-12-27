@@ -1238,7 +1238,16 @@ defmodule Torchx.Backend do
   end
 
   defp check_singular_matrix(tensor) do
-    eps = 1.0e-10 |> Nx.tensor() |> Torchx.from_nx()
+    {device, _} = tensor
+
+    type =
+      tensor
+      |> Torchx.scalar_type()
+      |> from_torch_type()
+      |> Nx.Type.to_real()
+      |> to_torch_type()
+
+    eps = Torchx.scalar_tensor(1.0e-10, type, device)
 
     # We need to manually validate if the A tensor is singular
     # (i.e. the tensor has its determinant equal to 0)
@@ -1431,24 +1440,34 @@ defmodule Torchx.Backend do
 
   @impl true
   def window_max(out, tensor, window_dims_tuple, opts) do
+    {device, _} = from_nx(tensor)
+
+    pad_constant =
+      Nx.Constants.min(tensor.type, backend: {Torchx.Backend, device: device}) |> from_nx()
+
     window_op(
       out,
       tensor,
       window_dims_tuple,
       opts,
-      Nx.Constants.min(tensor.type) |> from_nx(),
+      pad_constant,
       &Torchx.amax(&1, &2, false)
     )
   end
 
   @impl true
   def window_min(out, tensor, window_dims_tuple, opts) do
+    {device, _} = from_nx(tensor)
+
+    pad_constant =
+      Nx.Constants.max(tensor.type, backend: {Torchx.Backend, device: device}) |> from_nx()
+
     window_op(
       out,
       tensor,
       window_dims_tuple,
       opts,
-      Nx.Constants.max(tensor.type) |> from_nx(),
+      pad_constant,
       &Torchx.amin(&1, &2, false)
     )
   end
@@ -1492,6 +1511,8 @@ defmodule Torchx.Backend do
   end
 
   defp window_scatter_function(function, out, tensor, source, init_value, window_dims_tuple, opts) do
+    {device, _} = from_nx(tensor)
+
     unfold_flat = fn tensor ->
       {device, _} = t_tx = from_nx(tensor)
       window_dilations = List.duplicate(1, tuple_size(window_dims_tuple))
@@ -1549,7 +1570,7 @@ defmodule Torchx.Backend do
     flat_source = Nx.flatten(source)
 
     init_value
-    |> Nx.backend_transfer(Torchx.Backend)
+    |> Nx.backend_transfer({Torchx.Backend, device: device})
     |> Nx.broadcast(out.shape)
     |> Nx.indexed_add(indices, flat_source)
     |> Nx.as_type(out.type)
