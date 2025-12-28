@@ -74,12 +74,12 @@ defmodule Torchx.Backend do
       # Use custom Torchx implementation for CPU and supported operations
       case function_name do
         :qr -> apply(&qr_impl/2, args)
-        :lu -> apply(&lu_impl/3, args)
-        :eigh -> apply(&eigh_impl/3, args)
+        :lu -> apply(&lu_impl/2, args)
+        :eigh -> apply(&eigh_impl/2, args)
         :solve -> apply(&solve_impl/2, args)
-        :cholesky -> apply(&cholesky_impl/2, args)
+        :cholesky -> apply(&cholesky_impl/1, args)
         :svd -> apply(&svd_impl/2, args)
-        :determinant -> apply(&determinant_impl/2, args)
+        :determinant -> apply(&determinant_impl/1, args)
         _ -> apply(default_impl, args)
       end
     end
@@ -224,12 +224,26 @@ defmodule Torchx.Backend do
 
   @impl true
   def to_binary(tensor, limit) do
+    {device, _} = from_nx(tensor)
     blob = Torchx.to_blob(from_nx(tensor), limit)
 
-    case tensor.type do
-      {:u, 16} -> for <<x::32-native <- blob>>, do: <<x::16-native>>, into: <<>>
-      {:u, 32} -> for <<x::64-native <- blob>>, do: <<x::32-native>>, into: <<>>
-      _ -> blob
+    case {tensor.type, device} do
+      {{:u, 16}, _} ->
+        for <<x::32-native <- blob>>, do: <<x::16-native>>, into: <<>>
+
+      {{:u, 32}, _} ->
+        for <<x::64-native <- blob>>, do: <<x::32-native>>, into: <<>>
+
+      {{:f, 64}, :mps} ->
+        for <<x::float-32-native <- blob>>, into: <<>>, do: <<x::float-64-native>>
+
+      {{:c, 128}, :mps} ->
+        for <<r::float-32-native, i::float-32-native <- blob>>,
+          into: <<>>,
+          do: <<r::float-64-native, i::float-64-native>>
+
+      _ ->
+        blob
     end
   end
 
@@ -715,14 +729,18 @@ defmodule Torchx.Backend do
     result_tx
   end
 
-  defp determinant_impl(out, tensor) do
-    {device, _} = from_nx(tensor)
+  defp determinant_impl(tensor) do
+    tensor =
+      if Nx.Type.integer?(tensor.type) do
+        Nx.as_type(tensor, {:f, 32})
+      else
+        tensor
+      end
 
     tensor
     |> from_nx()
-    |> Torchx.to_type(to_torch_type(out.type, device))
     |> Torchx.determinant()
-    |> to_nx(out)
+    |> create_tensor()
   end
 
   @impl true
@@ -1150,23 +1168,27 @@ defmodule Torchx.Backend do
     |> translate_to_inner_axes(batch_axes)
   end
 
-  defp cholesky_impl(%T{} = out, %T{} = t) do
+  defp cholesky_impl(t) do
     t
     |> from_nx()
     |> Torchx.cholesky()
-    |> to_nx(out)
+    |> create_tensor()
   end
 
-  defp eigh_impl({eigenvals, eigenvecs}, tensor, _opts) do
-    {device, _} = from_nx(tensor)
+  defp eigh_impl(tensor, _opts) do
+    tensor =
+      if Nx.Type.integer?(tensor.type) do
+        Nx.as_type(tensor, {:f, 32})
+      else
+        tensor
+      end
 
     {q, r} =
       tensor
       |> from_nx()
-      |> Torchx.to_type(to_torch_type(eigenvecs.type, device))
       |> Torchx.eigh()
 
-    {to_nx(q, eigenvals), to_nx(r, eigenvecs)}
+    {create_tensor(q), create_tensor(r)}
   end
 
   defp qr_impl(tensor, opts) do
@@ -1231,35 +1253,20 @@ defmodule Torchx.Backend do
     end
   end
 
-  defp lu_impl(
-         {p_holder, %{type: output_type} = l_holder, %{type: output_type} = u_holder},
-         tensor,
-         _opts
-       ) do
-    {device, _} = tensor_ref = from_nx(tensor)
-    out_type = to_torch_type(output_type, device)
+  defp lu_impl(tensor, _opts) do
+    tensor =
+      if Nx.Type.integer?(tensor.type) do
+        Nx.as_type(tensor, {:f, 32})
+      else
+        tensor
+      end
 
     {p_tx, l_tx, u_tx} =
-      tensor_ref
-      |> Torchx.to_type(out_type)
+      tensor
+      |> from_nx()
       |> Torchx.lu()
 
-    p_type = to_torch_type(p_holder.type, device)
-
-    # p_type can be an integer type, but we can
-    # demote the floating-point torch tensor
-    # without any loss because p_tx is a tensor
-    # of zeros or ones only
-
-    p =
-      p_tx
-      |> Torchx.to_type(p_type)
-      |> to_nx(p_holder)
-
-    l = to_nx(l_tx, l_holder)
-    u = to_nx(u_tx, u_holder)
-
-    {p, l, u}
+    {create_tensor(p_tx), create_tensor(l_tx), create_tensor(u_tx)}
   end
 
   @impl true
