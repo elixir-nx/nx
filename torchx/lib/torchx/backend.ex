@@ -51,7 +51,7 @@ defmodule Torchx.Backend do
   @impl true
   def optional(function_name, args, default_impl) do
     # For MPS device, some linear algebra operations are not supported
-    # Delegate to default implementation which will fall back to BinaryBackend
+    # Delegate to default implementation which will fall back to elementary Nx operations.
     mps_unsupported = [
       :lu,
       :eigh,
@@ -234,14 +234,6 @@ defmodule Torchx.Backend do
       {{:u, 32}, _} ->
         for <<x::64-native <- blob>>, do: <<x::32-native>>, into: <<>>
 
-      {{:f, 64}, :mps} ->
-        for <<x::float-32-native <- blob>>, into: <<>>, do: <<x::float-64-native>>
-
-      {{:c, 128}, :mps} ->
-        for <<r::float-32-native, i::float-32-native <- blob>>,
-          into: <<>>,
-          do: <<r::float-64-native, i::float-64-native>>
-
       _ ->
         blob
     end
@@ -266,20 +258,9 @@ defmodule Torchx.Backend do
     Torchx.to_device(from_nx(tensor), device_option(opts)) |> to_nx(tensor)
   end
 
-  def backend_copy(%T{type: type} = tensor, backend, opts) do
-    {device, _} = from_nx(tensor)
+  def backend_copy(%T{} = tensor, backend, opts) do
     blob = Torchx.to_blob(from_nx(tensor))
-
-    # When copying from Torchx to another backend, we need to adjust the tensor type
-    # if MPS downgraded it (f64->f32 or c128->c64)
-    adjusted_tensor =
-      case {type, device} do
-        {{:f, 64}, :mps} -> %{tensor | type: {:f, 32}}
-        {{:c, 128}, :mps} -> %{tensor | type: {:c, 64}}
-        _ -> tensor
-      end
-
-    backend.from_binary(adjusted_tensor, blob, opts)
+    backend.from_binary(tensor, blob, opts)
   end
 
   @impl true
@@ -287,37 +268,14 @@ defmodule Torchx.Backend do
     device = device_option(backend_options)
     torch_type = to_torch_type(type, device)
 
-    # Handle type downgrading for MPS - need to convert binary data format
-    {adjusted_binary, adjusted_type, adjusted_out} =
-      case {type, torch_type, device} do
-        # f64 -> f32 downgrade on MPS: convert binary from float64 to float32
-        {{:f, 64}, :float, :mps} ->
-          bin = for <<x::float-64-native <- binary>>, into: <<>>, do: <<x::float-32-native>>
-          {bin, {:f, 32}, %{out | type: {:f, 32}}}
-
-        # c128 -> c64 downgrade on MPS: convert binary from complex128 to complex64
-        {{:c, 128}, :complex, :mps} ->
-          bin =
-            for <<r::float-64-native, i::float-64-native <- binary>>,
-              into: <<>>,
-              do: <<r::float-32-native, i::float-32-native>>
-
-          {bin, {:c, 64}, %{out | type: {:c, 64}}}
-
-        # No downgrade needed
-        _ ->
-          {binary, type, out}
-      end
-
-    # Create tensor with adjusted type
-    adjusted_binary
-    |> maybe_pad_binary(adjusted_type)
+    binary
+    |> maybe_pad_binary(type)
     |> Torchx.from_blob(
       shape,
       torch_type,
       device
     )
-    |> to_nx(adjusted_out)
+    |> to_nx(out)
   end
 
   defp maybe_pad_binary(bin, {:u, size}) when size in [16, 32] do
@@ -347,8 +305,6 @@ defmodule Torchx.Backend do
     device = device_from_ref(t_tx)
     target_torch_type = to_torch_type(type, device)
 
-    # For MPS with f64/c128, the torch type is downgraded but we still need
-    # to present the tensor metadata as the requested type
     t_tx
     |> Torchx.to_type(target_torch_type)
     |> bitmask(type)
@@ -1469,7 +1425,7 @@ defmodule Torchx.Backend do
     # Use a more lenient epsilon to account for rounding in conversions
     epsilon_value =
       case torch_type do
-        # f32 - more lenient for downgraded f64
+        # f32
         :float -> 1.0e-4
         # f64
         :double -> 1.0e-10
@@ -1985,10 +1941,8 @@ defmodule Torchx.Backend do
   # Helper to extract device from a torchx tensor reference
   defp device_from_ref({device, _ref}), do: device
 
-  # Convert Nx type to Torch type, with optional MPS downgrading
-  # MPS doesn't support f64 or c128, so we downgrade them
-  defp to_torch_type({:f, 64}, :mps), do: :float
-  defp to_torch_type({:c, 128}, :mps), do: :complex
+  defp to_torch_type({:f, 64}, :mps), do: raise(ArgumentError, "MPS does not support f64")
+  defp to_torch_type({:c, 128}, :mps), do: raise(ArgumentError, "MPS does not support c128")
 
   defp to_torch_type({:u, 2}, _), do: :byte
   defp to_torch_type({:u, 4}, _), do: :byte
@@ -2028,14 +1982,6 @@ defmodule Torchx.Backend do
           :ok
 
         {{:s, 64}, {:u, 64}, _} ->
-          :ok
-
-        # MPS doesn't support f64, so it's downgraded to f32
-        {{:f, 32}, {:f, 64}, :mps} ->
-          :ok
-
-        # MPS doesn't support c128, so it's downgraded to c64
-        {{:c, 64}, {:c, 128}, :mps} ->
           :ok
 
         {ct, t, _} when ct != t ->

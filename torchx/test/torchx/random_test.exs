@@ -122,8 +122,7 @@ defmodule Torchx.Nx.RandomTest do
       )
     end
 
-    # MPS downgrades f64 to f32, so this test would fail
-    @tag :skip_on_mps
+    @tag :mps_f64_not_supported
     test "uniform f64 upcast" do
       key = Nx.Random.key(44)
 
