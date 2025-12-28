@@ -228,7 +228,33 @@ defmodule Torchx do
   def eye(size, type, device), do: eye(size, size, type, device)
   defdevice eye(m, n, type, device)
   defdevice from_blob(blob, shape, type, device)
-  defdevice to_device(tensor, device)
+
+  @torch_function {:to_device, 2}
+  def to_device(tensor, device) do
+    {[tensor_ref], current_device} = prepare_tensors!([tensor])
+    {user_device, index} = normalize_device!(device)
+    target_device_struct = torch_device!(user_device, index)
+
+    tensor_to_move =
+      if user_device == :mps do
+        case Torchx.NIF.scalar_type(tensor_ref) do
+          {:ok, :double} ->
+            {_, new_ref} = Torchx.to_type({current_device, tensor_ref}, :float)
+            new_ref
+
+          _ ->
+            tensor_ref
+        end
+      else
+        tensor_ref
+      end
+
+    case user_device do
+      :cpu -> Torchx.NIF.to_device_cpu(tensor_to_move, target_device_struct)
+      _ -> Torchx.NIF.to_device_io(tensor_to_move, target_device_struct)
+    end
+    |> unwrap_tensor!(user_device)
+  end
 
   ## Manipulation
 

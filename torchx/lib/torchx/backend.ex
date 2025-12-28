@@ -52,7 +52,16 @@ defmodule Torchx.Backend do
   def optional(function_name, args, default_impl) do
     # For MPS device, some linear algebra operations are not supported
     # Delegate to default implementation which will fall back to BinaryBackend
-    mps_unsupported = [:qr, :lu, :eigh, :solve]
+    mps_unsupported = [
+      :qr,
+      :lu,
+      :eigh,
+      :solve,
+      :determinant,
+      :svd,
+      :cholesky,
+      :matrix_power
+    ]
 
     device =
       case args do
@@ -70,6 +79,9 @@ defmodule Torchx.Backend do
         :lu -> apply(&lu_impl/3, args)
         :eigh -> apply(&eigh_impl/3, args)
         :solve -> apply(&solve_impl/2, args)
+        :cholesky -> apply(&cholesky_impl/2, args)
+        :svd -> apply(&svd_impl/3, args)
+        :determinant -> apply(&determinant_impl/2, args)
         _ -> apply(default_impl, args)
       end
     end
@@ -471,7 +483,7 @@ defmodule Torchx.Backend do
     shape = tensor.shape
 
     indices_rank = tuple_size(indices.shape)
-    transpose_axes = [indices_rank - 1 | Enum.to_list(0..(indices_rank - 2))]
+    transpose_axes = [indices_rank - 1 | Enum.to_list(0..(indices_rank - 2)//1)]
     indices = Nx.transpose(indices, axes: transpose_axes)
 
     n = elem(indices.shape, 0)
@@ -705,8 +717,7 @@ defmodule Torchx.Backend do
     result_tx
   end
 
-  @impl true
-  def determinant(out, tensor) do
+  defp determinant_impl(out, tensor) do
     {device, _} = from_nx(tensor)
 
     tensor
@@ -1141,8 +1152,7 @@ defmodule Torchx.Backend do
     |> translate_to_inner_axes(batch_axes)
   end
 
-  @impl true
-  def cholesky(%T{} = out, %T{} = t) do
+  defp cholesky_impl(%T{} = out, %T{} = t) do
     t
     |> from_nx()
     |> Torchx.cholesky()
@@ -1173,8 +1183,7 @@ defmodule Torchx.Backend do
     {to_nx(q, q_holder), to_nx(r, r_holder)}
   end
 
-  @impl true
-  def svd({u_holder, s_holder, vt_holder}, tensor, opts) do
+  defp svd_impl({u_holder, s_holder, vt_holder}, tensor, opts) do
     {device, _} = from_nx(tensor)
 
     {u, s, vt} =
@@ -1320,13 +1329,26 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def triangular_solve(%T{} = out, %T{} = a, %T{} = b, opts) do
+  def triangular_solve(out, a, b, opts) do
+    {device, _} = from_nx(a)
+
+    if device == :mps do
+      a_cpu = backend_transfer(a, Torchx.Backend, device: :cpu)
+      b_cpu = backend_transfer(b, Torchx.Backend, device: :cpu)
+      res_cpu = triangular_solve_impl(out, a_cpu, b_cpu, opts)
+      backend_transfer(res_cpu, Torchx.Backend, device: :mps)
+    else
+      triangular_solve_impl(out, a, b, opts)
+    end
+  end
+
+  defp triangular_solve_impl(%T{} = out, %T{} = a, %T{} = b, opts) do
     transform = opts[:transform_a]
     upper = !opts[:lower]
     left_side = opts[:left_side]
 
-    # We can support this eventually, but we'd need
-    # to apply the same permutations BinaryBackend applies,
+    # We can support this eventually, but we'd need to
+    # apply the same permutations BinaryBackend applies,
     # because this is not natively supported by libtorch
     unless left_side do
       raise ArgumentError, "left_side: false option not supported in Torchx"
