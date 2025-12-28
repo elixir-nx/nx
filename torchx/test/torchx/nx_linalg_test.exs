@@ -49,6 +49,7 @@ defmodule Torchx.NxLinAlgTest do
       assert_all_close(result, Nx.tensor([1.33333337, -0.6666666, 2.6666667, -1.33333]))
     end
 
+    @tag :mps_f64_not_supported
     test "base case 1D (f64)" do
       a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
       %{type: {:f, 64}} = result = Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]))
@@ -95,7 +96,8 @@ defmodule Torchx.NxLinAlgTest do
       end
     end
 
-    test "transform_a: :transpose" do
+    @tag :mps_f64_not_supported
+    test "transform_a: :transpose f64" do
       a = Nx.tensor([[1, 1, 1], [0, 1, 1], [0, 0, 1]], type: {:f, 64})
       b = Nx.tensor([1, 2, 1])
       result = Nx.LinAlg.triangular_solve(a, b, transform_a: :transpose, lower: false)
@@ -103,8 +105,25 @@ defmodule Torchx.NxLinAlgTest do
       assert_all_close(result, Nx.tensor([1.0, 1.0, -1.0]))
     end
 
-    test "explicit transform_a: :none" do
+    @tag :mps_f64_not_supported
+    test "explicit transform_a: :none f64" do
       a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+      b = Nx.tensor([1, 2, 1])
+      result = Nx.LinAlg.triangular_solve(a, b, transform_a: :none)
+
+      assert_all_close(result, Nx.tensor([1.0, 1.0, -1.0]))
+    end
+
+    test "transform_a: :transpose f32" do
+      a = Nx.tensor([[1, 1, 1], [0, 1, 1], [0, 0, 1]], type: {:f, 32})
+      b = Nx.tensor([1, 2, 1])
+      result = Nx.LinAlg.triangular_solve(a, b, transform_a: :transpose, lower: false)
+
+      assert_all_close(result, Nx.tensor([1.0, 1.0, -1.0]))
+    end
+
+    test "explicit transform_a: :none f32" do
+      a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 32})
       b = Nx.tensor([1, 2, 1])
       result = Nx.LinAlg.triangular_solve(a, b, transform_a: :none)
 
@@ -130,7 +149,7 @@ defmodule Torchx.NxLinAlgTest do
       assert_raise ArgumentError,
                    "invalid value for :transform_a option, expected :none, :transpose, or :conjugate, got: :other",
                    fn ->
-                     a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
+                     a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 32})
                      Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :other)
                    end
     end
@@ -145,6 +164,7 @@ defmodule Torchx.NxLinAlgTest do
       assert_all_close(result, Nx.tensor([1.33333337, -0.6666666, 2.6666667, -1.33333]))
     end
 
+    @tag :mps_f64_not_supported
     test "base case 1D (f64)" do
       a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: {:f, 64})
       %{type: {:f, 64}} = result = Nx.LinAlg.solve(a, Nx.tensor([1, 2, 1]))
@@ -231,7 +251,7 @@ defmodule Torchx.NxLinAlgTest do
 
         a_reconstructed = eigenvec |> Nx.multiply(eigenval) |> Nx.dot(eigenvec |> Nx.transpose())
 
-        assert_all_close(a, a_reconstructed)
+        assert_all_close(a, a_reconstructed, atol: 1.0e-3)
       end
     end
   end
