@@ -359,15 +359,18 @@ fine::Ok<fine::ResourcePtr<TorchTensor>>
 index_put(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> input,
           std::vector<fine::ResourcePtr<TorchTensor>> indices,
           fine::ResourcePtr<TorchTensor> values, bool accumulate) {
+  TORCH_CATCH_ERROR(
+      [&]() {
+        c10::List<std::optional<at::Tensor>> torch_indices;
+        for (const auto &idx : indices) {
+          torch_indices.push_back(get_tensor(idx));
+        }
 
-  c10::List<std::optional<at::Tensor>> torch_indices;
-  for (const auto &idx : indices) {
-    torch_indices.push_back(get_tensor(idx));
-  }
-
-  torch::Tensor result = get_tensor(input).clone();
-  result.index_put_(torch_indices, get_tensor(values), accumulate);
-  return tensor_ok(result);
+        torch::Tensor result = get_tensor(input).clone();
+        result.index_put_(torch_indices, get_tensor(values), accumulate);
+        return tensor_ok(result);
+      }(),
+      "index_put");
 }
 
 REGISTER_TENSOR_NIF(index_put);

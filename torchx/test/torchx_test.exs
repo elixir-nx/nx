@@ -307,6 +307,8 @@ defmodule TorchxTest do
       assert {%{shape: {4, 4}} = u, %{shape: {4}} = s, %{shape: {4, 10}} = vt} =
                Nx.LinAlg.svd(t, full_matrices?: false)
 
+      dbg({u, s, vt})
+
       assert_all_close(t, u |> Nx.multiply(s) |> Nx.dot(vt))
 
       assert {%{shape: {4, 4}} = u, %{shape: {4}} = s, %{shape: {10, 10}} = vt} =

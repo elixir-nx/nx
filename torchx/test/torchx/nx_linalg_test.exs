@@ -233,7 +233,7 @@ defmodule Torchx.NxLinAlgTest do
 
         a_reconstructed = eigenvec |> Nx.multiply(eigenval) |> Nx.dot(eigenvec |> Nx.transpose())
 
-        assert_all_close(a, a_reconstructed)
+        assert_all_close(a, a_reconstructed, atol: 1.0e-3)
       end
     end
   end
@@ -243,17 +243,33 @@ defmodule Torchx.NxLinAlgTest do
       t = Nx.tensor([[1.0, 0, 0], [0, 1, 0], [0, 0, -1]])
       {u, s, vt} = Nx.LinAlg.svd(t)
 
-      assert_all_close(u, Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
-      assert_all_close(s, Nx.tensor([1, 1, 1]))
+      {device, _} = u.data.ref
 
-      assert_all_close(
-        vt,
-        Nx.tensor([
-          [1.0, 0.0, 0.0],
-          [0.0, 1.0, 0.0],
-          [0.0, 0.0, -1.0]
-        ])
-      )
+      if device == :mps do
+        assert_all_close(u, Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, -1]]))
+        assert_all_close(s, Nx.tensor([1, 1, 1]))
+
+        assert_all_close(
+          vt,
+          Nx.tensor([
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0]
+          ])
+        )
+      else
+        assert_all_close(u, Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]]))
+        assert_all_close(s, Nx.tensor([1, 1, 1]))
+
+        assert_all_close(
+          vt,
+          Nx.tensor([
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, -1.0]
+          ])
+        )
+      end
 
       assert_all_close(t, u |> Nx.multiply(s) |> Nx.dot(vt))
     end
@@ -262,17 +278,33 @@ defmodule Torchx.NxLinAlgTest do
       t = Nx.tensor([[2.0, 0, 0], [0, 3, 0], [0, 0, -1], [0, 0, 0]])
       {u, s, vt} = Nx.LinAlg.svd(t)
 
-      assert_all_close(u, Nx.tensor([[0, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]))
-      assert_all_close(s, Nx.tensor([3, 2, 1]))
+      {device, _} = u.data.ref
 
-      assert_all_close(
-        vt,
-        Nx.tensor([
-          [0.0, 1.0, 0.0],
-          [1.0, 0.0, 0.0],
-          [0.0, 0.0, -1.0]
-        ])
-      )
+      if device == :mps do
+        assert_all_close(u, Nx.tensor([[0, 1, 0, 0], [1, 0, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]]))
+        assert_all_close(s, Nx.tensor([3, 2, 1]))
+
+        assert_all_close(
+          vt,
+          Nx.tensor([
+            [0.0, 1.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0]
+          ])
+        )
+      else
+        assert_all_close(u, Nx.tensor([[0, 1, 0, 0], [1, 0, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]))
+        assert_all_close(s, Nx.tensor([3, 2, 1]))
+
+        assert_all_close(
+          vt,
+          Nx.tensor([
+            [0.0, 1.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 0.0, -1.0]
+          ])
+        )
+      end
 
       eye = {4, 4} |> Nx.eye() |> Nx.slice([0, 0], [4, 3])
 

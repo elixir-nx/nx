@@ -53,7 +53,6 @@ defmodule Torchx.Backend do
     # For MPS device, some linear algebra operations are not supported
     # Delegate to default implementation which will fall back to BinaryBackend
     mps_unsupported = [
-      :qr,
       :lu,
       :eigh,
       :solve,
@@ -75,7 +74,7 @@ defmodule Torchx.Backend do
     else
       # Use custom Torchx implementation for CPU and supported operations
       case function_name do
-        :qr -> apply(&qr_impl/3, args)
+        :qr -> apply(&qr_impl/2, args)
         :lu -> apply(&lu_impl/3, args)
         :eigh -> apply(&eigh_impl/3, args)
         :solve -> apply(&solve_impl/2, args)
@@ -1171,16 +1170,37 @@ defmodule Torchx.Backend do
     {to_nx(q, eigenvals), to_nx(r, eigenvecs)}
   end
 
-  defp qr_impl({q_holder, r_holder}, tensor, opts) do
+  defp qr_impl(tensor, opts) do
     {device, _} = from_nx(tensor)
 
-    {q, r} =
-      tensor
-      |> from_nx()
-      |> Torchx.to_type(to_torch_type(q_holder.type, device))
-      |> Torchx.qr(opts[:mode] == :reduced)
+    if device == :mps do
+      cpu_tensor = backend_copy(tensor, __MODULE__, device: :cpu)
+      {q_cpu, r_cpu} = qr_impl(cpu_tensor, opts)
 
-    {to_nx(q, q_holder), to_nx(r, r_holder)}
+      {
+        backend_copy(q_cpu, __MODULE__, device: :mps),
+        backend_copy(r_cpu, __MODULE__, device: :mps)
+      }
+    else
+      {q_tx, r_tx} =
+        tensor
+        |> from_nx()
+        |> Torchx.qr(opts[:mode] == :reduced)
+
+      {create_tensor(q_tx), create_tensor(r_tx)}
+    end
+  end
+
+  defp create_tensor({_, _} = ref) do
+    shape = Torchx.shape(ref)
+    type = Torchx.scalar_type(ref) |> from_torch_type()
+
+    %T{
+      data: %TB{ref: ref},
+      shape: shape,
+      type: type,
+      names: List.duplicate(nil, tuple_size(shape))
+    }
   end
 
   defp svd_impl({u_holder, s_holder, vt_holder}, tensor, opts) do
