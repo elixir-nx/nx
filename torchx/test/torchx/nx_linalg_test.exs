@@ -187,7 +187,6 @@ defmodule Torchx.NxLinAlgTest do
   end
 
   describe "qr" do
-    @tag :skip_on_mps
     test "property" do
       for _ <- 1..10, type <- [{:f, 32}, {:c, 64}] do
         square = random_uniform({4, 4}, type: type)
@@ -205,7 +204,6 @@ defmodule Torchx.NxLinAlgTest do
       end
     end
 
-    @tag :skip_on_mps
     test "rectangular matrix" do
       t = Nx.tensor([[1.0, -1.0, 4.0], [1.0, 4.0, -2.0], [1.0, 4.0, 2.0], [1.0, -1.0, 0.0]])
       {q, r} = Nx.LinAlg.qr(t, mode: :reduced)
@@ -214,7 +212,6 @@ defmodule Torchx.NxLinAlgTest do
   end
 
   describe "lu" do
-    @tag :skip_on_mps
     test "property" do
       for _ <- 1..20, type <- [{:f, 32}, {:c, 64}] do
         a = random_uniform({3, 3}, type: type)
@@ -228,7 +225,6 @@ defmodule Torchx.NxLinAlgTest do
   end
 
   describe "eigh" do
-    @tag :skip_on_mps
     test "property" do
       for _ <- 1..20 do
         a = random_uniform({3, 3}) |> then(&Nx.add(&1, Nx.transpose(&1)))

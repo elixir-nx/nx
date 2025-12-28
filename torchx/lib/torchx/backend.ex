@@ -46,6 +46,35 @@ defmodule Torchx.Backend do
     Keyword.validate!(opts, [:device])
   end
 
+  ## Optional callback for MPS compatibility
+
+  @impl true
+  def optional(function_name, args, default_impl) do
+    # For MPS device, some linear algebra operations are not supported
+    # Delegate to default implementation which will fall back to BinaryBackend
+    mps_unsupported = [:qr, :lu, :eigh, :solve]
+
+    device =
+      case args do
+        [%T{data: %TB{ref: {device, _}}} | _] -> device
+        _ -> :cpu
+      end
+
+    if device == :mps and function_name in mps_unsupported do
+      # Use default implementation for unsupported MPS operations
+      apply(default_impl, args)
+    else
+      # Use custom Torchx implementation for CPU and supported operations
+      case function_name do
+        :qr -> apply(&qr_impl/3, args)
+        :lu -> apply(&lu_impl/3, args)
+        :eigh -> apply(&eigh_impl/3, args)
+        :solve -> apply(&solve_impl/2, args)
+        _ -> apply(default_impl, args)
+      end
+    end
+  end
+
   ## Creation
 
   def constant(
@@ -235,30 +264,28 @@ defmodule Torchx.Backend do
     torch_type = to_torch_type(type, device)
 
     # Handle type downgrading for MPS - need to convert binary data format
-    {adjusted_binary, adjusted_type} =
+    {adjusted_binary, adjusted_type, adjusted_out} =
       case {type, torch_type, device} do
         # f64 -> f32 downgrade on MPS: convert binary from float64 to float32
         {{:f, 64}, :float, :mps} ->
-          converted = for <<x::float-64-native <- binary>>, into: <<>>, do: <<x::float-32-native>>
-          {converted, {:f, 32}}
+          bin = for <<x::float-64-native <- binary>>, into: <<>>, do: <<x::float-32-native>>
+          {bin, {:f, 32}, %{out | type: {:f, 32}}}
 
         # c128 -> c64 downgrade on MPS: convert binary from complex128 to complex64
         {{:c, 128}, :complex, :mps} ->
-          converted =
+          bin =
             for <<r::float-64-native, i::float-64-native <- binary>>,
               into: <<>>,
               do: <<r::float-32-native, i::float-32-native>>
 
-          {converted, {:c, 64}}
+          {bin, {:c, 64}, %{out | type: {:c, 64}}}
 
         # No downgrade needed
         _ ->
-          {binary, type}
+          {binary, type, out}
       end
 
-    # Adjust the output tensor type to match what was actually stored
-    adjusted_out = %{out | type: adjusted_type}
-
+    # Create tensor with adjusted type
     adjusted_binary
     |> maybe_pad_binary(adjusted_type)
     |> Torchx.from_blob(
@@ -294,7 +321,14 @@ defmodule Torchx.Backend do
   def as_type(%T{type: type} = out, %T{} = t) do
     t_tx = from_nx(t)
     device = device_from_ref(t_tx)
-    t_tx |> Torchx.to_type(to_torch_type(type, device)) |> bitmask(type) |> to_nx(out)
+    target_torch_type = to_torch_type(type, device)
+
+    # For MPS with f64/c128, the torch type is downgraded but we still need
+    # to present the tensor metadata as the requested type
+    t_tx
+    |> Torchx.to_type(target_torch_type)
+    |> bitmask(type)
+    |> to_nx(out)
   end
 
   @impl true
@@ -1115,8 +1149,7 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  @impl true
-  def eigh({eigenvals, eigenvecs}, tensor, _opts) do
+  defp eigh_impl({eigenvals, eigenvecs}, tensor, _opts) do
     {device, _} = from_nx(tensor)
 
     {q, r} =
@@ -1128,8 +1161,7 @@ defmodule Torchx.Backend do
     {to_nx(q, eigenvals), to_nx(r, eigenvecs)}
   end
 
-  @impl true
-  def qr({q_holder, r_holder}, tensor, opts) do
+  defp qr_impl({q_holder, r_holder}, tensor, opts) do
     {device, _} = from_nx(tensor)
 
     {q, r} =
@@ -1154,12 +1186,11 @@ defmodule Torchx.Backend do
     {to_nx(u, u_holder), to_nx(s, s_holder), to_nx(vt, vt_holder)}
   end
 
-  @impl true
-  def lu(
-        {p_holder, %{type: output_type} = l_holder, %{type: output_type} = u_holder},
-        tensor,
-        _opts
-      ) do
+  defp lu_impl(
+         {p_holder, %{type: output_type} = l_holder, %{type: output_type} = u_holder},
+         tensor,
+         _opts
+       ) do
     {device, _} = tensor_ref = from_nx(tensor)
     out_type = to_torch_type(output_type, device)
 
@@ -1332,14 +1363,24 @@ defmodule Torchx.Backend do
     a_tx_batched
     |> Torchx.triangular_solve(b_tx, transform == :transpose, upper)
     |> Torchx.reshape(out.shape)
-    |> Torchx.to_nx()
+    |> to_nx(out)
   end
 
-  @impl true
-  def solve(%T{type: type} = out, a, b) do
+  defp solve_impl(a, b) do
     {device, _} = from_nx(a)
-    a_tx = a |> from_nx |> Torchx.to_type(to_torch_type(type, device))
-    b_tx = b |> from_nx |> Torchx.to_type(to_torch_type(type, device))
+
+    # Compute output type
+    output_type =
+      a.type
+      |> Nx.Type.merge(b.type)
+      |> Nx.Type.to_floating()
+
+    # Compute output shape
+    output_shape = Nx.Shape.solve(a.shape, b.shape)
+    out = Nx.template(output_shape, output_type)
+
+    a_tx = a |> from_nx |> Torchx.to_type(to_torch_type(output_type, device))
+    b_tx = b |> from_nx |> Torchx.to_type(to_torch_type(output_type, device))
 
     check_singular_matrix(a_tx)
 
@@ -1855,18 +1896,9 @@ defmodule Torchx.Backend do
         device_ref
       end
 
-    # Adjust type if MPS downgraded it (f64->f32 or c128->c64)
-    adjusted_type =
-      case {type, device} do
-        {{:f, 64}, :mps} -> {:f, 32}
-        {{:c, 128}, :mps} -> {:c, 64}
-        _ -> type
-      end
-
     %{
       t
-      | type: adjusted_type,
-        data: %__MODULE__{ref: check_shape_and_type!(t_tx, shape, adjusted_type)}
+      | data: %__MODULE__{ref: check_shape_and_type!(t_tx, shape, type)}
     }
   end
 

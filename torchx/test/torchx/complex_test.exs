@@ -200,7 +200,6 @@ defmodule Torchx.ComplexTest do
       end
     end
 
-    @tag :skip_on_mps
     test "invert" do
       a = ~MAT[
         1 0 i
@@ -222,7 +221,6 @@ defmodule Torchx.ComplexTest do
       assert_all_close(Nx.dot(result, a), Nx.eye(Nx.shape(a)))
     end
 
-    @tag :skip_on_mps
     test "solve" do
       a = ~MAT[
         1 0 i
@@ -259,7 +257,6 @@ defmodule Torchx.ComplexTest do
       assert_all_close(Nx.LinAlg.matrix_power(a, 0), Nx.eye(Nx.shape(a)))
     end
 
-    @tag :skip_on_mps
     test "supports complex with negative exponent" do
       a = ~MAT[
         1 -0.5i
