@@ -57,7 +57,6 @@ defmodule Torchx.Backend do
       :eigh,
       :solve,
       :determinant,
-      :svd,
       :cholesky,
       :matrix_power
     ]
@@ -79,7 +78,7 @@ defmodule Torchx.Backend do
         :eigh -> apply(&eigh_impl/3, args)
         :solve -> apply(&solve_impl/2, args)
         :cholesky -> apply(&cholesky_impl/2, args)
-        :svd -> apply(&svd_impl/3, args)
+        :svd -> apply(&svd_impl/2, args)
         :determinant -> apply(&determinant_impl/2, args)
         _ -> apply(default_impl, args)
       end
@@ -1203,16 +1202,33 @@ defmodule Torchx.Backend do
     }
   end
 
-  defp svd_impl({u_holder, s_holder, vt_holder}, tensor, opts) do
+  defp svd_impl(tensor, opts) do
+    tensor =
+      if Nx.Type.integer?(tensor.type) do
+        Nx.as_type(tensor, {:f, 32})
+      else
+        tensor
+      end
+
     {device, _} = from_nx(tensor)
 
-    {u, s, vt} =
-      tensor
-      |> from_nx()
-      |> Torchx.to_type(to_torch_type(u_holder.type, device))
-      |> Torchx.svd(opts[:full_matrices?] == true)
+    if device == :mps do
+      cpu_tensor = backend_copy(tensor, __MODULE__, device: :cpu)
+      {u_cpu, s_cpu, vt_cpu} = svd_impl(cpu_tensor, opts)
 
-    {to_nx(u, u_holder), to_nx(s, s_holder), to_nx(vt, vt_holder)}
+      {
+        backend_copy(u_cpu, __MODULE__, device: :mps),
+        backend_copy(s_cpu, __MODULE__, device: :mps),
+        backend_copy(vt_cpu, __MODULE__, device: :mps)
+      }
+    else
+      {u_tx, s_tx, vt_tx} =
+        tensor
+        |> from_nx()
+        |> Torchx.svd(opts[:full_matrices?] == true)
+
+      {create_tensor(u_tx), create_tensor(s_tx), create_tensor(vt_tx)}
+    end
   end
 
   defp lu_impl(
