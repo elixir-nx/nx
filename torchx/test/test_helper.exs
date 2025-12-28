@@ -5,22 +5,10 @@ Application.put_env(:nx, :default_backend, {Torchx.Backend, device: default_devi
 skip_apple_arm64 = Application.get_env(:torchx, :is_apple_arm64)
 device_is_mps = default_device == :mps
 
-# MPS doesn't handle concurrent command encoders well
-# Tests must run synchronously to avoid GPU framework crashes
-mps_opts =
-  if device_is_mps do
-    [max_cases: 1]
-  else
-    []
-  end
-
 ExUnit.start(
-  [
-    exclude: [
-      skip_apple_arm64: skip_apple_arm64,
-      mps_f64_not_supported: device_is_mps,
-      mps_round_difference: device_is_mps
-    ]
-  ] ++
-    mps_opts
+  exclude: [
+    skip_apple_arm64: skip_apple_arm64,
+    mps_f64_not_supported: device_is_mps,
+    mps_round_difference: device_is_mps
+  ]
 )
