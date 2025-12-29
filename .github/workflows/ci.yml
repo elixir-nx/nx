@@ -201,6 +201,9 @@ jobs:
         with:
           otp-version: ${{ matrix.otp }}
           elixir-version: ${{ matrix.elixir }}
+      - name: Install libomp
+        if: ${{ env.should_run == 'true' }}
+        run: brew install libomp
       - name: Retrieve dependencies cache
         if: ${{ steps.mix-cache.outputs.cache-hit != 'true' && env.should_run == 'true' }}
         env:
