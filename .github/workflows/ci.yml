@@ -194,7 +194,7 @@ jobs:
           if [ "${{ needs.detect-changes.outputs.torchx-changed }}" = "true" ]; then
             echo "should_run=true" >> $GITHUB_ENV
           else
-            echo "should_run=false" >> $GITHUB_ENV
+            echo "should_run=true" >> $GITHUB_ENV
           fi
       - uses: actions/checkout@v2
       - uses: erlef/setup-beam@v1
