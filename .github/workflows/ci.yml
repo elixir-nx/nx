@@ -187,6 +187,7 @@ jobs:
     env:
       MIX_ENV: test
       TORCHX_DEFAULT_DEVICE: mps
+      PYTORCH_MPS_HIGH_WATERMARK_RATIO: "0.0"
     steps:
       - name: Set conditional variables
         working-directory: .
