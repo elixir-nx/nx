@@ -104,23 +104,30 @@ REGISTER_TENSOR_NIF(delete_tensor);
 fine::Ok<fine::ResourcePtr<TorchTensor>>
 from_blob(ErlNifEnv *env, ErlNifBinary blob, std::vector<int64_t> shape,
           fine::Atom type_atom, std::tuple<int64_t, int64_t> device_tuple) {
+  try {
+    auto type = string2type(type_atom.to_string());
+    auto device = tuple_to_device(device_tuple);
 
-  auto type = string2type(type_atom.to_string());
-  auto device = tuple_to_device(device_tuple);
+    // Check if binary is large enough
+    if (blob.size / dtype_sizes[type_atom.to_string()] < elem_count(shape)) {
+      throw std::invalid_argument(
+          "Binary size is too small for the requested shape");
+    }
 
-  // Check if binary is large enough
-  if (blob.size / dtype_sizes[type_atom.to_string()] < elem_count(shape)) {
-    throw std::invalid_argument(
-        "Binary size is too small for the requested shape");
-  }
+    auto tensor = torch::from_blob(blob.data, vec_to_array_ref(shape),
+                                   torch::device(torch::kCPU).dtype(type));
 
-  auto tensor = torch::from_blob(blob.data, vec_to_array_ref(shape),
-                                 torch::device(torch::kCPU).dtype(type));
-
-  if (device.type() == torch::kCPU) {
-    return tensor_ok(tensor.clone());
-  } else {
-    return tensor_ok(tensor.to(device));
+    if (device.type() == torch::kCPU) {
+      return tensor_ok(tensor.clone());
+    } else {
+      return tensor_ok(tensor.to(device));
+    }
+  } catch (const c10::Error &e) {
+    throw std::runtime_error("from_blob failed: " + e.msg());
+  } catch (const std::exception &e) {
+    throw std::runtime_error("from_blob failed: " + std::string(e.what()));
+  } catch (...) {
+    throw std::runtime_error("from_blob failed with unknown error");
   }
 }
 
