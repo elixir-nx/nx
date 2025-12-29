@@ -170,3 +170,52 @@ jobs:
       - name: Run tests
         if: ${{ env.should_run == 'true' }}
         run: mix test
+
+  macos:
+    name: macOS ARM (torchx, ${{ matrix.elixir }}, ${{ matrix.otp }})
+    runs-on: macos-14
+    needs: detect-changes
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - elixir: "1.18.4"
+            otp: "27.3"
+    defaults:
+      run:
+        working-directory: torchx
+    env:
+      MIX_ENV: test
+      TORCHX_DEFAULT_DEVICE: mps
+    steps:
+      - name: Set conditional variables
+        working-directory: .
+        run: |
+          if [ "${{ needs.detect-changes.outputs.torchx-changed }}" = "true" ]; then
+            echo "should_run=true" >> $GITHUB_ENV
+          else
+            echo "should_run=false" >> $GITHUB_ENV
+          fi
+      - uses: actions/checkout@v2
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ matrix.otp }}
+          elixir-version: ${{ matrix.elixir }}
+      - name: Retrieve dependencies cache
+        if: ${{ steps.mix-cache.outputs.cache-hit != 'true' && env.should_run == 'true' }}
+        env:
+          cache-name: cache-mix-deps
+        uses: actions/cache@v3
+        id: mix-cache # id to use in retrieve action
+        with:
+          path: ${{ github.workspace }}/torchx/deps
+          key: ${{ runner.os }}-Elixir-v${{ matrix.elixir }}-OTP-${{ matrix.otp }}-${{ hashFiles('torchx/mix.lock') }}-v1
+      - name: Install dependencies
+        if: ${{ steps.mix-cache.outputs.cache-hit != 'true' && env.should_run == 'true' }}
+        run: mix deps.get
+      - name: Compile and check warnings
+        if: ${{ env.should_run == 'true' }}
+        run: mix compile --warnings-as-errors
+      - name: Run tests
+        if: ${{ env.should_run == 'true' }}
+        run: mix test
