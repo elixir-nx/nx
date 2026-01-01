@@ -20,10 +20,6 @@ defmodule EXLA.MixProject do
       name: "EXLA",
       description: "Google's XLA (Accelerated Linear Algebra) compiler/backend for Nx",
       package: package(),
-      preferred_cli_env: [
-        docs: :docs,
-        "hex.publish": :docs
-      ],
       compilers: [:extract_xla, :cached_make] ++ Mix.compilers(),
       aliases: [
         "compile.extract_xla": &extract_xla/1,
@@ -56,6 +52,15 @@ defmodule EXLA.MixProject do
           host: [platform: :host]
         ],
         preferred_clients: [:cuda, :rocm, :tpu, :host]
+      ]
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
+        docs: :docs,
+        "hex.publish": :docs
       ]
     ]
   end
