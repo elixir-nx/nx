@@ -169,7 +169,6 @@ defmodule Nx.Defn.Evaluator do
   defp compute_cache(%Nx.Tensor{data: %Expr{id: id, op: op}} = tensor, state, cache) do
     case state.parent_ids do
       # If the id exists in the parent, the parent will compute it.
-      # For now, keep storing the full tensor for parent refs (will optimize later)
       %{^id => _} ->
         Map.put_new(cache, id, tensor)
 
@@ -184,8 +183,10 @@ defmodule Nx.Defn.Evaluator do
     end
   end
 
-  defp compute_cache_op(:fun, %{data: %Expr{id: id, args: args}}, state, cache) do
+  defp compute_cache_op(:fun, %{data: %Expr{id: id, args: args}} = tensor, state, cache) do
     [_args, expr, _mfa] = args
+    # Process args first (using old approach for scoped ops)
+    {_, cache} = Tree.apply_args(tensor, cache, &{&1, compute_cache(&1, state, &2)})
     fun_cache = init_compute_cache(expr, state)
     Map.put(cache, [:fun | id], fun_cache)
   end
@@ -247,6 +248,7 @@ defmodule Nx.Defn.Evaluator do
       Enum.map_reduce(clause_caches, {%{}, cache}, fn clause_cache, seen_ids_cache ->
         {clause_cache, seen_ids_cache} =
           Enum.flat_map_reduce(clause_cache, seen_ids_cache, fn
+            # Handle full tensor entries (old format for parent refs)
             {id, %_{} = tensor}, {seen_ids, cache} ->
               case seen_ids do
                 # We have already processed this id for the whole cond
@@ -263,6 +265,7 @@ defmodule Nx.Defn.Evaluator do
                   {[], {Map.put(seen_ids, id, true), cache}}
               end
 
+            # Handle integer counters
             {id, counter}, seen_ids_cache ->
               {[{id, counter}], seen_ids_cache}
           end)
@@ -291,10 +294,11 @@ defmodule Nx.Defn.Evaluator do
     Map.put(cache, [:token | id], hooks)
   end
 
-  # Catch-all for generic operations - traverse args and build cache
+  # Catch-all for generic operations - traverse args
+  # TODO Phase 4: Will add flattening here later, for now keep old behavior
   defp compute_cache_op(_op, tensor, state, cache) do
-    {_, acc} = Tree.apply_args(tensor, cache, &{&1, compute_cache(&1, state, &2)})
-    acc
+    {_, cache} = Tree.apply_args(tensor, cache, &{&1, compute_cache(&1, state, &2)})
+    cache
   end
 
   defp computation_key(op, args) do
