@@ -169,16 +169,22 @@ defmodule Nx.Defn.Evaluator do
   defp compute_cache(%Nx.Tensor{data: %Expr{id: id, op: op}} = tensor, state, cache) do
     case state.parent_ids do
       # If the id exists in the parent, the parent will compute it.
+      # Store as parent ref marker (will be flattened by parent)
       %{^id => _} ->
         Map.put_new(cache, id, tensor)
 
       %{} ->
         case cache do
+          # Flattened entry - increment count
+          %{^id => {:expr, count, type, shape, names, vectorized_axes, op_cached, args}} ->
+            %{cache | id => {:expr, count + 1, type, shape, names, vectorized_axes, op_cached, args}}
+
+          # Legacy integer (shouldn't happen with new code)
           %{^id => counter} when is_integer(counter) ->
             %{cache | id => counter + 1}
 
           %{} ->
-            compute_cache_op(op, tensor, state, Map.put(cache, id, 1))
+            compute_cache_op(op, tensor, state, cache)
         end
     end
   end
@@ -248,6 +254,22 @@ defmodule Nx.Defn.Evaluator do
       Enum.map_reduce(clause_caches, {%{}, cache}, fn clause_cache, seen_ids_cache ->
         {clause_cache, seen_ids_cache} =
           Enum.flat_map_reduce(clause_cache, seen_ids_cache, fn
+            # Handle flattened entries
+            {id, {:expr, _count, _type, _shape, _names, _vectorized_axes, _op, _args} = entry}, {seen_ids, cache} ->
+              case seen_ids do
+                # We have already processed this id for the whole cond
+                %{^id => _} ->
+                  {[], {seen_ids, cache}}
+
+                # The ID belongs to our own parents
+                %{} when is_map_key(parent_ids, id) ->
+                  {[], {seen_ids, Map.put_new(cache, id, entry)}}
+
+                # The ID belongs to us
+                %{} ->
+                  {[], {Map.put(seen_ids, id, true), Map.put_new(cache, id, entry)}}
+              end
+
             # Handle full tensor entries (old format for parent refs)
             {id, %_{} = tensor}, {seen_ids, cache} ->
               case seen_ids do
@@ -294,11 +316,30 @@ defmodule Nx.Defn.Evaluator do
     Map.put(cache, [:token | id], hooks)
   end
 
-  # Catch-all for generic operations - traverse args
-  # TODO Phase 4: Will add flattening here later, for now keep old behavior
-  defp compute_cache_op(_op, tensor, state, cache) do
+  # For :elem and :attach_token, use integer format (they have special eval logic)
+  defp compute_cache_op(op, tensor, state, cache) when op in [:elem, :attach_token] do
     {_, cache} = Tree.apply_args(tensor, cache, &{&1, compute_cache(&1, state, &2)})
     cache
+  end
+
+  # Catch-all for generic operations - store flattened entries
+  defp compute_cache_op(
+         _op,
+         %Nx.Tensor{
+           data: %Expr{id: id, op: op, args: args},
+           type: type,
+           shape: shape,
+           names: names,
+           vectorized_axes: vectorized_axes
+         } = tensor,
+         state,
+         cache
+       ) do
+    # First, recursively process all args to ensure they're in the cache
+    {_, cache} = Tree.apply_args(tensor, cache, &{&1, compute_cache(&1, state, &2)})
+    
+    # Store flattened entry: {:expr, count, type, shape, names, vectorized_axes, op, args}
+    Map.put(cache, id, {:expr, 1, type, shape, names, vectorized_axes, op, args})
   end
 
   defp computation_key(op, args) do
@@ -328,12 +369,30 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, [cache | caches]) do
     case cache do
+      # Flattened entry with cached result
+      %{^id => {:expr, count, type, shape, names, vectorized_axes, op_cached, args, res}} ->
+        debug_node(ans, res, state)
+        new_cache = if count == 1, do: Map.delete(cache, id), else: Map.put(cache, id, {:expr, count - 1, type, shape, names, vectorized_axes, op_cached, args, res})
+        {res, [new_cache | caches]}
+
+      # Flattened entry without result - need to evaluate
+      %{^id => {:expr, count, type, shape, names, vectorized_axes, op_cached, args}} ->
+        # Reconstruct tensor for eval_apply
+        tensor_for_eval = reconstruct_tensor(type, shape, names, vectorized_axes, %Expr{id: id, op: op_cached, args: args, context: ans.data.context})
+        {res, [cache | caches]} = eval_apply(op_cached, tensor_for_eval, state, [cache | caches])
+        state.gc && :erlang.garbage_collect(self())
+        debug_node(ans, res, state)
+        new_cache = if count == 1, do: Map.delete(cache, id), else: Map.put(cache, id, {:expr, count - 1, type, shape, names, vectorized_axes, op_cached, args, res})
+        {res, [new_cache | caches]}
+
+      # Legacy: integer count (for scoped ops like :fun, :while, etc.)
       %{^id => count} when is_integer(count) ->
         {res, [cache | caches]} = eval_apply(op, ans, state, [cache | caches])
         state.gc && :erlang.garbage_collect(self())
         debug_node(ans, res, state)
         {res, [decrement_cache(cache, id, count, res) | caches]}
 
+      # Legacy: already evaluated {count, result}
       %{^id => {count, res}} ->
         debug_node(ans, res, state)
         {res, [decrement_cache(cache, id, count, res) | caches]}
@@ -356,9 +415,23 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval_parent([cache | caches], id, op, ans, state, acc) do
     case cache do
+      # Flattened entry with result
+      %{^id => {:expr, _count, _type, _shape, _names, _vectorized_axes, _op_cached, _args, res}} ->
+        {res, Enum.reverse(acc, [cache | caches])}
+
+      # Flattened entry without result - evaluate it
+      %{^id => {:expr, count, type, shape, names, vectorized_axes, op_cached, args}} ->
+        tensor_for_eval = reconstruct_tensor(type, shape, names, vectorized_axes, %Expr{id: id, op: op_cached, args: args, context: ans.data.context})
+        {res, [cache | caches]} = eval_apply(op_cached, tensor_for_eval, state, [cache | caches])
+        state.gc && :erlang.garbage_collect(self())
+        updated_cache = Map.put(cache, id, {:expr, count, type, shape, names, vectorized_axes, op_cached, args, res})
+        {res, Enum.reverse(acc, [updated_cache | caches])}
+
+      # Legacy: already evaluated {count, result}
       %{^id => {_count, res}} ->
         {res, Enum.reverse(acc, [cache | caches])}
 
+      # Legacy: integer count
       %{^id => count} when is_integer(count) ->
         {res, [cache | caches]} = eval_apply(op, ans, state, [cache | caches])
         state.gc && :erlang.garbage_collect(self())
@@ -376,8 +449,26 @@ defmodule Nx.Defn.Evaluator do
 
   defp decrement_parents([cache | caches], id) do
     case cache do
+      # Flattened entry with result
+      %{^id => {:expr, 1, _type, _shape, _names, _vectorized_axes, _op, _args, _res}} ->
+        [Map.delete(cache, id) | caches]
+
+      %{^id => {:expr, count, type, shape, names, vectorized_axes, op, args, res}} ->
+        [Map.put(cache, id, {:expr, count - 1, type, shape, names, vectorized_axes, op, args, res}) | caches]
+
+      # Flattened entry without result (rare, but handle it)
+      %{^id => {:expr, 1, _type, _shape, _names, _vectorized_axes, _op, _args}} ->
+        [Map.delete(cache, id) | caches]
+
+      %{^id => {:expr, count, type, shape, names, vectorized_axes, op, args}} ->
+        [Map.put(cache, id, {:expr, count - 1, type, shape, names, vectorized_axes, op, args}) | caches]
+
+      # Legacy: {count, value}
       %{^id => {count, value}} -> [decrement_cache(cache, id, count, value) | caches]
+
+      # Legacy: integer count
       %{^id => count} -> [%{cache | id => count - 1} | caches]
+
       %{} -> [cache | decrement_parents(caches, id)]
     end
   end
@@ -734,4 +825,3 @@ defmodule Nx.Defn.Evaluator do
     |> String.replace(["#Ref<", ">"], "")
   end
 end
-
