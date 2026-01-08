@@ -1834,6 +1834,16 @@ defmodule Nx.Serving.Default do
         {index, value}
       end)
 
+    IO.puts("Batch funs size: #{:erts_debug.size(batch_funs)}")
+    # IO.puts("Getting flat size")
+    # IO.puts("Batch funs flat size: #{:erts_debug.flat_size(batch_funs)}")
+    Enum.each(batch_funs, fn {index, value} ->
+      IO.puts("Batch fun #{index} size: #{:erts_debug.size(value)}")
+      IO.puts("Getting flat size")
+      # IO.puts("Batch fun #{index} flat size: #{:erts_debug.flat_size(value)}")
+      IO.inspect(:erlang.fun_info(value, :env), label: "Batch fun #{index} env")
+    end)
+
     if type == :process do
       ref = make_ref()
       :persistent_term.put(ref, Map.new(batch_funs))
@@ -1863,8 +1873,12 @@ defmodule Nx.Serving.Default do
           %{^partition => fun} -> fun
         end
 
+
       {batch_fun.(batch), :server_info}
     end
+
+    IO.puts("Wrapped function size: #{:erts_debug.flat_size(wrapped)}")
+    IO.inspect(:erlang.fun_info(wrapped, :env), label: "Wrapped env")
 
     {:execute, wrapped, {:persistent, ref}}
   end

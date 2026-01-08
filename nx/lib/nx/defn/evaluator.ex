@@ -33,6 +33,40 @@ defmodule Nx.Defn.Evaluator do
   @list_ops [:concatenate, :stack]
   @indices_ops [:slice, :put_slice]
 
+  ## Cache Entry Helpers
+
+  # Extracts the ID from an expression tensor argument, or returns the value as-is
+  # for non-expression arguments (integers, options, etc.)
+  defp arg_to_id_or_value(%Nx.Tensor{data: %Expr{id: id}}), do: id
+  defp arg_to_id_or_value(other), do: other
+
+  # Extracts IDs from a list of arguments
+  defp args_to_ids_or_values(args) do
+    Enum.map(args, &arg_to_id_or_value/1)
+  end
+
+  # Creates a tensor wrapper with the given expression data
+  defp make_tensor(type, shape, names, vectorized_axes, expr_data) do
+    %Nx.Tensor{
+      data: expr_data,
+      type: type,
+      shape: shape,
+      names: names,
+      vectorized_axes: vectorized_axes
+    }
+  end
+
+  # Reconstructs a tensor wrapper from cached metadata and new data
+  defp reconstruct_tensor(type, shape, names, vectorized_axes, data) do
+    %Nx.Tensor{
+      data: data,
+      type: type,
+      shape: shape,
+      names: names,
+      vectorized_axes: vectorized_axes
+    }
+  end
+
   @impl true
   def __partitions_options__(opts) do
     List.duplicate(opts, Keyword.get(opts, :max_concurrency, 1))
