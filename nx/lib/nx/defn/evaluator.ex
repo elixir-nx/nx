@@ -153,6 +153,12 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp compute_cache(%Nx.Tensor{data: %Expr{op: :constant}}, _state, cache) do
+    # Constants are evaluated inline, no cache entry needed
+    cache
+  end
+
+  defp compute_cache(%Nx.Tensor{data: %Expr{op: :tensor}}, _state, cache) do
+    # Pre-existing tensors are evaluated inline, no cache entry needed
     cache
   end
 
@@ -163,31 +169,35 @@ defmodule Nx.Defn.Evaluator do
   defp compute_cache(%Nx.Tensor{data: %Expr{id: id, op: op}} = tensor, state, cache) do
     case state.parent_ids do
       # If the id exists in the parent, the parent will compute it.
+      # For now, keep storing the full tensor for parent refs (will optimize later)
       %{^id => _} ->
         Map.put_new(cache, id, tensor)
 
       %{} ->
         case cache do
-          %{^id => counter} -> %{cache | id => counter + 1}
-          %{} -> compute_cache(op, tensor, state, Map.put(cache, id, 1))
+          %{^id => counter} when is_integer(counter) ->
+            %{cache | id => counter + 1}
+
+          %{} ->
+            compute_cache_op(op, tensor, state, Map.put(cache, id, 1))
         end
     end
   end
 
-  defp compute_cache(:fun, %{data: %Expr{id: id, args: args}}, state, cache) do
+  defp compute_cache_op(:fun, %{data: %Expr{id: id, args: args}}, state, cache) do
     [_args, expr, _mfa] = args
     fun_cache = init_compute_cache(expr, state)
     Map.put(cache, [:fun | id], fun_cache)
   end
 
-  defp compute_cache(:while, %{data: %Expr{args: args, id: id}}, state, cache) do
+  defp compute_cache_op(:while, %{data: %Expr{args: args, id: id}}, state, cache) do
     [initial, _arg, pred, block] = args
     cache = composite_compute_cache(initial, state, cache)
     while_cache = init_compute_cache({pred, block}, state)
     Map.put(cache, [:while | id], while_cache)
   end
 
-  defp compute_cache(:optional, %{data: %Expr{args: args, id: id}}, state, cache) do
+  defp compute_cache_op(:optional, %{data: %Expr{args: args, id: id}}, state, cache) do
     [call, expr, _callback] = args
     %{data: %{args: call_args_in, op: call_name}} = call
 
@@ -209,7 +219,7 @@ defmodule Nx.Defn.Evaluator do
     Map.put(cache, [:optional | id], optional_expr_cache)
   end
 
-  defp compute_cache(
+  defp compute_cache_op(
          :runtime_call,
          %{data: %Expr{args: [tensor_expr, _opts, _fun, _out]}},
          state,
@@ -218,7 +228,7 @@ defmodule Nx.Defn.Evaluator do
     composite_compute_cache(tensor_expr, state, cache)
   end
 
-  defp compute_cache(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, cache) do
+  defp compute_cache_op(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, cache) do
     %{parent_ids: parent_ids, current_ids: current_ids} = state
 
     clause_caches =
@@ -263,7 +273,7 @@ defmodule Nx.Defn.Evaluator do
     Map.put(cache, [:cond | id], {clauses_cache, last_cache, Map.keys(all_ids)})
   end
 
-  defp compute_cache(:token, %{data: %Expr{args: [token], id: id}}, state, cache) do
+  defp compute_cache_op(:token, %{data: %Expr{args: [token], id: id}}, state, cache) do
     hooks = state.hooks
 
     {hooks, cache} =
@@ -281,7 +291,8 @@ defmodule Nx.Defn.Evaluator do
     Map.put(cache, [:token | id], hooks)
   end
 
-  defp compute_cache(_op, tensor, state, cache) do
+  # Catch-all for generic operations - traverse args and build cache
+  defp compute_cache_op(_op, tensor, state, cache) do
     {_, acc} = Tree.apply_args(tensor, cache, &{&1, compute_cache(&1, state, &2)})
     acc
   end
@@ -719,3 +730,4 @@ defmodule Nx.Defn.Evaluator do
     |> String.replace(["#Ref<", ">"], "")
   end
 end
+
