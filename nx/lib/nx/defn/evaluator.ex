@@ -179,12 +179,15 @@ defmodule Nx.Defn.Evaluator do
           %{^id => {:expr, count, type, shape, names, vectorized_axes, op_cached, args}} ->
             %{cache | id => {:expr, count + 1, type, shape, names, vectorized_axes, op_cached, args}}
 
-          # Legacy integer (shouldn't happen with new code)
+          # Legacy integer - increment count
           %{^id => counter} when is_integer(counter) ->
             %{cache | id => counter + 1}
 
           %{} ->
-            compute_cache_op(op, tensor, state, cache)
+            # For scoped ops (cond/while/fun/etc), we need to store an integer count entry
+            # The compute_cache_op implementation will also store special sub-cache entries
+            # For generic ops, compute_cache_op will replace this with a flattened entry
+            compute_cache_op(op, tensor, state, Map.put(cache, id, 1))
         end
     end
   end
@@ -337,7 +340,7 @@ defmodule Nx.Defn.Evaluator do
        ) do
     # First, recursively process all args to ensure they're in the cache
     {_, cache} = Tree.apply_args(tensor, cache, &{&1, compute_cache(&1, state, &2)})
-    
+
     # Store flattened entry: {:expr, count, type, shape, names, vectorized_axes, op, args}
     Map.put(cache, id, {:expr, 1, type, shape, names, vectorized_axes, op, args})
   end
@@ -463,15 +466,23 @@ defmodule Nx.Defn.Evaluator do
       %{^id => {:expr, count, type, shape, names, vectorized_axes, op, args}} ->
         [Map.put(cache, id, {:expr, count - 1, type, shape, names, vectorized_axes, op, args}) | caches]
 
+      # Parent ref (full tensor) - don't decrement, just keep it
+      %{^id => %Nx.Tensor{}} ->
+        [cache | caches]
+
       # Legacy: {count, value}
       %{^id => {count, value}} -> [decrement_cache(cache, id, count, value) | caches]
 
       # Legacy: integer count
-      %{^id => count} -> [%{cache | id => count - 1} | caches]
+      %{^id => count} when is_integer(count) -> [%{cache | id => count - 1} | caches]
 
       %{} -> [cache | decrement_parents(caches, id)]
     end
   end
+
+  # If we reach an empty cache list, the ID wasn't found - this can happen if it was
+  # already deleted or never used. Just return the empty list.
+  defp decrement_parents([], _id), do: []
 
   defp eval_apply(:parameter, %{data: %Expr{args: [i]}}, state, caches) do
     case Enum.fetch!(state.params, i).() do
