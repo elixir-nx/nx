@@ -956,6 +956,7 @@ defmodule EXLA.MLIR.Value do
   defp type_number({:s, width}), do: "i#{width}"
   defp type_number({:u, width}), do: "ui#{width}"
   defp type_number({:f, 8}), do: "f8E5M2"
+  defp type_number({:f8_e4m3fn, 8}), do: "f8E4M3FN"
   defp type_number({:f, width}), do: "f#{width}"
   defp type_number({:bf, width}), do: "bf#{width}"
   defp type_number({:c, 64}), do: "complex<f32>"
@@ -998,6 +999,7 @@ defmodule EXLA.MLIR.Value do
         :nan -> type |> Nx.Type.nan_binary() |> native_to_big()
         :infinity -> type |> Nx.Type.infinity_binary() |> native_to_big()
         :neg_infinity -> type |> Nx.Type.neg_infinity_binary() |> native_to_big()
+        value when mod == :f8_e4m3fn -> f8E4M3FN_to_big(value)
         value when size == 8 -> f8E5M2_to_big(value)
         value when mod == :bf and size == 16 -> bf16_to_big(value)
         value -> <<value::float-size(size)-big>>
@@ -1008,6 +1010,11 @@ defmodule EXLA.MLIR.Value do
 
   defp f8E5M2_to_big(x) do
     binary_part(<<x::float-big-16>>, 0, 1)
+  end
+
+  defp f8E4M3FN_to_big(x) do
+    # E4M3FN encoding using Nx.Shared helper
+    Nx.Shared.write_finite_f8_e4m3fn(x)
   end
 
   defp bf16_to_big(x) do
