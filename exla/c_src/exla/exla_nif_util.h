@@ -19,6 +19,7 @@ static auto bf = fine::Atom("bf");
 static auto c = fine::Atom("c");
 static auto error = fine::Atom("error");
 static auto f = fine::Atom("f");
+static auto f8_e4m3fn = fine::Atom("f8_e4m3fn");
 static auto info = fine::Atom("info");
 static auto pred = fine::Atom("pred");
 static auto s = fine::Atom("s");
@@ -125,6 +126,9 @@ private:
         return xla::F64;
       }
     }
+    if (element == "f8_e4m3fn") {
+      return xla::F8E4M3FN;
+    }
     if (element == "bf") {
       switch (size) {
       case 16:
@@ -198,6 +202,9 @@ private:
       } else if (element_type.isBF16()) {
         type_name = exla::atoms::bf;
         type_size = 16;
+      } else if (element_type.isFloat8E4M3FN()) {
+        type_name = exla::atoms::f8_e4m3fn;
+        type_size = 8;
       } else if (auto float_type =
                      mlir::dyn_cast<mlir::FloatType>(element_type)) {
         type_name = exla::atoms::f;
