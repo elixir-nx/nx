@@ -180,10 +180,7 @@ defmodule Nx.Shared do
 
   defp write_bin_modifier(var, :f8_e4m3fn, _size) do
     quote do
-      case unquote(var) do
-        x when is_number(x) -> Nx.Shared.write_finite_f8_e4m3fn(unquote(var))
-        x -> Nx.Shared.write_non_finite_f8_e4m3fn(x)
-      end :: binary
+      Nx.Shared.write_f8_e4m3fn(unquote(var)) :: binary
     end
   end
 
