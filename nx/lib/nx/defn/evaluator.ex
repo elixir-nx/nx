@@ -56,7 +56,7 @@ defmodule Nx.Defn.Evaluator do
     }
   end
 
-  # Reconstructs a tensor wrapper from cached metadata and new data
+  # Reconstructs a tensor wrapper from cached metadata and Expr data
   defp reconstruct_tensor(type, shape, names, vectorized_axes, data) do
     %Nx.Tensor{
       data: data,
@@ -65,6 +65,42 @@ defmodule Nx.Defn.Evaluator do
       names: names,
       vectorized_axes: vectorized_axes
     }
+  end
+
+  # Resolves flattened args (IDs or values) to evaluable args (Expr tensors or values)
+  # This is needed when reconstructing tensors from flattened cache entries
+  defp resolve_flattened_args(flattened_args, cache, original_context) do
+    Enum.map(flattened_args, fn
+      id when is_reference(id) ->
+        # This is an ID reference - we need to resolve it to a minimal Expr tensor
+        # The actual evaluation will happen when eval is called on this tensor
+        case Map.get(cache, id) do
+          {:expr, _count, type, shape, names, vectorized_axes, op, args} ->
+            # Create a minimal tensor with just enough info for eval to find it in the cache
+            %Nx.Tensor{
+              data: %Expr{id: id, op: op, args: args, context: original_context},
+              type: type,
+              shape: shape,
+              names: names,
+              vectorized_axes: vectorized_axes
+            }
+
+          nil ->
+            # ID not in cache - might be in parent scope or a parameter/constant
+            # Create a placeholder that eval will resolve
+            %Nx.Tensor{
+              data: %Expr{id: id, op: :placeholder, args: [], context: original_context},
+              type: {:s, 32},
+              shape: {},
+              names: [],
+              vectorized_axes: []
+            }
+        end
+
+      value ->
+        # Not an ID - keep as-is (integers, options, etc.)
+        value
+    end)
   end
 
   @impl true
@@ -178,6 +214,12 @@ defmodule Nx.Defn.Evaluator do
           # Flattened entry - increment count
           %{^id => {:expr, count, type, shape, names, vectorized_axes, op_cached, args}} ->
             %{cache | id => {:expr, count + 1, type, shape, names, vectorized_axes, op_cached, args}}
+
+          # Full tensor entry (from cond parent ref) - replace with proper entry
+          %{^id => %Nx.Tensor{}} ->
+            # This happens when a cond branch stored a parent ref, and now we're processing
+            # the expression normally. Replace the full tensor with the proper cache entry.
+            compute_cache_op(op, tensor, state, Map.put(cache, id, 1))
 
           # Legacy integer - increment count
           %{^id => counter} when is_integer(counter) ->
@@ -342,6 +384,7 @@ defmodule Nx.Defn.Evaluator do
     {_, cache} = Tree.apply_args(tensor, cache, &{&1, compute_cache(&1, state, &2)})
 
     # Store flattened entry: {:expr, count, type, shape, names, vectorized_axes, op, args}
+    # Args are kept as-is (full Expr tensors) - the flattening is at the cache entry level
     Map.put(cache, id, {:expr, 1, type, shape, names, vectorized_axes, op, args})
   end
 
@@ -379,13 +422,13 @@ defmodule Nx.Defn.Evaluator do
         {res, [new_cache | caches]}
 
       # Flattened entry without result - need to evaluate
-      %{^id => {:expr, count, type, shape, names, vectorized_axes, op_cached, args}} ->
-        # Reconstruct tensor for eval_apply
-        tensor_for_eval = reconstruct_tensor(type, shape, names, vectorized_axes, %Expr{id: id, op: op_cached, args: args, context: ans.data.context})
+      %{^id => {:expr, count, type, shape, names, cached_vectorized_axes, op_cached, args}} ->
+        # Reconstruct tensor for eval_apply - use ans.vectorized_axes (may differ from cached)
+        tensor_for_eval = reconstruct_tensor(type, shape, names, ans.vectorized_axes, %Expr{id: id, op: op_cached, args: args, context: ans.data.context})
         {res, [cache | caches]} = eval_apply(op_cached, tensor_for_eval, state, [cache | caches])
         state.gc && :erlang.garbage_collect(self())
         debug_node(ans, res, state)
-        new_cache = if count == 1, do: Map.delete(cache, id), else: Map.put(cache, id, {:expr, count - 1, type, shape, names, vectorized_axes, op_cached, args, res})
+        new_cache = if count == 1, do: Map.delete(cache, id), else: Map.put(cache, id, {:expr, count - 1, type, shape, names, cached_vectorized_axes, op_cached, args, res})
         {res, [new_cache | caches]}
 
       # Legacy: integer count (for scoped ops like :fun, :while, etc.)
@@ -423,12 +466,13 @@ defmodule Nx.Defn.Evaluator do
         {res, Enum.reverse(acc, [cache | caches])}
 
       # Flattened entry without result - evaluate it
-      %{^id => {:expr, count, type, shape, names, vectorized_axes, op_cached, args}} ->
-        tensor_for_eval = reconstruct_tensor(type, shape, names, vectorized_axes, %Expr{id: id, op: op_cached, args: args, context: ans.data.context})
-        {res, [cache | caches]} = eval_apply(op_cached, tensor_for_eval, state, [cache | caches])
+      %{^id => {:expr, count, type, shape, names, cached_vectorized_axes, op_cached, args}} ->
+        tensor_for_eval = reconstruct_tensor(type, shape, names, ans.vectorized_axes, %Expr{id: id, op: op_cached, args: args, context: ans.data.context})
+        {res, [updated_cache | caches]} = eval_apply(op_cached, tensor_for_eval, state, [cache | caches])
         state.gc && :erlang.garbage_collect(self())
-        updated_cache = Map.put(cache, id, {:expr, count, type, shape, names, vectorized_axes, op_cached, args, res})
-        {res, Enum.reverse(acc, [updated_cache | caches])}
+        # Store the result in the cache entry
+        final_cache = Map.put(updated_cache, id, {:expr, count, type, shape, names, cached_vectorized_axes, op_cached, args, res})
+        {res, Enum.reverse(acc, [final_cache | caches])}
 
       # Legacy: already evaluated {count, result}
       %{^id => {_count, res}} ->
