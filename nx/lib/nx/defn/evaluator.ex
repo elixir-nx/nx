@@ -219,7 +219,18 @@ defmodule Nx.Defn.Evaluator do
           %{^id => %Nx.Tensor{}} ->
             # This happens when a cond branch stored a parent ref, and now we're processing
             # the expression normally. Replace the full tensor with the proper cache entry.
-            compute_cache_op(op, tensor, state, Map.put(cache, id, 1))
+            # Note: We need to call compute_cache_op which will set count=1, but then
+            # we might need to increment if this is not the first reference
+            new_cache = compute_cache_op(op, tensor, state, cache)
+            # Check if compute_cache_op created a flattened entry or kept integer
+            case new_cache do
+              %{^id => {:expr, 1, type, shape, names, vectorized_axes, op_cached, args}} ->
+                # It's flattened - this is good, count is already 1
+                new_cache
+              _ ->
+                # It's still integer format or something else - just return it
+                new_cache
+            end
 
           # Legacy integer - increment count
           %{^id => counter} when is_integer(counter) ->
@@ -431,6 +442,11 @@ defmodule Nx.Defn.Evaluator do
         new_cache = if count == 1, do: Map.delete(cache, id), else: Map.put(cache, id, {:expr, count - 1, type, shape, names, cached_vectorized_axes, op_cached, args, res})
         {res, [new_cache | caches]}
 
+      # Parent ref (full tensor) - this should be evaluated in parent scope
+      %{^id => %Nx.Tensor{}} ->
+        # Don't decrement here, let the parent scope handle it
+        eval_parent(caches, id, op, ans, state, [cache])
+
       # Legacy: integer count (for scoped ops like :fun, :while, etc.)
       %{^id => count} when is_integer(count) ->
         {res, [cache | caches]} = eval_apply(op, ans, state, [cache | caches])
@@ -461,6 +477,10 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval_parent([cache | caches], id, op, ans, state, acc) do
     case cache do
+      # Parent ref (full tensor) - continue looking in parent scopes
+      %{^id => %Nx.Tensor{}} ->
+        eval_parent(caches, id, op, ans, state, [cache | acc])
+
       # Flattened entry with result
       %{^id => {:expr, _count, _type, _shape, _names, _vectorized_axes, _op_cached, _args, res}} ->
         {res, Enum.reverse(acc, [cache | caches])}
