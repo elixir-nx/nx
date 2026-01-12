@@ -43,16 +43,22 @@ Transform the evaluator to use a **flattened graph representation**:
 
 ## Current Status
 
-### ✅ Working
+### ✅ Working (43/49 tests - 88%)
 - Simple arithmetic operations (add, multiply, etc.)
 - Basic tensor operations (reshape, iota, etc.)
-- Operations without control flow
+- Basic cond/if operations
+- Simple while loops
+- Tuple operations
+- Basic hooks
+- Most vectorization
 
-### ❌ Failing (32/49 tests)
-- Cond/if operations with parent scope references
-- While loops
-- Operations with hooks
-- Tuple destructuring in cond branches
+### ❌ Failing (6/49 tests - 12%)
+1. **decompositions lu** - Complex while loop with nested cond
+2. **decompositions svd** - Complex while loop with nested cond
+3. **cond cache on both** - Hook/token with attach_token + parent refs
+4. **cond cache with nested map** - Nested cond with map containers
+5. **cond cache with nested condition** - Triple-nested cond
+6. **vectorization vectorize works inside defn** - Vectorized_axes handling
 
 ## Core Issue: Parent Scope References in Cond
 
