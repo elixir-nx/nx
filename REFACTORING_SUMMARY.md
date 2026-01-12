@@ -54,7 +54,7 @@ id => {:expr, count, type, shape, names, vectorized_axes, op, args, result}
 
 # Scoped operations (UNCHANGED)
 [:fun | id] => fun_cache
-[:while | id] => while_cache  
+[:while | id] => while_cache
 [:cond | id] => {clauses_cache, last_cache, parent_ids}
 [:token | id] => hooks
 [:optional | id] => optional_info
@@ -104,7 +104,7 @@ id => %Nx.Tensor{}   # Parent refs (being phased out)
 
 **❌ Known Failures:**
 1. test decompositions lu
-2. test decompositions svd  
+2. test decompositions svd
 3. test cond cache on both
 4. test cond cache with nested map
 5. test cond cache with nested condition
@@ -180,7 +180,7 @@ cache = %{
 ## 📝 Files Modified
 
 - `nx/lib/nx/defn/evaluator.ex` - Main implementation (100+ lines changed)
-- `EVALUATOR_FLATTENING_STATUS.md` - Comprehensive tracking document  
+- `EVALUATOR_FLATTENING_STATUS.md` - Comprehensive tracking document
 - `REFACTORING_SUMMARY.md` - This summary
 
 ## 🎓 Lessons Learned

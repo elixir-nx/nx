@@ -172,7 +172,7 @@ All failures involve **complex nesting + parent scope references**:
    - Parent expressions from outer while used in inner cond
    - Entries deleted prematurely during nested evaluation
 
-2. **cond cache tests** (3 tests)  
+2. **cond cache tests** (3 tests)
    - Hooks/tokens with attach_token + parent refs
    - Nested cond (2-3 levels deep) with shared parent expressions
    - Reference counting doesn't account for complex multi-level nesting
@@ -189,7 +189,7 @@ The core issue is **premature cache entry deletion** in deeply nested scopes:
 1. Expression `E` is defined in outer scope (count=N)
 2. Inner cond/while references `E` (counted as parent reference)
 3. During inner scope evaluation, `E` is accessed M times (M < N)
-4. Inner scope finishes, decrements `E` once (now count=N-1)  
+4. Inner scope finishes, decrements `E` once (now count=N-1)
 5. Later code tries to access `E` but it's gone (was deleted when count hit 0)
 
 **Why It Happens:**
@@ -209,7 +209,7 @@ The core issue is **premature cache entry deletion** in deeply nested scopes:
    - Only delete after the entire scope is finished
    - Keep a "pending deletion" list instead of immediate deletion
 
-3. **Copy-on-Share**  
+3. **Copy-on-Share**
    - When a parent expression is referenced in multiple nested scopes, duplicate its cache entry
    - Each scope manages its own copy
    - Avoids interference between scope levels
@@ -245,7 +245,7 @@ The remaining 12% involves edge cases with deeply nested scopes where reference 
 
 **Recommendation:** The current implementation can be used for most cases. For production, either:
 1. Fix the remaining 6 test cases (estimated: 2-4 hours of focused debugging)
-2. Add a fallback that disables flattening for expressions with deep nesting  
+2. Add a fallback that disables flattening for expressions with deep nesting
 3. Use as-is with a known limitation for deeply nested cond/while/hooks
 
 The infrastructure is solid and the benefits are real - just needs the final polish for complex nesting scenarios.
