@@ -484,10 +484,12 @@ defmodule Nx.Defn.Evaluator do
     {other, caches}
   end
 
-  # Don't delete integer-format entries - keep them with {0, result}
-  # This allows cross-scope references to still find them
-  defp decrement_cache(cache, id, 1, res), do: %{cache | id => {0, res}}
-  defp decrement_cache(cache, id, counter, res), do: %{cache | id => {counter - 1, res}}
+  # Don't delete integer-format entries - keep them with {count-1, result}
+  # For count <= 1, keep at {0, result} to allow cross-scope references
+  defp decrement_cache(cache, id, count, res) when is_integer(count) and count <= 1, do: %{cache | id => {0, res}}
+  defp decrement_cache(cache, id, counter, res) when is_integer(counter), do: %{cache | id => {counter - 1, res}}
+  # If count is not an integer, something is wrong - just keep the cache as-is
+  defp decrement_cache(cache, _id, _count, _res), do: cache
 
   defp eval_parent([cache | caches], id, op, ans, state, acc) do
     case cache do
