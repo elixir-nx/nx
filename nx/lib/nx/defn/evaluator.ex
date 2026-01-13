@@ -215,22 +215,13 @@ defmodule Nx.Defn.Evaluator do
           %{^id => {:expr, count, type, shape, names, vectorized_axes, op_cached, args}} ->
             %{cache | id => {:expr, count + 1, type, shape, names, vectorized_axes, op_cached, args}}
 
-          # Full tensor entry (from cond parent ref) - replace with proper entry
+          # Full tensor entry (from cond parent ref) - treat as already processed
           %{^id => %Nx.Tensor{}} ->
-            # This happens when a cond branch stored a parent ref, and now we're processing
-            # the expression normally. Replace the full tensor with the proper cache entry.
-            # Note: We need to call compute_cache_op which will set count=1, but then
-            # we might need to increment if this is not the first reference
-            new_cache = compute_cache_op(op, tensor, state, cache)
-            # Check if compute_cache_op created a flattened entry or kept integer
-            case new_cache do
-              %{^id => {:expr, 1, type, shape, names, vectorized_axes, op_cached, args}} ->
-                # It's flattened - this is good, count is already 1
-                new_cache
-              _ ->
-                # It's still integer format or something else - just return it
-                new_cache
-            end
+            # This is a parent ref marker from a cond branch. The actual expression
+            # should already be processed in a parent cache level. Don't try to process
+            # it again here - just treat the marker as meaning "this expression exists"
+            # and let the normal reference counting handle it.
+            cache
 
           # Legacy integer - increment count
           %{^id => counter} when is_integer(counter) ->
@@ -317,13 +308,13 @@ defmodule Nx.Defn.Evaluator do
                 %{^id => _} ->
                   {[], {seen_ids, cache}}
 
-                # The ID belongs to our own parents
+                # The ID belongs to our own parents - use Map.put to replace parent refs
                 %{} when is_map_key(parent_ids, id) ->
-                  {[], {seen_ids, Map.put_new(cache, id, entry)}}
+                  {[], {seen_ids, Map.put(cache, id, entry)}}
 
-                # The ID belongs to us
+                # The ID belongs to us - use Map.put to replace parent refs
                 %{} ->
-                  {[], {Map.put(seen_ids, id, true), Map.put_new(cache, id, entry)}}
+                  {[], {Map.put(seen_ids, id, true), Map.put(cache, id, entry)}}
               end
 
             # Handle full tensor entries (old format for parent refs)
@@ -477,9 +468,12 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval_parent([cache | caches], id, op, ans, state, acc) do
     case cache do
-      # Parent ref (full tensor) - continue looking in parent scopes
-      %{^id => %Nx.Tensor{}} ->
-        eval_parent(caches, id, op, ans, state, [cache | acc])
+      # Parent ref (full tensor) - evaluate it directly from the stored tensor
+      %{^id => %Nx.Tensor{} = stored_tensor} ->
+        # The full tensor was stored as a parent ref marker by a cond branch
+        # We can evaluate it directly using the stored information
+        {res, updated_caches} = eval(stored_tensor, state, Enum.reverse(acc, [cache | caches]))
+        {res, updated_caches}
 
       # Flattened entry with result
       %{^id => {:expr, _count, _type, _shape, _names, _vectorized_axes, _op_cached, _args, res}} ->
