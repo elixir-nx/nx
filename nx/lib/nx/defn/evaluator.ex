@@ -218,9 +218,8 @@ defmodule Nx.Defn.Evaluator do
           # Full tensor entry (from cond parent ref) - treat as already processed
           %{^id => %Nx.Tensor{}} ->
             # This is a parent ref marker from a cond branch. The actual expression
-            # should already be processed in a parent cache level. Don't try to process
-            # it again here - just treat the marker as meaning "this expression exists"
-            # and let the normal reference counting handle it.
+            # should already be processed in a parent cache level. Just increment the count.
+            # Don't replace the full tensor - it will be replaced when actually needed.
             cache
 
           # Legacy integer - increment count
@@ -420,7 +419,9 @@ defmodule Nx.Defn.Evaluator do
       # Flattened entry with cached result
       %{^id => {:expr, count, type, shape, names, vectorized_axes, op_cached, args, res}} ->
         debug_node(ans, res, state)
-        new_cache = if count == 1, do: Map.delete(cache, id), else: Map.put(cache, id, {:expr, count - 1, type, shape, names, vectorized_axes, op_cached, args, res})
+        # Don't delete the entry - keep it with the result even if count goes to 0
+        # This allows other scopes to still access the cached result
+        new_cache = Map.put(cache, id, {:expr, count - 1, type, shape, names, vectorized_axes, op_cached, args, res})
         {res, [new_cache | caches]}
 
       # Flattened entry without result - need to evaluate
@@ -430,7 +431,8 @@ defmodule Nx.Defn.Evaluator do
         {res, [cache | caches]} = eval_apply(op_cached, tensor_for_eval, state, [cache | caches])
         state.gc && :erlang.garbage_collect(self())
         debug_node(ans, res, state)
-        new_cache = if count == 1, do: Map.delete(cache, id), else: Map.put(cache, id, {:expr, count - 1, type, shape, names, cached_vectorized_axes, op_cached, args, res})
+        # Don't delete - keep with result and decremented count
+        new_cache = Map.put(cache, id, {:expr, count - 1, type, shape, names, cached_vectorized_axes, op_cached, args, res})
         {res, [new_cache | caches]}
 
       # Parent ref (full tensor) - this should be evaluated in parent scope
@@ -475,8 +477,9 @@ defmodule Nx.Defn.Evaluator do
         {res, updated_caches} = eval(stored_tensor, state, Enum.reverse(acc, [cache | caches]))
         {res, updated_caches}
 
-      # Flattened entry with result
+      # Flattened entry with result (count can be <= 0 if used across scopes)
       %{^id => {:expr, _count, _type, _shape, _names, _vectorized_axes, _op_cached, _args, res}} ->
+        # Return the cached result regardless of count
         {res, Enum.reverse(acc, [cache | caches])}
 
       # Flattened entry without result - evaluate it
@@ -525,17 +528,11 @@ defmodule Nx.Defn.Evaluator do
 
   defp decrement_parents([cache | caches], id) do
     case cache do
-      # Flattened entry with result
-      %{^id => {:expr, 1, _type, _shape, _names, _vectorized_axes, _op, _args, _res}} ->
-        [Map.delete(cache, id) | caches]
-
+      # Flattened entry with result - don't delete, just decrement (can go negative)
       %{^id => {:expr, count, type, shape, names, vectorized_axes, op, args, res}} ->
         [Map.put(cache, id, {:expr, count - 1, type, shape, names, vectorized_axes, op, args, res}) | caches]
 
-      # Flattened entry without result (rare, but handle it)
-      %{^id => {:expr, 1, _type, _shape, _names, _vectorized_axes, _op, _args}} ->
-        [Map.delete(cache, id) | caches]
-
+      # Flattened entry without result - don't delete, just decrement
       %{^id => {:expr, count, type, shape, names, vectorized_axes, op, args}} ->
         [Map.put(cache, id, {:expr, count - 1, type, shape, names, vectorized_axes, op, args}) | caches]
 
