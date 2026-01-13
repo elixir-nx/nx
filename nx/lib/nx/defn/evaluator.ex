@@ -576,8 +576,9 @@ defmodule Nx.Defn.Evaluator do
       %{^id => %Nx.Tensor{}} ->
         [cache | caches]
 
-      # Legacy: {count, value}
-      %{^id => {count, value}} -> [decrement_cache(cache, id, count, value) | caches]
+      # Legacy: {count, value} - only decrement if count > 0
+      %{^id => {count, value}} when count > 0 -> [decrement_cache(cache, id, count, value) | caches]
+      %{^id => {0, _value}} -> [cache | caches]  # Don't decrement below 0
 
       # Legacy: integer count
       %{^id => count} when is_integer(count) -> [%{cache | id => count - 1} | caches]
