@@ -472,7 +472,9 @@ defmodule Nx.Defn.Evaluator do
     {other, caches}
   end
 
-  defp decrement_cache(cache, id, 1, _res), do: Map.delete(cache, id)
+  # Don't delete integer-format entries - keep them with {0, result}
+  # This allows cross-scope references to still find them
+  defp decrement_cache(cache, id, 1, res), do: %{cache | id => {0, res}}
   defp decrement_cache(cache, id, counter, res), do: %{cache | id => {counter - 1, res}}
 
   defp eval_parent([cache | caches], id, op, ans, state, acc) do
