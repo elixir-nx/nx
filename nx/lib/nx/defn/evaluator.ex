@@ -340,9 +340,20 @@ defmodule Nx.Defn.Evaluator do
                   {[], {Map.put(seen_ids, id, true), cache}}
               end
 
-            # Handle integer counters
-            {id, counter}, seen_ids_cache ->
-              {[{id, counter}], seen_ids_cache}
+            # Handle integer counters - add to BOTH clause cache AND parent cache
+            {id, counter}, {seen_ids, cache} ->
+              case seen_ids do
+                # Already processed
+                %{^id => _} ->
+                  # Keep in clause cache
+                  {[{id, counter}], {seen_ids, cache}}
+                
+                # First time seeing this integer op - add to parent cache too
+                %{} ->
+                  # Add to parent cache so it's accessible after branch exits
+                  # But also keep in clause cache for branch-local access
+                  {[{id, counter}], {Map.put(seen_ids, id, true), Map.put(cache, id, counter)}}
+              end
           end)
 
         {Map.new(clause_cache), seen_ids_cache}
