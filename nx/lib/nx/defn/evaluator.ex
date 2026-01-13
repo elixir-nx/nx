@@ -505,13 +505,21 @@ defmodule Nx.Defn.Evaluator do
         {res, Enum.reverse(acc, [Map.put(cache, id, {count, res}) | caches])}
 
       %{} ->
-        # Special case: if this is a parameter/constant/tensor, evaluate it directly
-        # These operations don't have cache entries
+        # Special case: if this is a parameter/constant/tensor/metadata, evaluate it directly
+        # These operations don't have cache entries or are transparent wrappers
         case op do
-          :parameter -> eval_apply(:parameter, ans, state, Enum.reverse(acc, [cache | caches]))
-          :constant -> eval_apply(:constant, ans, state, Enum.reverse(acc, [cache | caches]))
-          :tensor -> eval_apply(:tensor, ans, state, Enum.reverse(acc, [cache | caches]))
-          _ -> eval_parent(caches, id, op, ans, state, [cache | acc])
+          :parameter -> 
+            {res, caches_result} = eval_apply(:parameter, ans, state, Enum.reverse(acc, [cache | caches]))
+            {res, caches_result}
+          :constant -> 
+            {backend, backend_options} = Nx.default_backend()
+            {backend.constant(ans, ans.data.args |> hd(), backend_options), Enum.reverse(acc, [cache | caches])}
+          :tensor -> 
+            {ans.data.args |> hd(), Enum.reverse(acc, [cache | caches])}
+          :metadata ->
+            composite_eval(ans.data.args |> hd(), state, Enum.reverse(acc, [cache | caches]))
+          _ -> 
+            eval_parent(caches, id, op, ans, state, [cache | acc])
         end
     end
   end
