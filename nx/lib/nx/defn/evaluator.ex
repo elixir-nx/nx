@@ -505,11 +505,26 @@ defmodule Nx.Defn.Evaluator do
         {res, Enum.reverse(acc, [Map.put(cache, id, {count, res}) | caches])}
 
       %{} ->
-        eval_parent(caches, id, op, ans, state, [cache | acc])
+        # Special case: if this is a parameter/constant/tensor, evaluate it directly
+        # These operations don't have cache entries
+        case op do
+          :parameter -> eval_apply(:parameter, ans, state, Enum.reverse(acc, [cache | caches]))
+          :constant -> eval_apply(:constant, ans, state, Enum.reverse(acc, [cache | caches]))
+          :tensor -> eval_apply(:tensor, ans, state, Enum.reverse(acc, [cache | caches]))
+          _ -> eval_parent(caches, id, op, ans, state, [cache | acc])
+        end
     end
   end
 
-  defp eval_parent([], _id, _op, ans, _state, _acc) do
+  defp eval_parent([], id, op, ans, _state, acc) do
+    if System.get_env("DEBUG_CACHE") do
+      IO.puts("\n=== CACHE EXPIRED ===")
+      IO.puts("ID: #{inspect(id)}")
+      IO.puts("Op: #{inspect(op)}")
+      IO.puts("Checked #{length(acc)} cache levels")
+      IO.puts("Expr: #{inspect(ans.data, limit: 2)}")
+    end
+    
     raise "trying to read evaluator cache that has expired during expression:\n\n#{inspect(ans)}\n\n" <>
             "Please report this bug with the relevant code that triggers it: https://github.com/elixir-nx/nx"
   end

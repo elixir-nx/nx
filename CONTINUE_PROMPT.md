@@ -8,7 +8,7 @@ I'm working on refactoring `nx/lib/nx/defn/evaluator.ex` to use a flattened cach
 ### ✅ Working (43/49 tests)
 The flattened cache format works perfectly for:
 - Basic arithmetic/tensor operations
-- Simple cond/if/while 
+- Simple cond/if/while
 - Functions, tuples, most hooks
 - Parent scope references in simple cases
 
@@ -93,7 +93,7 @@ Fix the reference counting for nested scopes so all 49 tests pass.
 
 3. Reference counting during cache building vs evaluation:
    - Build-time counts: how many times expression appears in tree
-   - Run-time decrements: how many times expression is evaluated  
+   - Run-time decrements: how many times expression is evaluated
    - These must match exactly
 
 ## ✅ Success Criteria
