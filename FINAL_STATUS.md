@@ -26,7 +26,7 @@ Starting from `a011b1f0` through `139ee75a`
 ## ❌ Remaining Failures (5/49 tests - 10%)
 
 1. **test decompositions lu** - While loop with nested cond + tuples
-2. **test decompositions svd** - While loop with nested cond + tuples  
+2. **test decompositions svd** - While loop with nested cond + tuples
 3. **test cond cache on both** - Hook + attach_token with parent refs
 4. **test cond cache with nested condition** - Triple-nested cond
 5. **test vectorization vectorize works inside defn** - Vectorized_axes edge case
@@ -137,7 +137,7 @@ Flattened entries store the full operation metadata, so even if referenced multi
 
 ### Failure Group 4: Vectorization
 **Pattern**: Vectorized tensor with dynamic axes
-**Issue**: "unexpected vectorized axes in evaluator"  
+**Issue**: "unexpected vectorized axes in evaluator"
 **Hypothesis**: ans.vectorized_axes differs from cached, but reconstructed tensor has wrong axes
 
 ## 🛠️ Potential Solutions
@@ -147,7 +147,7 @@ Don't decrement integer-format entries in `decrement_parents` - only decrement t
 
 ```elixir
 # In decrement_parents, add:
-%{^id => count} when is_integer(count) -> 
+%{^id => count} when is_integer(count) ->
   # Don't decrement integer entries - they manage their own lifecycle
   [cache | caches]
 ```
@@ -232,7 +232,7 @@ The remaining 10% involves complex edge cases with deeply nested scopes and inte
 
 **Recommendation**: Ship this as an improvement with known limitations, or invest 2-4 more hours to reach 100%.
 
-**Branch**: `feature/evaluator-cache-flattening`  
+**Branch**: `feature/evaluator-cache-flattening`
 **Remote**: https://github.com/polvalente/nx/tree/feature/evaluator-cache-flattening
 
 Total work time: ~3-4 hours
