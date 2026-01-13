@@ -508,17 +508,17 @@ defmodule Nx.Defn.Evaluator do
         # Special case: if this is a parameter/constant/tensor/metadata, evaluate it directly
         # These operations don't have cache entries or are transparent wrappers
         case op do
-          :parameter -> 
+          :parameter ->
             {res, caches_result} = eval_apply(:parameter, ans, state, Enum.reverse(acc, [cache | caches]))
             {res, caches_result}
-          :constant -> 
+          :constant ->
             {backend, backend_options} = Nx.default_backend()
             {backend.constant(ans, ans.data.args |> hd(), backend_options), Enum.reverse(acc, [cache | caches])}
-          :tensor -> 
+          :tensor ->
             {ans.data.args |> hd(), Enum.reverse(acc, [cache | caches])}
           :metadata ->
             composite_eval(ans.data.args |> hd(), state, Enum.reverse(acc, [cache | caches]))
-          _ -> 
+          _ ->
             eval_parent(caches, id, op, ans, state, [cache | acc])
         end
     end
@@ -532,7 +532,7 @@ defmodule Nx.Defn.Evaluator do
       IO.puts("Checked #{length(acc)} cache levels")
       IO.puts("Expr: #{inspect(ans.data, limit: 2)}")
     end
-    
+
     raise "trying to read evaluator cache that has expired during expression:\n\n#{inspect(ans)}\n\n" <>
             "Please report this bug with the relevant code that triggers it: https://github.com/elixir-nx/nx"
   end
