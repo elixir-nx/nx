@@ -387,6 +387,18 @@ defmodule Nx.Defn.Evaluator do
   end
 
   # Catch-all for generic operations - store flattened entries
+  # Don't flatten operations with vectorized axes - they need special handling
+  defp compute_cache_op(
+         _op,
+         %Nx.Tensor{vectorized_axes: [_ | _]} = tensor,
+         state,
+         cache
+       ) do
+    # Vectorized operations use integer format for now
+    {_, cache} = Tree.apply_args(tensor, cache, &{&1, compute_cache(&1, state, &2)})
+    cache
+  end
+  
   defp compute_cache_op(
          _op,
          %Nx.Tensor{
@@ -443,14 +455,15 @@ defmodule Nx.Defn.Evaluator do
         {res, [new_cache | caches]}
 
       # Flattened entry without result - need to evaluate
-      %{^id => {:expr, count, type, shape, names, cached_vectorized_axes, op_cached, args}} ->
-        # Reconstruct tensor for eval_apply - use ans.vectorized_axes (may differ from cached)
+      %{^id => {:expr, count, type, shape, names, _cached_vectorized_axes, op_cached, args}} ->
+        # Reconstruct tensor for eval_apply
+        # Use ans.vectorized_axes which represents the current state (may be devectorized)
         tensor_for_eval = reconstruct_tensor(type, shape, names, ans.vectorized_axes, %Expr{id: id, op: op_cached, args: args, context: ans.data.context})
         {res, [cache | caches]} = eval_apply(op_cached, tensor_for_eval, state, [cache | caches])
         state.gc && :erlang.garbage_collect(self())
         debug_node(ans, res, state)
-        # Don't delete - keep with result and decremented count
-        new_cache = Map.put(cache, id, {:expr, count - 1, type, shape, names, cached_vectorized_axes, op_cached, args, res})
+        # Store with result, keeping cached_vectorized_axes for future reference
+        new_cache = Map.put(cache, id, {:expr, count - 1, type, shape, names, ans.vectorized_axes, op_cached, args, res})
         {res, [new_cache | caches]}
 
       # Parent ref (full tensor) - this should be evaluated in parent scope
