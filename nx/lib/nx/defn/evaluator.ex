@@ -454,10 +454,11 @@ defmodule Nx.Defn.Evaluator do
         debug_node(ans, res, state)
         {res, [decrement_cache(cache, id, count, res) | caches]}
 
-      # Legacy: already evaluated {count, result}
-      %{^id => {count, res}} ->
+      # Legacy: already evaluated {count, result} - accept count >= 0
+      %{^id => {count, res}} when count >= 0 ->
         debug_node(ans, res, state)
-        {res, [decrement_cache(cache, id, count, res) | caches]}
+        new_cache = if count == 0, do: cache, else: %{cache | id => {count - 1, res}}
+        {res, [new_cache | caches]}
 
       %{} ->
         # If we don't find the tensor in the current scope,
@@ -500,7 +501,7 @@ defmodule Nx.Defn.Evaluator do
         final_cache = Map.put(updated_cache, id, {:expr, count, type, shape, names, cached_vectorized_axes, op_cached, args, res})
         {res, Enum.reverse(acc, [final_cache | caches])}
 
-      # Legacy: already evaluated {count, result}
+      # Legacy: already evaluated {count, result} - accept any count including 0
       %{^id => {_count, res}} ->
         {res, Enum.reverse(acc, [cache | caches])}
 
