@@ -518,15 +518,7 @@ defmodule Nx.Defn.Evaluator do
     end
   end
 
-  defp eval_parent([], id, op, ans, _state, acc) do
-    if System.get_env("DEBUG_CACHE") do
-      IO.puts("\n=== CACHE EXPIRED ===")
-      IO.puts("ID: #{inspect(id)}")
-      IO.puts("Op: #{inspect(op)}")
-      IO.puts("Checked #{length(acc)} cache levels")
-      IO.puts("Expr: #{inspect(ans.data, limit: 2)}")
-    end
-
+  defp eval_parent([], _id, _op, ans, _state, _acc) do
     raise "trying to read evaluator cache that has expired during expression:\n\n#{inspect(ans)}\n\n" <>
             "Please report this bug with the relevant code that triggers it: https://github.com/elixir-nx/nx"
   end
