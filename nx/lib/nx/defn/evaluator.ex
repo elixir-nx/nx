@@ -203,6 +203,13 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp compute_cache(%Nx.Tensor{data: %Expr{id: id, op: op}} = tensor, state, cache) do
+    # Debug output (can be removed later)
+    # if System.get_env("DEBUG_OPS") do
+    #   count = Process.get(:debug_compute_cache_count, 0) + 1
+    #   Process.put(:debug_compute_cache_count, count)
+    #   IO.puts(:stderr, "[#{count}] compute_cache: #{inspect(op)}")
+    # end
+    
     case state.parent_ids do
       # If the id exists in the parent, the parent will compute it.
       # Store as parent ref marker (will be flattened by parent)
