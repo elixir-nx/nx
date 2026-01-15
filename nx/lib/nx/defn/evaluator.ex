@@ -209,7 +209,7 @@ defmodule Nx.Defn.Evaluator do
     #   Process.put(:debug_compute_cache_count, count)
     #   IO.puts(:stderr, "[#{count}] compute_cache: #{inspect(op)}")
     # end
-    
+
     case state.parent_ids do
       # If the id exists in the parent, the parent will compute it.
       # Store as parent ref marker (will be flattened by parent)
@@ -347,7 +347,7 @@ defmodule Nx.Defn.Evaluator do
                 %{^id => _} ->
                   # Keep in clause cache
                   {[{id, counter}], {seen_ids, cache}}
-                
+
                 # First time seeing this integer op - add to parent cache too
                 %{} ->
                   # Add to parent cache so it's accessible after branch exits
@@ -398,7 +398,7 @@ defmodule Nx.Defn.Evaluator do
     {_, cache} = Tree.apply_args(tensor, cache, &{&1, compute_cache(&1, state, &2)})
     cache
   end
-  
+
   defp compute_cache_op(
          _op,
          %Nx.Tensor{

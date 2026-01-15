@@ -7,7 +7,7 @@
 ### Bug Location Identified
 The 5 failing tests all involve integer-format operations (`:attach_token`, `:elem`, `:cond`) that are NOT found in the cache during evaluation.
 
-**Error Pattern**: "trying to read evaluator cache that has expired"  
+**Error Pattern**: "trying to read evaluator cache that has expired"
 **Op Types**: :attach_token (3 tests), :cond (2 tests)
 
 ### Root Cause Hypothesis
@@ -32,19 +32,19 @@ The 5 failing tests all involve integer-format operations (`:attach_token`, `:el
 
 1. ✅ **No-deletion policy**: Keep flattened entries even with count <= 0
    - Status: Implemented, helps but doesn't solve core issue
-   
+
 2. ✅ **Map.put instead of Map.put_new**: Replace parent refs with flattened entries
    - Status: Implemented, correct fix for a different issue
-   
+
 3. ✅ **Special handling for inline ops**: parameter/constant/tensor/metadata in eval_parent
    - Status: Implemented, fixed 1 test (nested map)
-   
+
 4. ✅ **Direct evaluation of parent ref tensors**: eval(stored_tensor) in eval_parent
    - Status: Implemented, correct approach
-   
+
 5. ❌ **Merging integer counters to parent**: Tried merging integer ops to parent cache
    - Status: Reverted, broke 42 additional tests
-   
+
 6. ❌ **Not decrementing integers in decrement_parents**: Keep integer entries unchanged
    - Status: Tried, didn't help
 
@@ -118,7 +118,7 @@ left * right
 
 **Structure**:
 - 2 conds (left, right)
-- Each cond has 2 branches (true, false)  
+- Each cond has 2 branches (true, false)
 - Each branch uses `res` -> creates attach_token
 - Total: 4 attach_token operations
 
