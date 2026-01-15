@@ -432,14 +432,6 @@ defmodule Nx.Serving do
             when state: term()
 
   @doc """
-  The callback used to terminate the serving.
-
-  It receives the state returned by `init/3`.
-  """
-  @callback terminate(state :: term()) :: any()
-  @optional_callbacks terminate: 1
-
-  @doc """
   Creates a new function serving.
 
   It expects a single- or double-arity function. If a single-arity
@@ -1046,6 +1038,7 @@ defmodule Nx.Serving do
         )
 
     {preprocessed, info} = handle_preprocessing(preprocessing, input)
+
     ref = Process.monitor(pid, alias: :demonitor)
 
     size_or_unknown =
@@ -1504,7 +1497,7 @@ defmodule Nx.Serving do
   end
 
   @impl true
-  def terminate(_reason, %{tasks: tasks, pending_batches: pending_batches, module: module, module_state: module_state}) do
+  def terminate(_reason, %{tasks: tasks, pending_batches: pending_batches}) do
     for {batch_key, queue} <- pending_batches do
       # Emulate the process is gone for entries in the queue
       for {_batch, ref_sizes} <- :queue.to_list(queue) do
@@ -1523,10 +1516,6 @@ defmodule Nx.Serving do
         {^ref, :done} -> Process.demonitor(ref, [:flush])
         {:DOWN, ^ref, :process, _, reason} -> server_reply_down(reason, ref_sizes)
       end
-    end
-
-    if function_exported?(module, :terminate, 1) do
-      module.terminate(module_state)
     end
 
     :ok
@@ -1815,7 +1804,7 @@ defmodule Nx.Serving.Default do
   @behaviour Nx.Serving
 
   @impl true
-  def init(type, fun, partitions) do
+  def init(_type, fun, partitions) do
     batch_funs =
       Enum.with_index(partitions, fn defn_options, index ->
         value =
@@ -1834,23 +1823,7 @@ defmodule Nx.Serving.Default do
         {index, value}
       end)
 
-    IO.puts("Batch funs size: #{:erts_debug.size(batch_funs)}")
-    # IO.puts("Getting flat size")
-    # IO.puts("Batch funs flat size: #{:erts_debug.flat_size(batch_funs)}")
-    Enum.each(batch_funs, fn {index, value} ->
-      IO.puts("Batch fun #{index} size: #{:erts_debug.size(value)}")
-      IO.puts("Getting flat size")
-      # IO.puts("Batch fun #{index} flat size: #{:erts_debug.flat_size(value)}")
-      IO.inspect(:erlang.fun_info(value, :env), label: "Batch fun #{index} env")
-    end)
-
-    if type == :process do
-      ref = make_ref()
-      :persistent_term.put(ref, Map.new(batch_funs))
-      {:ok, {:persistent, ref}}
-    else
-      {:ok, Map.new(batch_funs)}
-    end
+    {:ok, Map.new(batch_funs)}
   end
 
   defp validate_batch_fun!(batch_fun) when is_function(batch_fun, 1), do: batch_fun
@@ -1858,29 +1831,6 @@ defmodule Nx.Serving.Default do
   defp validate_batch_fun!(other) do
     raise "anonymous function given to Nx.Serving.new/2 should return an AOT or " <>
             "JIT compiled function that expects one argument. Got: #{inspect(other)}"
-  end
-
-  @impl true
-  def handle_batch(batch, partition, {:persistent, ref}) do
-    key = batch.key
-
-    wrapped = fn ->
-      batch_funs = :persistent_term.get(ref)
-
-      batch_fun =
-        case batch_funs do
-          %{^partition => batch_keys} when is_map(batch_keys) -> Map.fetch!(batch_keys, key)
-          %{^partition => fun} -> fun
-        end
-
-
-      {batch_fun.(batch), :server_info}
-    end
-
-    IO.puts("Wrapped function size: #{:erts_debug.flat_size(wrapped)}")
-    IO.inspect(:erlang.fun_info(wrapped, :env), label: "Wrapped env")
-
-    {:execute, wrapped, {:persistent, ref}}
   end
 
   @impl true
@@ -1893,11 +1843,4 @@ defmodule Nx.Serving.Default do
 
     {:execute, fn -> {batch_fun.(batch), :server_info} end, batch_funs}
   end
-
-  @impl true
-  def terminate({:persistent, ref}) do
-    :persistent_term.erase(ref)
-  end
-
-  def terminate(_state), do: :ok
 end
