@@ -73,6 +73,33 @@ defmodule Nx.Defn.Compiler do
   """
   @callback __to_backend__(keyword) :: {module, keyword}
 
+  @doc """
+  Callback for compilation of a parallelizable computation.
+
+  Its main purpose is to compile a function for a given `Nx.Defn.Mesh`.
+
+  Receives an opaque `key` used for caching, a `mesh`, a list of `vars`
+  in `[vars]`, the function `fun` which builds a defn expression, a list of
+  argument lists in `args_list`, and the compiler options.
+
+  Using `[vars]` instead of a single `vars` allows the compiler to keep one
+  set of abstract parameters per shard or logical device in the mesh. This is useful
+  when the tensors are already divided into shards.
+  """
+  @callback __shard_jit__(
+    key :: term,
+    mesh :: Nx.Defn.Shard.Mesh.t(),
+    [vars],
+    fun :: (vars -> Nx.Container.t()),
+    args_list :: [[(-> Nx.Tensor.t())]],
+    opts :: keyword
+  ) :: [Nx.Container.t()]
+  when vars: [Nx.Container.t()]
+
+  @optional_callbacks [
+    __shard_jit__: 6
+  ]
+
   # Modules allowed in defn
   @allowed_modules [Nx.Constants, Nx.Defn, Nx.Defn.Kernel, Nx.LinAlg, Nx.Type]
 
@@ -263,6 +290,14 @@ defmodule Nx.Defn.Compiler do
         Enum.map(defn_exports, &compile_each_defn(&1, state))
 
     {:__block__, [], quoted}
+  end
+
+  def __shard_jit__(fun, mesh, params, args_list, opts) do
+    {module, runtime_fun, opts} = prepare_options(fun, opts)
+    module.__shard_jit__(fun, mesh, params, runtime_fun, args_list, opts)
+  rescue
+    e in [UndefinedFunctionError] ->
+      raise_missing_callback(e, :__shard_jit__, 6, __STACKTRACE__)
   end
 
   defp compile_prepare_arities(definitions) do

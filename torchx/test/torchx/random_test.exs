@@ -120,6 +120,11 @@ defmodule Torchx.Nx.RandomTest do
         Nx.Random.uniform_split(key, 0.0, 100.0, type: :bf16),
         Nx.tensor(43.0, type: :bf16)
       )
+    end
+
+    @tag :mps_f64_not_supported
+    test "uniform f64 upcast" do
+      key = Nx.Random.key(44)
 
       # upcast
       assert_equal(

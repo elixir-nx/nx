@@ -228,7 +228,19 @@ defmodule Torchx do
   def eye(size, type, device), do: eye(size, size, type, device)
   defdevice eye(m, n, type, device)
   defdevice from_blob(blob, shape, type, device)
-  defdevice to_device(tensor, device)
+
+  @torch_function {:to_device, 2}
+  def to_device(tensor, device) do
+    {[tensor_ref], _current_device} = prepare_tensors!([tensor])
+    {user_device, index} = normalize_device!(device)
+    target_device_struct = torch_device!(user_device, index)
+
+    case user_device do
+      :cpu -> Torchx.NIF.to_device_cpu(tensor_ref, target_device_struct)
+      _ -> Torchx.NIF.to_device_io(tensor_ref, target_device_struct)
+    end
+    |> unwrap_tensor!(user_device)
+  end
 
   ## Manipulation
 
@@ -466,7 +478,9 @@ defmodule Torchx do
           ref
 
         {other_dev, ref} when is_tensor(other_dev, ref) ->
-          raise ArgumentError, "cannot perform operation across devices #{dev} and #{other_dev}"
+          # Auto-transfer tensor to target device
+          {^dev, new_ref} = Torchx.to_device({other_dev, ref}, dev)
+          new_ref
 
         bad_tensor ->
           raise ArgumentError, "expected a Torchx tensor, got: #{inspect(bad_tensor)}"
@@ -484,7 +498,9 @@ defmodule Torchx do
         {ref, dev}
 
       {dev, ref}, other_dev when is_tensor(dev, ref) ->
-        raise ArgumentError, "cannot perform operation across devices #{dev} and #{other_dev}"
+        # Auto-transfer tensor to target device
+        {^other_dev, new_ref} = Torchx.to_device({dev, ref}, other_dev)
+        {new_ref, other_dev}
 
       [{dev, ref} | _] = tensors, nil when is_tensor(dev, ref) ->
         prepare_tensors_list!(tensors, dev)

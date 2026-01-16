@@ -55,6 +55,10 @@ defmodule Torchx.NxTest do
         type_b <- @types,
         not (op in (@ops_unimplemented_for_bfloat ++ @ops_with_bfloat_specific_result) and
                Nx.Type.merge(type_a, type_b) == {:bf, 16}) do
+      if type_a == {:f, 64} or type_b == {:f, 64} or type_a == {:c, 128} or type_b == {:c, 128} do
+        @tag :mps_f64_not_supported
+      end
+
       test "#{op}(#{Nx.Type.to_string(type_a)}, #{Nx.Type.to_string(type_b)})" do
         op = unquote(op)
         type_a = unquote(type_a)
@@ -69,6 +73,10 @@ defmodule Torchx.NxTest do
         type <- @types,
         not (op in (@ops_unimplemented_for_bfloat ++ @ops_with_bfloat_specific_result) and
                type == {:bf, 16}) do
+      if type == {:f, 64} or type == {:c, 128} do
+        @tag :mps_f64_not_supported
+      end
+
       test "#{op}(#{Nx.Type.to_string(type)}, #{Nx.Type.to_string(type)}) broadcast" do
         op = unquote(op)
         type = unquote(type)
@@ -114,6 +122,10 @@ defmodule Torchx.NxTest do
   describe "unary ops" do
     for op <- @unary_ops -- [:bitwise_not],
         type <- @types do
+      if type == {:f, 64} or type == {:c, 128} do
+        @tag :mps_f64_not_supported
+      end
+
       test "#{op}(#{Nx.Type.to_string(type)})" do
         test_unary_op(unquote(op), unquote(type))
       end
@@ -593,6 +605,9 @@ defmodule Torchx.NxTest do
       )
     end
 
+    # TODO: MPS uses different rounding rules (half-to-even vs half-away-from-zero)
+    # Need to investigate if this can be fixed or if tests need to account for it
+    @tag :mps_round_difference
     test "round/1" do
       assert_all_close(
         Nx.tensor([-2.0, -0.0, 0.0, 2.0]),
@@ -638,6 +653,7 @@ defmodule Torchx.NxTest do
                )
     end
 
+    @tag :mps_f64_not_supported
     test "non-finite to between floats conversions" do
       non_finite = Nx.stack([Nx.Constants.infinity(), Nx.Constants.neg_infinity()])
       non_finite_binary_backend = Nx.backend_copy(non_finite)

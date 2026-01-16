@@ -1,12 +1,18 @@
 defmodule Torchx.DeviceTest do
   use ExUnit.Case, async: true
+  import Nx.Testing
 
   alias Torchx.Backend, as: TB
 
-  if Torchx.device_available?(:cuda) do
-    @device {:cuda, 0}
-  else
-    @device :cpu
+  cond do
+    Torchx.device_available?(:cuda) ->
+      @device {:cuda, 0}
+
+    Torchx.device_available?(:mps) ->
+      @device :mps
+
+    true ->
+      @device :cpu
   end
 
   describe "creation" do
@@ -43,6 +49,21 @@ defmodule Torchx.DeviceTest do
 
       # TODO: we need to raise once the data has been transferred once
       # assert_raise ArgumentError, fn -> Nx.backend_transfer(t) end
+    end
+  end
+
+  describe "indices_to_flatten" do
+    test "works" do
+      t = Nx.tensor([[1, 0, 2], [3, 0, 4], [5, 0, 6]], backend: {TB, device: @device})
+      source = Nx.tensor([[2, 6, 3]], backend: {TB, device: @device})
+
+      expected =
+        Nx.tensor([[0, 6, 0], [0, 0, 0], [2, 0, 3]], backend: {TB, device: @device})
+
+      assert_equal(
+        Nx.window_scatter_max(t, source, 0, {3, 1}, strides: [1, 1]),
+        expected
+      )
     end
   end
 end
