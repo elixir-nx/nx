@@ -38,27 +38,29 @@ defmodule EXLA.Defn do
   @doc false
   def __shard_jit__(key, mesh, vars, fun, args_list, options) do
     input_shardings = options[:input_shardings]
-    
+
     # First validate that input_shardings is a list
     if not is_list(input_shardings) do
       raise ArgumentError, "input_shardings are required for sharding"
     end
-    
+
     # Validate number of input_shardings matches number of parameters
     num_params = length(vars)
     num_shardings = length(input_shardings)
-    
+
     if num_shardings != num_params do
       raise ArgumentError,
             "expected #{num_params} input sharding configuration(s), got #{num_shardings}"
     end
-    
+
     unsharded_shape_multipliers = validate_input_shardings!(mesh, input_shardings, vars)
     vars = calculate_unsharded_inputs(vars, unsharded_shape_multipliers)
 
     options = Keyword.put(options, :mesh, mesh)
 
-    __compile__(key, vars, fun, options).(args_list)
+    compiled_fun = __compile__(key, vars, fun, options)
+
+    compiled_fun.([args_list])
   end
 
   defp validate_input_shardings!(mesh, input_shardings, vars) do
@@ -146,7 +148,7 @@ defmodule EXLA.Defn do
 
         {time, res} =
           :timer.tc(fn ->
-            maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options)
+            maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options, !!options[:mesh])
           end)
 
         debug? &&
@@ -194,7 +196,7 @@ defmodule EXLA.Defn do
     outfeed
   end
 
-  defp maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options)
+  defp maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options, _is_sharded?)
        when Outfeed.will_outfeed(outfeed) do
     {buffers, infeeds} =
       EXLA.Defn.Buffers.split_by_value(args, used_inputs, fn
@@ -220,14 +222,26 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp maybe_outfeed(lock, executable, args, used_inputs, outputs, _outfeed, run_options) do
+  defp maybe_outfeed(lock, executable, args, used_inputs, outputs, _outfeed, run_options, is_sharded?) do
     try do
-      buffers =
-        EXLA.Defn.Buffers.filter_by_indexes(args, used_inputs, fn arg, _i ->
-          EXLA.Defn.Buffers.from_nx!(arg, executable)
-        end)
+      # Check if args are pre-sliced (list of arglists for each partition)
+      input_lists =
+        if is_sharded? do
+          # Wrap raw tensors in functions since from_nx! expects lazy parameters
+          Enum.map(args, fn partition_args ->
+            EXLA.Defn.Buffers.filter_by_indexes(partition_args, used_inputs, fn arg, _i ->
+              EXLA.Defn.Buffers.from_nx!(fn -> arg end, executable)
+            end)
+          end)
+        else
+          # Regular inputs (lazy parameters): convert to buffers then slice
+          buffers =
+            EXLA.Defn.Buffers.filter_by_indexes(args, used_inputs, fn arg, _i ->
+              EXLA.Defn.Buffers.from_nx!(arg, executable)
+            end)
 
-      input_lists = slice_inputs(buffers, executable)
+          slice_inputs(buffers, executable)
+        end
 
       EXLA.Executable.run(executable, input_lists, run_options)
     else
@@ -235,11 +249,10 @@ defmodule EXLA.Defn do
         [EXLA.Defn.Buffers.to_nx!(result, outputs)]
 
       results when is_list(results) ->
-        # For SPMD, we get multiple results (one per partition).
-        # For now, we just take the first one to verify execution.
-        # TODO: Implement re-assembly of sharded outputs
-        [first | _] = results
-        [EXLA.Defn.Buffers.to_nx!(first, outputs)]
+        # For sharded execution, we get a list of results (one per partition)
+        Enum.map(results, fn result ->
+          EXLA.Defn.Buffers.to_nx!(result, outputs)
+        end)
     after
       EXLA.Defn.Lock.unlock(lock)
     end

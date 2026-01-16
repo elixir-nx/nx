@@ -304,20 +304,24 @@ defmodule EXLA do
   @doc """
   A shortcut for `Nx.Defn.shard_jit/3` with the EXLA compiler.
 
-      iex> EXLA.shard_jit(&Nx.add(&1, &1), [Nx.tensor([1, 2, 3])])
-      #Nx.Tensor<
-        s32[3]
-        [2, 4, 6]
-      >`
+  ## Example
+
+      mesh = %Nx.Defn.Mesh{name: "mesh", shape: {2}}
+      fun = EXLA.shard_jit(&Nx.add(&1, &1), mesh, input_shardings: [[[0]]])
+      # Pass sharded inputs (one arglist per partition)
+      fun.([[Nx.tensor([1, 2, 3])], [Nx.tensor([4, 5, 6])]])
+      #=> #Nx.Tensor<
+      #     s32[6]
+      #     [2, 4, 6, 8, 10, 12]
+      #   >
 
   ## Options
 
-    * `:mesh` - a `Nx.Defn.Mesh` struct that defines the mesh to use for the computation.
     * `:input_shardings` - a list of lists of axis indices to shard the input tensors on.
 
   Also accepts the same options as `compile/3`.
   """
-  def shard_jit(function, %Nx.Defn.Mesh{} = mesh, options) when is_list(options) do
+  def shard_jit(function, %Nx.Defn.Mesh{} = mesh, options \\ []) when is_list(options) do
     Nx.Defn.shard_jit(function, mesh, Keyword.put(options, :compiler, EXLA))
   end
 

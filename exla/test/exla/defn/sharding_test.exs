@@ -56,17 +56,28 @@ defmodule EXLA.Defn.ShardingTest do
 
       result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
 
-      mlir = result.mlir_module
+      expected_mlir = """
+      module {
+        sdy.mesh @"3d_mesh" = <["axis_0"=2, "axis_1"=2, "axis_2"=2]>
+        func.func public @main(%arg0: tensor<8x4x2xi32> {sdy.sharding = #sdy.sharding<@"3d_mesh", [{"axis_0", ?}p0, {"axis_1", ?}p0, {"axis_2", ?}p0]>}) -> tensor<8x4x2xi32> {
+          %c = stablehlo.constant dense<2> : tensor<i32>
+          %0 = stablehlo.broadcast_in_dim %c, dims = [] : (tensor<i32>) -> tensor<8x4x2xi32>
+          %1 = stablehlo.multiply %0, %arg0 : tensor<8x4x2xi32>
+          return %1 : tensor<8x4x2xi32>
+        }
+      }
+      """
 
-      assert mlir =~ ~r/sdy\.mesh/
-      assert mlir =~ ~r/"3d_mesh"/
-      assert mlir =~ ~r/sdy\.sharding/
+      assert expected_mlir == result.mlir_module
     end
 
     test "generates correct MLIR with replicated dimensions" do
       fun = fn x -> Nx.add(x, 1) end
 
-      mesh = %Mesh{name: "mesh", shape: {2, 2}}
+      # he did the mesh
+      #       he did the:
+      mesh = %Mesh{name: "monster_mesh", shape: {2, 2}}
+
       # Shard only first dimension, second dimension is replicated
       input_shardings = [[[0], []]]
 
@@ -77,10 +88,19 @@ defmodule EXLA.Defn.ShardingTest do
 
       result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
 
-      mlir = result.mlir_module
+      expected_mlir = """
+      module {
+        sdy.mesh @monster_mesh = <["axis_0"=2, "axis_1"=2]>
+        func.func public @main(%arg0: tensor<8x4xi32> {sdy.sharding = #sdy.sharding<@monster_mesh, [{"axis_0", ?}p0, {?}p0]>}) -> tensor<8x4xi32> {
+          %c = stablehlo.constant dense<1> : tensor<i32>
+          %0 = stablehlo.broadcast_in_dim %c, dims = [] : (tensor<i32>) -> tensor<8x4xi32>
+          %1 = stablehlo.add %0, %arg0 : tensor<8x4xi32>
+          return %1 : tensor<8x4xi32>
+        }
+      }
+      """
 
-      assert mlir =~ ~r/sdy\.mesh/
-      assert mlir =~ ~r/sdy\.sharding/
+      assert expected_mlir == result.mlir_module
     end
 
     test "generates correct MLIR with multi-axis sharding" do
@@ -97,10 +117,17 @@ defmodule EXLA.Defn.ShardingTest do
 
       result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
 
-      mlir = result.mlir_module
+      expected_mlir = """
+      module {
+        sdy.mesh @mesh = <["axis_0"=2, "axis_1"=2]>
+        func.func public @main(%arg0: tensor<8x8xi32> {sdy.sharding = #sdy.sharding<@mesh, [{"axis_0", "axis_1", ?}p0, {?}p0]>}) -> tensor<8x8xi32> {
+          %0 = stablehlo.transpose %arg0, dims = [1, 0] : (tensor<8x8xi32>) -> tensor<8x8xi32>
+          return %0 : tensor<8x8xi32>
+        }
+      }
+      """
 
-      assert mlir =~ ~r/sdy\.mesh/
-      assert mlir =~ ~r/sdy\.sharding/
+      assert expected_mlir == result.mlir_module
     end
 
     test "generates correct MLIR with multiple inputs" do
@@ -134,10 +161,18 @@ defmodule EXLA.Defn.ShardingTest do
 
       result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
 
-      mlir = result.mlir_module
+      expected_mlir = """
+      module {
+        sdy.mesh @mesh = <["axis_0"=2, "axis_1"=2]>
+        func.func public @main(%arg0: tensor<8x2xi32> {sdy.sharding = #sdy.sharding<@mesh, [{"axis_0", ?}p0, {"axis_1", ?}p0]>}, %arg1: tensor<8x2xi32> {sdy.sharding = #sdy.sharding<@mesh, [{"axis_0", ?}p0, {?}p0]>}, %arg2: tensor<8x2xi32> {sdy.sharding = #sdy.sharding<@mesh, [{?}p0, {"axis_1", ?}p0]>}) -> tensor<8x2xi32> {
+          %0 = stablehlo.multiply %arg0, %arg1 : tensor<8x2xi32>
+          %1 = stablehlo.add %0, %arg2 : tensor<8x2xi32>
+          return %1 : tensor<8x2xi32>
+        }
+      }
+      """
 
-      assert mlir =~ ~r/sdy\.mesh/
-      assert mlir =~ ~r/sdy\.sharding/
+      assert expected_mlir == result.mlir_module
     end
   end
 
@@ -240,6 +275,7 @@ defmodule EXLA.Defn.ShardingTest do
   end
 
   describe "num_partitions calculation" do
+    @tag :multi_device
     test "calculates correct num_partitions from mesh shape" do
       fun = fn x -> Nx.add(x, 1) end
 
@@ -256,7 +292,43 @@ defmodule EXLA.Defn.ShardingTest do
       # The module should be compiled with num_partitions = 4
       # We can't directly check this from to_mlir_module, but we can verify
       # it doesn't raise an error
-      assert is_binary(result.mlir_module)
+      expected_mlir = """
+      module {
+        sdy.mesh @mesh = <["axis_0"=2, "axis_1"=2]>
+        func.func public @main(%arg0: tensor<8x2xi32> {sdy.sharding = #sdy.sharding<@mesh, [{"axis_0", ?}p0, {?}p0]>}) -> tensor<8x2xi32> {
+          %c = stablehlo.constant dense<1> : tensor<i32>
+          %0 = stablehlo.broadcast_in_dim %c, dims = [] : (tensor<i32>) -> tensor<8x2xi32>
+          %1 = stablehlo.add %0, %arg0 : tensor<8x2xi32>
+          return %1 : tensor<8x2xi32>
+        }
+      }
+      """
+
+      assert expected_mlir == result.mlir_module
+
+      results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      assert length(results) == 4
+
+      expected_result =
+        Nx.tensor([
+          [1, 2],
+          [3, 4],
+          [5, 6],
+          [7, 8],
+          [1, 2],
+          [3, 4],
+          [5, 6],
+          [7, 8]
+        ])
+
+      device_ids =
+        for r <- results do
+          assert_equal(r, expected_result)
+          r.data.buffer.device_id
+        end
+
+      assert Enum.sort(device_ids) == [0, 1, 2, 3]
     end
 
     test "calculates correct num_partitions for 3D mesh" do
