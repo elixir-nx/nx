@@ -301,6 +301,26 @@ defmodule EXLA do
     Nx.Defn.compile(function, args, Keyword.put(options, :compiler, EXLA))
   end
 
+  @doc """
+  A shortcut for `Nx.Defn.shard_jit/3` with the EXLA compiler.
+
+      iex> EXLA.shard_jit(&Nx.add(&1, &1), [Nx.tensor([1, 2, 3])])
+      #Nx.Tensor<
+        s32[3]
+        [2, 4, 6]
+      >`
+
+  ## Options
+
+    * `:mesh` - a `Nx.Defn.Mesh` struct that defines the mesh to use for the computation.
+    * `:input_shardings` - a list of lists of axis indices to shard the input tensors on.
+
+  Also accepts the same options as `compile/3`.
+  """
+  def shard_jit(function, %Nx.Defn.Mesh{} = mesh, options) when is_list(options) do
+    Nx.Defn.shard_jit(function, mesh, Keyword.put(options, :compiler, EXLA))
+  end
+
   @doc ~S'''
   Takes in a function, the argument templates and the compilation
   options and returns the textual representation of the MLIR module.
@@ -330,6 +350,7 @@ defmodule EXLA do
   '''
   def to_mlir_module(function, args, options \\ []) do
     {nested_compilation?, options} = Keyword.pop(options, :within_defn_compiler, false)
+    mesh = Keyword.get(options, :mesh)
 
     opts =
       Keyword.merge(options,
@@ -338,9 +359,18 @@ defmodule EXLA do
       )
 
     if nested_compilation? do
-      EXLA.Defn.__compile__(function, args, function, opts)
+      if mesh do
+        EXLA.Defn.__shard_jit__(function, mesh, args, function, args, opts)
+      else
+        EXLA.Defn.__compile__(function, args, function, opts)
+      end
     else
-      Nx.Defn.compile(function, args, opts)
+      if mesh do
+        # shard_jit returns a function that expects args as separate parameters
+        Nx.Defn.shard_jit(function, mesh, opts).(args)
+      else
+        Nx.Defn.compile(function, args, opts)
+      end
     end
   catch
     {:mlir_module, ref, used_inputs, output_container} ->
@@ -414,4 +444,7 @@ defmodule EXLA do
 
   @impl true
   defdelegate __to_backend__(opts), to: EXLA.Defn
+
+  @impl true
+  defdelegate __shard_jit__(key, mesh, list_of_vars, fun, args_list, opts), to: EXLA.Defn
 end

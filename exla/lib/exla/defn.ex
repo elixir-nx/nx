@@ -36,6 +36,81 @@ defmodule EXLA.Defn do
   end
 
   @doc false
+  def __shard_jit__(key, mesh, vars, fun, args_list, options) do
+    input_shardings = options[:input_shardings]
+    
+    # First validate that input_shardings is a list
+    if not is_list(input_shardings) do
+      raise ArgumentError, "input_shardings are required for sharding"
+    end
+    
+    # Validate number of input_shardings matches number of parameters
+    num_params = length(vars)
+    num_shardings = length(input_shardings)
+    
+    if num_shardings != num_params do
+      raise ArgumentError,
+            "expected #{num_params} input sharding configuration(s), got #{num_shardings}"
+    end
+    
+    unsharded_shape_multipliers = validate_input_shardings!(mesh, input_shardings, vars)
+    vars = calculate_unsharded_inputs(vars, unsharded_shape_multipliers)
+
+    options = Keyword.put(options, :mesh, mesh)
+
+    __compile__(key, vars, fun, options).(args_list)
+  end
+
+  defp validate_input_shardings!(mesh, input_shardings, vars) do
+    # Create a set of all available mesh axes
+    all_axes =
+      mesh.shape
+      |> tuple_size()
+      |> axes_for_rank()
+      |> MapSet.new()
+
+    # Validate each input tensor's sharding spec
+    Enum.zip_with(input_shardings, vars, fn input_sharding, var ->
+      # Check that sharding spec rank matches tensor rank
+      tensor_rank = tuple_size(var.shape)
+      sharding_rank = length(input_sharding)
+
+      if sharding_rank != tensor_rank do
+        raise ArgumentError,
+              "sharding spec rank (#{sharding_rank}) doesn't match tensor rank (#{tensor_rank})"
+      end
+
+      # Track which axes have been used for this specific tensor
+      {dim_shardings, _used_axes} =
+        Enum.map_reduce(input_sharding, MapSet.new(), fn axis_list, used_axes ->
+          # For each dimension, check that axes are valid and not reused
+          Enum.each(axis_list, fn axis ->
+            if axis not in all_axes do
+              raise ArgumentError,
+                    "axis #{axis} is not valid for mesh with #{MapSet.size(all_axes)} axes"
+            end
+
+            if axis in used_axes do
+              raise ArgumentError, "axis #{axis} was used twice in the same input sharding"
+            end
+          end)
+
+          # Mark these axes as used
+          new_used_axes = Enum.reduce(axis_list, used_axes, &MapSet.put(&2, &1))
+
+          accumulated_dim_shardings =
+            Enum.reduce(axis_list, 1, fn axis, acc ->
+              acc * elem(mesh.shape, axis)
+            end)
+
+          {accumulated_dim_shardings, new_used_axes}
+        end)
+
+      dim_shardings
+    end)
+  end
+
+  @doc false
   def __compile__(key, vars, fun, options) do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
     debug? = Keyword.get(compile_options, :debug, false)
@@ -43,7 +118,10 @@ defmodule EXLA.Defn do
     # We start the callback server regardless if it's needed
     # as it's relatively cheap to start it.
     callback_server_pid =
-      case DynamicSupervisor.start_child(EXLA.CallbackServer.Supervisor, {EXLA.CallbackServer, []}) do
+      case DynamicSupervisor.start_child(
+             EXLA.CallbackServer.Supervisor,
+             {EXLA.CallbackServer, []}
+           ) do
         {:ok, pid} -> pid
         {:error, reason} -> raise "Failed to start EXLA.CallbackServer: #{inspect(reason)}"
       end
@@ -399,7 +477,8 @@ defmodule EXLA.Defn do
               end
 
               if !mesh and input_shardings != [] do
-                raise ArgumentError, "input sharding configs provided but no device mesh was provided"
+                raise ArgumentError,
+                      "input sharding configuration provided but no device mesh was provided"
               end
 
               # Apply sharding annotations to function arguments if provided
@@ -408,11 +487,11 @@ defmodule EXLA.Defn do
 
                 if length(input_shardings) != num_comp_args do
                   raise ArgumentError,
-                        "expected #{num_comp_args} input sharding configs (one per argument), got #{length(input_shardings)}"
+                        "expected #{num_comp_args} input sharding configuration (one per argument), got #{length(input_shardings)}"
                 end
 
                 Enum.with_index(input_shardings, fn sharding, arg_index ->
-                  Function.set_arg_sharding(builder, arg_index, sharding)
+                  Function.set_arg_sharding(builder, arg_index, {mesh, sharding})
                 end)
               end
 
@@ -435,8 +514,7 @@ defmodule EXLA.Defn do
               # Compute num_partitions from mesh and enable SPMD if mesh is provided
               options =
                 if mesh do
-                  num_partitions =
-                    Enum.reduce(mesh.axes, 1, fn {_name, size}, acc -> acc * size end)
+                  num_partitions = Tuple.product(mesh.shape)
 
                   options
                   |> Keyword.put(:num_partitions, num_partitions)
@@ -2179,5 +2257,22 @@ defmodule EXLA.Defn do
 
   defp expr_to_typespec(expr) do
     Typespec.tensor(expr.type, expr.shape)
+  end
+
+  defp calculate_unsharded_inputs(vars, input_shardings) do
+    # We use only the first input list in the collection,
+    # and we just assume they all have the same deep shapes.
+
+    Enum.zip_with(vars, input_shardings, fn var, sharding ->
+      Nx.Defn.Composite.traverse(var, fn
+        %T{shape: shape} = t ->
+          # TODO: we need to decide how vectorization interacts with input shardings
+          updated_shape = shape |> Tuple.to_list() |> Enum.zip_with(sharding, &*/2) |> List.to_tuple()
+          %{t | shape: updated_shape}
+
+        var ->
+          var
+      end)
+    end)
   end
 end

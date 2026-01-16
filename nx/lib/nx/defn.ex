@@ -850,7 +850,9 @@ defmodule Nx.Defn do
   end
 
   def shard_jit(fun, mesh, opts \\ []) when is_function(fun) and is_list(opts) do
-    wrap(fun, &shard_jit_apply(fun, mesh, &1, opts))
+    fn args_list ->
+      shard_jit_apply(fun, mesh, args_list, opts)
+    end
   end
 
   def shard_jit_apply(fun, mesh, args, opts \\ [])
@@ -872,10 +874,13 @@ defmodule Nx.Defn do
     end
   end
 
-  defp do_shard_jit_apply(fun, mesh, args, opts) do
+  defp do_shard_jit_apply(fun, mesh, args_list, opts) do
     opts = prepare_options(opts)
-    {fun, params, _templates, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args)
-    [res] = Nx.Defn.Compiler.__shard_jit__(fun, mesh, params, [flatten], opts)
+    # Use the first arglist to determine function signature
+    [first_args | _] = args_list
+    {fun, params, _templates, _flatten} = Nx.Defn.Compiler.to_lazy_params(fun, first_args)
+    # Pass all arglists to __shard_jit__
+    [res] = Nx.Defn.Compiler.__shard_jit__(fun, mesh, params, args_list, opts)
     res
   end
 
