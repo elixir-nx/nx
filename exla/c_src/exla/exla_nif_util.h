@@ -202,7 +202,9 @@ private:
       } else if (element_type.isBF16()) {
         type_name = exla::atoms::bf;
         type_size = 16;
-      } else if (element_type.isFloat8E4M3FN()) {
+      // Float8E4M3FNType doesn't have a convenience method like isBF16() on the
+      // base mlir::Type class, so we use mlir::isa<> for type checking instead.
+      } else if (mlir::isa<mlir::Float8E4M3FNType>(element_type)) {
         type_name = exla::atoms::f8_e4m3fn;
         type_size = 8;
       } else if (auto float_type =
