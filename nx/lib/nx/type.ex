@@ -139,8 +139,8 @@ defmodule Nx.Type do
   def infinity_binary(type)
   def infinity_binary({:bf, 16}), do: <<0x7F80::16-native>>
   def infinity_binary({:f, 8}), do: <<0x7C::8-native>>
-  # E4M3FN has no infinity, return NaN per OFP8 spec
-  def infinity_binary({:f8_e4m3fn, 8}), do: <<0x7F::8-native>>
+  # E4M3FN has no infinity, saturate to max finite value
+  def infinity_binary({:f8_e4m3fn, 8}), do: <<0x7E::8-native>>
   def infinity_binary({:f, 16}), do: <<0x7C00::16-native>>
   def infinity_binary({:f, 32}), do: <<0x7F800000::32-native>>
   def infinity_binary({:f, 64}), do: <<0x7FF0000000000000::64-native>>
@@ -151,8 +151,8 @@ defmodule Nx.Type do
   def neg_infinity_binary(type)
   def neg_infinity_binary({:bf, 16}), do: <<0xFF80::16-native>>
   def neg_infinity_binary({:f, 8}), do: <<0xFC::8-native>>
-  # E4M3FN has no infinity, return NaN per OFP8 spec
-  def neg_infinity_binary({:f8_e4m3fn, 8}), do: <<0x7F::8-native>>
+  # E4M3FN has no infinity, saturate to min finite value
+  def neg_infinity_binary({:f8_e4m3fn, 8}), do: <<0xFE::8-native>>
   def neg_infinity_binary({:f, 16}), do: <<0xFC00::16-native>>
   def neg_infinity_binary({:f, 32}), do: <<0xFF800000::32-native>>
   def neg_infinity_binary({:f, 64}), do: <<0xFFF0000000000000::64-native>>

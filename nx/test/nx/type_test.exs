@@ -46,13 +46,15 @@ defmodule Nx.TypeTest do
       assert Nx.Type.nan_binary({:f8_e4m3fn, 8}) == <<0x7F::8-native>>
     end
 
-    test "infinity_binary returns NaN (0x7F) since E4M3FN has no infinity" do
+    test "infinity_binary saturates to max finite (0x7E) since E4M3FN has no infinity" do
       # E4M3FN has no infinity per OFP8 spec (FN = "Finite, No infinities")
-      assert Nx.Type.infinity_binary({:f8_e4m3fn, 8}) == <<0x7F::8-native>>
+      # Saturate to max finite value for consistency with overflow behavior
+      assert Nx.Type.infinity_binary({:f8_e4m3fn, 8}) == <<0x7E::8-native>>
     end
 
-    test "neg_infinity_binary returns NaN (0x7F) since E4M3FN has no infinity" do
-      assert Nx.Type.neg_infinity_binary({:f8_e4m3fn, 8}) == <<0x7F::8-native>>
+    test "neg_infinity_binary saturates to min finite (0xFE) since E4M3FN has no infinity" do
+      # Saturate to min finite value for consistency with overflow behavior
+      assert Nx.Type.neg_infinity_binary({:f8_e4m3fn, 8}) == <<0xFE::8-native>>
     end
 
     test "max_binary returns finite max (not infinity)" do
