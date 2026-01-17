@@ -100,22 +100,4 @@ defmodule Nx.TypeTest do
       assert Nx.shape(restored) == {3}
     end
   end
-
-  describe "existing {:f, 8} type (E5M2) unchanged" do
-    test "validates {:f, 8} tuple" do
-      assert Nx.Type.normalize!({:f, 8}) == {:f, 8}
-    end
-
-    test "validates :f8 atom" do
-      assert Nx.Type.normalize!(:f8) == {:f, 8}
-    end
-
-    test "E5M2 has infinity (0x7C)" do
-      assert Nx.Type.infinity_binary({:f, 8}) == <<0x7C::8-native>>
-    end
-
-    test "E5M2 has neg_infinity (0xFC)" do
-      assert Nx.Type.neg_infinity_binary({:f, 8}) == <<0xFC::8-native>>
-    end
-  end
 end

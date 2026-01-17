@@ -87,11 +87,8 @@ defmodule Nx.Type do
   @doc """
   Returns the minimum possible value for the given type.
   """
-  # E4M3FN has no infinity, return finite min
-  def min_binary({:f8_e4m3fn, 8} = type), do: min_finite_binary(type)
-
   def min_binary(type) do
-    if float?(type), do: neg_infinity_binary(type), else: min_finite_binary(type)
+    if infinite_float?(type), do: neg_infinity_binary(type), else: min_finite_binary(type)
   end
 
   @doc """
@@ -121,11 +118,8 @@ defmodule Nx.Type do
   @doc """
   Returns the maximum possible value for the given type.
   """
-  # E4M3FN has no infinity, return finite max
-  def max_binary({:f8_e4m3fn, 8} = type), do: max_finite_binary(type)
-
   def max_binary(type) do
-    if float?(type), do: infinity_binary(type), else: max_finite_binary(type)
+    if infinite_float?(type), do: infinity_binary(type), else: max_finite_binary(type)
   end
 
   @doc """
@@ -598,6 +592,30 @@ defmodule Nx.Type do
   def float?({:bf, _}), do: true
   def float?({:c, _}), do: true
   def float?({_, _}), do: false
+
+  @doc """
+  Returns whether the given float type supports infinity values.
+
+  Most floating point types support infinity, but some specialized
+  formats like E4M3FN do not (the "FN" stands for "Finite, No infinities").
+
+  ## Examples
+
+      iex> Nx.Type.infinite_float?({:f, 32})
+      true
+      iex> Nx.Type.infinite_float?({:bf, 16})
+      true
+      iex> Nx.Type.infinite_float?({:f8_e4m3fn, 8})
+      false
+      iex> Nx.Type.infinite_float?({:s, 32})
+      false
+
+  """
+  def infinite_float?({:f8_e4m3fn, _}), do: false
+  def infinite_float?({:f, _}), do: true
+  def infinite_float?({:bf, _}), do: true
+  def infinite_float?({:c, _}), do: true
+  def infinite_float?(_), do: false
 
   @doc """
   Returns true if the type is a complex number.

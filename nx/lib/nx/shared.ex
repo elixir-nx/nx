@@ -333,7 +333,7 @@ defmodule Nx.Shared do
           mantissa = round(abs_val / :math.pow(2, -6) * 8)
           <<sign::1, 0::4, min(7, mantissa)::3>>
 
-        exp >= 15 ->
+        exp > 15 ->
           # Overflow to max finite (not NaN, since E4M3FN saturates in our impl)
           <<sign::1, 15::4, 6::3>>
 
@@ -343,8 +343,8 @@ defmodule Nx.Shared do
           mantissa = round((significand - 1.0) * 8)
           mantissa = max(0, min(7, mantissa))
 
-          # Check if mantissa 7 at exp 15 (would be NaN)
-          if exp == 15 and mantissa == 7 do
+          # exp=15 with mantissa=7 would be NaN, cap at 6
+          if exp == 15 and mantissa >= 7 do
             <<sign::1, 15::4, 6::3>>
           else
             <<sign::1, exp::4, mantissa::3>>
@@ -354,16 +354,25 @@ defmodule Nx.Shared do
   end
 
   @doc """
-  FP8 E4M3FN write callback for non-finite values.
-  E4M3FN has no infinity, so infinity maps to NaN.
+  FP8 E4M3FN write callback for any value (finite or non-finite).
+  Dispatches to the appropriate writer based on value type.
   """
-  def write_non_finite_f8_e4m3fn(data) do
-    case data do
-      :infinity -> <<0x7F::8>>
-      :neg_infinity -> <<0x7F::8>>
-      :nan -> <<0x7F::8>>
-    end
+  def write_f8_e4m3fn(value) when is_number(value) do
+    write_finite_f8_e4m3fn(value)
   end
+
+  def write_f8_e4m3fn(value) do
+    write_non_finite_f8_e4m3fn(value)
+  end
+
+  @doc """
+  FP8 E4M3FN write callback for non-finite values.
+  E4M3FN has no infinity, so infinity saturates to max/min finite values.
+  This preserves sign information and matches the clamping behavior for overflow.
+  """
+  def write_non_finite_f8_e4m3fn(:infinity), do: <<0x7E::8>>
+  def write_non_finite_f8_e4m3fn(:neg_infinity), do: <<0xFE::8>>
+  def write_non_finite_f8_e4m3fn(:nan), do: <<0x7F::8>>
 
   @doc """
   Complex write callback.
