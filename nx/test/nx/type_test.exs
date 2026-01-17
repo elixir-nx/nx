@@ -91,15 +91,4 @@ defmodule Nx.TypeTest do
       assert byte_size(binary) == 4
     end
   end
-
-  describe "fp8 E4M3FN binary round-trip" do
-    test "to_binary and from_binary round-trip" do
-      original = Nx.tensor([1.0, 2.0, 4.0], type: :f8_e4m3fn)
-      binary = Nx.to_binary(original)
-      restored = Nx.from_binary(binary, {:f8_e4m3fn, 8})
-
-      assert Nx.type(restored) == {:f8_e4m3fn, 8}
-      assert Nx.shape(restored) == {3}
-    end
-  end
 end

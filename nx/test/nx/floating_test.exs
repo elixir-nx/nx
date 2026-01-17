@@ -489,4 +489,15 @@ defmodule Nx.FloatingTest do
       assert_in_delta loaded, 1.5, 0.25
     end
   end
+
+  describe "tensor round-trip" do
+    test "to_binary and from_binary round-trip" do
+      original = Nx.tensor([1.0, 2.0, 4.0], type: :f8_e4m3fn)
+      binary = Nx.to_binary(original)
+      restored = Nx.from_binary(binary, {:f8_e4m3fn, 8})
+
+      assert Nx.type(restored) == {:f8_e4m3fn, 8}
+      assert Nx.shape(restored) == {3}
+    end
+  end
 end
