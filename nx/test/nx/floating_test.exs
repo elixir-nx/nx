@@ -500,4 +500,24 @@ defmodule Nx.FloatingTest do
       assert Nx.shape(restored) == {3}
     end
   end
+
+  describe "tensor creation" do
+    test "creates tensor with :f8_e4m3fn type" do
+      tensor = Nx.tensor([1.0, 2.0, 3.0], type: :f8_e4m3fn)
+      assert Nx.type(tensor) == {:f8_e4m3fn, 8}
+      assert Nx.shape(tensor) == {3}
+    end
+
+    test "creates multi-dimensional tensor" do
+      tensor = Nx.tensor([[1.0, 2.0], [3.0, 4.0]], type: :f8_e4m3fn)
+      assert Nx.type(tensor) == {:f8_e4m3fn, 8}
+      assert Nx.shape(tensor) == {2, 2}
+    end
+
+    test "binary size is 1 byte per element" do
+      tensor = Nx.tensor([1.0, 2.0, 3.0, 4.0], type: :f8_e4m3fn)
+      binary = Nx.to_binary(tensor)
+      assert byte_size(binary) == 4
+    end
+  end
 end

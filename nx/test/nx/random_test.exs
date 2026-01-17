@@ -125,6 +125,12 @@ defmodule Nx.RandomTest do
                Nx.tensor(49.70372348385783, type: :f64)
     end
 
+    test "f8_e4m3fn" do
+      key = Nx.Random.key(44)
+      {result, _key} = Nx.Random.uniform(key, type: :f8_e4m3fn)
+      assert Nx.type(result) == {:f8_e4m3fn, 8}
+    end
+
     test "normal" do
       key = Nx.Random.key(44)
 
