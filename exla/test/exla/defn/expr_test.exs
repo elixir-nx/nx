@@ -104,6 +104,12 @@ defmodule EXLA.Defn.ExprTest do
     test "bf16" do
       assert_equal(return_bf16(), Nx.tensor(1, type: {:bf, 16}))
     end
+
+    defn return_f8_e4m3fn, do: Nx.tensor(1, type: {:f8_e4m3fn, 8})
+
+    test "f8_e4m3fn" do
+      assert_equal(return_f8_e4m3fn(), Nx.tensor(1, type: {:f8_e4m3fn, 8}))
+    end
   end
 
   describe "complex" do
