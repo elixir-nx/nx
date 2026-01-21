@@ -15,7 +15,6 @@ defmodule Torchx.NxLinAlgDoctestTest do
     qr: 2,
     triangular_solve: 3,
     solve: 2,
-    invert: 1,
     determinant: 1,
     pinv: 2,
     least_squares: 3

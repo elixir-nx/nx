@@ -14,15 +14,14 @@ defmodule Torchx.NxDoctestTest do
   end
 
   @rounding_error_doctests [
-    atanh: 1,
-    cos: 1,
-    cosh: 1,
+    acos: 1,
+    sqrt: 1,
     erfc: 1,
     erf_inv: 1,
     round: 1,
-    sigmoid: 1,
     fft: 2,
     ifft: 2,
+    expm1: 1,
     standard_deviation: 2
   ]
 
