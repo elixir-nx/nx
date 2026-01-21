@@ -29,7 +29,16 @@ defmodule EXLA.NIF do
   def mlir_push_region(_function, _arg_types), do: err!()
   def mlir_pop_region(_function), do: err!()
   def mlir_add_mesh(_module, _mesh_name, _axes), do: err!()
-  def mlir_set_function_argument_attribute(_function, _arg_index, _attribute_name, _mesh_name, _dim_shardings), do: err!()
+
+  def mlir_set_function_argument_attribute(
+        _function,
+        _arg_index,
+        _attribute_name,
+        _mesh_name,
+        _dim_shardings
+      ),
+      do: err!()
+
   def mlir_build(_function, _root), do: err!()
 
   def mlir_compile(
