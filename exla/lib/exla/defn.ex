@@ -148,7 +148,16 @@ defmodule EXLA.Defn do
 
         {time, res} =
           :timer.tc(fn ->
-            maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options, !!options[:mesh])
+            maybe_outfeed(
+              lock,
+              executable,
+              args,
+              used_inputs,
+              outputs,
+              outfeed,
+              run_options,
+              !!options[:mesh]
+            )
           end)
 
         debug? &&
@@ -196,7 +205,16 @@ defmodule EXLA.Defn do
     outfeed
   end
 
-  defp maybe_outfeed(lock, executable, args, used_inputs, outputs, outfeed, run_options, _is_sharded?)
+  defp maybe_outfeed(
+         lock,
+         executable,
+         args,
+         used_inputs,
+         outputs,
+         outfeed,
+         run_options,
+         _is_sharded?
+       )
        when Outfeed.will_outfeed(outfeed) do
     {buffers, infeeds} =
       EXLA.Defn.Buffers.split_by_value(args, used_inputs, fn
@@ -222,33 +240,30 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp maybe_outfeed(lock, executable, args, used_inputs, outputs, _outfeed, run_options, is_sharded?) do
+  defp maybe_outfeed(
+         lock,
+         executable,
+         args,
+         used_inputs,
+         outputs,
+         _outfeed,
+         run_options,
+         is_sharded?
+       ) do
     try do
+      args = if is_sharded?, do: args, else: [args]
+
       # Check if args are pre-sliced (list of arglists for each partition)
       input_lists =
-        if is_sharded? do
-          # Wrap raw tensors in functions since from_nx! expects lazy parameters
-          Enum.map(args, fn partition_args ->
-            EXLA.Defn.Buffers.filter_by_indexes(partition_args, used_inputs, fn arg, _i ->
-              EXLA.Defn.Buffers.from_nx!(fn -> arg end, executable)
-            end)
+        Enum.map(args, fn partition_args ->
+          EXLA.Defn.Buffers.filter_by_indexes(partition_args, used_inputs, fn arg, _i ->
+            EXLA.Defn.Buffers.from_nx!(arg, executable)
           end)
-        else
-          # Regular inputs (lazy parameters): convert to buffers then slice
-          buffers =
-            EXLA.Defn.Buffers.filter_by_indexes(args, used_inputs, fn arg, _i ->
-              EXLA.Defn.Buffers.from_nx!(arg, executable)
-            end)
-
-          slice_inputs(buffers, executable)
-        end
+        end)
 
       EXLA.Executable.run(executable, input_lists, run_options)
     else
-      [result] ->
-        [EXLA.Defn.Buffers.to_nx!(result, outputs)]
-
-      results when is_list(results) ->
+      [_ | _] = results ->
         # For sharded execution, we get a list of results (one per partition)
         Enum.map(results, fn result ->
           EXLA.Defn.Buffers.to_nx!(result, outputs)
@@ -259,133 +274,6 @@ defmodule EXLA.Defn do
   end
 
   defp run_key(%{client: %{ref: ref}, device_id: device_id}), do: [ref | device_id]
-
-  defp slice_inputs(buffers, %EXLA.Executable{num_partitions: 1}), do: [buffers]
-
-  defp slice_inputs(
-         buffers,
-         %EXLA.Executable{
-           mesh: mesh,
-           input_shardings: shardings,
-           num_partitions: np
-         }
-       )
-       when np > 1 and not is_nil(mesh) and not is_nil(shardings) do
-    # Build mesh axis map for quick lookup
-    mesh_axes = Map.new(mesh.axes)
-
-    # Generate shards for each partition
-    for partition_idx <- 0..(np - 1) do
-      # Convert linear partition index to mesh coordinates
-      coords = unravel_index(partition_idx, mesh.axes)
-
-      # Slice each buffer according to its sharding spec
-      Enum.zip(buffers, shardings)
-      |> Enum.map(fn {buffer, sharding} ->
-        slice_buffer_for_partition(buffer, sharding, coords, mesh_axes)
-      end)
-    end
-  end
-
-  defp slice_inputs(buffers, %EXLA.Executable{num_partitions: np}),
-    do: List.duplicate(buffers, np)
-
-  # Converts linear partition index to mesh coordinates
-  # Example: index 3 in [x: 2, y: 2] -> %{x: 1, y: 1}
-  defp unravel_index(index, axes) do
-    {coords, _} =
-      Enum.reduce(Enum.reverse(axes), {%{}, index}, fn {name, size}, {acc, current_idx} ->
-        coord = rem(current_idx, size)
-        remaining = div(current_idx, size)
-        {Map.put(acc, name, coord), remaining}
-      end)
-
-    coords
-  end
-
-  # Slices a single buffer for a specific partition based on sharding spec
-  defp slice_buffer_for_partition(
-         %EXLA.BinaryBuffer{data: data, typespec: typespec},
-         sharding,
-         coords,
-         mesh_axes
-       ) do
-    # Convert binary buffer to Nx tensor
-    tensor = binary_buffer_to_nx(data, typespec)
-
-    # Slice along each dimension according to sharding spec
-    sharded_tensor =
-      tensor.shape
-      |> Tuple.to_list()
-      |> Enum.with_index()
-      |> Enum.reduce(tensor, fn {dim_size, dim_idx}, acc ->
-        axis_names = Enum.at(sharding.axes, dim_idx, [])
-
-        if axis_names == [] do
-          # Dimension is replicated, keep full dimension
-          acc
-        else
-          # Special case: size 1 dimensions cannot be sharded
-          # Treat them as replicated (effectively remove sharding)
-          if dim_size == 1 do
-            acc
-          else
-            # Calculate total number of shards for this dimension
-            # (product of all mesh axes this dimension is sharded on)
-            shards_count =
-              Enum.reduce(axis_names, 1, fn name, acc ->
-                acc * Map.fetch!(mesh_axes, name)
-              end)
-
-            # Error if dimension size is less than shards_count (and not size 1)
-            if dim_size < shards_count do
-              raise ArgumentError,
-                    "Cannot shard dimension #{dim_idx} of size #{dim_size} across #{shards_count} shards. " <>
-                      "Dimension size must be >= shards_count (or size 1 for implicit replication)"
-            end
-
-            # Calculate chunk size (assuming even division)
-            chunk_size = div(dim_size, shards_count)
-
-            # Calculate slice index for this partition
-            slice_idx =
-              case axis_names do
-                [name] ->
-                  Map.fetch!(coords, name)
-
-                _ ->
-                  # Multi-axis sharding: calculate linear index from coordinates
-                  # This handles the cartesian product of mesh axes
-                  Enum.reduce(axis_names, 0, fn name, acc ->
-                    coord = Map.fetch!(coords, name)
-                    axis_size = Map.fetch!(mesh_axes, name)
-                    acc * axis_size + coord
-                  end)
-              end
-
-            # Normal case: evenly divisible
-            start = slice_idx * chunk_size
-            Nx.slice_along_axis(acc, start, chunk_size, axis: dim_idx)
-          end
-        end
-      end)
-
-    # Convert back to BinaryBuffer
-    nx_to_binary_buffer(sharded_tensor)
-  end
-
-  # Converts BinaryBuffer to Nx tensor
-  defp binary_buffer_to_nx(data, %EXLA.Typespec{type: type, shape: shape}) do
-    Nx.from_binary(data, type) |> Nx.reshape(shape)
-  end
-
-  # Converts Nx tensor to BinaryBuffer
-  defp nx_to_binary_buffer(tensor) do
-    %EXLA.BinaryBuffer{
-      data: Nx.to_binary(tensor),
-      typespec: %EXLA.Typespec{type: tensor.type, shape: tensor.shape}
-    }
-  end
 
   ## Compile
 
@@ -2280,7 +2168,9 @@ defmodule EXLA.Defn do
       Nx.Defn.Composite.traverse(var, fn
         %T{shape: shape} = t ->
           # TODO: we need to decide how vectorization interacts with input shardings
-          updated_shape = shape |> Tuple.to_list() |> Enum.zip_with(sharding, &*/2) |> List.to_tuple()
+          updated_shape =
+            shape |> Tuple.to_list() |> Enum.zip_with(sharding, &*/2) |> List.to_tuple()
+
           %{t | shape: updated_shape}
 
         var ->
