@@ -10,7 +10,7 @@ defmodule EXLA.Defn.ShardingTest do
       mesh = %Mesh{name: "mesh", shape: {2, 2}}
       # First arg: shard dim 0 on mesh axis 0, dim 1 on mesh axis 1
       # Second arg: shard dim 0 on mesh axis 0, dim 1 not sharded
-      input_shardings = [[[0], [1]], [[0], []]]
+      input_shardings = [%{0 => [0], 1 => [1]}, %{0 => [0]}]
 
       # For mesh {2, 2}, we have 4 partitions
       # Each partition gets a shard of the inputs
@@ -48,7 +48,7 @@ defmodule EXLA.Defn.ShardingTest do
 
       mesh = %Mesh{name: "3d_mesh", shape: {2, 2, 2}}
       # Shard all three dimensions on corresponding mesh axes
-      input_shardings = [[[0], [1], [2]]]
+      input_shardings = [%{0 => [0], 1 => [1], 2 => [2]}]
 
       # For mesh {2, 2, 2}, we have 8 partitions
       # Each partition gets {4, 2, 1} (full tensor {8, 4, 2} / {2, 2, 2})
@@ -79,7 +79,7 @@ defmodule EXLA.Defn.ShardingTest do
       mesh = %Mesh{name: "monster_mesh", shape: {2, 2}}
 
       # Shard only first dimension, second dimension is replicated
-      input_shardings = [[[0], []]]
+      input_shardings = [%{0 => [0]}]
 
       # For mesh {2, 2}, we have 4 partitions
       # Input: shape {8, 4} sharded as [[0], []]
@@ -108,7 +108,7 @@ defmodule EXLA.Defn.ShardingTest do
 
       mesh = %Mesh{name: "mesh", shape: {2, 2}}
       # Shard first dimension on both mesh axes 0 and 1
-      input_shardings = [[[0, 1], []]]
+      input_shardings = [%{0 => [0, 1]}]
 
       # For mesh {2, 2}, we have 4 partitions
       # Input: shape {8, 8} sharded as [[0, 1], []]
@@ -137,11 +137,11 @@ defmodule EXLA.Defn.ShardingTest do
 
       input_shardings = [
         # x: shard dim 0 on axis 0, dim 1 on axis 1
-        [[0], [1]],
+        %{0 => [0], 1 => [1]},
         # y: shard dim 0 on axis 0, dim 1 replicated
-        [[0], []],
+        %{0 => [0]},
         # z: dim 0 replicated, shard dim 1 on axis 1
-        [[], [1]]
+        %{1 => [1]}
       ]
 
       # For mesh {2, 2}, we have 4 partitions
@@ -182,7 +182,7 @@ defmodule EXLA.Defn.ShardingTest do
       # For non-sharded case, we don't need list of lists
       args = [Nx.iota({8, 2})]
 
-      input_shardings = [[[0], []]]
+      input_shardings = [%{0 => [0]}]
 
       assert_raise ArgumentError,
                    ~r/input sharding configuration provided but no device mesh was provided/,
@@ -211,7 +211,7 @@ defmodule EXLA.Defn.ShardingTest do
 
       mesh = %Mesh{name: "mesh", shape: {2, 2}}
       # Only one sharding spec for two arguments
-      input_shardings = [[[0], []]]
+      input_shardings = [%{0 => [0]}]
 
       # For mesh {2, 2}, we have 4 partitions
       # Each partition has 2 inputs
@@ -231,7 +231,7 @@ defmodule EXLA.Defn.ShardingTest do
 
       mesh = %Mesh{name: "mesh", shape: {2, 2}}
       # Mesh has 2 axes (0 and 1), but we reference axis 2
-      input_shardings = [[[2], []]]
+      input_shardings = [%{0 => [2]}]
 
       # For mesh {2, 2}, we have 4 partitions
       args = List.duplicate([Nx.iota({4, 2})], 4)
@@ -246,7 +246,7 @@ defmodule EXLA.Defn.ShardingTest do
 
       mesh = %Mesh{name: "mesh", shape: {2, 2}}
       # Axis 0 used for both dimensions
-      input_shardings = [[[0], [0]]]
+      input_shardings = [%{0 => [0], 1 => [0]}]
 
       # For mesh {2, 2}, we have 4 partitions
       args = List.duplicate([Nx.iota({4, 1})], 4)
@@ -263,7 +263,7 @@ defmodule EXLA.Defn.ShardingTest do
 
       mesh = %Mesh{name: "mesh", shape: {2, 2}}
       # Tensor is rank 2, but sharding spec has 3 dimensions
-      input_shardings = [[[0], [1], []]]
+      input_shardings = [%{0 => [0], 1 => [1], 2 => []}]
 
       # For mesh {2, 2}, we have 4 partitions
       args = List.duplicate([Nx.iota({4, 2})], 4)
@@ -271,6 +271,38 @@ defmodule EXLA.Defn.ShardingTest do
       assert_raise ArgumentError, fn ->
         EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
       end
+    end
+
+    test "raises when negative axis is out of bounds" do
+      fun = fn x -> Nx.add(x, 1) end
+
+      mesh = %Mesh{name: "mesh", shape: {2}}
+      # Tensor is rank 2, but -3 is out of bounds (only -1 and -2 are valid)
+      input_shardings = [%{-3 => [0]}]
+
+      args = List.duplicate([Nx.iota({4, 2})], 2)
+
+      assert_raise ArgumentError,
+                   ~r/given axis \(-3\) invalid for shape with rank 2/,
+                   fn ->
+                     EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+                   end
+    end
+
+    test "raises when positive axis is out of bounds" do
+      fun = fn x -> Nx.add(x, 1) end
+
+      mesh = %Mesh{name: "mesh", shape: {2}}
+      # Tensor is rank 2, but axis 3 is out of bounds
+      input_shardings = [%{3 => [0]}]
+
+      args = List.duplicate([Nx.iota({4, 2})], 2)
+
+      assert_raise ArgumentError,
+                   ~r/given axis \(3\) invalid for shape with rank 2/,
+                   fn ->
+                     EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+                   end
     end
   end
 
@@ -281,7 +313,7 @@ defmodule EXLA.Defn.ShardingTest do
 
       # 2 * 2 = 4 partitions
       mesh = %Mesh{name: "mesh", shape: {2, 2}}
-      input_shardings = [[[0], []]]
+      input_shardings = [%{0 => [0]}]
 
       # For mesh {2, 2}, we have 4 partitions
       # Input sharded [[0], []] -> each partition gets {4, 2}
@@ -336,7 +368,7 @@ defmodule EXLA.Defn.ShardingTest do
 
       # 2 * 2 * 2 = 8 partitions
       mesh = %Mesh{name: "mesh", shape: {2, 2, 2}}
-      input_shardings = [[[0], [1], [2]]]
+      input_shardings = [%{0 => [0], 1 => [1], 2 => [2]}]
 
       # Input sharded [[0], [1], [2]] -> each partition gets {4, 2, 1}
       args = List.duplicate([Nx.iota({4, 2, 1})], 8)
@@ -351,7 +383,7 @@ defmodule EXLA.Defn.ShardingTest do
 
       # 4 partitions
       mesh = %Mesh{name: "mesh", shape: {4}}
-      input_shardings = [[[0]]]
+      input_shardings = [%{0 => [0]}]
 
       # Input sharded [[0]] -> each partition gets {2}
       args = List.duplicate([Nx.iota({2})], 4)
@@ -368,7 +400,7 @@ defmodule EXLA.Defn.ShardingTest do
 
       mesh = %Mesh{name: "mesh", shape: {2, 2}}
       # All dimensions replicated
-      input_shardings = [[[], []]]
+      input_shardings = [%{}]
 
       # For mesh {2, 2}, we have 4 partitions
       # Input fully replicated -> each partition gets full {8, 4}
@@ -384,7 +416,7 @@ defmodule EXLA.Defn.ShardingTest do
 
       mesh = %Mesh{name: "mesh", shape: {2}}
       # Scalar has no dimensions to shard
-      input_shardings = [[]]
+      input_shardings = [%{}]
 
       # For mesh {2}, we have 2 partitions
       # Scalar is replicated across all partitions
@@ -402,11 +434,11 @@ defmodule EXLA.Defn.ShardingTest do
 
       input_shardings = [
         # x: both dimensions sharded
-        [[0], [1]],
+        %{0 => [0], 1 => [1]},
         # y: first dimension sharded, second replicated
-        [[0], []],
+        %{0 => [0]},
         # z: fully replicated
-        [[], []]
+        %{}
       ]
 
       # For mesh {2, 2}, we have 4 partitions
@@ -435,7 +467,7 @@ defmodule EXLA.Defn.ShardingTest do
       fun = fn x -> Nx.add(x, 1) end
 
       mesh = %Mesh{name: "test_mesh", shape: {4, 2}}
-      input_shardings = [[[0], []]]
+      input_shardings = [%{0 => [0]}]
 
       # For mesh {4, 2}, we have 8 partitions
       # Input sharded [[0], []] -> each partition gets {2, 2}
@@ -456,7 +488,7 @@ defmodule EXLA.Defn.ShardingTest do
       fun = fn x -> Nx.add(x, 1) end
 
       mesh = %Mesh{name: "mesh", shape: {2, 2}}
-      input_shardings = [[[0], [1]]]
+      input_shardings = [%{0 => [0], 1 => [1]}]
 
       # For mesh {2, 2}, we have 4 partitions
       # Input sharded [[0], [1]] -> each partition gets {4, 1}
@@ -471,6 +503,74 @@ defmodule EXLA.Defn.ShardingTest do
 
       # Check that the main function exists
       assert mlir =~ ~r/func\.func.*@main/
+    end
+
+    test "supports named tensor dimensions" do
+      fun = fn x -> Nx.add(x, 1) end
+
+      mesh = %Mesh{name: "mesh", shape: {2}}
+      # Use named dimensions instead of indices
+      input_shardings = [%{:batch => [0]}]
+
+      # For mesh {2}, we have 2 partitions
+      # Named dimension :batch should map to first dimension (index 0)
+      args = List.duplicate([Nx.iota({4, 2}, names: [:batch, :features])], 2)
+
+      result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
+
+      # Should generate valid MLIR with sharding on first dimension
+      assert is_binary(result.mlir_module)
+      assert result.mlir_module =~ ~r/sdy\.sharding/
+    end
+
+    test "supports negative axis indices" do
+      fun = fn x -> Nx.add(x, 1) end
+
+      mesh = %Mesh{name: "mesh", shape: {2, 2}}
+      # Use negative indices: -1 for last dimension, -2 for second to last
+      input_shardings = [%{-2 => [0], -1 => [1]}]
+
+      # For mesh {2, 2}, we have 4 partitions
+      # -2 => dim 0 (first), -1 => dim 1 (last) for a rank-2 tensor
+      # This should be equivalent to %{0 => [0], 1 => [1]}
+      args = List.duplicate([Nx.iota({4, 1})], 4)
+
+      result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
+
+      expected_mlir = """
+      module {
+        sdy.mesh @mesh = <["axis_0"=2, "axis_1"=2]>
+        func.func public @main(%arg0: tensor<8x2xi32> {sdy.sharding = #sdy.sharding<@mesh, [{"axis_0", ?}p0, {"axis_1", ?}p0]>}) -> tensor<8x2xi32> {
+          %c = stablehlo.constant dense<1> : tensor<i32>
+          %0 = stablehlo.broadcast_in_dim %c, dims = [] : (tensor<i32>) -> tensor<8x2xi32>
+          %1 = stablehlo.add %0, %arg0 : tensor<8x2xi32>
+          return %1 : tensor<8x2xi32>
+        }
+      }
+      """
+
+      assert expected_mlir == result.mlir_module
+    end
+
+    test "supports mixed positive, negative, and named axes" do
+      fun = fn x -> Nx.add(x, 1) end
+
+      mesh = %Mesh{name: "mesh", shape: {2, 2}}
+      # Mix: positive index 0, negative index -1, and named dimension
+      # For a 3D tensor [batch: 8, height: 4, width: 2]
+      # 0 => batch (first), -1 => width (last)
+      input_shardings = [%{0 => [0], -1 => [1]}]
+
+      args = List.duplicate([Nx.iota({4, 2, 1}, names: [:batch, :height, :width])], 4)
+
+      result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
+
+      # Should generate valid MLIR with sharding on first and last dimensions
+      assert is_binary(result.mlir_module)
+      assert result.mlir_module =~ ~r/sdy\.sharding/
+      # Check that it has sharding for both axis_0 and axis_1
+      assert result.mlir_module =~ ~r/"axis_0"/
+      assert result.mlir_module =~ ~r/"axis_1"/
     end
   end
 end

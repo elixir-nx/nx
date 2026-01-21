@@ -53,17 +53,23 @@ defmodule EXLA.Defn do
             "expected #{num_params} input sharding configuration(s), got #{num_shardings}"
     end
 
-    unsharded_shape_multipliers = validate_input_shardings!(mesh, input_shardings, vars)
+    # Convert map format to list format and validate
+    {input_shardings_list, unsharded_shape_multipliers} =
+      convert_and_validate_input_shardings!(mesh, input_shardings, vars)
+
     vars = calculate_unsharded_inputs(vars, unsharded_shape_multipliers)
 
-    options = Keyword.put(options, :mesh, mesh)
+    options =
+      options
+      |> Keyword.put(:mesh, mesh)
+      |> Keyword.put(:input_shardings, input_shardings_list)
 
     compiled_fun = __compile__(key, vars, fun, options)
 
     compiled_fun.([args_list])
   end
 
-  defp validate_input_shardings!(mesh, input_shardings, vars) do
+  defp convert_and_validate_input_shardings!(mesh, input_shardings, vars) do
     # Create a set of all available mesh axes
     all_axes =
       mesh.shape
@@ -71,45 +77,119 @@ defmodule EXLA.Defn do
       |> axes_for_rank()
       |> MapSet.new()
 
-    # Validate each input tensor's sharding spec
-    Enum.zip_with(input_shardings, vars, fn input_sharding, var ->
-      # Check that sharding spec rank matches tensor rank
-      tensor_rank = tuple_size(var.shape)
-      sharding_rank = length(input_sharding)
+    # Convert and validate each input tensor's sharding spec
+    results =
+      Enum.zip_with(input_shardings, vars, fn input_sharding, var ->
+        unless is_map(input_sharding) do
+          raise ArgumentError,
+                "expected input sharding to be a map, got: #{inspect(input_sharding)}"
+        end
 
-      if sharding_rank != tensor_rank do
-        raise ArgumentError,
-              "sharding spec rank (#{sharding_rank}) doesn't match tensor rank (#{tensor_rank})"
-      end
+        # Convert map format to list format
+        # Map: %{tensor_dim => [mesh_axes]}
+        # List: [[mesh_axes], [mesh_axes], ...]
+        tensor_rank = tuple_size(var.shape)
 
-      # Track which axes have been used for this specific tensor
-      {dim_shardings, _used_axes} =
-        Enum.map_reduce(input_sharding, MapSet.new(), fn axis_list, used_axes ->
-          # For each dimension, check that axes are valid and not reused
-          Enum.each(axis_list, fn axis ->
-            if axis not in all_axes do
+        # Build a mapping from dimension indices to mesh axes
+        dim_to_axes_map =
+          Enum.reduce(input_sharding, %{}, fn {tensor_dim, mesh_axes}, acc ->
+            # Normalize tensor dimension (could be integer, negative integer, or atom name)
+            dim_index = normalize_axis(tensor_dim, var.shape, var.names)
+
+            # Check for duplicate dimension specifications
+            if Map.has_key?(acc, dim_index) do
               raise ArgumentError,
-                    "axis #{axis} is not valid for mesh with #{MapSet.size(all_axes)} axes"
+                    "tensor dimension #{inspect(tensor_dim)} (index #{dim_index}) was specified multiple times"
             end
 
-            if axis in used_axes do
-              raise ArgumentError, "axis #{axis} was used twice in the same input sharding"
-            end
+            Map.put(acc, dim_index, mesh_axes)
           end)
 
-          # Mark these axes as used
-          new_used_axes = Enum.reduce(axis_list, used_axes, &MapSet.put(&2, &1))
+        # Convert to list format (one entry per tensor dimension)
+        dim_shardings_list =
+          for dim_idx <- 0..(tensor_rank - 1)//1 do
+            Map.get(dim_to_axes_map, dim_idx, [])
+          end
 
-          accumulated_dim_shardings =
-            Enum.reduce(axis_list, 1, fn axis, acc ->
-              acc * elem(mesh.shape, axis)
+        # Track which axes have been used for this specific tensor
+        {dim_shardings, _used_axes} =
+          Enum.map_reduce(dim_shardings_list, MapSet.new(), fn axis_list, used_axes ->
+            # For each dimension, check that axes are valid and not reused
+            Enum.each(axis_list, fn axis ->
+              if axis not in all_axes do
+                raise ArgumentError,
+                      "axis #{axis} is not valid for mesh with #{MapSet.size(all_axes)} axes"
+              end
+
+              if axis in used_axes do
+                raise ArgumentError, "axis #{axis} was used twice in the same input sharding"
+              end
             end)
 
-          {accumulated_dim_shardings, new_used_axes}
-        end)
+            # Mark these axes as used
+            new_used_axes = Enum.reduce(axis_list, used_axes, &MapSet.put(&2, &1))
 
-      dim_shardings
-    end)
+            accumulated_dim_shardings =
+              Enum.reduce(axis_list, 1, fn axis, acc ->
+                acc * elem(mesh.shape, axis)
+              end)
+
+            {accumulated_dim_shardings, new_used_axes}
+          end)
+
+        {dim_shardings_list, dim_shardings}
+      end)
+
+    # Separate the list format (for MLIR) and multipliers (for shape calculation)
+    {list_format, multipliers} = Enum.unzip(results)
+    {list_format, multipliers}
+  end
+
+  # Normalize a tensor dimension specification to an integer index.
+  # Follows the same strategy as Nx.Shape.normalize_axis/4.
+  # Supports:
+  # - Non-negative integers: 0, 1, 2, ...
+  # - Negative integers: -1 (last), -2 (second to last), ...
+  # - Atom names: :batch, :features, etc.
+  defp normalize_axis(axis, shape, _names) when is_integer(axis) do
+    rank = tuple_size(shape)
+    normalized = if axis < 0, do: rank + axis, else: axis
+
+    if normalized in 0..(rank - 1)//1 do
+      normalized
+    else
+      raise ArgumentError,
+            "given axis (#{axis}) invalid for shape with rank #{rank}"
+    end
+  end
+
+  defp normalize_axis(nil, _shape, _names) do
+    raise ArgumentError, "axis name cannot be nil"
+  end
+
+  defp normalize_axis(axis, shape, names) when is_atom(axis) do
+    rank = tuple_size(shape)
+
+    case names do
+      names when is_list(names) and length(names) == rank ->
+        case Enum.find_index(names, &(&1 == axis)) do
+          nil ->
+            raise ArgumentError,
+                  "name #{inspect(axis)} not found in tensor with names #{inspect(names)}"
+
+          index ->
+            index
+        end
+
+      _ ->
+        raise ArgumentError,
+              "cannot use named dimension #{inspect(axis)} for tensor without names or mismatched name count"
+    end
+  end
+
+  defp normalize_axis(axis, shape, _names) do
+    raise ArgumentError,
+          "given axis (#{inspect(axis)}) invalid for shape with rank #{tuple_size(shape)}"
   end
 
   @doc false

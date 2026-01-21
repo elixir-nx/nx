@@ -307,7 +307,7 @@ defmodule EXLA do
   ## Example
 
       mesh = %Nx.Defn.Mesh{name: "mesh", shape: {2}}
-      fun = EXLA.shard_jit(&Nx.add(&1, &1), mesh, input_shardings: [[[0]]])
+      fun = EXLA.shard_jit(&Nx.add(&1, &1), mesh, input_shardings: [%{0 => [0]}])
       # Pass sharded inputs (one arglist per partition)
       fun.([[Nx.tensor([1, 2, 3])], [Nx.tensor([4, 5, 6])]])
       #=> #Nx.Tensor<
@@ -317,7 +317,15 @@ defmodule EXLA do
 
   ## Options
 
-    * `:input_shardings` - a list of lists of axis indices to shard the input tensors on.
+    * `:input_shardings` - a list of maps specifying how to shard each input tensor.
+      Each map has tensor dimension (integer index or atom name) as keys and lists of
+      mesh axis indices as values. Dimensions not specified are replicated.
+
+      Examples:
+        - `[%{0 => [0], 1 => [1]}]` - shard first input's dim 0 on mesh axis 0, dim 1 on mesh axis 1
+        - `[%{0 => [0]}, %{1 => [1]}]` - first input sharded on dim 0, second input sharded on dim 1
+        - `[%{0 => [0, 1]}]` - shard dim 0 across both mesh axes 0 and 1
+        - `[%{}]` - fully replicated tensor
 
   Also accepts the same options as `compile/3`.
   """
