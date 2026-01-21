@@ -9,26 +9,21 @@ defmodule EXLA.BackendTest do
   end
 
   @excluded_doctests [
+    asin: 1,
+    atan: 1,
     tan: 1,
-    atanh: 1,
+    acos: 1,
     cosh: 1,
-    sigmoid: 1,
-    expm1: 1,
-    erf: 1,
+    erf_inv: 1,
     erfc: 1,
-    tanh: 1,
+    sinh: 1,
+    atanh: 1,
     asinh: 1,
     logsumexp: 2
   ]
 
-  if is_mac_arm?() do
-    @skip_mac_arm [asin: 1, sin: 1, cos: 1]
-  else
-    @skip_mac_arm []
-  end
-
   doctest Nx,
-    except: [:moduledoc] ++ @excluded_doctests ++ @skip_mac_arm
+    except: [:moduledoc] ++ @excluded_doctests
 
   test "Nx.to_binary/1" do
     t = Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)

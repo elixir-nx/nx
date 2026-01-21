@@ -8,17 +8,13 @@ defmodule Nx.MixProject do
     [
       app: :nx,
       version: @version,
-      elixir: "~> 1.15",
+      elixir: "~> 1.16",
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       docs: docs(),
       name: "Nx",
       description: "Multi-dimensional arrays (tensors) and numerical definitions for Elixir",
-      package: package(),
-      preferred_cli_env: [
-        docs: :docs,
-        "hex.publish": :docs
-      ]
+      package: package()
     ]
   end
 
@@ -27,6 +23,15 @@ defmodule Nx.MixProject do
       extra_applications: [:logger],
       mod: {Nx.Application, []},
       env: [default_backend: {Nx.BinaryBackend, []}, default_defn_options: []]
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
+        docs: :docs,
+        "hex.publish": :docs
+      ]
     ]
   end
 

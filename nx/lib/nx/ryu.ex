@@ -320,10 +320,12 @@ defmodule Nx.Ryu do
   end
 
   defp handle_zero_output_mod(_vr, _vm, _accept, _vm_tz, last_removed_digit)
-       when last_removed_digit >= 5, do: 1
+       when last_removed_digit >= 5,
+       do: 1
 
   defp handle_zero_output_mod(vr, vm, accept, vm_tz, _last_removed_digit)
-       when vr == vm and (not accept or not vm_tz), do: 1
+       when vr == vm and (not accept or not vm_tz),
+       do: 1
 
   defp handle_zero_output_mod(_vr, _vm, _accept, _vm_tz, _last_removed_digit), do: 0
 
