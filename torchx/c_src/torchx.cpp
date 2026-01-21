@@ -979,28 +979,42 @@ REGISTER_TENSOR_NIF_ARITY(cholesky, cholesky_2);
 fine::Ok<
     std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>>>
 qr_1(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
-  TORCH_CATCH_ERROR(
-      [&]() {
-        auto result = torch::linalg_qr(get_tensor(t), "reduced");
-        return fine::Ok(std::make_tuple(
-            fine::make_resource<TorchTensor>(std::get<0>(result)),
-            fine::make_resource<TorchTensor>(std::get<1>(result))));
-      }(),
-      "QR decomposition");
+  try {
+    auto result = torch::linalg_qr(get_tensor(t), "reduced");
+    return fine::Ok(
+        std::make_tuple(fine::make_resource<TorchTensor>(std::get<0>(result)),
+                        fine::make_resource<TorchTensor>(std::get<1>(result))));
+  } catch (const c10::Error &e) {
+    throw std::runtime_error(std::string("QR decomposition") +
+                             " failed: " + e.what());
+  } catch (const std::exception &e) {
+    throw std::runtime_error(std::string("QR decomposition") +
+                             " failed: " + e.what());
+  } catch (...) {
+    throw std::runtime_error(std::string("QR decomposition") +
+                             " failed with unknown error");
+  }
 }
 
 fine::Ok<
     std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>>>
 qr_2(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, bool reduced) {
-  TORCH_CATCH_ERROR(
-      [&]() {
-        auto result =
-            torch::linalg_qr(get_tensor(t), reduced ? "reduced" : "complete");
-        return fine::Ok(std::make_tuple(
-            fine::make_resource<TorchTensor>(std::get<0>(result)),
-            fine::make_resource<TorchTensor>(std::get<1>(result))));
-      }(),
-      "QR decomposition");
+  try {
+    auto result =
+        torch::linalg_qr(get_tensor(t), reduced ? "reduced" : "complete");
+    return fine::Ok(
+        std::make_tuple(fine::make_resource<TorchTensor>(std::get<0>(result)),
+                        fine::make_resource<TorchTensor>(std::get<1>(result))));
+  } catch (const c10::Error &e) {
+    throw std::runtime_error(std::string("QR decomposition") +
+                             " failed: " + e.what());
+  } catch (const std::exception &e) {
+    throw std::runtime_error(std::string("QR decomposition") +
+                             " failed: " + e.what());
+  } catch (...) {
+    throw std::runtime_error(std::string("QR decomposition") +
+                             " failed with unknown error");
+  }
 }
 
 REGISTER_TENSOR_NIF_ARITY(qr, qr_1);
@@ -1011,30 +1025,44 @@ fine::Ok<
     std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>,
                fine::ResourcePtr<TorchTensor>>>
 svd_1(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
-  TORCH_CATCH_ERROR(
-      [&]() {
-        auto result = torch::linalg_svd(get_tensor(t), true);
-        return fine::Ok(std::make_tuple(
-            fine::make_resource<TorchTensor>(std::get<0>(result)),
-            fine::make_resource<TorchTensor>(std::get<1>(result)),
-            fine::make_resource<TorchTensor>(std::get<2>(result))));
-      }(),
-      "SVD decomposition");
+  try {
+    auto result = torch::linalg_svd(get_tensor(t), true);
+    return fine::Ok(
+        std::make_tuple(fine::make_resource<TorchTensor>(std::get<0>(result)),
+                        fine::make_resource<TorchTensor>(std::get<1>(result)),
+                        fine::make_resource<TorchTensor>(std::get<2>(result))));
+  } catch (const c10::Error &e) {
+    throw std::runtime_error(std::string("SVD decomposition") +
+                             " failed: " + e.what());
+  } catch (const std::exception &e) {
+    throw std::runtime_error(std::string("SVD decomposition") +
+                             " failed: " + e.what());
+  } catch (...) {
+    throw std::runtime_error(std::string("SVD decomposition") +
+                             " failed with unknown error");
+  }
 }
 
 fine::Ok<
     std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>,
                fine::ResourcePtr<TorchTensor>>>
 svd_2(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t, bool full_matrices) {
-  TORCH_CATCH_ERROR(
-      [&]() {
-        auto result = torch::linalg_svd(get_tensor(t), full_matrices);
-        return fine::Ok(std::make_tuple(
-            fine::make_resource<TorchTensor>(std::get<0>(result)),
-            fine::make_resource<TorchTensor>(std::get<1>(result)),
-            fine::make_resource<TorchTensor>(std::get<2>(result))));
-      }(),
-      "SVD decomposition");
+  try {
+    auto result = torch::linalg_svd(get_tensor(t), full_matrices);
+    return fine::Ok(
+        std::make_tuple(fine::make_resource<TorchTensor>(std::get<0>(result)),
+                        fine::make_resource<TorchTensor>(std::get<1>(result)),
+                        fine::make_resource<TorchTensor>(std::get<2>(result))));
+  } catch (const c10::Error &e) {
+    throw std::runtime_error(std::string("SVD decomposition") +
+                             " failed: " + e.what());
+  } catch (const std::exception &e) {
+    throw std::runtime_error(std::string("SVD decomposition") +
+                             " failed: " + e.what());
+  } catch (...) {
+    throw std::runtime_error(std::string("SVD decomposition") +
+                             " failed with unknown error");
+  }
 }
 
 REGISTER_TENSOR_NIF_ARITY(svd, svd_1);
@@ -1044,18 +1072,25 @@ fine::Ok<
     std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>,
                fine::ResourcePtr<TorchTensor>>>
 lu(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
-  TORCH_CATCH_ERROR(
-      [&]() {
-        std::tuple<torch::Tensor, torch::Tensor> lu_result =
-            torch::linalg_lu_factor(get_tensor(t));
-        std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> plu =
-            torch::lu_unpack(std::get<0>(lu_result), std::get<1>(lu_result));
-        return fine::Ok(std::make_tuple(
-            fine::make_resource<TorchTensor>(std::get<0>(plu)),
-            fine::make_resource<TorchTensor>(std::get<1>(plu)),
-            fine::make_resource<TorchTensor>(std::get<2>(plu))));
-      }(),
-      "LU decomposition");
+  try {
+    std::tuple<torch::Tensor, torch::Tensor> lu_result =
+        torch::linalg_lu_factor(get_tensor(t));
+    std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> plu =
+        torch::lu_unpack(std::get<0>(lu_result), std::get<1>(lu_result));
+    return fine::Ok(
+        std::make_tuple(fine::make_resource<TorchTensor>(std::get<0>(plu)),
+                        fine::make_resource<TorchTensor>(std::get<1>(plu)),
+                        fine::make_resource<TorchTensor>(std::get<2>(plu))));
+  } catch (const c10::Error &e) {
+    throw std::runtime_error(std::string("LU decomposition") +
+                             " failed: " + e.what());
+  } catch (const std::exception &e) {
+    throw std::runtime_error(std::string("LU decomposition") +
+                             " failed: " + e.what());
+  } catch (...) {
+    throw std::runtime_error(std::string("LU decomposition") +
+                             " failed with unknown error");
+  }
 }
 
 REGISTER_TENSOR_NIF(lu);
@@ -1081,14 +1116,21 @@ REGISTER_TENSOR_NIF(amin);
 fine::Ok<
     std::tuple<fine::ResourcePtr<TorchTensor>, fine::ResourcePtr<TorchTensor>>>
 eigh(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor) {
-  TORCH_CATCH_ERROR(
-      [&]() {
-        auto result = torch::linalg_eigh(get_tensor(tensor));
-        return fine::Ok(std::make_tuple(
-            fine::make_resource<TorchTensor>(std::get<0>(result)),
-            fine::make_resource<TorchTensor>(std::get<1>(result))));
-      }(),
-      "Eigenvalue decomposition (eigh)");
+  try {
+    auto result = torch::linalg_eigh(get_tensor(tensor));
+    return fine::Ok(
+        std::make_tuple(fine::make_resource<TorchTensor>(std::get<0>(result)),
+                        fine::make_resource<TorchTensor>(std::get<1>(result))));
+  } catch (const c10::Error &e) {
+    throw std::runtime_error(std::string("Eigenvalue decomposition (eigh)") +
+                             " failed: " + e.what());
+  } catch (const std::exception &e) {
+    throw std::runtime_error(std::string("Eigenvalue decomposition (eigh)") +
+                             " failed: " + e.what());
+  } catch (...) {
+    throw std::runtime_error(std::string("Eigenvalue decomposition (eigh)") +
+                             " failed with unknown error");
+  }
 }
 
 REGISTER_TENSOR_NIF(eigh);
