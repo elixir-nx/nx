@@ -43,7 +43,10 @@ defmodule EXLA.Defn do
     # We start the callback server regardless if it's needed
     # as it's relatively cheap to start it.
     callback_server_pid =
-      case DynamicSupervisor.start_child(EXLA.CallbackServer.Supervisor, {EXLA.CallbackServer, []}) do
+      case DynamicSupervisor.start_child(
+             EXLA.CallbackServer.Supervisor,
+             {EXLA.CallbackServer, []}
+           ) do
         {:ok, pid} -> pid
         {:error, reason} -> raise "Failed to start EXLA.CallbackServer: #{inspect(reason)}"
       end
