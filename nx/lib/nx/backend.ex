@@ -192,47 +192,49 @@ defmodule Nx.Backend do
 
   Note the `binary` may have fewer elements than the
   tensor size but, in such cases, it must strictly have
-  more elements than `inspect_opts.limit`
-
-  ## Options
-
-  The following must be passed through `Inspect` `:custom_options`
-
-    * `:nx_precision` - Configures the floating-point number printing precision.
-      If set, will print floating-point numbers in scientific notation using the
-      specified number of significant digits. Otherwise, default Elixir printing
-      rules are applied.
+  more elements than `inspect_opts.limit`.
   """
   def inspect(%{shape: shape, type: type}, binary, inspect_opts) do
     open = IA.color("[", :list, inspect_opts)
     sep = IA.color(",", :list, inspect_opts)
     close = IA.color("]", :list, inspect_opts)
 
-    # TODO: This is a palliative accessibility-related solution
-    precision = inspect_opts.custom_options[:nx_precision]
-
     dims = Tuple.to_list(shape)
 
     {data, _rest, _limit} =
-      chunk(dims, binary, type, inspect_opts.limit, precision, {open, sep, close})
+      chunk(dims, binary, type, inspect_opts.limit, {open, sep, close})
 
     data
   end
 
-  defp chunk([], data, type, limit, precision, _docs) do
+  defp chunk([], data, type, limit, _docs) do
     {doc, tail} =
-      Nx.Shared.match_types [type] do
-        <<match!(head, 0), tail::binary>> = data
-        {inspect_value(read!(head, 0), precision), tail}
+      case type do
+        {:s, size} ->
+          <<seg::size(^size)-signed-integer-native, tail::binary>> = data
+          {Integer.to_string(seg), tail}
+
+        {:u, size} ->
+          <<seg::size(^size)-unsigned-integer-native, tail::binary>> = data
+          {Integer.to_string(seg), tail}
+
+        {:c, size} ->
+          half = div(size, 2)
+          <<re::size(^half)-bitstring, im::size(^half)-bitstring, tail::binary>> = data
+          {complex_to_string(re, im, half), tail}
+
+        {type, size} ->
+          <<float::size(^size)-bitstring, tail::bitstring>> = data
+          {float_to_string(float, type, size), tail}
       end
 
     if limit == :infinity, do: {doc, tail, limit}, else: {doc, tail, limit - 1}
   end
 
-  defp chunk([dim | dims], data, type, limit, precision, {open, sep, close} = docs) do
+  defp chunk([dim | dims], data, type, limit, {open, sep, close} = docs) do
     {acc, rest, limit} =
       chunk_each(dim, data, [], limit, fn chunk, limit ->
-        chunk(dims, chunk, type, limit, precision, docs)
+        chunk(dims, chunk, type, limit, docs)
       end)
 
     {open, sep, close, nest} =
@@ -264,43 +266,32 @@ defmodule Nx.Backend do
     chunk_each(dim - 1, rest, [doc | acc], limit, fun)
   end
 
-  defp inspect_value(integer, _) when is_integer(integer), do: Integer.to_string(integer)
-  defp inspect_value(:neg_infinity, _), do: "-Inf"
-  defp inspect_value(:infinity, _), do: "Inf"
-  defp inspect_value(:nan, _), do: "NaN"
-  defp inspect_value(%Complex{} = val, precision), do: complex_to_string(val, precision)
+  defp float_to_string(<<float::64-float-native>>, :f, 64),
+    do: Float.to_string(float)
 
-  defp inspect_value(float, precision), do: float_to_string(float, precision)
+  defp float_to_string(binary, :f, 64),
+    do:
+      (case Nx.Shared.read_non_finite(binary, 64) do
+         :nan -> "NaN"
+         :infinity -> "Inf"
+         :neg_infinity -> "-Inf"
+       end)
 
-  defp float_to_string(float, precision) do
-    [integer_part, decimal_part, exponent_part] =
-      case String.split(Float.to_string(float), [".", "e"], parts: 3) do
-        [i, d] -> [i, d, ""]
-        [i, d, e] -> [i, d, "e" <> e]
-      end
+  defp float_to_string(<<bits::32-native-unsigned>>, :f, 32),
+    do: Nx.Ryu.bits_to_decimal(bits, 23, 8)
 
-    # We'll now prune decimal_part to ensure we have at most `precision`
-    # digits there.
+  defp float_to_string(<<bits::16-native-unsigned>>, :f, 16),
+    do: Nx.Ryu.bits_to_decimal(bits, 10, 5)
 
-    decimal_part =
-      decimal_part
-      |> binary_part(0, min(byte_size(decimal_part), precision))
+  defp float_to_string(<<bits::8-native-unsigned>>, :f, 8),
+    do: Nx.Ryu.bits_to_decimal(bits, 2, 5)
 
-    #  We also prune trailing zeros. Only for more than 1 digit because that single
-    # digit always needs to stay put.
-    decimal_part =
-      if byte_size(decimal_part) > 1 do
-        String.trim_trailing(decimal_part, "0")
-      else
-        decimal_part
-      end
+  defp float_to_string(<<bits::16-native-unsigned>>, :bf, 16),
+    do: Nx.Ryu.bits_to_decimal(bits, 7, 8)
 
-    integer_part <> "." <> decimal_part <> exponent_part
-  end
-
-  def complex_to_string(%Complex{re: re, im: im}, precision) do
-    re_str = inspect_value(re, precision)
-    im_str = inspect_value(im, precision)
+  defp complex_to_string(re, im, float_unit) do
+    re_str = float_to_string(re, :f, float_unit)
+    im_str = float_to_string(im, :f, float_unit)
 
     im_str =
       case im_str do

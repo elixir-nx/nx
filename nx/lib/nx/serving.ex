@@ -1103,8 +1103,10 @@ defmodule Nx.Serving do
 
   defp validate_batch_key!(batch, batch_keys) do
     unless is_map_key(batch_keys, batch.key) do
+      sorted_keys = Enum.sort(Map.keys(batch_keys))
+
       raise ArgumentError,
-            "unknown batch key: #{inspect(batch.key)} (expected one of #{inspect(Map.keys(batch_keys))})"
+            "unknown batch key: #{inspect(batch.key)} (expected one of #{inspect(sorted_keys)})"
     end
   end
 
