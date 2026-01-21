@@ -57,16 +57,6 @@ defmodule EXLA.MLIR.Function do
         Enum.map(axis_indices, &"axis_#{&1}")
       end)
 
-    EXLA.NIF.mlir_set_arg_sharding(ref, arg_index, mesh_name, dims)
-  end
-
-  # For backwards compatibility with old TensorSharding struct
-  def set_arg_sharding(%Function{ref: ref}, arg_index, %{
-        __struct__: struct_name,
-        mesh_name: mesh,
-        axes: dims
-      })
-      when struct_name == EXLA.Sharding.TensorSharding do
-    EXLA.NIF.mlir_set_arg_sharding(ref, arg_index, mesh, dims)
+    EXLA.NIF.mlir_set_function_argument_attribute(ref, arg_index, "sdy.sharding", mesh_name, dims)
   end
 end
