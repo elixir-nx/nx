@@ -51,9 +51,9 @@ jobs:
       fail-fast: false
       matrix:
         working_directory: ["nx", "exla", "torchx"]
-        elixir: ["1.15.8", "1.18.4"]
+        elixir: ["1.16.3", "1.18.4"]
         include:
-          - elixir: "1.15.8"
+          - elixir: "1.16.3"
             otp: "25.3"
           - elixir: "1.18.4"
             otp: "27.3"
