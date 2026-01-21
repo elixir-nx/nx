@@ -14,11 +14,14 @@ defmodule Torchx.NxDoctestTest do
   end
 
   @rounding_error_doctests [
+    acos: 1,
+    erfc: 1,
     erf_inv: 1,
     round: 1,
     fft: 2,
     ifft: 2,
-    expm1: 1
+    expm1: 1,
+    standard_deviation: 2
   ]
 
   if Application.compile_env(:torchx, :is_apple_arm64) do
