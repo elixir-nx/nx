@@ -25,6 +25,16 @@ jobs:
             BASE_SHA="${{ github.event.before }}"
           fi
 
+          # Handle edge cases:
+          # - BASE_SHA is all zeros (first push to branch)
+          # - BASE_SHA is empty
+          # - BASE_SHA doesn't exist (e.g., after force push)
+          if [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ] || \
+             [ -z "$BASE_SHA" ] || \
+             ! git cat-file -e "$BASE_SHA" 2>/dev/null; then
+            BASE_SHA="origin/main"
+          fi
+
           if git diff --name-only $BASE_SHA ${{ github.sha }} | grep -q "^nx/"; then
             echo "nx=true" >> $GITHUB_OUTPUT
           else
@@ -131,13 +141,13 @@ jobs:
         shell: pwsh
         run: |
           if ("${{ needs.detect-changes.outputs.nx-changed }}" -eq "true" -and "${{ matrix.working_directory }}" -eq "nx") {
-            echo "should_run=true" >> $env:GITHUB_ENV
+            echo "should_run=true" | Out-File -FilePath $env:GITHUB_ENV -Append
           } elseif ("${{ needs.detect-changes.outputs.exla-changed }}" -eq "true" -and "${{ matrix.working_directory }}" -eq "exla") {
-            echo "should_run=true" >> $env:GITHUB_ENV
+            echo "should_run=true" | Out-File -FilePath $env:GITHUB_ENV -Append
           } elseif ("${{ needs.detect-changes.outputs.torchx-changed }}" -eq "true" -and "${{ matrix.working_directory }}" -eq "torchx") {
-            echo "should_run=true" >> $env:GITHUB_ENV
+            echo "should_run=true" | Out-File -FilePath $env:GITHUB_ENV -Append
           } else {
-            echo "should_run=false" >> $env:GITHUB_ENV
+            echo "should_run=false" | Out-File -FilePath $env:GITHUB_ENV -Append
           }
       - name: Configure Git
         run: git config --global core.autocrlf input
