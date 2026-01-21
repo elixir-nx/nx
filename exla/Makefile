@@ -22,10 +22,18 @@ XLA_EXTENSION_LIB_LINK_PATH = ../$(CWD_RELATIVE_TO_PRIV_PATH)/$(XLA_EXTENSION_LI
 EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
 
 # Build flags
+#
 # Note that XLA requires c++17, Fine as well
+#
+# We need to define NDEBUG to out-out of debug mode. XLA is precompiled with
+# that flag. In EXLA we include some XLA headers that may have conditionals
+# on NDEBUG. Crucially, the conditionals may be around struct fields and if
+# we omit the flag, the struct fields will differ from what the precompiled
+# library uses leading to incompatible ABI and nasty segfaults.
 CFLAGS += -fPIC -I$(ERTS_INCLUDE_DIR) -I$(FINE_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -Wall -Wno-sign-compare \
 	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
-	 -std=c++17 -w
+	 -std=c++17 -w \
+	 -DNDEBUG
 
 ifdef DEBUG
 	CFLAGS += -g
