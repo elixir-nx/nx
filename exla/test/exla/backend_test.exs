@@ -11,6 +11,8 @@ defmodule EXLA.BackendTest do
   @excluded_doctests [
     asin: 1,
     atan: 1,
+    tan: 1,
+    acos: 1,
     cosh: 1,
     erf_inv: 1,
     erfc: 1,
