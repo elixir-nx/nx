@@ -32,7 +32,9 @@ jobs:
           if [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ] || \
              [ -z "$BASE_SHA" ] || \
              ! git cat-file -e "$BASE_SHA" 2>/dev/null; then
-            BASE_SHA="origin/main"
+            # Fetch main branch to compare against
+            git fetch origin main:main --depth=1 || true
+            BASE_SHA="main"
           fi
 
           if git diff --name-only $BASE_SHA ${{ github.sha }} | grep -q "^nx/"; then
