@@ -508,7 +508,7 @@ defmodule Nx do
       iex> Nx.tensor([1.2, 2.3, 3.4, 4.5])
       #Nx.Tensor<
         f32[4]
-        [1.2000000476837158, 2.299999952316284, 3.4000000953674316, 4.5]
+        [1.2, 2.3, 3.4, 4.5]
       >
 
   The type can be explicitly given. Integers and floats
@@ -5595,7 +5595,7 @@ defmodule Nx do
       iex> Nx.add(1, 2.2)
       #Nx.Tensor<
         f32
-        3.200000047683716
+        3.2
       >
 
   ### Adding a scalar to a tensor
@@ -6023,7 +6023,7 @@ defmodule Nx do
       iex> Nx.divide(1, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
         f32[data: 3]
-        [1.0, 0.5, 0.3333333432674408]
+        [1.0, 0.5, 0.33333334]
       >
 
   ### Dividing tensors
@@ -6034,8 +6034,8 @@ defmodule Nx do
       #Nx.Tensor<
         f32[x: 2][y: 2]
         [
-          [0.10000000149011612, 0.05000000074505806],
-          [0.20000000298023224, 0.10000000149011612]
+          [0.1, 0.05],
+          [0.2, 0.1]
         ]
       >
 
@@ -6045,8 +6045,8 @@ defmodule Nx do
       #Nx.Tensor<
         f32[x: 2][y: 2]
         [
-          [0.10000000149011612, 0.05000000074505806],
-          [0.20000000298023224, 0.10000000149011612]
+          [0.1, 0.05],
+          [0.2, 0.1]
         ]
       >
 
@@ -6056,8 +6056,8 @@ defmodule Nx do
       #Nx.Tensor<
         f32[x: 2][y: 2]
         [
-          [0.10000000149011612, 0.05000000074505806],
-          [0.20000000298023224, 0.10000000149011612]
+          [0.1, 0.05],
+          [0.2, 0.1]
         ]
       >
 
@@ -6182,7 +6182,7 @@ defmodule Nx do
       iex> Nx.atan2(1, 2)
       #Nx.Tensor<
         f32
-        0.46364760398864746
+        0.4636476
       >
 
   ### Arc tangent between tensors and scalars
@@ -6190,13 +6190,13 @@ defmodule Nx do
       iex> Nx.atan2(Nx.tensor([1, 2, 3], names: [:data]), 1)
       #Nx.Tensor<
         f32[data: 3]
-        [0.7853981852531433, 1.1071487665176392, 1.249045729637146]
+        [0.7853982, 1.1071488, 1.2490457]
       >
 
       iex> Nx.atan2(1, Nx.tensor([1.0, 2.0, 3.0], names: [:data]))
       #Nx.Tensor<
         f32[data: 3]
-        [0.7853981852531433, 0.46364760398864746, 0.32175055146217346]
+        [0.7853982, 0.4636476, 0.32175055]
       >
 
   ### Arc tangent between tensors
@@ -8044,7 +8044,7 @@ defmodule Nx do
   for {name, {desc, code, formula}} <- Nx.Shared.unary_math_funs() do
     inputs =
       if name in [:acos, :asin, :atan, :atanh, :erf_inv] do
-        [to_float32(0.1), to_float32(0.5), to_float32(0.9)]
+        [0.1, 0.5, 0.9]
       else
         [1, 2, 3]
       end
@@ -8052,7 +8052,7 @@ defmodule Nx do
     outputs =
       for input <- inputs do
         {res, _} = Code.eval_quoted(code, x: input)
-        to_float32(res)
+        res
       end
 
     complex_check_block =
@@ -8071,15 +8071,15 @@ defmodule Nx do
 
     ## Examples
 
-        iex> Nx.#{name}(#{hd(inputs)})
+        iex> Nx.#{name}(Nx.tensor(#{hd(inputs)}, type: :f64))
         #Nx.Tensor<
-          f32
+          f64
           #{hd(outputs)}
         >
 
-        iex> Nx.#{name}(Nx.tensor(#{inspect(inputs)}, names: [:x]))
+        iex> Nx.#{name}(Nx.tensor(#{inspect(inputs)}, names: [:x], type: :f64))
         #Nx.Tensor<
-          f32[x: 3]
+          f64[x: 3]
           #{inspect(outputs)}
         >
 
@@ -8290,7 +8290,7 @@ defmodule Nx do
        iex> Nx.phase(Complex.new(1, 2))
        #Nx.Tensor<
          f32
-         1.1071487665176392
+         1.1071488
        >
 
        iex> Nx.phase(1)
@@ -8303,7 +8303,7 @@ defmodule Nx do
        iex> Nx.phase(~VEC[1+2i -2+1i])
        #Nx.Tensor<
          f32[2]
-         [1.1071487665176392, 2.677945137023926]
+         [1.1071488, 2.6779451]
        >
   """
   @doc type: :element
@@ -9258,7 +9258,7 @@ defmodule Nx do
       iex> Nx.weighted_mean(Nx.tensor([1, 2, 3]), Nx.tensor([3, 2, 1]))
       #Nx.Tensor<
         f32
-        1.6666666269302368
+        1.6666666
       >
 
   ### Aggregating over axes
@@ -9266,13 +9266,13 @@ defmodule Nx do
       iex> Nx.weighted_mean(Nx.tensor([1, 2, 3], names: [:x]), Nx.tensor([4, 5, 6]), axes: [0])
       #Nx.Tensor<
         f32
-        2.133333444595337
+        2.1333334
       >
 
       iex> Nx.weighted_mean(Nx.tensor([1, 2, 3], type: :u8, names: [:x]), Nx.tensor([1, 3, 5]), axes: [:x])
       #Nx.Tensor<
         f32
-        2.444444417953491
+        2.4444444
       >
 
       iex> t = Nx.iota({3, 4})
@@ -9303,7 +9303,7 @@ defmodule Nx do
         f32[x: 2][y: 2][z: 1]
         [
           [
-            [1.6666666269302368],
+            [1.6666666],
             [3.5]
           ],
           [
@@ -10582,8 +10582,8 @@ defmodule Nx do
             [0.0, 2.0, 5.0, 6.5, 0.0]
           ],
           [
-            [0.0, 1.2000000476837158, 2.200000047683716, 3.200000047683716, 0.0],
-            [0.0, 4.0, 5.0, 6.199999809265137, 0.0]
+            [0.0, 1.2, 2.2, 3.2, 0.0],
+            [0.0, 4.0, 5.0, 6.2, 0.0]
           ]
         ]
       >
@@ -10745,8 +10745,8 @@ defmodule Nx do
             [0.0, 1.0, 2.5, 3.25, 0.0]
           ],
           [
-            [0.0, 0.6000000238418579, 1.100000023841858, 1.600000023841858, 0.0],
-            [0.0, 2.0, 2.5, 3.0999999046325684, 0.0]
+            [0.0, 0.6, 1.1, 1.6, 0.0],
+            [0.0, 2.0, 2.5, 3.1, 0.0]
           ]
         ]
       >
@@ -10882,8 +10882,8 @@ defmodule Nx do
             [-Inf, 2.0, 5.0, 6.5, -Inf]
           ],
           [
-            [-Inf, 1.2000000476837158, 2.200000047683716, 3.200000047683716, -Inf],
-            [-Inf, 4.0, 5.0, 6.199999809265137, -Inf]
+            [-Inf, 1.2, 2.2, 3.2, -Inf],
+            [-Inf, 4.0, 5.0, 6.2, -Inf]
           ]
         ]
       >
@@ -11008,8 +11008,8 @@ defmodule Nx do
             [Inf, 2.0, 5.0, 6.5, Inf]
           ],
           [
-            [Inf, 1.2000000476837158, 2.200000047683716, 3.200000047683716, Inf],
-            [Inf, 4.0, 5.0, 6.199999809265137, Inf]
+            [Inf, 1.2, 2.2, 3.2, Inf],
+            [Inf, 4.0, 5.0, 6.2, Inf]
           ]
         ]
       >
@@ -11137,8 +11137,8 @@ defmodule Nx do
             [1.0, 2.0, 5.0, 6.5, 1.0]
           ],
           [
-            [1.0, 1.2000000476837158, 2.200000047683716, 3.200000047683716, 1.0],
-            [1.0, 4.0, 5.0, 6.199999809265137, 1.0]
+            [1.0, 1.2, 2.2, 3.2, 1.0],
+            [1.0, 4.0, 5.0, 6.2, 1.0]
           ]
         ]
       >
@@ -15823,7 +15823,7 @@ defmodule Nx do
       iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]), ddof: 1)
       #Nx.Tensor<
         f32
-        1.6666666269302368
+        1.6666666
       >
 
       iex> Nx.variance(Nx.tensor([[1, 2], [3, 4]]), axes: [0])
@@ -15906,13 +15906,13 @@ defmodule Nx do
       iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]))
       #Nx.Tensor<
         f32
-        1.1180340051651
+        1.118034
       >
 
       iex> Nx.standard_deviation(Nx.tensor([[1, 2], [3, 4]]), ddof: 1)
       #Nx.Tensor<
         f32
-        1.29099440574646
+        1.2909944
       >
 
       iex> Nx.standard_deviation(Nx.tensor([[1, 2], [10, 20]]), axes: [0])
@@ -15930,13 +15930,13 @@ defmodule Nx do
       iex> Nx.standard_deviation(Nx.tensor([[1, 2], [10, 20]]), axes: [0], ddof: 1)
       #Nx.Tensor<
         f32[2]
-        [6.363961219787598, 12.727922439575195]
+        [6.363961, 12.727922]
       >
 
       iex> Nx.standard_deviation(Nx.tensor([[1, 2], [10, 20]]), axes: [1], ddof: 1)
       #Nx.Tensor<
         f32[2]
-        [0.7071067690849304, 7.071067810058594]
+        [0.70710677, 7.071068]
       >
 
   ### Keeping axes
@@ -15945,7 +15945,7 @@ defmodule Nx do
       #Nx.Tensor<
         f32[1][1]
         [
-          [7.628073215484619]
+          [7.628073]
         ]
       >
 
@@ -15999,8 +15999,8 @@ defmodule Nx do
       #Nx.Tensor<
         f32[2][2]
         [
-          [2.6666667461395264, 2.6666667461395264],
-          [2.6666667461395264, 2.6666667461395264]
+          [2.6666667, 2.6666667],
+          [2.6666667, 2.6666667]
         ]
       >
 
@@ -16009,12 +16009,12 @@ defmodule Nx do
         f32[2][2][2]
         [
           [
-            [2.6666667461395264, 2.6666667461395264],
-            [2.6666667461395264, 2.6666667461395264]
+            [2.6666667, 2.6666667],
+            [2.6666667, 2.6666667]
           ],
           [
-            [2.6666667461395264, 2.6666667461395264],
-            [2.6666667461395264, 2.6666667461395264]
+            [2.6666667, 2.6666667],
+            [2.6666667, 2.6666667]
           ]
         ]
       >
@@ -16032,8 +16032,8 @@ defmodule Nx do
       #Nx.Tensor<
         f32[2][2]
         [
-          [3.6666667461395264, 1.6666666269302368],
-          [1.6666666269302368, 3.6666667461395264]
+          [3.6666667, 1.6666666],
+          [1.6666666, 3.6666667]
         ]
       >
   """
@@ -17268,7 +17268,7 @@ defmodule Nx do
       #Nx.Tensor<
         f16[1][4]
         [
-          [0.0999755859375, 0.199951171875, 0.300048828125, 0.39990234375]
+          [0.1, 0.2, 0.3, 0.4]
         ]
       >
       iex> ~MAT[1+1i 2-2.0i -3]
@@ -17333,7 +17333,7 @@ defmodule Nx do
       iex> ~VEC[0.1 0.2 0.3 0.4]f16
       #Nx.Tensor<
         f16[4]
-        [0.0999755859375, 0.199951171875, 0.300048828125, 0.39990234375]
+        [0.1, 0.2, 0.3, 0.4]
       >
       iex> ~VEC[1+1i 2-2.0i -3]
       #Nx.Tensor<
@@ -17526,13 +17526,13 @@ defmodule Nx do
       iex> Nx.logsumexp(Nx.tensor([1, 2, 3, 4, 5, 6]))
       #Nx.Tensor<
         f32
-        6.456193447113037
+        6.4561934
       >
 
       iex> Nx.logsumexp(Nx.tensor([1, 2, 3, 4, 5, 6]), exp_scaling_factor: 0.5)
       #Nx.Tensor<
         f32
-        5.7630462646484375
+        5.7630463
       >
 
       iex> t = Nx.tensor([1, 2, 3, 4, 5, 6])
@@ -17540,13 +17540,13 @@ defmodule Nx do
       iex> Nx.logsumexp(t, exp_scaling_factor: a)
       #Nx.Tensor<
         f32
-        6.356536865234375
+        6.356537
       >
 
       iex> Nx.logsumexp(Nx.tensor([[1, 2], [3, 4], [5, 6]]))
       #Nx.Tensor<
         f32
-        6.456193447113037
+        6.4561934
       >
 
   ### Aggregating over an axis
@@ -17555,21 +17555,21 @@ defmodule Nx do
       iex> Nx.logsumexp(t, axes: [:x])
       #Nx.Tensor<
         f32[y: 2]
-        [5.1429314613342285, 6.1429314613342285]
+        [5.1429315, 6.1429315]
       >
 
       iex> t = Nx.tensor([[1, 2], [3, 4], [5, 6]], names: [:x, :y])
       iex> Nx.logsumexp(t, axes: [:y])
       #Nx.Tensor<
         f32[x: 3]
-        [2.3132617473602295, 4.31326150894165, 6.31326150894165]
+        [2.3132617, 4.3132615, 6.3132615]
       >
 
       iex> t = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]], names: [:x, :y, :z])
       iex> Nx.logsumexp(t, axes: [:x, :z])
       #Nx.Tensor<
         f32[y: 2]
-        [6.331411361694336, 8.331411361694336]
+        [6.3314114, 8.331411]
       >
 
   ### Keeping axes
@@ -17580,8 +17580,8 @@ defmodule Nx do
         f32[x: 1][y: 2][z: 1]
         [
           [
-            [6.331411361694336],
-            [8.331411361694336]
+            [6.3314114],
+            [8.331411]
           ]
         ]
       >
@@ -17594,9 +17594,9 @@ defmodule Nx do
         vectorized[x: 3]
         f32[1]
         [
-          [2.3132617473602295],
-          [4.31326150894165],
-          [6.31326150894165]
+          [2.3132617],
+          [4.3132615],
+          [6.3132615]
         ]
       >
   """

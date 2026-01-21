@@ -186,7 +186,7 @@ defmodule Nx.Constants do
       iex> Nx.Constants.max_finite({:f, 32})
       #Nx.Tensor<
         f32
-        3.4028234663852886e38
+        3.4028235e38
       >
 
   """
@@ -248,7 +248,7 @@ defmodule Nx.Constants do
       iex> Nx.Constants.min_finite({:f, 32})
       #Nx.Tensor<
         f32
-        -3.4028234663852886e38
+        -3.4028235e38
       >
 
   """
@@ -341,25 +341,25 @@ defmodule Nx.Constants do
       iex> Nx.Constants.smallest_positive_normal({:f, 32})
       #Nx.Tensor<
         f32
-        1.1754943508222875e-38
+        1.1754944e-38
       >
 
       iex> Nx.Constants.smallest_positive_normal({:f, 16})
       #Nx.Tensor<
         f16
-        6.103515625e-5
+        6.104e-5
       >
 
       iex> Nx.Constants.smallest_positive_normal(:bf16)
       #Nx.Tensor<
         bf16
-        1.1754943508222875e-38
+        1.18e-38
       >
 
       iex> Nx.Constants.smallest_positive_normal(:f8)
       #Nx.Tensor<
         f8
-        6.103515625e-5
+        6e-5
       >
 
       iex> Nx.Constants.smallest_positive_normal({:s, 32})
@@ -390,19 +390,19 @@ defmodule Nx.Constants do
       iex> Nx.Constants.epsilon({:f, 32})
       #Nx.Tensor<
         f32
-        1.1920928955078125e-7
+        1.1920929e-7
       >
 
       iex> Nx.Constants.epsilon({:f, 16})
       #Nx.Tensor<
         f16
-        9.765625e-4
+        9.77e-4
       >
 
       iex> Nx.Constants.epsilon(:bf16)
       #Nx.Tensor<
         bf16
-        0.0078125
+        0.0078
       >
 
       iex> Nx.Constants.epsilon(:f8)
@@ -442,19 +442,19 @@ defmodule Nx.Constants do
       iex> Nx.Constants.pi({:f, 32})
       #Nx.Tensor<
         f32
-        3.1415927410125732
+        3.1415927
       >
 
       iex> Nx.Constants.pi({:f, 16})
       #Nx.Tensor<
         f16
-        3.140625
+        3.14
       >
 
       iex> Nx.Constants.pi({:bf, 16})
       #Nx.Tensor<
         bf16
-        3.140625
+        3.14
       >
 
       iex> Nx.Constants.pi({:f, 8})
@@ -494,19 +494,19 @@ defmodule Nx.Constants do
       iex> Nx.Constants.e({:f, 32})
       #Nx.Tensor<
         f32
-        2.7182817459106445
+        2.7182817
       >
 
       iex> Nx.Constants.e({:f, 16})
       #Nx.Tensor<
         f16
-        2.71875
+        2.719
       >
 
       iex> Nx.Constants.e({:bf, 16})
       #Nx.Tensor<
         bf16
-        2.703125
+        2.7
       >
 
       iex> Nx.Constants.e({:f, 8})
@@ -546,19 +546,19 @@ defmodule Nx.Constants do
       iex> Nx.Constants.euler_gamma({:f, 32})
       #Nx.Tensor<
         f32
-        0.5772156715393066
+        0.5772157
       >
 
       iex> Nx.Constants.euler_gamma({:f, 16})
       #Nx.Tensor<
         f16
-        0.5771484375
+        0.577
       >
 
       iex> Nx.Constants.euler_gamma({:bf, 16})
       #Nx.Tensor<
         bf16
-        0.57421875
+        0.574
       >
 
       iex> Nx.Constants.euler_gamma({:f, 8})

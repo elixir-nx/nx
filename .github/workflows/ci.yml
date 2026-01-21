@@ -25,6 +25,18 @@ jobs:
             BASE_SHA="${{ github.event.before }}"
           fi
 
+          # Handle edge cases:
+          # - BASE_SHA is all zeros (first push to branch)
+          # - BASE_SHA is empty
+          # - BASE_SHA doesn't exist (e.g., after force push)
+          if [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ] || \
+             [ -z "$BASE_SHA" ] || \
+             ! git cat-file -e "$BASE_SHA" 2>/dev/null; then
+            # Fetch main branch to compare against
+            git fetch origin main:main --depth=1 || true
+            BASE_SHA="main"
+          fi
+
           if git diff --name-only $BASE_SHA ${{ github.sha }} | grep -q "^nx/"; then
             echo "nx=true" >> $GITHUB_OUTPUT
           else
@@ -51,9 +63,9 @@ jobs:
       fail-fast: false
       matrix:
         working_directory: ["nx", "exla", "torchx"]
-        elixir: ["1.15.8", "1.18.4"]
+        elixir: ["1.16.3", "1.18.4"]
         include:
-          - elixir: "1.15.8"
+          - elixir: "1.16.3"
             otp: "25.3"
           - elixir: "1.18.4"
             otp: "27.3"
@@ -131,13 +143,13 @@ jobs:
         shell: pwsh
         run: |
           if ("${{ needs.detect-changes.outputs.nx-changed }}" -eq "true" -and "${{ matrix.working_directory }}" -eq "nx") {
-            echo "should_run=true" >> $env:GITHUB_ENV
+            echo "should_run=true" | Out-File -FilePath $env:GITHUB_ENV -Append
           } elseif ("${{ needs.detect-changes.outputs.exla-changed }}" -eq "true" -and "${{ matrix.working_directory }}" -eq "exla") {
-            echo "should_run=true" >> $env:GITHUB_ENV
+            echo "should_run=true" | Out-File -FilePath $env:GITHUB_ENV -Append
           } elseif ("${{ needs.detect-changes.outputs.torchx-changed }}" -eq "true" -and "${{ matrix.working_directory }}" -eq "torchx") {
-            echo "should_run=true" >> $env:GITHUB_ENV
+            echo "should_run=true" | Out-File -FilePath $env:GITHUB_ENV -Append
           } else {
-            echo "should_run=false" >> $env:GITHUB_ENV
+            echo "should_run=false" | Out-File -FilePath $env:GITHUB_ENV -Append
           }
       - name: Configure Git
         run: git config --global core.autocrlf input

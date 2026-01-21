@@ -237,7 +237,7 @@ defmodule Nx.Tensor do
 
       shape = Nx.Shape.to_algebra(shape, names, open, close)
 
-      # TO-DO: this is not the right way, but helps validate results
+      # Devectorizing helps validate results
       data = tensor.data.__struct__.inspect(Nx.devectorize(tensor), opts)
 
       inner =

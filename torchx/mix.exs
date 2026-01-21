@@ -10,7 +10,7 @@ defmodule Torchx.MixProject do
     [
       app: :torchx,
       version: @version,
-      elixir: "~> 1.15",
+      elixir: "~> 1.16",
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       docs: docs(),
@@ -19,10 +19,6 @@ defmodule Torchx.MixProject do
       name: "Torchx",
       description: "LibTorch bindings and backend for Nx",
       package: package(),
-      preferred_cli_env: [
-        docs: :docs,
-        "hex.publish": :docs
-      ],
 
       # Compilers
       compilers: @libtorch_compilers ++ Mix.compilers(),
@@ -33,6 +29,15 @@ defmodule Torchx.MixProject do
   def application do
     [
       extra_applications: [:logger]
+    ]
+  end
+
+  def cli do
+    [
+      preferred_envs: [
+        docs: :docs,
+        "hex.publish": :docs
+      ]
     ]
   end
 
