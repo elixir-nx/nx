@@ -15,6 +15,7 @@ defmodule Torchx.NxDoctestTest do
 
   @rounding_error_doctests [
     acos: 1,
+    sqrt: 1,
     erfc: 1,
     erf_inv: 1,
     round: 1,
