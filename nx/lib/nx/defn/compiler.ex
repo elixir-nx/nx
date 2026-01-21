@@ -87,14 +87,14 @@ defmodule Nx.Defn.Compiler do
   when the tensors are already divided into shards.
   """
   @callback __shard_jit__(
-    key :: term,
-    mesh :: Nx.Defn.Shard.Mesh.t(),
-    [vars],
-    fun :: (vars -> Nx.Container.t()),
-    args_list :: [[(-> Nx.Tensor.t())]],
-    opts :: keyword
-  ) :: [Nx.Container.t()]
-  when vars: [Nx.Container.t()]
+              key :: term,
+              mesh :: Nx.Defn.Shard.Mesh.t(),
+              [vars],
+              fun :: (vars -> Nx.Container.t()),
+              args_list :: [[(-> Nx.Tensor.t())]],
+              opts :: keyword
+            ) :: [Nx.Container.t()]
+            when vars: [Nx.Container.t()]
 
   @optional_callbacks [
     __shard_jit__: 6
