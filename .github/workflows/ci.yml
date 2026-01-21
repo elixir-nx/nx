@@ -75,7 +75,7 @@ jobs:
         working-directory: ${{ matrix.working_directory }}
     env:
       MIX_ENV: test
-      XLA_FLAGS: --xla_force_host_platform_device_count=2
+      XLA_FLAGS: --xla_force_host_platform_device_count=4
     steps:
       - name: Set conditional variables
         working-directory: .
@@ -136,7 +136,7 @@ jobs:
         working-directory: ${{ matrix.working_directory }}
     env:
       MIX_ENV: test
-      XLA_FLAGS: --xla_force_host_platform_device_count=2
+      XLA_FLAGS: --xla_force_host_platform_device_count=4
     steps:
       - name: Set conditional variables
         working-directory: .
