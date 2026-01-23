@@ -41,7 +41,8 @@ defmodule EXLA.Defn do
 
     # First validate that input_shardings is a list
     if not is_list(input_shardings) do
-      raise ArgumentError, "input_shardings are required for sharding in EXLA, see EXLA.shard_jit/3 for more information"
+      raise ArgumentError,
+            "input_shardings are required for sharding in EXLA, see EXLA.shard_jit/3 for more information"
     end
 
     # Validate number of input_shardings matches number of parameters
@@ -327,6 +328,13 @@ defmodule EXLA.Defn do
 
     {client_name, options} = Keyword.pop_lazy(options, :client, &EXLA.Client.default_name/0)
     client = EXLA.Client.fetch!(client_name)
+    mesh = options[:mesh]
+    input_shardings = Keyword.get(options, :input_shardings, [])
+
+    if !mesh and input_shardings != [] do
+      raise ArgumentError,
+            "input sharding configuration provided but no device mesh was provided"
+    end
 
     {args_key, reverse_args_identifiers} =
       Enum.map_reduce(vars, [], fn var, acc ->
@@ -376,9 +384,6 @@ defmodule EXLA.Defn do
       outfeed = Outfeed.new(hooks, defined_hooks)
       comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
 
-      mesh = Keyword.get(options, :mesh)
-      input_shardings = Keyword.get(options, :input_shardings, [])
-
       {comp_time, {evaled, {xla_time, executable, inputs_and_typespecs, outfeed}}} =
         :timer.tc(fn ->
           comp_cache_fun.(comp_key, fn ->
@@ -408,22 +413,8 @@ defmodule EXLA.Defn do
               # Add device mesh to module if provided
               if mesh do
                 EXLA.MLIR.Module.add_mesh(builder.module, mesh)
-              end
 
-              if !mesh and input_shardings != [] do
-                raise ArgumentError,
-                      "input sharding configuration provided but no device mesh was provided"
-              end
-
-              # Apply sharding annotations to function arguments if provided
-              if input_shardings != [] do
-                num_comp_args = length(comp_typespecs)
-
-                if length(input_shardings) != num_comp_args do
-                  raise ArgumentError,
-                        "expected #{num_comp_args} input sharding configuration (one per argument), got #{length(input_shardings)}"
-                end
-
+                # Apply sharding annotations to function arguments if provided
                 Enum.with_index(input_shardings, fn sharding, arg_index ->
                   Function.set_arg_sharding(builder, arg_index, {mesh, sharding})
                 end)
