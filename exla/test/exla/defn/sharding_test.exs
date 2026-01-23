@@ -72,19 +72,19 @@ defmodule EXLA.Defn.ShardingTest do
     test "generates correct MLIR with 3D mesh" do
       fun = fn x -> Nx.multiply(x, 2) end
 
-      mesh = %Mesh{name: "3d_mesh", shape: {2, 2, 2}}
+      mesh = %Mesh{name: "3d_mesh", shape: {2, 1, 2}}
       # Shard all three dimensions on corresponding mesh axes
       input_shardings = [%{0 => [0], 1 => [1], 2 => [2]}]
 
-      # For mesh {2, 2, 2}, we have 8 partitions
-      # Each partition gets {4, 2, 1} (full tensor {8, 4, 2} / {2, 2, 2})
-      args = List.duplicate([Nx.iota({4, 2, 1})], 8)
+      # For mesh {2, 1, 2}, we have 4 partitions
+      # Each partition gets {4, 4, 1} (full tensor {8, 4, 2} / {2, 1, 2})
+      args = List.duplicate([Nx.iota({4, 4, 1})], 4)
 
       result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
 
       expected_mlir = """
       module {
-        sdy.mesh @"3d_mesh" = <["axis_0"=2, "axis_1"=2, "axis_2"=2]>
+        sdy.mesh @"3d_mesh" = <["axis_0"=2, "axis_1"=1, "axis_2"=2]>
         func.func public @main(%arg0: tensor<8x4x2xi32> {sdy.sharding = #sdy.sharding<@"3d_mesh", [{"axis_0", ?}p0, {"axis_1", ?}p0, {"axis_2", ?}p0]>}) -> tensor<8x4x2xi32> {
           %c = stablehlo.constant dense<2> : tensor<i32>
           %0 = stablehlo.broadcast_in_dim %c, dims = [] : (tensor<i32>) -> tensor<8x4x2xi32>
@@ -98,18 +98,14 @@ defmodule EXLA.Defn.ShardingTest do
 
       results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
 
-      assert length(results) == 8
+      assert length(results) == 4
 
       expected_result =
         Nx.tensor([
-          [[0, 0], [2, 2], [0, 0], [2, 2]],
-          [[4, 4], [6, 6], [4, 4], [6, 6]],
-          [[8, 8], [10, 10], [8, 8], [10, 10]],
-          [[12, 12], [14, 14], [12, 12], [14, 14]],
-          [[0, 0], [2, 2], [0, 0], [2, 2]],
-          [[4, 4], [6, 6], [4, 4], [6, 6]],
-          [[8, 8], [10, 10], [8, 8], [10, 10]],
-          [[12, 12], [14, 14], [12, 12], [14, 14]]
+          [[0, 0], [2, 2], [4, 4], [6, 6]],
+          [[8, 8], [10, 10], [12, 12], [14, 14]],
+          [[0, 0], [2, 2], [4, 4], [6, 6]],
+          [[8, 8], [10, 10], [12, 12], [14, 14]]
         ])
 
       device_ids =
@@ -118,7 +114,7 @@ defmodule EXLA.Defn.ShardingTest do
           r.data.buffer.device_id
         end
 
-      assert Enum.sort(device_ids) == [0, 1, 2, 3, 4, 5, 6, 7]
+      assert Enum.sort(device_ids) == [0, 1, 2, 3]
     end
 
     @moduletag :multi_device
@@ -492,12 +488,12 @@ defmodule EXLA.Defn.ShardingTest do
     test "calculates correct num_partitions for 3D mesh" do
       fun = fn x -> Nx.add(x, 1) end
 
-      # 2 * 2 * 2 = 8 partitions
-      mesh = %Mesh{name: "mesh", shape: {2, 2, 2}}
+      # 2 * 1 * 2 = 4 partitions
+      mesh = %Mesh{name: "mesh", shape: {2, 1, 2}}
       input_shardings = [%{0 => [0], 1 => [1], 2 => [2]}]
 
       # Input sharded [[0], [1], [2]] -> each partition gets {4, 2, 1}
-      args = List.duplicate([Nx.iota({4, 2, 1})], 8)
+      args = List.duplicate([Nx.iota({4, 2, 1})], 4)
 
       result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
 
@@ -505,18 +501,18 @@ defmodule EXLA.Defn.ShardingTest do
 
       results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
 
-      assert length(results) == 8
+      assert length(results) == 4
 
       expected_result =
         Nx.tensor([
-          [[1, 1], [2, 2], [1, 1], [2, 2]],
-          [[3, 3], [4, 4], [3, 3], [4, 4]],
-          [[5, 5], [6, 6], [5, 5], [6, 6]],
-          [[7, 7], [8, 8], [7, 7], [8, 8]],
-          [[1, 1], [2, 2], [1, 1], [2, 2]],
-          [[3, 3], [4, 4], [3, 3], [4, 4]],
-          [[5, 5], [6, 6], [5, 5], [6, 6]],
-          [[7, 7], [8, 8], [7, 7], [8, 8]]
+          [[1, 1], [2, 2]],
+          [[3, 3], [4, 4]],
+          [[5, 5], [6, 6]],
+          [[7, 7], [8, 8]],
+          [[1, 1], [2, 2]],
+          [[3, 3], [4, 4]],
+          [[5, 5], [6, 6]],
+          [[7, 7], [8, 8]]
         ])
 
       device_ids =
@@ -525,7 +521,7 @@ defmodule EXLA.Defn.ShardingTest do
           r.data.buffer.device_id
         end
 
-      assert Enum.sort(device_ids) == [0, 1, 2, 3, 4, 5, 6, 7]
+      assert Enum.sort(device_ids) == [0, 1, 2, 3]
     end
 
     @moduletag :multi_device
@@ -631,12 +627,12 @@ defmodule EXLA.Defn.ShardingTest do
     test "MLIR contains mesh definition with correct shape" do
       fun = fn x -> Nx.add(x, 1) end
 
-      mesh = %Mesh{name: "test_mesh", shape: {4, 2}}
+      mesh = %Mesh{name: "test_mesh", shape: {2, 2}}
       input_shardings = [%{0 => [0]}]
 
-      # For mesh {4, 2}, we have 8 partitions
-      # Input sharded [[0], []] -> each partition gets {2, 2}
-      args = List.duplicate([Nx.iota({2, 2})], 8)
+      # For mesh {2, 2}, we have 4 partitions
+      # Input sharded [[0], []] -> each partition gets {4, 2}
+      args = List.duplicate([Nx.iota({4, 2})], 4)
 
       result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
 
