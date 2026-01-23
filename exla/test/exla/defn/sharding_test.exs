@@ -4,6 +4,7 @@ defmodule EXLA.Defn.ShardingTest do
   alias Nx.Defn.Mesh
 
   describe "MLIR module generation with sharding" do
+    @tag :multi_device
     test "generates correct MLIR with simple 2D mesh and sharding" do
       fun = fn x, y -> Nx.add(x, y) end
 
@@ -41,8 +42,33 @@ defmodule EXLA.Defn.ShardingTest do
       """
 
       assert expected_mlir == result.mlir_module
+
+      results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      assert length(results) == 4
+
+      expected_result =
+        Nx.tensor([
+          [0, 0],
+          [2, 2],
+          [4, 4],
+          [6, 6],
+          [0, 0],
+          [2, 2],
+          [4, 4],
+          [6, 6]
+        ])
+
+      device_ids =
+        for r <- results do
+          assert_equal(r, expected_result)
+          r.data.buffer.device_id
+        end
+
+      assert Enum.sort(device_ids) == [0, 1, 2, 3]
     end
 
+    @tag :multi_device
     test "generates correct MLIR with 3D mesh" do
       fun = fn x -> Nx.multiply(x, 2) end
 
@@ -69,8 +95,33 @@ defmodule EXLA.Defn.ShardingTest do
       """
 
       assert expected_mlir == result.mlir_module
+
+      results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      assert length(results) == 8
+
+      expected_result =
+        Nx.tensor([
+          [[0, 0], [2, 2], [0, 0], [2, 2]],
+          [[4, 4], [6, 6], [4, 4], [6, 6]],
+          [[8, 8], [10, 10], [8, 8], [10, 10]],
+          [[12, 12], [14, 14], [12, 12], [14, 14]],
+          [[0, 0], [2, 2], [0, 0], [2, 2]],
+          [[4, 4], [6, 6], [4, 4], [6, 6]],
+          [[8, 8], [10, 10], [8, 8], [10, 10]],
+          [[12, 12], [14, 14], [12, 12], [14, 14]]
+        ])
+
+      device_ids =
+        for r <- results do
+          assert_equal(r, expected_result)
+          r.data.buffer.device_id
+        end
+
+      assert Enum.sort(device_ids) == [0, 1, 2, 3, 4, 5, 6, 7]
     end
 
+    @tag :multi_device
     test "generates correct MLIR with replicated dimensions" do
       fun = fn x -> Nx.add(x, 1) end
 
@@ -101,8 +152,33 @@ defmodule EXLA.Defn.ShardingTest do
       """
 
       assert expected_mlir == result.mlir_module
+
+      results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      assert length(results) == 4
+
+      expected_result =
+        Nx.tensor([
+          [1, 2, 3, 4],
+          [5, 6, 7, 8],
+          [9, 10, 11, 12],
+          [13, 14, 15, 16],
+          [1, 2, 3, 4],
+          [5, 6, 7, 8],
+          [9, 10, 11, 12],
+          [13, 14, 15, 16]
+        ])
+
+      device_ids =
+        for r <- results do
+          assert_equal(r, expected_result)
+          r.data.buffer.device_id
+        end
+
+      assert Enum.sort(device_ids) == [0, 1, 2, 3]
     end
 
+    @tag :multi_device
     test "generates correct MLIR with multi-axis sharding" do
       fun = fn x -> Nx.transpose(x) end
 
@@ -128,8 +204,33 @@ defmodule EXLA.Defn.ShardingTest do
       """
 
       assert expected_mlir == result.mlir_module
+
+      results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      assert length(results) == 4
+
+      expected_result =
+        Nx.tensor([
+          [0, 8, 0, 8, 0, 8, 0, 8],
+          [1, 9, 1, 9, 1, 9, 1, 9],
+          [2, 10, 2, 10, 2, 10, 2, 10],
+          [3, 11, 3, 11, 3, 11, 3, 11],
+          [4, 12, 4, 12, 4, 12, 4, 12],
+          [5, 13, 5, 13, 5, 13, 5, 13],
+          [6, 14, 6, 14, 6, 14, 6, 14],
+          [7, 15, 7, 15, 7, 15, 7, 15]
+        ])
+
+      device_ids =
+        for r <- results do
+          assert_equal(r, expected_result)
+          r.data.buffer.device_id
+        end
+
+      assert Enum.sort(device_ids) == [0, 1, 2, 3]
     end
 
+    @tag :multi_device
     test "generates correct MLIR with multiple inputs" do
       fun = fn x, y, z -> Nx.add(Nx.multiply(x, y), z) end
 
@@ -173,6 +274,30 @@ defmodule EXLA.Defn.ShardingTest do
       """
 
       assert expected_mlir == result.mlir_module
+
+      results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      assert length(results) == 4
+
+      expected_result =
+        Nx.tensor([
+          [0, 0],
+          [3, 4],
+          [10, 12],
+          [21, 24],
+          [4, 4],
+          [7, 8],
+          [14, 16],
+          [25, 28]
+        ])
+
+      device_ids =
+        for r <- results do
+          assert_equal(r, expected_result)
+          r.data.buffer.device_id
+        end
+
+      assert Enum.sort(device_ids) == [0, 1, 2, 3]
     end
   end
 
@@ -363,6 +488,7 @@ defmodule EXLA.Defn.ShardingTest do
       assert Enum.sort(device_ids) == [0, 1, 2, 3]
     end
 
+    @tag :multi_device
     test "calculates correct num_partitions for 3D mesh" do
       fun = fn x -> Nx.add(x, 1) end
 
@@ -376,8 +502,33 @@ defmodule EXLA.Defn.ShardingTest do
       result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
 
       assert is_binary(result.mlir_module)
+
+      results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      assert length(results) == 8
+
+      expected_result =
+        Nx.tensor([
+          [[1, 1], [2, 2], [1, 1], [2, 2]],
+          [[3, 3], [4, 4], [3, 3], [4, 4]],
+          [[5, 5], [6, 6], [5, 5], [6, 6]],
+          [[7, 7], [8, 8], [7, 7], [8, 8]],
+          [[1, 1], [2, 2], [1, 1], [2, 2]],
+          [[3, 3], [4, 4], [3, 3], [4, 4]],
+          [[5, 5], [6, 6], [5, 5], [6, 6]],
+          [[7, 7], [8, 8], [7, 7], [8, 8]]
+        ])
+
+      device_ids =
+        for r <- results do
+          assert_equal(r, expected_result)
+          r.data.buffer.device_id
+        end
+
+      assert Enum.sort(device_ids) == [0, 1, 2, 3, 4, 5, 6, 7]
     end
 
+    @tag :multi_device
     test "calculates correct num_partitions for 1D mesh" do
       fun = fn x -> Nx.add(x, 1) end
 
@@ -391,6 +542,20 @@ defmodule EXLA.Defn.ShardingTest do
       result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
 
       assert is_binary(result.mlir_module)
+
+      results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      assert length(results) == 4
+
+      expected_result = Nx.tensor([1, 2, 1, 2, 1, 2, 1, 2])
+
+      device_ids =
+        for r <- results do
+          assert_equal(r, expected_result)
+          r.data.buffer.device_id
+        end
+
+      assert Enum.sort(device_ids) == [0, 1, 2, 3]
     end
   end
 
