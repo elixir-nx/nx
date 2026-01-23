@@ -876,9 +876,7 @@ defmodule Nx.Defn do
 
   defp do_shard_jit_apply(fun, mesh, args_list, opts) do
     opts = prepare_options(opts)
-    # Use the first arglist to determine function signature
-    [first_args | _] = args_list
-    {fun, params, _templates, _flatten} = Nx.Defn.Compiler.to_lazy_params(fun, first_args)
+    {fun, params, _templates, args_list} = Nx.Defn.Compiler.to_lazy_params_sharded(fun, args_list)
     Nx.Defn.Compiler.__shard_jit__(fun, mesh, params, args_list, opts)
   end
 
