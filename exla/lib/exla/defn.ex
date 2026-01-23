@@ -41,7 +41,7 @@ defmodule EXLA.Defn do
 
     # First validate that input_shardings is a list
     if not is_list(input_shardings) do
-      raise ArgumentError, "input_shardings are required for sharding"
+      raise ArgumentError, "input_shardings are required for sharding in EXLA, see EXLA.shard_jit/3 for more information"
     end
 
     # Validate number of input_shardings matches number of parameters
