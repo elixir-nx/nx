@@ -4,7 +4,7 @@ defmodule EXLA.Defn.ShardingTest do
   alias Nx.Defn.Mesh
 
   describe "MLIR module generation with sharding" do
-    @tag :multi_device
+    @moduletag :multi_device
     test "generates correct MLIR with simple 2D mesh and sharding" do
       fun = fn x, y -> Nx.add(x, y) end
 
@@ -68,7 +68,7 @@ defmodule EXLA.Defn.ShardingTest do
       assert Enum.sort(device_ids) == [0, 1, 2, 3]
     end
 
-    @tag :multi_device
+    @moduletag :multi_device
     test "generates correct MLIR with 3D mesh" do
       fun = fn x -> Nx.multiply(x, 2) end
 
@@ -121,7 +121,7 @@ defmodule EXLA.Defn.ShardingTest do
       assert Enum.sort(device_ids) == [0, 1, 2, 3, 4, 5, 6, 7]
     end
 
-    @tag :multi_device
+    @moduletag :multi_device
     test "generates correct MLIR with replicated dimensions" do
       fun = fn x -> Nx.add(x, 1) end
 
@@ -178,7 +178,7 @@ defmodule EXLA.Defn.ShardingTest do
       assert Enum.sort(device_ids) == [0, 1, 2, 3]
     end
 
-    @tag :multi_device
+    @moduletag :multi_device
     test "generates correct MLIR with multi-axis sharding" do
       fun = fn x -> Nx.transpose(x) end
 
@@ -230,7 +230,7 @@ defmodule EXLA.Defn.ShardingTest do
       assert Enum.sort(device_ids) == [0, 1, 2, 3]
     end
 
-    @tag :multi_device
+    @moduletag :multi_device
     test "generates correct MLIR with multiple inputs" do
       fun = fn x, y, z -> Nx.add(Nx.multiply(x, y), z) end
 
@@ -432,7 +432,7 @@ defmodule EXLA.Defn.ShardingTest do
   end
 
   describe "num_partitions calculation" do
-    @tag :multi_device
+    @moduletag :multi_device
     test "calculates correct num_partitions from mesh shape" do
       fun = fn x -> Nx.add(x, 1) end
 
@@ -488,7 +488,7 @@ defmodule EXLA.Defn.ShardingTest do
       assert Enum.sort(device_ids) == [0, 1, 2, 3]
     end
 
-    @tag :multi_device
+    @moduletag :multi_device
     test "calculates correct num_partitions for 3D mesh" do
       fun = fn x -> Nx.add(x, 1) end
 
@@ -528,7 +528,7 @@ defmodule EXLA.Defn.ShardingTest do
       assert Enum.sort(device_ids) == [0, 1, 2, 3, 4, 5, 6, 7]
     end
 
-    @tag :multi_device
+    @moduletag :multi_device
     test "calculates correct num_partitions for 1D mesh" do
       fun = fn x -> Nx.add(x, 1) end
 
