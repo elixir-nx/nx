@@ -94,7 +94,7 @@ defmodule EXLA.Defn do
         dim_to_axes_map =
           Enum.reduce(input_sharding, %{}, fn {tensor_dim, mesh_axes}, acc ->
             # Normalize tensor dimension (could be integer, negative integer, or atom name)
-            dim_index = normalize_axis(tensor_dim, var.shape, var.names)
+            dim_index = Nx.axis_index(var, tensor_dim)
 
             # Check for duplicate dimension specifications
             if Map.has_key?(acc, dim_index) do
@@ -143,53 +143,6 @@ defmodule EXLA.Defn do
     # Separate the list format (for MLIR) and multipliers (for shape calculation)
     {list_format, multipliers} = Enum.unzip(results)
     {list_format, multipliers}
-  end
-
-  # Normalize a tensor dimension specification to an integer index.
-  # Follows the same strategy as Nx.Shape.normalize_axis/4.
-  # Supports:
-  # - Non-negative integers: 0, 1, 2, ...
-  # - Negative integers: -1 (last), -2 (second to last), ...
-  # - Atom names: :batch, :features, etc.
-  defp normalize_axis(axis, shape, _names) when is_integer(axis) do
-    rank = tuple_size(shape)
-    normalized = if axis < 0, do: rank + axis, else: axis
-
-    if normalized in 0..(rank - 1)//1 do
-      normalized
-    else
-      raise ArgumentError,
-            "given axis (#{axis}) invalid for shape with rank #{rank}"
-    end
-  end
-
-  defp normalize_axis(nil, _shape, _names) do
-    raise ArgumentError, "axis name cannot be nil"
-  end
-
-  defp normalize_axis(axis, shape, names) when is_atom(axis) do
-    rank = tuple_size(shape)
-
-    case names do
-      names when is_list(names) and length(names) == rank ->
-        case Enum.find_index(names, &(&1 == axis)) do
-          nil ->
-            raise ArgumentError,
-                  "name #{inspect(axis)} not found in tensor with names #{inspect(names)}"
-
-          index ->
-            index
-        end
-
-      _ ->
-        raise ArgumentError,
-              "cannot use named dimension #{inspect(axis)} for tensor without names or mismatched name count"
-    end
-  end
-
-  defp normalize_axis(axis, shape, _names) do
-    raise ArgumentError,
-          "given axis (#{inspect(axis)}) invalid for shape with rank #{tuple_size(shape)}"
   end
 
   @doc false
