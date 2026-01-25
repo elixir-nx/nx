@@ -30,7 +30,7 @@
 
 ### Enhancements
 
-  * [Nx] Add 8-bit Floating Point numerical type
+  * [Nx] Add 8-bit Floating Point numerical type (E5M2)
   * [Nx] Add quantized int types (s2, s4, u2, u4)
 
 ### Bug fixes

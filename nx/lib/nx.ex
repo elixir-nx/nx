@@ -51,8 +51,9 @@ defmodule Nx do
 
     * unsigned integers (`u2`, `u4`, `u8`, `u16`, `u32`, `u64`)
     * signed integers (`s2`, `s4`, `s8`, `s16`, `s32`, `s64`)
-    * floats (`f8`, `f16`, `f32`, `f64`)
+    * floats (`f16`, `f32`, `f64`)
     * brain floats (`bf16`)
+    * quantized floats (`f8` (E5M2), `f8_e4m3fn`)
     * and complex numbers (`c64`, `c128`)
 
   The types are tracked as tuples:
@@ -613,16 +614,7 @@ defmodule Nx do
         [1.0, 2.0, 3.0]
       >
 
-  Certain backends and compilers support 8-bit floats. The precision
-  implementation of 8-bit floats may change per backend, so you must
-  be careful when transferring data across. The binary backend implements
-  F8E5M2:
-
-      iex> Nx.tensor([1, 2, 3], type: :f8)
-      #Nx.Tensor<
-        f8[3]
-        [1.0, 2.0, 3.0]
-      >
+  We also supported two types of quantized floats (see next section).
 
   In all cases, the non-finite values negative infinity (-Inf),
   infinity (Inf), and "not a number" (NaN) can be represented by
@@ -640,6 +632,38 @@ defmodule Nx do
       #Nx.Tensor<
         c64
         1.0-1.0i
+      >
+
+  ## Quantized floats
+
+  Certain backends and compilers support 8-bit floats. Two types
+  of 8-bit floats are currently supported: `f8` and `f8_e4m3fn`.
+
+  The `f8` type is effectively (E5M2) and works similarly to
+  the other floating numbers, as specified by IEEE:
+
+      iex> Nx.tensor([1, 2, 3], type: :f8)
+      #Nx.Tensor<
+        f8[3]
+        [1.0, 2.0, 3.0]
+      >
+
+  The `f8_e4m3fn` type, however, does not support infinites
+  (`fn` stands for finite and NaNs).
+
+      iex> Nx.tensor([1, 2, 3], type: :f8_e4m3fn)
+      #Nx.Tensor<
+        f8_e4m3fn[3]
+        [1.0, 2.0, 3.0]
+      >
+
+  Once a value is out of range, it saturates either at the maximum
+  or minimum supported value:
+
+      iex> Nx.tensor([:infinity], type: :f8_e4m3fn)
+      #Nx.Tensor<
+        f8_e4m3fn[1]
+        [450.0]
       >
 
   ## Naming dimensions

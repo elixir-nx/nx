@@ -651,12 +651,12 @@ defmodule Nx.Type do
       "u32"
       iex> Nx.Type.to_string({:u, 64})
       "u64"
-      iex> Nx.Type.to_string({:f, 16})
-      "f16"
+      iex> Nx.Type.to_string({:f8_e4m3fn, 8})
+      "f8_e4m3fn"
+      iex> Nx.Type.to_string({:f, 8})
+      "f8"
       iex> Nx.Type.to_string({:bf, 16})
       "bf16"
-      iex> Nx.Type.to_string({:f, 32})
-      "f32"
       iex> Nx.Type.to_string({:f, 64})
       "f64"
   """

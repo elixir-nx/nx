@@ -24,8 +24,7 @@ defmodule Nx.Defn.CompositeTest do
                 Nx.tensor(1),
                 Nx.tensor(3, type: {:c, 64}),
                 Nx.tensor(4, type: {:c, 64})
-              },
-              Nx.tensor(2, type: {:c, 64})} ==
+              }, Nx.tensor(2, type: {:c, 64})} ==
                Composite.traverse(
                  {1, Complex.new(2), Nx.tensor(3)},
                  0,

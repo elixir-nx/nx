@@ -1,10 +1,11 @@
 defmodule Nx.RyuTest do
   use ExUnit.Case, async: true
 
-  import Nx.Ryu, only: [bits_to_decimal: 3]
+  import Nx.Ryu, only: [bits_to_decimal: 3, bits_to_decimal: 4]
 
   defp f16_to_decimal(bits), do: bits_to_decimal(bits, 10, 5)
   defp f32_to_decimal(bits), do: bits_to_decimal(bits, 23, 8)
+  defp f8_e4m3fn_to_decimal(bits), do: bits_to_decimal(bits, 3, 4, :fn)
 
   test "f16: matches C Ryu output for all 65536 values" do
     mismatches =
@@ -61,5 +62,34 @@ defmodule Nx.RyuTest do
     # NaN
     assert f32_to_decimal(0x7F800001) == "NaN"
     assert f32_to_decimal(0xFF800001) == "NaN"
+  end
+
+  test "f8_e4m3fn with :fn modifier" do
+    # Zero
+    assert f8_e4m3fn_to_decimal(0x00) == "0.0"
+    assert f8_e4m3fn_to_decimal(0x80) == "-0.0"
+
+    # NaN only when all mantissa bits are 1 (mantissa=7)
+    # 0x7F = 0_1111_111 (sign=0, exp=15, mantissa=7) = positive NaN
+    assert f8_e4m3fn_to_decimal(0x7F) == "NaN"
+    # 0xFF = 1_1111_111 (sign=1, exp=15, mantissa=7) = negative NaN
+    assert f8_e4m3fn_to_decimal(0xFF) == "NaN"
+
+    # Values that would be Inf in standard IEEE 754 are normal numbers in FN
+    # 0x78 = 0_1111_000 (sign=0, exp=15, mantissa=0) = would be +Inf, but is 448.0 in FN
+    assert f8_e4m3fn_to_decimal(0x78) != "Inf"
+    assert f8_e4m3fn_to_decimal(0x78) =~ ~r/^\d/
+    # 0xF8 = 1_1111_000 (sign=1, exp=15, mantissa=0) = would be -Inf, but is -448.0 in FN
+    assert f8_e4m3fn_to_decimal(0xF8) != "-Inf"
+    assert f8_e4m3fn_to_decimal(0xF8) =~ ~r/^-\d/
+
+    # Values that would be NaN in standard IEEE 754 (exp=max, mantissa!=0 but not all 1s)
+    # are normal numbers in FN
+    # 0x79 = 0_1111_001 (sign=0, exp=15, mantissa=1) = would be NaN, but is a number in FN
+    assert f8_e4m3fn_to_decimal(0x79) != "NaN"
+    assert f8_e4m3fn_to_decimal(0x79) =~ ~r/^\d/
+    # 0x7E = 0_1111_110 (sign=0, exp=15, mantissa=6) = would be NaN, but is a number in FN
+    assert f8_e4m3fn_to_decimal(0x7E) != "NaN"
+    assert f8_e4m3fn_to_decimal(0x7E) =~ ~r/^\d/
   end
 end
