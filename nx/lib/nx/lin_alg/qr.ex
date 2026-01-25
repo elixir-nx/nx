@@ -1,4 +1,5 @@
 defmodule Nx.LinAlg.QR do
+  @moduledoc false
   import Nx.Defn
 
   defn qr(a, opts \\ []) do

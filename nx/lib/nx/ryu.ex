@@ -15,11 +15,7 @@
 # Reference implementation: https://github.com/erlang/otp/pull/2960
 
 defmodule Nx.Ryu do
-  @moduledoc """
-  Generic Ryu algorithm for IEEE 754 float-to-string conversion.
-
-  Can handle any F32 format and below.
-  """
+  @moduledoc false
 
   import Bitwise
 
@@ -29,6 +25,8 @@ defmodule Nx.Ryu do
 
   @doc """
   Convert IEEE 754 binary representation to shortest decimal string.
+
+  Can handle any F32 format and below.
 
   Parameters:
     - bits: the raw bit pattern as an integer

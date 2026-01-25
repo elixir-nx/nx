@@ -2221,6 +2221,14 @@ defmodule Nx do
   end
 
   @doc """
+  A shortcut to calling `Nx.runtime_call/4` without `static_arguments`.
+  """
+  @doc type: :backend
+  def runtime_call(output, tensor_or_container, fun) when is_function(fun, 1) do
+    runtime_call(output, tensor_or_container, [], fn value, _opts -> fun.(value) end)
+  end
+
+  @doc """
   Invokes an Elixir function from within `defn`.
 
   This function allows integrating arbitrary Elixir code into `defn` graphs.
@@ -2257,11 +2265,10 @@ defmodule Nx do
       iex> pid = self()
       iex> x = Nx.tensor([1, 2, 3])
       iex> out = Nx.template({3}, {:s, 32})
-      iex> _ =
-      ...>   Nx.runtime_call(out, x, fn t ->
-      ...>     send(pid, {:sum, Enum.sum(Nx.to_flat_list(t))})
-      ...>     t
-      ...>   end)
+      iex> Nx.runtime_call(out, x, fn t ->
+      ...>   send(pid, {:sum, Enum.sum(Nx.to_flat_list(t))})
+      ...>   t
+      ...> end)
       iex> receive do {:sum, value} -> value end
       6
 
@@ -2272,11 +2279,10 @@ defmodule Nx do
       iex> x = Nx.tensor([1, 2, 3])
       iex> y = Nx.tensor([4, 5, 6])
       iex> out = %{x: x, y: y}
-      iex> _ =
-      ...>   Nx.runtime_call(out, {x, y}, [pid: pid], fn {a, b}, opts ->
-      ...>     send(opts[:pid], {:dot, Nx.to_number(Nx.dot(a, b))})
-      ...>     %{x: a, y: b}
-      ...>   end)
+      iex> Nx.runtime_call(out, {x, y}, [pid: pid], fn {a, b}, opts ->
+      ...>   send(opts[:pid], {:dot, Nx.to_number(Nx.dot(a, b))})
+      ...>   %{x: a, y: b}
+      ...> end)
       iex> receive do {:dot, value} -> value end
       32
 
@@ -2285,10 +2291,6 @@ defmodule Nx do
   directly and validates the result matches the template.
   """
   @doc type: :backend
-  def runtime_call(output, tensor_or_container, fun) when is_function(fun, 1) do
-    runtime_call(output, tensor_or_container, [], fn value, _opts -> fun.(value) end)
-  end
-
   def runtime_call(output, tensor_or_container, static_argument, fun)
       when is_function(fun, 2) do
     # Outside defn, we execute the callback directly or via the backend if it

@@ -1,4 +1,5 @@
 defmodule Nx.LinAlg.Eigh do
+  @moduledoc false
   import Nx.Defn
 
   alias Nx.LinAlg.QR

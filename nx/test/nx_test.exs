@@ -28,7 +28,7 @@ defmodule NxTest do
     {:docs_v1, _, :elixir, "text/markdown", _docs, _metadata, entries} = Code.fetch_docs(Nx)
 
     for {{:function, name, arity}, _ann, _signature, docs, metadata} <- entries,
-        is_map(docs) and map_size(docs) > 0,
+        is_map(docs) or docs == :none,
         metadata[:type] not in @doctypes do
       flunk("invalid @doc type: #{inspect(metadata[:type])} for #{name}/#{arity}")
     end
