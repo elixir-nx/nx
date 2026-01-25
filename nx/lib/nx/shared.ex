@@ -88,7 +88,7 @@ defmodule Nx.Shared do
     end
   end
 
-  @all_types [:s, :f, :bf, :u, :c]
+  @all_types [:s, :f, :f8_e4m3fn, :bf, :u, :c]
 
   defp match_types([h | t]) do
     for type <- @all_types, t <- match_types(t) do
@@ -98,7 +98,7 @@ defmodule Nx.Shared do
 
   defp match_types([]), do: [[]]
 
-  defp match_bin_modifier(var, type, size) when type in [:f, :bf, :c],
+  defp match_bin_modifier(var, type, size) when type in [:f, :f8_e4m3fn, :bf, :c],
     do: quote(do: unquote(var) :: bitstring - size(^unquote(size)))
 
   defp match_bin_modifier(var, type, size),
@@ -114,6 +114,10 @@ defmodule Nx.Shared do
 
   defp read_bin_modifier(var, :f, 8) do
     quote do: Nx.Shared.read_f8(unquote(var))
+  end
+
+  defp read_bin_modifier(var, :f8_e4m3fn, _size) do
+    quote do: Nx.Shared.read_f8_e4m3fn(unquote(var))
   end
 
   defp read_bin_modifier(var, :f, size) do
@@ -174,6 +178,12 @@ defmodule Nx.Shared do
     end
   end
 
+  defp write_bin_modifier(var, :f8_e4m3fn, _size) do
+    quote do
+      Nx.Shared.write_f8_e4m3fn(unquote(var)) :: binary
+    end
+  end
+
   defp write_bin_modifier(var, type, size),
     do: shared_bin_modifier(var, type, size)
 
@@ -214,6 +224,36 @@ defmodule Nx.Shared do
 
   def read_f8(<<sign::1, exp::5, mantissa::2>>) do
     float = :math.pow(2, exp - 15) * (1 + mantissa / 4)
+
+    case sign do
+      0 -> float
+      _ -> -float
+    end
+  end
+
+  @doc """
+  FP8 E4M3FN read callback.
+  E4M3FN format: 1 sign bit, 4 exponent bits, 3 mantissa bits
+  Exponent bias: 7
+  Per OFP8 spec: E4M3FN has NO infinity (FN = "Finite, No infinities")
+  Only S.1111.111 is NaN; all other S.1111.xxx are finite values
+  """
+  # Only mantissa = 111 (0x7) is NaN in E4M3FN
+  def read_f8_e4m3fn(<<_sign::1, 15::4, 7::3>>), do: :nan
+
+  def read_f8_e4m3fn(<<0::1, 0::4, mantissa::3>>) do
+    # Denormalized positive
+    :math.pow(2, -6) * (mantissa / 8.0)
+  end
+
+  def read_f8_e4m3fn(<<1::1, 0::4, mantissa::3>>) do
+    # Denormalized negative
+    -:math.pow(2, -6) * (mantissa / 8.0)
+  end
+
+  def read_f8_e4m3fn(<<sign::1, exp::4, mantissa::3>>) do
+    # Normalized
+    float = :math.pow(2, exp - 7) * (1 + mantissa / 8.0)
 
     case sign do
       0 -> float
@@ -263,6 +303,76 @@ defmodule Nx.Shared do
       binary_part(<<x::float-native-16>>, 0, 1)
     end
   end
+
+  @doc """
+  FP8 E4M3FN write callback for finite values.
+  E4M3FN: 1 sign, 4 exponent (bias 7), 3 mantissa
+  Max value: 448.0 (0x7E), Min value: -448.0 (0xFE)
+  """
+  def write_finite_f8_e4m3fn(x) when is_number(x) do
+    # Clamp to E4M3FN range and convert
+    # E4M3FN max is 448.0, min is -448.0
+    clamped = max(-448.0, min(448.0, x * 1.0))
+
+    # Extract sign
+    {sign, abs_val} = if clamped < 0, do: {1, -clamped}, else: {0, clamped}
+
+    # Handle zero
+    if abs_val == 0.0 do
+      <<sign::1, 0::4, 0::3>>
+    else
+      # Calculate exponent and mantissa
+      # E4M3FN: value = (1 + mantissa/8) * 2^(exp - 7) for normalized
+      log2_val = :math.log2(abs_val)
+      exp_unbiased = floor(log2_val)
+      exp = exp_unbiased + 7
+
+      cond do
+        exp <= 0 ->
+          # Denormalized: value = mantissa/8 * 2^(-6)
+          mantissa = round(abs_val / :math.pow(2, -6) * 8)
+          <<sign::1, 0::4, min(7, mantissa)::3>>
+
+        exp > 15 ->
+          # Overflow to max finite (not NaN, since E4M3FN saturates in our impl)
+          <<sign::1, 15::4, 6::3>>
+
+        true ->
+          # Normalized: value = (1 + mantissa/8) * 2^(exp - 7)
+          significand = abs_val / :math.pow(2, exp_unbiased)
+          mantissa = round((significand - 1.0) * 8)
+          mantissa = max(0, min(7, mantissa))
+
+          # exp=15 with mantissa=7 would be NaN, cap at 6
+          if exp == 15 and mantissa >= 7 do
+            <<sign::1, 15::4, 6::3>>
+          else
+            <<sign::1, exp::4, mantissa::3>>
+          end
+      end
+    end
+  end
+
+  @doc """
+  FP8 E4M3FN write callback for any value (finite or non-finite).
+  Dispatches to the appropriate writer based on value type.
+  """
+  def write_f8_e4m3fn(value) when is_number(value) do
+    write_finite_f8_e4m3fn(value)
+  end
+
+  def write_f8_e4m3fn(value) do
+    write_non_finite_f8_e4m3fn(value)
+  end
+
+  @doc """
+  FP8 E4M3FN write callback for non-finite values.
+  E4M3FN has no infinity, so infinity saturates to max/min finite values.
+  This preserves sign information and matches the clamping behavior for overflow.
+  """
+  def write_non_finite_f8_e4m3fn(:infinity), do: <<0x7E::8>>
+  def write_non_finite_f8_e4m3fn(:neg_infinity), do: <<0xFE::8>>
+  def write_non_finite_f8_e4m3fn(:nan), do: <<0x7F::8>>
 
   @doc """
   Complex write callback.

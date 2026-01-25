@@ -315,6 +315,7 @@ defmodule Nx.Random do
     mantissa =
       case type do
         {:f, 8} -> 2
+        {:f8_e4m3fn, 8} -> 3
         {:bf, 16} -> 7
         {:f, 16} -> 10
         {:f, 32} -> 23
@@ -1130,7 +1131,7 @@ defmodule Nx.Random do
         to_complex = Nx.stack([1, Nx.Constants.i()])
         Nx.dot(data, to_complex)
 
-      {t, _} when t == :f or t == :bf ->
+      {t, _} when t == :f or t == :bf or t == :f8_e4m3fn ->
         fun.(key, type, shape)
 
       _ ->
