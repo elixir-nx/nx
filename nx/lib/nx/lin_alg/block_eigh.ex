@@ -1,14 +1,11 @@
 defmodule Nx.LinAlg.BlockEigh do
-  @moduledoc """
-  Parallel Jacobi symmetric eigendecomposition.
-
-  Reference implementation taking from XLA's eigh_expander
-  which is built on the approach in:
-  Brent, R. P., & Luk, F. T. (1985). The solution of singular-value
-  and symmetric eigenvalue problems on multiprocessor arrays.
-  SIAM Journal on Computing, 6(1), 69-84. https://doi.org/10.1137/0906007
-  """
-  require Nx
+  @moduledoc false
+  # Parallel Jacobi symmetric eigendecomposition.
+  # Reference implementation taking from XLA's eigh_expander
+  # which is built on the approach in:
+  # Brent, R. P., & Luk, F. T. (1985). The solution of singular-value
+  # and symmetric eigenvalue problems on multiprocessor arrays.
+  # SIAM Journal on Computing, 6(1), 69-84. https://doi.org/10.1137/0906007
 
   import Nx.Defn
 
