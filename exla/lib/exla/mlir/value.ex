@@ -684,11 +684,32 @@ defmodule EXLA.MLIR.Value do
     {token, results}
   end
 
-  def outfeed(%Value{} = input, token), do: outfeed([input], token)
+  def outfeed(input_or_inputs, token, mesh \\ nil)
+  
+  def outfeed(%Value{} = input, token, mesh), do: outfeed([input], token, mesh)
 
-  def outfeed(inputs, %Value{function: func} = token) do
+  def outfeed(inputs, %Value{function: func} = token, mesh) when is_list(inputs) do
     result_types = [type_token()]
-    op(func, "stablehlo.outfeed", inputs ++ [token], result_types) |> one!()
+    
+    # Add replicated sharding attribute if mesh is provided
+    # Outfeed operations require TUPLE sharding with two elements:
+    # - First element: sharding for the data operands
+    # - Second element: sharding for the token
+    attributes =
+      case mesh do
+        %Nx.Defn.Mesh{} ->
+          # MHLO sharding attribute with tuple sharding
+          # Format: "{{replicated}, {replicated}}" 
+          # First {replicated} is for data, second {replicated} is for token
+          # Both should be replicated so hooks execute on all devices
+          [{:"mhlo.sharding", attr_string("{{replicated}, {replicated}}")}]
+
+        nil ->
+          []
+      end
+
+    op(func, "stablehlo.outfeed", inputs ++ [token], result_types, attributes: attributes)
+    |> one!()
   end
 
   def create_token(%Function{} = func) do

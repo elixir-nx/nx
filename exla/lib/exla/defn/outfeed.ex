@@ -13,7 +13,8 @@ defmodule EXLA.Defn.Outfeed do
             used_hooks: [],
             compiled_hooks: %{},
             token: nil,
-            infeeds: []
+            infeeds: [],
+            mesh: nil
 
   ## Functional API
 
@@ -111,6 +112,11 @@ defmodule EXLA.Defn.Outfeed do
   def with_token(%Outfeed{} = outfeed, token), do: %{outfeed | token: token}
 
   @doc """
+  Sets the mesh for sharding support.
+  """
+  def with_mesh(%Outfeed{} = outfeed, mesh), do: %{outfeed | mesh: mesh}
+
+  @doc """
   Adds an infeed hook.
   """
   def add_infeeds(%Outfeed{} = outfeed, builder, entries) do
@@ -162,19 +168,22 @@ defmodule EXLA.Defn.Outfeed do
 
   def close(%Outfeed{} = outfeed, %Function{} = builder) when will_outfeed(outfeed),
     do:
-      update_in(outfeed.token, &Value.outfeed(Value.constant(builder, [0], flag_typespec()), &1))
+      update_in(
+        outfeed.token,
+        &Value.outfeed(Value.constant(builder, [0], flag_typespec()), &1, outfeed.mesh)
+      )
 
   def close(%Outfeed{} = outfeed, _builder),
     do: outfeed
 
-  defp outfeed_flat_tuple(%Outfeed{token: token, compiled_hooks: ch} = outfeed, builder, tuple) do
+  defp outfeed_flat_tuple(%Outfeed{token: token, compiled_hooks: ch, mesh: mesh} = outfeed, builder, tuple) do
     flag = next_hook(ch)
-    token = Value.outfeed(Value.constant(builder, [flag], flag_typespec()), token)
+    token = Value.outfeed(Value.constant(builder, [flag], flag_typespec()), token, mesh)
     typespecs = Enum.map(tuple, &Value.get_typespec/1)
 
     token =
       Enum.reduce(tuple, token, fn elem, token ->
-        Value.outfeed(elem, token)
+        Value.outfeed(elem, token, mesh)
       end)
 
     {%{outfeed | token: token}, flag, typespecs}
@@ -190,6 +199,8 @@ defmodule EXLA.Defn.Outfeed do
   `{typespecs, {pid, ref} | {fun, template}}` pairs to
   deliver/execute the outputs. The computation must emit
   a 0 flag on exit.
+
+  For SPMD execution (num_partitions > 1), spawns a listener for each device.
   """
   def start_child(
         %EXLA.Executable{} = executable,
@@ -197,16 +208,37 @@ defmodule EXLA.Defn.Outfeed do
         group_leader,
         infeeds \\ %{}
       ) do
-    %{client: client, device_id: device_id} = executable
+    %{
+      client: client,
+      device_id: device_id,
+      outfeed_device_id: outfeed_device_id,
+      num_partitions: num_partitions
+    } = executable
 
     %{compiled_hooks: compiled_hooks, default_hooks: default_hooks, user_hooks: user_hooks} =
       outfeed
 
     hooks = Map.merge(default_hooks, user_hooks)
 
-    Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
-      init(client, device_id, hooks, compiled_hooks, infeeds, group_leader)
-    end)
+    # For SPMD execution, we need to spawn a listener for each device
+    if device_id == -1 and num_partitions > 1 do
+      # Start a coordinator task that manages multiple device listeners
+      Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
+        init_spmd(
+          client,
+          num_partitions,
+          hooks,
+          compiled_hooks,
+          infeeds,
+          group_leader
+        )
+      end)
+    else
+      # Single device execution
+      Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
+        init(client, outfeed_device_id, hooks, compiled_hooks, infeeds, group_leader)
+      end)
+    end
   end
 
   defp init(client, device_id, hooks, compiled_hooks, infeeds, group_leader) do
@@ -216,6 +248,33 @@ defmodule EXLA.Defn.Outfeed do
     ref = make_ref()
     typespec = EXLA.Typespec.tensor({:u, 16}, {})
     loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
+  end
+
+  defp init_spmd(client, num_partitions, hooks, compiled_hooks, infeeds, group_leader) do
+    Process.flag(:trap_exit, true)
+    Process.group_leader(self(), group_leader)
+
+    # Spawn a listener task for each device
+    device_tasks =
+      for device_id <- 0..(num_partitions - 1) do
+        Task.async(fn ->
+          ref = make_ref()
+          typespec = EXLA.Typespec.tensor({:u, 16}, {})
+
+          # For SPMD, all devices execute hooks to provide visibility into what
+          # each device sees. With replicated sharding, all devices will have
+          # identical data, but this allows verification and future support
+          # for non-replicated sharding patterns.
+          filtered_hooks = hooks
+
+          loop(client, device_id, ref, typespec, filtered_hooks, compiled_hooks, infeeds)
+        end)
+      end
+
+    # Wait for all device listeners to complete
+    Enum.each(device_tasks, fn task ->
+      Task.await(task, :infinity)
+    end)
   end
 
   defp loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds) do

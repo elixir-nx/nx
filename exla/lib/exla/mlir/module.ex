@@ -70,6 +70,10 @@ defmodule EXLA.MLIR.Module do
     * `:use_spmd` - enables Single-Program Multiple-Data partitioning.
       This is set to true if `:num_partitions` is more than one, otherwise is `false`.
 
+    * `:outfeed_device_id` - the device id to use for outfeed operations (hooks).
+      When `:device_id` is set to `-1` (SPMD mode), this specifies which device
+      will handle outfeed data. Defaults to `0`. Ignored if `:device_id` is not `-1`.
+
     * `:module_compilation` - either `:to_mlir` or `:to_pjrt`. The default is `:to_pjrt`.
 
       * `:to_pjrt` - the `EXLA.Executable` `:ref` field will hold the reference to a PjRt executable.
@@ -103,6 +107,15 @@ defmodule EXLA.MLIR.Module do
         do: -1,
         else: Keyword.get(options, :device_id, client.default_device_id)
 
+    # For SPMD execution (device_id == -1), outfeed operations need a specific device.
+    # Default to device 0, but allow override via :outfeed_device_id option.
+    outfeed_device_id =
+      if device_id == -1 do
+        Keyword.get(options, :outfeed_device_id, 0)
+      else
+        device_id
+      end
+
     # Uncomment to debug the module MLIR source
     # module |> as_string() |> IO.puts()
 
@@ -132,7 +145,8 @@ defmodule EXLA.MLIR.Module do
       num_partitions: num_partitions,
       device_id: device_id,
       mesh: Keyword.get(options, :mesh),
-      input_shardings: Keyword.get(options, :input_shardings)
+      input_shardings: Keyword.get(options, :input_shardings),
+      outfeed_device_id: outfeed_device_id
     }
   end
 

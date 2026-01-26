@@ -15,7 +15,8 @@ defmodule EXLA.Executable do
     :num_partitions,
     :device_id,
     :mesh,
-    :input_shardings
+    :input_shardings,
+    :outfeed_device_id
   ]
 
   @doc """
@@ -56,7 +57,8 @@ defmodule EXLA.Executable do
         num_partitions: num_partitions,
         device_id: device_id,
         mesh: mesh,
-        input_shardings: input_shardings
+        input_shardings: input_shardings,
+        outfeed_device_id: outfeed_device_id
       })
       when node(ref) == node() do
     serialized_exec =
@@ -71,7 +73,8 @@ defmodule EXLA.Executable do
       num_partitions: num_partitions,
       device_id: device_id,
       mesh: mesh,
-      input_shardings: input_shardings
+      input_shardings: input_shardings,
+      outfeed_device_id: outfeed_device_id
     }
   end
 
@@ -93,6 +96,11 @@ defmodule EXLA.Executable do
 
     ref = EXLA.NIF.deserialize_executable(client.ref, serialized)
 
+    # For backward compatibility, default outfeed_device_id to device_id or 0 if device_id is -1
+    outfeed_device_id =
+      Map.get(data, :outfeed_device_id) ||
+        if device_id == -1, do: 0, else: device_id
+
     %EXLA.Executable{
       output_typespecs: output_typespecs,
       num_replicas: num_replicas,
@@ -100,6 +108,7 @@ defmodule EXLA.Executable do
       device_id: device_id,
       mesh: Map.get(data, :mesh),
       input_shardings: Map.get(data, :input_shardings),
+      outfeed_device_id: outfeed_device_id,
       ref: ref,
       client: client
     }

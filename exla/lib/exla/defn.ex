@@ -247,18 +247,26 @@ defmodule EXLA.Defn do
          outputs,
          outfeed,
          run_options,
-         _is_sharded?
+         is_sharded?
        )
        when Outfeed.will_outfeed(outfeed) do
-    {buffers, infeeds} =
-      EXLA.Defn.Buffers.split_by_value(args, used_inputs, fn
-        arg, _i, nil -> EXLA.Defn.Buffers.from_nx!(arg, executable, true)
-        arg, i, _depth -> {i, EXLA.Defn.Buffers.from_nx!(arg, executable, false)}
+    args = if is_sharded?, do: args, else: [args]
+
+    # Check if args are pre-sliced (list of arglists for each partition)
+    {input_lists, infeeds} =
+      Enum.map_reduce(args, %{}, fn partition_args, acc ->
+        {buffers, infeeds} =
+          EXLA.Defn.Buffers.split_by_value(partition_args, used_inputs, fn
+            arg, _i, nil -> EXLA.Defn.Buffers.from_nx!(arg, executable, true)
+            arg, i, _depth -> {i, EXLA.Defn.Buffers.from_nx!(arg, executable, false)}
+          end)
+
+        {Enum.reverse(buffers), Map.merge(acc, Map.new(infeeds))}
       end)
 
     {:ok, runner} =
       EXLA.Defn.Runner.start_link(lock, fn ->
-        EXLA.Executable.run(executable, [Enum.reverse(buffers)], run_options)
+        EXLA.Executable.run(executable, input_lists, run_options)
       end)
 
     {:ok, outfeed_pid} =
@@ -269,8 +277,11 @@ defmodule EXLA.Defn do
 
     receive do
       {:DOWN, ^ref, _, _, _} ->
-        [result] = EXLA.Defn.Runner.read(runner)
-        [EXLA.Defn.Buffers.to_nx!(result, outputs)]
+        results = EXLA.Defn.Runner.read(runner)
+
+        Enum.map(results, fn result ->
+          EXLA.Defn.Buffers.to_nx!(result, outputs)
+        end)
     end
   end
 
@@ -425,6 +436,7 @@ defmodule EXLA.Defn do
               outfeed =
                 if reverse_infeeds != [] or hooks != %{} or defined_hooks != %{} do
                   outfeed
+                  |> Outfeed.with_mesh(mesh)
                   |> Outfeed.with_token(Value.create_token(builder))
                   |> Outfeed.add_infeeds(builder, reverse_infeeds)
                 else

@@ -69,6 +69,97 @@ defmodule EXLA.Defn.ShardingTest do
     end
 
     @moduletag :multi_device
+    test "hooks with sharding" do
+      # This test verifies that hooks work correctly with SPMD sharding.
+      #
+      # ✅ MLIR generation works correctly with tuple sharding:
+      #    {mhlo.sharding = "{{replicated}, {replicated}}"}
+      # ✅ Compilation succeeds (no "Side-effect HLO must have sharding" error)
+      # ✅ Runtime execution: Outfeed mechanism properly handles sharded execution
+      #    by spawning a listener for each device (one per partition)
+      parent = self()
+
+      fun = fn x, y ->
+        import Nx.Defn.Kernel
+        intermediate = Nx.multiply(x, 2)
+        hooked = hook(intermediate, :multiply_hook, fn t -> send(parent, {:hook, t}) end)
+        Nx.add(hooked, y)
+      end
+
+      mesh = %Mesh{name: "mesh", shape: {2, 2}}
+      # First arg: shard dim 0 on mesh axis 0, dim 1 on mesh axis 1
+      # Second arg: shard dim 0 on mesh axis 0, dim 1 not sharded
+      input_shardings = [%{0 => [0], 1 => [1]}, %{0 => [0]}]
+
+      # For mesh {2, 2}, we have 4 partitions
+      # Each partition gets a shard of the inputs
+      # First input: shape {8, 2} sharded as [[0], [1]] -> each partition gets {4, 1}
+      # Second input: shape {8, 1} sharded as [[0], []] -> each partition gets {4, 1}
+      args = [
+        # partition 0
+        [Nx.iota({4, 1}), Nx.iota({4, 1})],
+        # partition 1
+        [Nx.iota({4, 1}), Nx.iota({4, 1})],
+        # partition 2
+        [Nx.iota({4, 1}), Nx.iota({4, 1})],
+        # partition 3
+        [Nx.iota({4, 1}), Nx.iota({4, 1})]
+      ]
+
+      # Verify MLIR generation includes hook operations with sharding
+      result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
+      assert result.mlir_module =~ "sdy.mesh"
+      assert result.mlir_module =~ "stablehlo.multiply"
+      assert result.mlir_module =~ "stablehlo.add"
+      # Outfeed operations should have tuple sharding with replicated data and token
+      assert result.mlir_module =~ "stablehlo.outfeed"
+      assert result.mlir_module =~ ~r/mhlo\.sharding = "\{\{replicated\}, \{replicated\}\}"/
+
+      # Execute with hooks
+      hooks = %{multiply_hook: fn t -> send(parent, {:hook, t}) end}
+      results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings, hooks: hooks).(args)
+
+      assert length(results) == 4
+
+      # Verify hook was called once per device (4 times total).
+      # With replicated sharding, all devices have identical data.
+      hook_tensors =
+        for _ <- results do
+          assert_receive {:hook, %Nx.Tensor{} = hook_tensor}, 1000
+          hook_tensor
+        end
+
+      # All 4 hook tensors should have the same data (replicated)
+      expected_hook_data = Nx.tensor([[0, 0], [2, 2], [4, 4], [6, 6], [0, 0], [2, 2], [4, 4], [6, 6]])
+
+      for hook_tensor <- hook_tensors do
+        assert_equal(hook_tensor, expected_hook_data)
+      end
+
+      # Expected: x * 2 + y where both x and y are iota({4,1}) replicated twice
+      # = [0,1,2,3] * 2 + [0,1,2,3] = [0,2,4,6] + [0,1,2,3] = [0,3,6,9]
+      expected_result =
+        Nx.tensor([
+          [0, 0],
+          [3, 3],
+          [6, 6],
+          [9, 9],
+          [0, 0],
+          [3, 3],
+          [6, 6],
+          [9, 9]
+        ])
+
+      device_ids =
+        for r <- results do
+          assert_equal(r, expected_result)
+          r.data.buffer.device_id
+        end
+
+      assert Enum.sort(device_ids) == [0, 1, 2, 3]
+    end
+
+    @moduletag :multi_device
     test "generates correct MLIR with 3D mesh" do
       fun = fn x -> Nx.multiply(x, 2) end
 
