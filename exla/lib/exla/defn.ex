@@ -247,7 +247,7 @@ defmodule EXLA.Defn do
          outputs,
          outfeed,
          run_options,
-         _is_sharded?
+         is_sharded?
        )
        when Outfeed.will_outfeed(outfeed) do
     if is_sharded? do
