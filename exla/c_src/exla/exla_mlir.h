@@ -29,6 +29,8 @@ class MLIRFunction {
 
   llvm::MutableArrayRef<mlir::BlockArgument> GetArguments() { return func_->getBody().front().getArguments(); }
 
+  mlir::func::FuncOp function() { return *func_; }
+
   fine::ResourcePtr<MLIRModule> module() { return module_; }
 
  private:

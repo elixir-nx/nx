@@ -14,6 +14,8 @@
 #include "exla_nif_util.h"
 #include "ipc.h"
 #include "mlir/IR/MLIRContext.h"
+#include "shardy/dialect/sdy/ir/dialect.h"
+#include "shardy/dialect/sdy/ir/register.h"
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
 #include "xla/pjrt/pjrt_api.h"
@@ -67,6 +69,9 @@ mlir_new_context(ErlNifEnv *env,
   context->getOrLoadDialect<mlir::func::FuncDialect>();
   context->getOrLoadDialect<mlir::stablehlo::StablehloDialect>();
   context->getOrLoadDialect<mlir::chlo::ChloDialect>();
+  context->getOrLoadDialect<mlir::sdy::SdyDialect>();
+  mlir::sdy::registerAllDialects(
+      const_cast<mlir::DialectRegistry &>(context->getDialectRegistry()));
 
   return context;
 }
@@ -170,6 +175,69 @@ fine::Ok<> mlir_pop_region(ErlNifEnv *env,
 }
 
 FINE_NIF(mlir_pop_region, 0);
+
+fine::Ok<> mlir_add_mesh(ErlNifEnv *env, fine::ResourcePtr<MLIRModule> module,
+                         std::string mesh_name,
+                         std::vector<std::tuple<std::string, int64_t>> axes) {
+  auto builder = module->builder();
+  auto context = module->module()->getContext();
+
+  llvm::SmallVector<mlir::sdy::MeshAxisAttr> axis_attrs;
+  for (auto [name, size] : axes) {
+    axis_attrs.push_back(mlir::sdy::MeshAxisAttr::get(context, name, size));
+  }
+
+  auto mesh_attr = mlir::sdy::MeshAttr::get(context, axis_attrs);
+
+  // Create the mesh op at the beginning of the module
+  auto module_op = module->module();
+  auto &body_region = module_op.getBodyRegion();
+  mlir::OpBuilder::InsertionGuard guard(*builder);
+  builder->setInsertionPointToStart(&body_region.front());
+
+  mlir::OperationState state(builder->getUnknownLoc(), "sdy.mesh");
+  mlir::sdy::MeshOp::build(*builder, state, mesh_name, mesh_attr);
+  builder->create(state);
+
+  return fine::Ok();
+}
+
+FINE_NIF(mlir_add_mesh, 0);
+
+mlir::sdy::TensorShardingAttr mlir_create_tensor_sharding_attr(
+    mlir::MLIRContext *context, std::string mesh_name,
+    std::vector<std::vector<std::string>> dim_shardings) {
+  llvm::SmallVector<mlir::sdy::DimensionShardingAttr> dim_sharding_attrs;
+  for (const auto &dim : dim_shardings) {
+    llvm::SmallVector<mlir::sdy::AxisRefAttr> axis_refs;
+    for (const auto &axis : dim) {
+      axis_refs.push_back(mlir::sdy::AxisRefAttr::get(context, axis));
+    }
+    dim_sharding_attrs.push_back(mlir::sdy::DimensionShardingAttr::get(
+        context, axis_refs, /*is_closed=*/false, /*priority=*/0));
+  }
+
+  return mlir::sdy::TensorShardingAttr::get(
+      context, mesh_name, dim_sharding_attrs,
+      /*replicated_axes=*/llvm::ArrayRef<mlir::sdy::AxisRefAttr>(),
+      /*unreduced_axes=*/llvm::ArrayRef<mlir::sdy::AxisRefAttr>());
+}
+
+fine::Ok<> mlir_set_function_argument_attribute(
+    ErlNifEnv *env, fine::ResourcePtr<MLIRFunction> function, int64_t arg_index,
+    std::string attribute_name, std::string mesh_name,
+    std::vector<std::vector<std::string>> dim_shardings) {
+
+  auto context = function->module()->module()->getContext();
+  auto sharding_attr =
+      mlir_create_tensor_sharding_attr(context, mesh_name, dim_shardings);
+
+  function->function().setArgAttr(arg_index, attribute_name, sharding_attr);
+
+  return fine::Ok();
+}
+
+FINE_NIF(mlir_set_function_argument_attribute, 0);
 
 mlir::Type mlir_get_typespec(ErlNifEnv *env,
                              fine::ResourcePtr<mlir::Value> value) {

@@ -130,8 +130,25 @@ defmodule EXLA.MLIR.Module do
       output_typespecs: return_typespecs,
       num_replicas: num_replicas,
       num_partitions: num_partitions,
-      device_id: device_id
+      device_id: device_id,
+      mesh: Keyword.get(options, :mesh),
+      input_shardings: Keyword.get(options, :input_shardings)
     }
+  end
+
+  @doc """
+  Adds a device mesh definition to the module.
+  """
+  def add_mesh(%__MODULE__{ref: module_ref}, %Nx.Defn.Mesh{name: name, shape: shape}) do
+    # Convert shape tuple to axes list with auto-generated names
+    # E.g., {2, 4} -> [{"axis_0", 2}, {"axis_1", 4}]
+    axes =
+      shape
+      |> Tuple.to_list()
+      |> Enum.with_index(fn size, idx -> {"axis_#{idx}", size} end)
+
+    EXLA.NIF.mlir_add_mesh(module_ref, name, axes)
+    :ok
   end
 
   @doc """

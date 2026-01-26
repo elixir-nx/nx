@@ -107,7 +107,8 @@ defmodule EXLA.Defn.Buffers do
   Nx -> EXLA.DeviceBuffer + EXLA.BinaryBuffer.
   """
   def from_nx!(fun, executable, transfer? \\ true) do
-    %Nx.Tensor{data: data} = tensor = Nx.devectorize(fun.())
+    %Nx.Tensor{data: data} =
+      tensor = Nx.devectorize(fun.())
 
     case data do
       %EXLA.Backend{buffer: %EXLA.DeviceBuffer{ref: ref} = buffer}

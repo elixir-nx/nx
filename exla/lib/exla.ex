@@ -301,6 +301,38 @@ defmodule EXLA do
     Nx.Defn.compile(function, args, Keyword.put(options, :compiler, EXLA))
   end
 
+  @doc """
+  A shortcut for `Nx.Defn.shard_jit/3` with the EXLA compiler.
+
+  ## Example
+
+      mesh = %Nx.Defn.Mesh{name: "mesh", shape: {2}}
+      fun = EXLA.shard_jit(&Nx.add(&1, &1), mesh, input_shardings: [%{0 => [0]}])
+      # Pass sharded inputs (one arglist per partition)
+      fun.([[Nx.tensor([1, 2, 3])], [Nx.tensor([4, 5, 6])]])
+      #=> #Nx.Tensor<
+      #     s32[6]
+      #     [2, 4, 6, 8, 10, 12]
+      #   >
+
+  ## Options
+
+    * `:input_shardings` - a list of maps specifying how to shard each input tensor.
+      Each map has tensor dimension (integer index or atom name) as keys and lists of
+      mesh axis indices as values. Dimensions not specified are replicated.
+
+      Examples:
+        - `[%{0 => [0], 1 => [1]}]` - shard first input's dim 0 on mesh axis 0, dim 1 on mesh axis 1
+        - `[%{0 => [0]}, %{1 => [1]}]` - first input sharded on dim 0, second input sharded on dim 1
+        - `[%{0 => [0, 1]}]` - shard dim 0 across both mesh axes 0 and 1
+        - `[%{}]` - fully replicated tensor
+
+  Also accepts the same options as `compile/3`.
+  """
+  def shard_jit(function, %Nx.Defn.Mesh{} = mesh, options \\ []) when is_list(options) do
+    Nx.Defn.shard_jit(function, mesh, Keyword.put(options, :compiler, EXLA))
+  end
+
   @doc ~S'''
   Takes in a function, the argument templates and the compilation
   options and returns the textual representation of the MLIR module.
@@ -330,6 +362,7 @@ defmodule EXLA do
   '''
   def to_mlir_module(function, args, options \\ []) do
     {nested_compilation?, options} = Keyword.pop(options, :within_defn_compiler, false)
+    mesh = Keyword.get(options, :mesh)
 
     opts =
       Keyword.merge(options,
@@ -338,9 +371,18 @@ defmodule EXLA do
       )
 
     if nested_compilation? do
-      EXLA.Defn.__compile__(function, args, function, opts)
+      if mesh do
+        EXLA.Defn.__shard_jit__(function, mesh, args, function, args, opts)
+      else
+        EXLA.Defn.__compile__(function, args, function, opts)
+      end
     else
-      Nx.Defn.compile(function, args, opts)
+      if mesh do
+        # shard_jit returns a function that expects args as separate parameters
+        Nx.Defn.shard_jit(function, mesh, opts).(args)
+      else
+        Nx.Defn.compile(function, args, opts)
+      end
     end
   catch
     {:mlir_module, ref, used_inputs, output_container} ->
@@ -414,4 +456,7 @@ defmodule EXLA do
 
   @impl true
   defdelegate __to_backend__(opts), to: EXLA.Defn
+
+  @impl true
+  defdelegate __shard_jit__(key, mesh, list_of_vars, fun, args_list, opts), to: EXLA.Defn
 end
