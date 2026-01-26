@@ -88,7 +88,7 @@ defmodule Nx.Shared do
     end
   end
 
-  @all_types [:s, :f, :bf, :u, :c]
+  @all_types [:s, :f, :f8_e4m3fn, :bf, :u, :c]
 
   defp match_types([h | t]) do
     for type <- @all_types, t <- match_types(t) do
@@ -98,7 +98,7 @@ defmodule Nx.Shared do
 
   defp match_types([]), do: [[]]
 
-  defp match_bin_modifier(var, type, size) when type in [:f, :bf, :c],
+  defp match_bin_modifier(var, type, size) when type in [:f, :f8_e4m3fn, :bf, :c],
     do: quote(do: unquote(var) :: bitstring - size(^unquote(size)))
 
   defp match_bin_modifier(var, type, size),
@@ -109,17 +109,21 @@ defmodule Nx.Shared do
   end
 
   defp read_bin_modifier(var, :bf, _) do
-    quote do: Nx.Shared.read_bf16(unquote(var))
+    quote do: Nx.Floating.load_bf16(unquote(var))
   end
 
   defp read_bin_modifier(var, :f, 8) do
-    quote do: Nx.Shared.read_f8(unquote(var))
+    quote do: Nx.Floating.load_f8(unquote(var))
+  end
+
+  defp read_bin_modifier(var, :f8_e4m3fn, _size) do
+    quote do: Nx.Floating.load_f8_e4m3fn(unquote(var))
   end
 
   defp read_bin_modifier(var, :f, size) do
     quote do
       case unquote(var) do
-        _ when unquote(size) == 8 -> Nx.Shared.read_f8(unquote(var))
+        _ when unquote(size) == 8 -> Nx.Floating.load_f8(unquote(var))
         <<var::float-native-size(^unquote(size))>> -> var
         var -> Nx.Shared.read_non_finite(var, unquote(size))
       end
@@ -134,14 +138,14 @@ defmodule Nx.Shared do
       quote do
         case unquote(var) do
           x when is_number(x) -> binary_part(<<x::float-native-32>>, 2, 2)
-          x -> Nx.Shared.write_non_finite_bf16(x)
+          x -> Nx.Floating.dump_bf16(x)
         end :: binary
       end
     else
       quote do
         case unquote(var) do
           x when is_number(x) -> binary_part(<<x::float-native-32>>, 0, 2)
-          x -> Nx.Shared.write_non_finite_bf16(x)
+          x -> Nx.Floating.dump_bf16(x)
         end :: binary
       end
     end
@@ -168,9 +172,15 @@ defmodule Nx.Shared do
     quote do
       case unquote(var) do
         x when is_number(x) and unquote(size) != 8 -> <<x::float-native-size(unquote(size))>>
-        x when is_number(x) -> Nx.Shared.write_finite_f8(unquote(var))
+        x when is_number(x) -> Nx.Floating.dump_f8(unquote(var))
         x -> Nx.Shared.write_non_finite(x, unquote(size))
       end :: binary
+    end
+  end
+
+  defp write_bin_modifier(var, :f8_e4m3fn, _size) do
+    quote do
+      Nx.Floating.dump_f8_e4m3fn(unquote(var)) :: binary
     end
   end
 
@@ -182,44 +192,6 @@ defmodule Nx.Shared do
 
   defp shared_bin_modifier(var, :u, size),
     do: quote(do: unquote(var) :: unsigned - integer - native - size(unquote(size)))
-
-  @doc """
-  BF16 read callback.
-  """
-  def read_bf16(<<0xFF80::16-native>>), do: :neg_infinity
-  def read_bf16(<<0x7F80::16-native>>), do: :infinity
-
-  if System.endianness() == :little do
-    def read_bf16(<<1::1, _::7, _sign::1, 127::7>>), do: :nan
-
-    def read_bf16(bf16) do
-      <<x::float-little-32>> = <<0::16, bf16::binary>>
-      x
-    end
-  else
-    def read_bf16(<<_sign::1, 255::8, _::7>>), do: :nan
-
-    def read_bf16(bf16) do
-      <<x::float-big-32>> = <<bf16::binary, 0::16>>
-      x
-    end
-  end
-
-  @doc """
-  F8 read callback.
-  """
-  def read_f8(<<0xFC::8-native>>), do: :neg_infinity
-  def read_f8(<<0x7C::8-native>>), do: :infinity
-  def read_f8(<<_sign::1, 31::5, mantissa::2>>) when mantissa != 0, do: :nan
-
-  def read_f8(<<sign::1, exp::5, mantissa::2>>) do
-    float = :math.pow(2, exp - 15) * (1 + mantissa / 4)
-
-    case sign do
-      0 -> float
-      _ -> -float
-    end
-  end
 
   @doc """
   C64 and C128 callback.
@@ -241,27 +213,6 @@ defmodule Nx.Shared do
       end
 
     Complex.new(re, im)
-  end
-
-  @doc """
-  BF16 write callback.
-  """
-  def write_non_finite_bf16(data) do
-    case data do
-      :infinity -> unquote(Nx.Type.infinity_binary({:bf, 16}))
-      :neg_infinity -> unquote(Nx.Type.neg_infinity_binary({:bf, 16}))
-      :nan -> unquote(Nx.Type.nan_binary({:bf, 16}))
-    end
-  end
-
-  if System.endianness() == :little do
-    def write_finite_f8(x) do
-      binary_part(<<x::float-native-16>>, 1, 1)
-    end
-  else
-    def write_finite_f8(x) do
-      binary_part(<<x::float-native-16>>, 0, 1)
-    end
   end
 
   @doc """

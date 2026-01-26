@@ -51,8 +51,9 @@ defmodule Nx do
 
     * unsigned integers (`u2`, `u4`, `u8`, `u16`, `u32`, `u64`)
     * signed integers (`s2`, `s4`, `s8`, `s16`, `s32`, `s64`)
-    * floats (`f8`, `f16`, `f32`, `f64`)
+    * floats (`f16`, `f32`, `f64`)
     * brain floats (`bf16`)
+    * quantized floats (`f8` (E5M2), `f8_e4m3fn`)
     * and complex numbers (`c64`, `c128`)
 
   The types are tracked as tuples:
@@ -613,16 +614,7 @@ defmodule Nx do
         [1.0, 2.0, 3.0]
       >
 
-  Certain backends and compilers support 8-bit floats. The precision
-  implementation of 8-bit floats may change per backend, so you must
-  be careful when transferring data across. The binary backend implements
-  F8E5M2:
-
-      iex> Nx.tensor([1, 2, 3], type: :f8)
-      #Nx.Tensor<
-        f8[3]
-        [1.0, 2.0, 3.0]
-      >
+  We also supported two types of quantized floats (see next section).
 
   In all cases, the non-finite values negative infinity (-Inf),
   infinity (Inf), and "not a number" (NaN) can be represented by
@@ -640,6 +632,38 @@ defmodule Nx do
       #Nx.Tensor<
         c64
         1.0-1.0i
+      >
+
+  ## Quantized floats
+
+  Certain backends and compilers support 8-bit floats. Two types
+  of 8-bit floats are currently supported: `f8` and `f8_e4m3fn`.
+
+  The `f8` type is effectively (E5M2) and works similarly to
+  the other floating numbers, as specified by IEEE:
+
+      iex> Nx.tensor([1, 2, 3], type: :f8)
+      #Nx.Tensor<
+        f8[3]
+        [1.0, 2.0, 3.0]
+      >
+
+  The `f8_e4m3fn` type, however, does not support infinites
+  (`fn` stands for finite and NaNs).
+
+      iex> Nx.tensor([1, 2, 3], type: :f8_e4m3fn)
+      #Nx.Tensor<
+        f8_e4m3fn[3]
+        [1.0, 2.0, 3.0]
+      >
+
+  Once a value is out of range, it saturates either at the maximum
+  or minimum supported value:
+
+      iex> Nx.tensor([:infinity], type: :f8_e4m3fn)
+      #Nx.Tensor<
+        f8_e4m3fn[1]
+        [450.0]
       >
 
   ## Naming dimensions
@@ -2197,6 +2221,14 @@ defmodule Nx do
   end
 
   @doc """
+  A shortcut to calling `Nx.runtime_call/4` without `static_arguments`.
+  """
+  @doc type: :backend
+  def runtime_call(output, tensor_or_container, fun) when is_function(fun, 1) do
+    runtime_call(output, tensor_or_container, [], fn value, _opts -> fun.(value) end)
+  end
+
+  @doc """
   Invokes an Elixir function from within `defn`.
 
   This function allows integrating arbitrary Elixir code into `defn` graphs.
@@ -2233,11 +2265,10 @@ defmodule Nx do
       iex> pid = self()
       iex> x = Nx.tensor([1, 2, 3])
       iex> out = Nx.template({3}, {:s, 32})
-      iex> _ =
-      ...>   Nx.runtime_call(out, x, fn t ->
-      ...>     send(pid, {:sum, Enum.sum(Nx.to_flat_list(t))})
-      ...>     t
-      ...>   end)
+      iex> Nx.runtime_call(out, x, fn t ->
+      ...>   send(pid, {:sum, Enum.sum(Nx.to_flat_list(t))})
+      ...>   t
+      ...> end)
       iex> receive do {:sum, value} -> value end
       6
 
@@ -2248,11 +2279,10 @@ defmodule Nx do
       iex> x = Nx.tensor([1, 2, 3])
       iex> y = Nx.tensor([4, 5, 6])
       iex> out = %{x: x, y: y}
-      iex> _ =
-      ...>   Nx.runtime_call(out, {x, y}, [pid: pid], fn {a, b}, opts ->
-      ...>     send(opts[:pid], {:dot, Nx.to_number(Nx.dot(a, b))})
-      ...>     %{x: a, y: b}
-      ...>   end)
+      iex> Nx.runtime_call(out, {x, y}, [pid: pid], fn {a, b}, opts ->
+      ...>   send(opts[:pid], {:dot, Nx.to_number(Nx.dot(a, b))})
+      ...>   %{x: a, y: b}
+      ...> end)
       iex> receive do {:dot, value} -> value end
       32
 
@@ -2261,10 +2291,6 @@ defmodule Nx do
   directly and validates the result matches the template.
   """
   @doc type: :backend
-  def runtime_call(output, tensor_or_container, fun) when is_function(fun, 1) do
-    runtime_call(output, tensor_or_container, [], fn value, _opts -> fun.(value) end)
-  end
-
   def runtime_call(output, tensor_or_container, static_argument, fun)
       when is_function(fun, 2) do
     # Outside defn, we execute the callback directly or via the backend if it

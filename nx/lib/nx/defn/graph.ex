@@ -16,6 +16,8 @@ defmodule Nx.Defn.Graph do
   alias Nx.Defn.Expr
 
   defmodule Stage do
+    @moduledoc false
+
     @typedoc """
     A stage in the graph splitter.
 

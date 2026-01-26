@@ -109,6 +109,8 @@ defmodule Nx.MixProject do
         Structs: [
           Nx.Batch,
           Nx.Heatmap,
+          Nx.Defn.Mesh,
+          Nx.Pointer,
           Nx.Tensor
         ],
         Backends: [
@@ -122,6 +124,7 @@ defmodule Nx.MixProject do
           Nx.Defn.Composite,
           Nx.Defn.Evaluator,
           Nx.Defn.Expr,
+          Nx.Defn.Graph,
           Nx.Defn.Token,
           Nx.Defn.Tree
         ]

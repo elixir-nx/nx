@@ -1,9 +1,21 @@
-defmodule Nx.Ryu do
-  @moduledoc """
-  Generic Ryu algorithm for IEEE 754 float-to-string conversion.
+# Copyright Ericsson AB 2017-2019. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
-  Can handle any F32 format and below.
-  """
+# Reference implementation: https://github.com/erlang/otp/pull/2960
+
+defmodule Nx.Ryu do
+  @moduledoc false
 
   import Bitwise
 
@@ -14,45 +26,61 @@ defmodule Nx.Ryu do
   @doc """
   Convert IEEE 754 binary representation to shortest decimal string.
 
+  Can handle any F32 format and below.
+
   Parameters:
     - bits: the raw bit pattern as an integer
     - mantissa_bits: number of mantissa bits (e.g., 10 for f16, 23 for f32, 52 for f64)
     - exponent_bits: number of exponent bits (e.g., 5 for f16, 8 for f32, 11 for f64)
+    - modifier: optional modifier atom (e.g., `:fn` for formats with no infinities
+      and NaN only when all mantissa bits are 1)
 
   Returns the shortest decimal string representation.
   """
-  def bits_to_decimal(bits, mantissa_bits, exponent_bits) do
+  def bits_to_decimal(bits, mantissa_bits, exponent_bits, modifier \\ nil) do
     {sign, mantissa, exponent} = decode_ieee754(bits, mantissa_bits, exponent_bits)
 
     bias = (1 <<< (exponent_bits - 1)) - 1
     max_exponent = (1 <<< exponent_bits) - 1
 
     cond do
-      # Zero
       exponent == 0 and mantissa == 0 ->
         if sign == 1, do: "-0.0", else: "0.0"
 
-      # Infinity or NaN
       exponent == max_exponent ->
         cond do
-          mantissa != 0 -> "NaN"
-          sign == 1 -> "-Inf"
-          true -> "Inf"
+          modifier == :fn and mantissa == (1 <<< mantissa_bits) - 1 ->
+            "NaN"
+
+          modifier == :fn ->
+            normal_number(sign, mantissa, exponent, mantissa_bits, exponent_bits, bias)
+
+          mantissa != 0 ->
+            "NaN"
+
+          sign == 1 ->
+            "-Inf"
+
+          true ->
+            "Inf"
         end
 
-      # Normal or subnormal number
       true ->
-        case check_small_int(mantissa, exponent, mantissa_bits, bias) do
-          {:int, m, e} ->
-            {place, digits} = compute_shortest_int(m, e)
-            digit_list = insert_decimal(place, digits, bits, mantissa_bits, exponent_bits)
-            insert_minus(sign, digit_list)
+        normal_number(sign, mantissa, exponent, mantissa_bits, exponent_bits, bias)
+    end
+  end
 
-          :not_int ->
-            {place, digits} = fwrite_g_1(mantissa, exponent, mantissa_bits, bias)
-            digit_list = insert_decimal(place, digits, bits, mantissa_bits, exponent_bits)
-            insert_minus(sign, digit_list)
-        end
+  defp normal_number(sign, mantissa, exponent, mantissa_bits, exponent_bits, bias) do
+    case check_small_int(mantissa, exponent, mantissa_bits, bias) do
+      {:int, m, e} ->
+        {place, digits} = compute_shortest_int(m, e)
+        digit_list = insert_decimal(place, digits, nil, mantissa_bits, exponent_bits)
+        insert_minus(sign, digit_list)
+
+      :not_int ->
+        {place, digits} = fwrite_g_1(mantissa, exponent, mantissa_bits, bias)
+        digit_list = insert_decimal(place, digits, nil, mantissa_bits, exponent_bits)
+        insert_minus(sign, digit_list)
     end
   end
 

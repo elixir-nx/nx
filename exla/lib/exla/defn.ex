@@ -251,7 +251,7 @@ defmodule EXLA.Defn do
        )
        when Outfeed.will_outfeed(outfeed) do
     args = if is_sharded?, do: args, else: [args]
-
+    defn - shard_jit_apply
     # Check if args are pre-sliced (list of arglists for each partition)
     {input_lists, infeeds} =
       Enum.map_reduce(args, %{}, fn partition_args, acc ->

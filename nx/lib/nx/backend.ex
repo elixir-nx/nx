@@ -289,6 +289,9 @@ defmodule Nx.Backend do
   defp float_to_string(<<bits::16-native-unsigned>>, :bf, 16),
     do: Nx.Ryu.bits_to_decimal(bits, 7, 8)
 
+  defp float_to_string(<<bits::8-native-unsigned>>, :f8_e4m3fn, 8),
+    do: Nx.Ryu.bits_to_decimal(bits, 3, 4, :fn)
+
   defp complex_to_string(re, im, float_unit) do
     re_str = float_to_string(re, :f, float_unit)
     im_str = float_to_string(im, :f, float_unit)

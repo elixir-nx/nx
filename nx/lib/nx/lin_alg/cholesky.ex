@@ -1,4 +1,5 @@
 defmodule Nx.LinAlg.Cholesky do
+  @moduledoc false
   import Nx.Defn
 
   defn cholesky(a, opts \\ []) do
