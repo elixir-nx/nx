@@ -250,6 +250,10 @@ defmodule EXLA.Defn do
          _is_sharded?
        )
        when Outfeed.will_outfeed(outfeed) do
+    if is_sharded? do
+      raise ArgumentError, "outfeed is not supported for sharded execution yet"
+    end
+
     {buffers, infeeds} =
       EXLA.Defn.Buffers.split_by_value(args, used_inputs, fn
         arg, _i, nil -> EXLA.Defn.Buffers.from_nx!(arg, executable, true)
