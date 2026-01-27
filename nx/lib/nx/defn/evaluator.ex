@@ -125,8 +125,6 @@ defmodule Nx.Defn.Evaluator do
     state = %{hooks: hooks, parent_ids: nil, current_ids: nil}
     {cache, templates} = init_compute_cache(devectorized_expr, state)
 
-    :erts_debug.size(devectorized_expr) |> dbg()
-
     # Use devectorized expression as-is - the cache is already flattened
     {devectorized_expr, Enum.reverse(output_templates), cache, templates}
   end
