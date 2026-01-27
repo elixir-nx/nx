@@ -60,7 +60,7 @@ defmodule Nx.Defn.Evaluator do
       end
     end
 
-    {expr, output, cache} = precompile(fun, vars, hooks)
+    {expr, output, cache, templates} = precompile(fun, vars, hooks)
 
     fn [params] ->
       printed_nodes =
@@ -73,7 +73,8 @@ defmodule Nx.Defn.Evaluator do
         gc: gc?,
         hooks: hooks,
         debug_options: debug_options,
-        printed_nodes: printed_nodes
+        printed_nodes: printed_nodes,
+        templates: templates
       }
 
       result =
@@ -104,87 +105,162 @@ defmodule Nx.Defn.Evaluator do
   defp precompile(fun, vars, hooks) do
     expr = fun.(vars)
     state = %{hooks: hooks, parent_ids: nil, current_ids: nil}
-    cache = init_compute_cache(expr, state)
-    {expr, output} = Nx.Defn.Composite.traverse(expr, [], &{Nx.devectorize(&1), [&1 | &2]})
-    {expr, Enum.reverse(output), cache}
+    {cache, templates} = init_compute_cache(expr, state)
+
+    # Devectorize the expression for evaluation, but keep original tensors for output templates
+    {devectorized_expr, output_templates} =
+      Nx.Defn.Composite.traverse(expr, [], fn tensor, acc ->
+        devectorized = Nx.devectorize(tensor)
+        {devectorized, [tensor | acc]}
+      end)
+
+    {devectorized_expr, Enum.reverse(output_templates), cache, templates}
   end
 
   defp init_compute_cache(expr, state) do
     state = %{state | parent_ids: %{}, current_ids: Tree.scope_ids(expr, %{})}
-    composite_compute_cache(expr, state, %{})
+    composite_compute_cache(expr, state, {%{}, %{}})
   end
 
-  defp composite_compute_cache(expr, state, cache) do
-    Composite.reduce(expr, cache, &compute_cache(&1, state, &2))
+  defp composite_compute_cache(expr, state, {cache, templates}) do
+    Composite.reduce(expr, {cache, templates}, fn tensor, {cache, templates} ->
+      compute_cache(tensor, state, {cache, templates})
+    end)
   end
 
-  defp compute_cache(%Nx.Tensor{data: %Expr{op: :constant}}, _state, cache) do
-    cache
+  # Create flattened node info for cache
+  # Store metadata separately in a tensor_templates map that we can look up by ID
+  defp make_node_info(:parameter, %{data: %Expr{args: [i]}} = _tensor),
+    do: {:param, i}
+
+  defp make_node_info(:constant, %{data: %Expr{args: [constant]}} = _tensor),
+    do: {:constant, constant}
+
+  defp make_node_info(:tensor, %{data: %Expr{args: [t]}} = _tensor),
+    do: {:tensor, t}
+
+  defp make_node_info(:metadata, %{data: %Expr{args: [expr, _meta]}} = _tensor) do
+    # Store the wrapped expression ID so we can defer evaluation to it
+    {:metadata, extract_id(expr)}
   end
 
-  defp compute_cache(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, cache) do
-    composite_compute_cache(expr, state, cache)
+  defp make_node_info(:fun, %{data: %Expr{id: id}} = _tensor),
+    do: {:fun, id}
+
+  defp make_node_info(:while, %{data: %Expr{id: id}} = _tensor),
+    do: {:while, id}
+
+  defp make_node_info(:cond, %{data: %Expr{id: id}} = _tensor),
+    do: {:cond, id}
+
+  defp make_node_info(:optional, %{data: %Expr{id: id}} = _tensor),
+    do: {:optional, id}
+
+  defp make_node_info(:token, %{data: %Expr{id: id}} = _tensor),
+    do: {:token, id}
+
+  defp make_node_info(:elem, %{data: %Expr{args: [tuple, i]}} = _tensor),
+    do: {:elem, extract_id(tuple), i}
+
+  defp make_node_info(:attach_token, %{data: %Expr{args: [token, expr]}} = _tensor),
+    do: {:attach_token, extract_id(token), extract_id(expr)}
+
+  defp make_node_info(:runtime_call, %{data: %Expr{args: [tensor_expr | _]}} = _tensor),
+    do: {:runtime_call, extract_id(tensor_expr)}
+
+  defp make_node_info(op, %{data: %Expr{args: args}} = _tensor) do
+    # For each arg, store either {:reference, id} for expressions or the literal value
+    arg_refs = Enum.map(args, &extract_arg_ref/1)
+    {:generic, op, arg_refs}
   end
 
-  defp compute_cache(%Nx.Tensor{data: %Expr{id: id, op: op}} = tensor, state, cache) do
+  # Extract argument reference - either an ID for expressions or the literal value
+  defp extract_arg_ref(%Nx.Tensor{data: %Expr{id: id}}), do: {:reference, id}
+  defp extract_arg_ref(other), do: other
+
+  defp extract_id(%Nx.Tensor{data: %Expr{id: id}}), do: id
+  defp extract_id(_), do: nil
+
+  defp compute_cache(%Nx.Tensor{data: %Expr{op: :constant}}, _state, acc) do
+    acc
+  end
+
+  defp compute_cache(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, acc) do
+    composite_compute_cache(expr, state, acc)
+  end
+
+  defp compute_cache(%Nx.Tensor{data: %Expr{id: id, op: op}} = tensor, state, {cache, templates}) do
     case state.parent_ids do
       # If the id exists in the parent, the parent will compute it.
       %{^id => _} ->
-        Map.put_new(cache, id, tensor)
+        {Map.put_new(cache, id, tensor), templates}
 
       %{} ->
         case cache do
-          %{^id => counter} -> %{cache | id => counter + 1}
-          %{} -> compute_cache(op, tensor, state, Map.put(cache, id, 1))
+          %{^id => {node_info, counter}} ->
+            {%{cache | id => {node_info, counter + 1}}, templates}
+          %{} ->
+            node_info = make_node_info(op, tensor)
+            templates = Map.put(templates, id, tensor)
+            compute_cache(op, tensor, state, {Map.put(cache, id, {node_info, 1}), templates})
         end
     end
   end
 
-  defp compute_cache(:fun, %{data: %Expr{id: id, args: args}}, state, cache) do
+  defp compute_cache(:fun, %{data: %Expr{id: id, args: args}}, state, {cache, templates}) do
     [_args, expr, _mfa] = args
-    fun_cache = init_compute_cache(expr, state)
-    Map.put(cache, [:fun | id], fun_cache)
+    {fun_cache, fun_templates} = init_compute_cache(expr, state)
+    # Merge fun templates into global templates
+    templates = Map.merge(templates, fun_templates)
+    {Map.put(cache, [:fun | id], fun_cache), templates}
   end
 
-  defp compute_cache(:while, %{data: %Expr{args: args, id: id}}, state, cache) do
+  defp compute_cache(:while, %{data: %Expr{args: args, id: id}}, state, {cache, templates}) do
     [initial, _arg, pred, block] = args
-    cache = composite_compute_cache(initial, state, cache)
-    while_cache = init_compute_cache({pred, block}, state)
-    Map.put(cache, [:while | id], while_cache)
+    {cache, templates} = composite_compute_cache(initial, state, {cache, templates})
+    {while_cache, while_templates} = init_compute_cache({pred, block}, state)
+    # Merge while templates into global templates
+    templates = Map.merge(templates, while_templates)
+    {Map.put(cache, [:while | id], while_cache), templates}
   end
 
-  defp compute_cache(:optional, %{data: %Expr{args: args, id: id}}, state, cache) do
+  defp compute_cache(:optional, %{data: %Expr{args: args, id: id}}, state, {cache, templates}) do
     [call, expr, _callback] = args
     %{data: %{args: call_args_in, op: call_name}} = call
 
     {call_args, opts} = Enum.split_while(call_args_in, &(not is_list(&1)))
 
-    cache = Enum.reduce(call_args, cache, &compute_cache(&1, state, &2))
+    {cache, templates} = Enum.reduce(call_args, {cache, templates}, fn arg, acc ->
+      compute_cache(arg, state, acc)
+    end)
     key = computation_key(call_name, call_args ++ opts)
 
-    {optional_expr_cache, cache} =
+    {optional_expr_cache, cache, templates} =
       case cache do
         %{^key => optional_expr_cache} ->
-          {optional_expr_cache, cache}
+          {optional_expr_cache, cache, templates}
 
         %{} ->
-          optional_expr_cache = {expr, init_compute_cache(expr, state)}
-          {optional_expr_cache, Map.put(cache, key, optional_expr_cache)}
+          {opt_cache, opt_templates} = init_compute_cache(expr, state)
+          # Merge optional templates into global templates
+          templates = Map.merge(templates, opt_templates)
+          optional_expr_cache = {expr, opt_cache}
+          {optional_expr_cache, Map.put(cache, key, optional_expr_cache), templates}
       end
 
-    Map.put(cache, [:optional | id], optional_expr_cache)
+    {Map.put(cache, [:optional | id], optional_expr_cache), templates}
   end
 
   defp compute_cache(
          :runtime_call,
          %{data: %Expr{args: [tensor_expr, _opts, _fun, _out]}},
          state,
-         cache
+         acc
        ) do
-    composite_compute_cache(tensor_expr, state, cache)
+    composite_compute_cache(tensor_expr, state, acc)
   end
 
-  defp compute_cache(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, cache) do
+  defp compute_cache(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, {cache, templates}) do
     %{parent_ids: parent_ids, current_ids: current_ids} = state
 
     clause_caches =
@@ -195,60 +271,73 @@ defmodule Nx.Defn.Evaluator do
             current_ids: Tree.scope_ids(clause, current_ids)
         }
 
-        composite_compute_cache(clause, state, %{})
+        composite_compute_cache(clause, state, {%{}, %{}})
       end)
 
     # Now, for each cache, split the IDs from parents from the actual cond IDs
-    {[last_cache | clauses_cache], {all_ids, cache}} =
-      Enum.map_reduce(clause_caches, {%{}, cache}, fn clause_cache, seen_ids_cache ->
-        {clause_cache, seen_ids_cache} =
-          Enum.flat_map_reduce(clause_cache, seen_ids_cache, fn
-            {id, %_{} = tensor}, {seen_ids, cache} ->
+    {[last_cache | clauses_cache], {all_ids, cache, templates}} =
+      Enum.map_reduce(clause_caches, {%{}, cache, templates}, fn {clause_cache, clause_templates}, {seen_ids, cache, templates} ->
+        {clause_cache, {seen_ids, cache, templates}} =
+          Enum.flat_map_reduce(clause_cache, {seen_ids, cache, templates}, fn
+            {id, %_{} = tensor}, {seen_ids, cache, templates} ->
               case seen_ids do
                 # We have already processed this id for the whole cond
                 %{^id => _} ->
-                  {[], {seen_ids, cache}}
+                  {[], {seen_ids, cache, templates}}
 
                 # The ID belongs to our own parents
                 %{} when is_map_key(parent_ids, id) ->
-                  {[], {seen_ids, Map.put_new(cache, id, tensor)}}
+                  {[], {seen_ids, Map.put_new(cache, id, tensor), templates}}
 
                 # The ID belongs to us
                 %{} ->
-                  cache = composite_compute_cache(tensor, state, cache)
-                  {[], {Map.put(seen_ids, id, true), cache}}
+                  {cache, templates} = composite_compute_cache(tensor, state, {cache, templates})
+                  {[], {Map.put(seen_ids, id, true), cache, templates}}
               end
 
-            {id, counter}, seen_ids_cache ->
-              {[{id, counter}], seen_ids_cache}
+            {id, {node_info, counter}}, {seen_ids, cache, templates} ->
+              {[{id, {node_info, counter}}], {seen_ids, cache, templates}}
+
+            # Handle special control flow keys like [:cond | id], [:while | id], etc.
+            {key, value}, {seen_ids, cache, templates} when is_list(key) ->
+              {[{key, value}], {seen_ids, cache, templates}}
           end)
 
-        {Map.new(clause_cache), seen_ids_cache}
+        # Merge clause templates into main templates
+        templates = Map.merge(templates, clause_templates)
+        {Map.new(clause_cache), {seen_ids, cache, templates}}
       end)
 
-    Map.put(cache, [:cond | id], {clauses_cache, last_cache, Map.keys(all_ids)})
+    {Map.put(cache, [:cond | id], {clauses_cache, last_cache, Map.keys(all_ids)}), templates}
   end
 
-  defp compute_cache(:token, %{data: %Expr{args: [token], id: id}}, state, cache) do
+  defp compute_cache(:token, %{data: %Expr{args: [token], id: id}}, state, {cache, templates}) do
     hooks = state.hooks
 
-    {hooks, cache} =
-      Enum.map_reduce(token.hooks, cache, fn
-        %{callback: callback, expr: expr, name: name}, cache ->
+    {hooks, cache, templates} =
+      Enum.reduce(token.hooks, {[], cache, templates}, fn
+        %{callback: callback, expr: expr, name: name}, {hooks_acc, cache, templates} ->
           hook_fun = hooks[name] || callback
 
           cond do
-            hook_fun -> {hook_fun, composite_compute_cache(expr, state, cache)}
-            Tree.has_hooks?(expr, hooks) -> {true, composite_compute_cache(expr, state, cache)}
-            true -> {false, cache}
+            hook_fun -> 
+              {cache, templates} = composite_compute_cache(expr, state, {cache, templates})
+              {[hook_fun | hooks_acc], cache, templates}
+            Tree.has_hooks?(expr, hooks) -> 
+              {cache, templates} = composite_compute_cache(expr, state, {cache, templates})
+              {[true | hooks_acc], cache, templates}
+            true -> 
+              {[false | hooks_acc], cache, templates}
           end
       end)
 
-    Map.put(cache, [:token | id], hooks)
+    {Map.put(cache, [:token | id], Enum.reverse(hooks)), templates}
   end
 
-  defp compute_cache(_op, tensor, state, cache) do
-    {_, acc} = Tree.apply_args(tensor, cache, &{&1, compute_cache(&1, state, &2)})
+  defp compute_cache(_op, tensor, state, acc) do
+    {_, acc} = Tree.apply_args(tensor, acc, fn arg, acc ->
+      {arg, compute_cache(arg, state, acc)}
+    end)
     acc
   end
 
@@ -264,6 +353,26 @@ defmodule Nx.Defn.Evaluator do
 
   ## Evaluation
 
+  # New ID-based evaluation - dispatch to node_info or legacy path
+  defp eval(id, state, [cache | caches]) when is_reference(id) do
+    case cache do
+      %{^id => {node_info, count}} when is_integer(count) ->
+        {res, [cache | caches]} = eval_node_info(node_info, id, state, [cache | caches])
+        state.gc && :erlang.garbage_collect(self())
+        # debug_node needs the tensor, skip for now or reconstruct
+        {res, [decrement_cache(cache, id, count, res) | caches]}
+
+      %{^id => {_node_info, count, res}} ->
+        # debug_node needs the tensor, skip for now
+        {res, [decrement_cache(cache, id, count, res) | caches]}
+
+      %{} ->
+        # If we don't find the id in the current scope, look up parent scopes
+        eval_parent_by_id(caches, id, state, [cache])
+    end
+  end
+
+  # Legacy path for tensors (still needed for some cases)
   defp eval(%Nx.Tensor{data: %Expr{op: :tensor, args: [t]}}, _state, caches) do
     {t, caches}
   end
@@ -279,13 +388,13 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, [cache | caches]) do
     case cache do
-      %{^id => count} when is_integer(count) ->
+      %{^id => {_node_info, count}} when is_integer(count) ->
         {res, [cache | caches]} = eval_apply(op, ans, state, [cache | caches])
         state.gc && :erlang.garbage_collect(self())
         debug_node(ans, res, state)
         {res, [decrement_cache(cache, id, count, res) | caches]}
 
-      %{^id => {count, res}} ->
+      %{^id => {_node_info, count, res}} ->
         debug_node(ans, res, state)
         {res, [decrement_cache(cache, id, count, res) | caches]}
 
@@ -303,17 +412,25 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp decrement_cache(cache, id, 1, _res), do: Map.delete(cache, id)
-  defp decrement_cache(cache, id, counter, res), do: %{cache | id => {counter - 1, res}}
+
+  defp decrement_cache(cache, id, counter, res) do
+    case cache do
+      %{^id => {node_info, ^counter}} ->
+        %{cache | id => {node_info, counter - 1, res}}
+      %{^id => {node_info, _old_counter, _old_res}} ->
+        %{cache | id => {node_info, counter - 1, res}}
+    end
+  end
 
   defp eval_parent([cache | caches], id, op, ans, state, acc) do
     case cache do
-      %{^id => {_count, res}} ->
+      %{^id => {_node_info, _count, res}} ->
         {res, Enum.reverse(acc, [cache | caches])}
 
-      %{^id => count} when is_integer(count) ->
+      %{^id => {node_info, count}} when is_integer(count) ->
         {res, [cache | caches]} = eval_apply(op, ans, state, [cache | caches])
         state.gc && :erlang.garbage_collect(self())
-        {res, Enum.reverse(acc, [Map.put(cache, id, {count, res}) | caches])}
+        {res, Enum.reverse(acc, [Map.put(cache, id, {node_info, count, res}) | caches])}
 
       %{} ->
         eval_parent(caches, id, op, ans, state, [cache | acc])
@@ -327,11 +444,111 @@ defmodule Nx.Defn.Evaluator do
 
   defp decrement_parents([cache | caches], id) do
     case cache do
-      %{^id => {count, value}} -> [decrement_cache(cache, id, count, value) | caches]
-      %{^id => count} -> [%{cache | id => count - 1} | caches]
-      %{} -> [cache | decrement_parents(caches, id)]
+      %{^id => {_node_info, count, value}} ->
+        [decrement_cache(cache, id, count, value) | caches]
+      %{^id => {node_info, count}} ->
+        [%{cache | id => {node_info, count - 1}} | caches]
+      %{} ->
+        [cache | decrement_parents(caches, id)]
     end
   end
+
+  # Evaluate by ID looking up parent caches
+  defp eval_parent_by_id([cache | caches], id, state, acc) do
+    case cache do
+      %{^id => {_node_info, _count, res}} ->
+        {res, Enum.reverse(acc, [cache | caches])}
+
+      %{^id => {node_info, count}} when is_integer(count) ->
+        {res, [cache | caches]} = eval_node_info(node_info, id, state, [cache | caches])
+        state.gc && :erlang.garbage_collect(self())
+        {res, Enum.reverse(acc, [Map.put(cache, id, {node_info, count, res}) | caches])}
+
+      %{} ->
+        eval_parent_by_id(caches, id, state, [cache | acc])
+    end
+  end
+
+  defp eval_parent_by_id([], id, _state, _acc) do
+    raise "trying to read evaluator cache that has expired for ID: #{inspect(id)}\n\n" <>
+            "Please report this bug with the relevant code that triggers it: https://github.com/elixir-nx/nx"
+  end
+
+  # Evaluate based on node_info from flattened cache
+  defp eval_node_info({:param, i}, _id, state, caches) do
+    case Enum.fetch!(state.params, i).() do
+      %Nx.Tensor{data: %Nx.Defn.Expr{}} = tensor ->
+        raise ArgumentError,
+              "cannot pass a tensor expression as argument to defn, got: #{inspect(tensor)}"
+
+      %Nx.Tensor{} = tensor ->
+        {Nx.devectorize(tensor), caches}
+    end
+  end
+
+  defp eval_node_info({:constant, constant}, id, state, caches) do
+    # Look up tensor template from state
+    ans = Map.fetch!(state.templates, id)
+    {backend, backend_options} = Nx.default_backend()
+    {backend.constant(ans, constant, backend_options), caches}
+  end
+
+  defp eval_node_info({:tensor, t}, _id, _state, caches) do
+    {t, caches}
+  end
+
+  defp eval_node_info({:metadata, wrapped_expr_id}, _id, state, caches) do
+    # Defer to the wrapped expression
+    eval(wrapped_expr_id, state, caches)
+  end
+
+  defp eval_node_info({:elem, tuple_id, i}, _id, state, caches) do
+    {tuple, caches} = eval(tuple_id, state, caches)
+    {elem(tuple, i), caches}
+  end
+
+  defp eval_node_info({:attach_token, token_id, expr_id}, _id, state, caches) do
+    {_, caches} = eval(token_id, state, caches)
+    eval(expr_id, state, caches)
+  end
+
+  defp eval_node_info({:fun, _fun_id}, id, state, caches) do
+    # Look up tensor template from state
+    tensor = Map.fetch!(state.templates, id)
+    eval_apply(:fun, tensor, state, caches)
+  end
+
+  defp eval_node_info({:cond, _cond_id}, id, state, caches) do
+    tensor = Map.fetch!(state.templates, id)
+    eval_apply(:cond, tensor, state, caches)
+  end
+
+  defp eval_node_info({:while, _while_id}, id, state, caches) do
+    tensor = Map.fetch!(state.templates, id)
+    eval_apply(:while, tensor, state, caches)
+  end
+
+  defp eval_node_info({:optional, _optional_id}, id, state, caches) do
+    tensor = Map.fetch!(state.templates, id)
+    eval_apply(:optional, tensor, state, caches)
+  end
+
+  defp eval_node_info({:token, _token_id}, id, state, caches) do
+    tensor = Map.fetch!(state.templates, id)
+    eval_apply(:token, tensor, state, caches)
+  end
+
+  defp eval_node_info({:runtime_call, _tensor_expr_id}, id, state, caches) do
+    tensor = Map.fetch!(state.templates, id)
+    eval_apply(:runtime_call, tensor, state, caches)
+  end
+
+  defp eval_node_info({:generic, op, _arg_refs}, id, state, caches) do
+    # Look up tensor template from state to get full operation info
+    tensor = Map.fetch!(state.templates, id)
+    eval_apply(op, tensor, state, caches)
+  end
+
 
   defp eval_apply(:parameter, %{data: %Expr{args: [i]}}, state, caches) do
     case Enum.fetch!(state.params, i).() do
@@ -535,9 +752,123 @@ defmodule Nx.Defn.Evaluator do
 
   ## Composite
 
-  defp composite_eval(composite, state, caches) do
-    Composite.traverse(composite, caches, &eval(&1, state, &2))
+  # Handle ID-based evaluation for the new flattened representation
+  defp composite_eval(id, state, caches) when is_reference(id) do
+    eval(id, state, caches)
   end
+
+  # Handle structs (including Container) - check if they contain IDs
+  defp composite_eval(%_{} = struct, state, caches) do
+    if is_id_based?(struct) do
+      # Struct contains IDs - traverse and evaluate them
+      Composite.traverse(struct, caches, fn element, caches ->
+        cond do
+          is_reference(element) -> eval(element, state, caches)
+          is_id_based?(element) -> composite_eval(element, state, caches)
+          true -> eval(element, state, caches)
+        end
+      end)
+    else
+      # Regular struct without IDs
+      Composite.traverse(struct, caches, &eval(&1, state, &2))
+    end
+  end
+
+  # Handle tuples - recursively evaluate each element
+  defp composite_eval(tuple, state, caches) when is_tuple(tuple) do
+    if tuple_is_composite?(tuple) do
+      # This is a tuple that may contain IDs or nested structures
+      {result_list, caches} =
+        tuple
+        |> Tuple.to_list()
+        |> Enum.map_reduce(caches, fn element, caches ->
+          composite_eval(element, state, caches)
+        end)
+      
+      {List.to_tuple(result_list), caches}
+    else
+      # Use Composite.traverse for tensor tuples (no IDs involved)
+      Composite.traverse(tuple, caches, &eval(&1, state, &2))
+    end
+  end
+
+  # Handle maps - recursively evaluate each value
+  defp composite_eval(map, state, caches) when is_map(map) and not is_struct(map) do
+    if map_is_composite?(map) do
+      # This is a map that may contain IDs or nested structures
+      {result_map, caches} =
+        Enum.map_reduce(map, caches, fn {key, value}, caches ->
+          {evaluated_value, caches} = composite_eval(value, state, caches)
+          {{key, evaluated_value}, caches}
+        end)
+      
+      {Map.new(result_map), caches}
+    else
+      # Use Composite.traverse for maps containing tensors
+      Composite.traverse(map, caches, &eval(&1, state, &2))
+    end
+  end
+
+  # Fallback for any composite structure - handles both tensors and ID-based structures
+  defp composite_eval(composite, state, caches) do
+    # Use Composite.traverse with a callback that can handle both IDs and nested structures
+    Composite.traverse(composite, caches, fn element, caches ->
+      cond do
+        # Direct ID - evaluate it
+        is_reference(element) ->
+          eval(element, state, caches)
+        
+        # Nested composite structure with IDs - recursively evaluate
+        is_id_based?(element) ->
+          composite_eval(element, state, caches)
+        
+        # Regular element (tensor, number, etc.) - evaluate normally
+        true ->
+          eval(element, state, caches)
+      end
+    end)
+  end
+
+  # Check if a tuple contains IDs or nested ID-based structures
+  defp tuple_is_composite?(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.any?(&is_id_based?/1)
+  end
+
+  # Check if a map contains IDs or nested ID-based structures
+  defp map_is_composite?(map) do
+    Enum.any?(map, fn {_k, v} -> is_id_based?(v) end)
+  end
+
+  # Check if a value is ID-based (either a reference or a structure containing references)
+  defp is_id_based?(value) when is_reference(value), do: true
+  
+  defp is_id_based?(tuple) when is_tuple(tuple) do
+    tuple |> Tuple.to_list() |> Enum.any?(&is_id_based?/1)
+  end
+  
+  defp is_id_based?(map) when is_map(map) and not is_struct(map) do
+    Enum.any?(map, fn {_k, v} -> is_id_based?(v) end)
+  end
+  
+  # Check structs by directly checking field values (non-recursive for structs to avoid infinite loops)
+  defp is_id_based?(%_{} = struct) do
+    # Convert struct to map and check all values
+    # Only check for direct references, tuples, or maps - don't recurse into nested structs
+    struct
+    |> Map.from_struct()
+    |> Map.values()
+    |> Enum.any?(fn
+      value when is_reference(value) -> true
+      value when is_tuple(value) -> value |> Tuple.to_list() |> Enum.any?(&is_reference/1)
+      value when is_map(value) and not is_struct(value) -> 
+        Enum.any?(value, fn {_k, v} -> is_reference(v) end)
+      _ -> false
+    end)
+  end
+  
+  defp is_id_based?(_), do: false
 
   defp composite_to_params(composite) do
     composite |> composite_to_params([]) |> Enum.reverse()
