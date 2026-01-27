@@ -9,10 +9,15 @@ defmodule Nx.Defn.Token do
       %{
         expr: Nx.Tensor.t | Nx.Container.t,
         name: atom(),
-        callback: (Nx.Tensor.t | Nx.Container.t -> term()) | nil
+        callback: (Nx.Tensor.t | Nx.Container.t -> term()) | nil,
+        metadata: map()
       }
 
   The `hooks` field must only be accessed by `defn` compilers.
+
+  The `metadata` field may contain:
+    * `:partitions` - list of partition IDs (integers) where the hook should execute.
+      If not specified, the hook executes on all partitions.
   """
 
   # Hooks are stored with the hooks declared first
@@ -27,9 +32,16 @@ defmodule Nx.Defn.Token do
   @doc false
   def add_hook(%Nx.Defn.Token{} = token, expr, name, callback)
       when is_atom(name) and (is_function(callback) or is_nil(callback)) do
-    hook = %{expr: expr, name: name, callback: callback}
+    # Extract metadata from the expression if present
+    metadata = extract_metadata(expr)
+    hook = %{expr: expr, name: name, callback: callback, metadata: metadata}
     update_in(token.hooks, &[hook | &1])
   end
+
+  defp extract_metadata(%Nx.Tensor{data: %Nx.Defn.Expr{op: :metadata, args: [_expr, metadata]}}),
+    do: metadata
+
+  defp extract_metadata(_), do: %{}
 
   defimpl Inspect do
     import Inspect.Algebra

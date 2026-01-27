@@ -1382,6 +1382,31 @@ defmodule Nx.Defn.Kernel do
   the result of the given expression. The expression can
   be any tensor or a `Nx.Container`.
 
+  ## Hook function and device IDs
+
+  Hook functions accept the tensor value as their single argument:
+
+      defn computation(x) do
+        result = Nx.multiply(x, 2)
+        hook(result, fn tensor ->
+          IO.inspect({:result, tensor})
+        end)
+      end
+
+  In multi-device/SPMD scenarios, you can access the device ID that produced
+  the hook data using `Process.get(:exla_hook_device_id)`:
+
+      defn computation(x) do
+        result = Nx.multiply(x, 2)
+        hook(result, fn tensor ->
+          device_id = Process.get(:exla_hook_device_id)
+          IO.inspect({:from_device, device_id, tensor})
+        end)
+      end
+
+  The `:exla_hook_device_id` key is only available during hook execution and
+  will be `nil` in single-device scenarios or non-EXLA backends.
+
   Note **you must return the result of the `hook` call**.
   For example, the code below won't inspect the `:add`
   tuple, because the hook is not returned from `defn`:

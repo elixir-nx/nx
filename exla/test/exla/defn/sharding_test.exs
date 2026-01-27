@@ -80,9 +80,8 @@ defmodule EXLA.Defn.ShardingTest do
       parent = self()
 
       fun = fn x, y ->
-        import Nx.Defn.Kernel
         intermediate = Nx.multiply(x, 2)
-        hooked = hook(intermediate, :multiply_hook, fn t -> send(parent, {:hook, t}) end)
+        hooked = Nx.Defn.Kernel.hook(intermediate, :multiply_hook, fn t -> send(parent, {:hook, t}) end)
         Nx.add(hooked, y)
       end
 
@@ -115,19 +114,32 @@ defmodule EXLA.Defn.ShardingTest do
       assert result.mlir_module =~ "stablehlo.outfeed"
       assert result.mlir_module =~ ~r/mhlo\.sharding = "\{\{replicated\}, \{replicated\}\}"/
 
-      # Execute with hooks
-      hooks = %{multiply_hook: fn t -> send(parent, {:hook, t}) end}
+      # Execute with hooks (hook can access device_id via Process.get)
+      hooks = %{
+        multiply_hook: fn t ->
+          device_id = Process.get(:exla_hook_device_id)
+          send(parent, {:hook, t, device_id})
+        end
+      }
+
       results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings, hooks: hooks).(args)
 
       assert length(results) == 4
 
       # Verify hook was called once per device (4 times total).
       # With replicated sharding, all devices have identical data.
-      hook_tensors =
+      # Hooks now receive device_id as second argument.
+      hook_data =
         for _ <- results do
-          assert_receive {:hook, %Nx.Tensor{} = hook_tensor}, 1000
-          hook_tensor
+          assert_receive {:hook, %Nx.Tensor{} = hook_tensor, device_id}, 1000
+          {hook_tensor, device_id}
         end
+
+      # Extract device IDs and tensors
+      {hook_tensors, device_ids} = Enum.unzip(hook_data)
+
+      # Should have received hooks from all 4 devices
+      assert Enum.sort(device_ids) == [0, 1, 2, 3]
 
       # All 4 hook tensors should have the same data (replicated)
       expected_hook_data = Nx.tensor([[0, 0], [2, 2], [4, 4], [6, 6], [0, 0], [2, 2], [4, 4], [6, 6]])
@@ -157,6 +169,77 @@ defmodule EXLA.Defn.ShardingTest do
         end
 
       assert Enum.sort(device_ids) == [0, 1, 2, 3]
+    end
+
+    @moduletag :multi_device
+    test "hooks with sharding and partition filtering" do
+      # Test that hooks can be restricted to specific partitions
+      parent = self()
+
+      fun = fn x, y ->
+        intermediate = Nx.multiply(x, 2)
+
+        # This hook should only run on partitions 0 and 2
+        expr = Nx.Defn.Expr.metadata(intermediate, %{partitions: [0, 2]})
+
+        hooked =
+          Nx.Defn.Kernel.hook(expr, :filtered_hook, fn t ->
+            device_id = Process.get(:exla_hook_device_id)
+            send(parent, {:filtered, t, device_id})
+          end)
+
+        Nx.add(hooked, y)
+      end
+
+      mesh = %Mesh{name: "mesh", shape: {2, 2}}
+      input_shardings = [%{0 => [0], 1 => [1]}, %{0 => [0]}]
+
+      args = [
+        [Nx.iota({4, 1}), Nx.iota({4, 1})],
+        [Nx.iota({4, 1}), Nx.iota({4, 1})],
+        [Nx.iota({4, 1}), Nx.iota({4, 1})],
+        [Nx.iota({4, 1}), Nx.iota({4, 1})]
+      ]
+
+      hooks = %{
+        filtered_hook: fn t ->
+          device_id = Process.get(:exla_hook_device_id)
+          send(parent, {:filtered, t, device_id})
+        end
+      }
+      results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings, hooks: hooks).(args)
+
+      assert length(results) == 4
+
+      # All hook tensors should have the multiply result
+      expected_hook_data =
+        Nx.tensor([[0, 0], [2, 2], [4, 4], [6, 6], [0, 0], [2, 2], [4, 4], [6, 6]])
+      # Should receive exactly 2 hook messages (from partitions 0 and 2 only)
+      assert_receive {:filtered, %Nx.Tensor{} = hook_tensor, 0}, 1000
+      assert_equal(hook_tensor, expected_hook_data)
+      assert_receive {:filtered, %Nx.Tensor{} = hook_tensor, 2}, 1000
+      assert_equal(hook_tensor, expected_hook_data)
+
+      # Should not receive more messages
+      refute_receive {:filtered, _, _}, 1000
+
+
+      # Results should still be correct
+      expected_result =
+        Nx.tensor([
+          [0, 0],
+          [3, 3],
+          [6, 6],
+          [9, 9],
+          [0, 0],
+          [3, 3],
+          [6, 6],
+          [9, 9]
+        ])
+
+      for r <- results do
+        assert_equal(r, expected_result)
+      end
     end
 
     @moduletag :multi_device

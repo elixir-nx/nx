@@ -145,11 +145,15 @@ defmodule EXLA.Defn.Outfeed do
   @doc """
   Adds a function hook if it has a callback defined for it.
   """
-  def maybe_add_function_hook(%Outfeed{} = outfeed, builder, tuple, name, expr) do
+  def maybe_add_function_hook(%Outfeed{} = outfeed, builder, tuple, name, expr, metadata \\ %{}) do
     cond do
       name in outfeed.used_hooks ->
         {outfeed, flag, typespecs} = outfeed_flat_tuple(outfeed, builder, tuple)
-        put_in(outfeed.compiled_hooks[flag], {:function, typespecs, name, Nx.to_template(expr)})
+
+        put_in(
+          outfeed.compiled_hooks[flag],
+          {:function, typespecs, name, Nx.to_template(expr), metadata}
+        )
 
       outfeed.token ->
         outfeed
@@ -261,11 +265,10 @@ defmodule EXLA.Defn.Outfeed do
           ref = make_ref()
           typespec = EXLA.Typespec.tensor({:u, 16}, {})
 
-          # For SPMD, all devices execute hooks to provide visibility into what
-          # each device sees. With replicated sharding, all devices will have
-          # identical data, but this allows verification and future support
-          # for non-replicated sharding patterns.
-          filtered_hooks = hooks
+          # Filter hooks based on partition metadata.
+          # For SPMD, hooks execute on all partitions by default, unless
+          # the hook has :partitions metadata specifying which partitions to run on.
+          filtered_hooks = filter_hooks_for_partition(hooks, compiled_hooks, device_id)
 
           loop(client, device_id, ref, typespec, filtered_hooks, compiled_hooks, infeeds)
         end)
@@ -274,6 +277,30 @@ defmodule EXLA.Defn.Outfeed do
     # Wait for all device listeners to complete
     Enum.each(device_tasks, fn task ->
       Task.await(task, :infinity)
+    end)
+  end
+
+  defp filter_hooks_for_partition(hooks, compiled_hooks, device_id) do
+    # Check each hook to see if it has partition restrictions
+    Map.new(hooks, fn {name, fun} ->
+      # Find the compiled hook to check its metadata
+      should_run =
+        Enum.any?(compiled_hooks, fn
+          {_flag, {:function, _typespecs, ^name, _template, %{partitions: partitions}}} ->
+            device_id in partitions
+
+          {_flag, {:function, _typespecs, ^name, _template, _metadata}} ->
+            true
+
+          {_flag, {:function, _typespecs, ^name, _template}} ->
+            true
+
+          _ ->
+            false
+        end)
+
+      filtered_fun = if should_run, do: fun, else: fn _tensor -> :ok end
+      {name, filtered_fun}
     end)
   end
 
@@ -296,12 +323,25 @@ defmodule EXLA.Defn.Outfeed do
             EXLA.Client.to_infeed(client, device_id, [{data, data_typespec}])
             loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
 
+          {:function, typespecs, name, template, _metadata} ->
+            fun = Map.fetch!(hooks, name)
+            length = length(typespecs)
+            parent = self()
+            ref = make_ref()
+            pid = spawn(fn -> apply_hook(parent, ref, length, fun, template, device_id) end)
+            :ok = EXLA.Client.from_outfeed(client, device_id, typespecs, pid, ref)
+
+            receive do
+              ^ref -> loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
+            end
+
+          # Legacy format without metadata (for backward compatibility)
           {:function, typespecs, name, template} ->
             fun = Map.fetch!(hooks, name)
             length = length(typespecs)
             parent = self()
             ref = make_ref()
-            pid = spawn(fn -> apply_hook(parent, ref, length, fun, template) end)
+            pid = spawn(fn -> apply_hook(parent, ref, length, fun, template, device_id) end)
             :ok = EXLA.Client.from_outfeed(client, device_id, typespecs, pid, ref)
 
             receive do
@@ -311,7 +351,7 @@ defmodule EXLA.Defn.Outfeed do
     end
   end
 
-  defp apply_hook(parent, ref, length, fun, template) do
+  defp apply_hook(parent, ref, length, fun, template, device_id) do
     buffers =
       for _ <- 1..length//1 do
         receive do
@@ -320,6 +360,15 @@ defmodule EXLA.Defn.Outfeed do
       end
 
     send(parent, ref)
-    fun.(EXLA.Defn.Buffers.to_nx!(buffers, template))
+    tensor = EXLA.Defn.Buffers.to_nx!(buffers, template)
+
+    # Store device_id in process dictionary so hooks can access it via Process.get(:exla_hook_device_id)
+    Process.put(:exla_hook_device_id, device_id)
+
+    try do
+      fun.(tensor)
+    after
+      Process.delete(:exla_hook_device_id)
+    end
   end
 end

@@ -251,7 +251,6 @@ defmodule EXLA.Defn do
        )
        when Outfeed.will_outfeed(outfeed) do
     args = if is_sharded?, do: args, else: [args]
-    defn - shard_jit_apply
     # Check if args are pre-sliced (list of arglists for each partition)
     {input_lists, infeeds} =
       Enum.map_reduce(args, %{}, fn partition_args, acc ->
@@ -857,14 +856,14 @@ defmodule EXLA.Defn do
     builder = state.builder
 
     cache =
-      List.foldr(token.hooks, cache, fn %{name: name, expr: expr}, cache ->
+      List.foldr(token.hooks, cache, fn %{name: name, expr: expr, metadata: metadata}, cache ->
         # First traverse the child because if it has hooks,
         # we need to handle them first
         {tuple, cache} = recur_flatten(expr, state, cache)
 
         cache
         |> get_outfeed()
-        |> Outfeed.maybe_add_function_hook(builder, tuple, name, expr)
+        |> Outfeed.maybe_add_function_hook(builder, tuple, name, expr, metadata)
         |> then(&put_outfeed(cache, &1))
       end)
 
