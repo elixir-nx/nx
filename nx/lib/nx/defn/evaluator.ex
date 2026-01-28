@@ -125,8 +125,15 @@ defmodule Nx.Defn.Evaluator do
     state = %{hooks: hooks, parent_ids: nil, current_ids: nil}
     {cache, templates} = init_compute_cache(devectorized_expr, state)
 
-    # Use devectorized expression as-is - the cache is already flattened
-    {devectorized_expr, Enum.reverse(output_templates), cache, templates}
+    # Make devectorized_expr shallow to reduce closure size
+    shallow_expr = make_shallow_expr(devectorized_expr)
+
+    # Make templates shallow to reduce closure size
+    # Templates are indexed by ID and used in eval_node_info, so we need to preserve structure
+    # but make the args shallow where possible
+    shallow_templates = make_templates_shallow(templates)
+
+    {shallow_expr, Enum.reverse(output_templates), cache, shallow_templates}
   end
 
   defp init_compute_cache(expr, state) do
@@ -201,6 +208,96 @@ defmodule Nx.Defn.Evaluator do
   defp make_shallow_template(%Nx.Tensor{shape: shape, type: type, names: names, vectorized_axes: vectorized_axes}) do
     %{shape: shape, type: type, names: names, vectorized_axes: vectorized_axes}
   end
+
+  # Replace Expr data with shallow references in composite structure
+  # This makes the devectorized_expr small enough to not hang :erts_debug.size()
+  defp make_shallow_expr(composite) do
+    Composite.traverse(composite, fn
+      %Nx.Tensor{data: %Expr{id: id}} = tensor when is_reference(id) ->
+        %{tensor | data: {:ref, id}}
+      other ->
+        other
+    end)
+  end
+
+  # Make templates shallow to reduce closure size
+  # Templates must preserve Expr structure for evaluation, but we can make args shallow
+  defp make_templates_shallow(templates) do
+    Map.new(templates, fn {id, tensor} ->
+      {id, make_template_tensor_shallow(tensor)}
+    end)
+  end
+
+  # Make a template tensor shallow based on its operation type
+  # Control flow ops need to preserve nested expression trees, but can make data args shallow
+  defp make_template_tensor_shallow(%Nx.Tensor{data: %Expr{op: op, args: args} = expr_data} = tensor) do
+    shallow_args = case op do
+      # For :while, args are [initial, arg, condition, block]
+      # Keep condition/block as full Expr trees (evaluated in nested scope)
+      # Make initial/arg shallow (just references to other nodes)
+      :while ->
+        [initial, arg, condition, block] = args
+        [make_arg_shallow(initial), make_arg_shallow(arg), condition, block]
+      
+      # For :fun, args are [args_template, expr, mfa]
+      # Keep expr as full tree (the function body)
+      # Make args_template and mfa shallow
+      :fun ->
+        [args_template, expr, mfa] = args
+        [make_arg_shallow(args_template), expr, make_arg_shallow(mfa)]
+      
+      # For :cond, args are [clauses, last] where clauses = [{pred, body}, ...]
+      # Keep preds and bodies as full trees (conditional branches)
+      :cond ->
+        args  # Keep all as full trees
+      
+      # For :optional, args are [call, expr, callback]
+      # Keep expr as full tree (the fallback computation)
+      # The call tensor also needs special handling to preserve its Expr structure
+      :optional ->
+        [call, expr, callback] = args
+        [make_optional_call_shallow(call), expr, make_arg_shallow(callback)]
+      
+      # For all other ops, make all args shallow
+      _ ->
+        Enum.map(args, &make_arg_shallow/1)
+    end
+    
+    # Use Nx.to_template for clean base tensor, then restore Expr with shallow args
+    clean_base = Nx.to_template(tensor)
+    %{clean_base | data: %{expr_data | args: shallow_args}}
+  end
+
+  # For non-Expr tensors (shouldn't happen in templates, but handle gracefully)
+  defp make_template_tensor_shallow(tensor), do: tensor
+
+  # Make an arg shallow - replace Expr tensors with minimal ref tensors
+  # We keep them as tensors (not bare {:ref, id} tuples) so Tree.apply_args can traverse them
+  defp make_arg_shallow(%Nx.Tensor{data: %Expr{id: id}} = tensor) when is_reference(id) do
+    # Use minimal tensor with {:ref, id} - just like make_shallow_expr does
+    %{tensor | data: {:ref, id}}
+  end
+
+  defp make_arg_shallow(tuple) when is_tuple(tuple) do
+    tuple |> Tuple.to_list() |> Enum.map(&make_arg_shallow/1) |> List.to_tuple()
+  end
+
+  defp make_arg_shallow(list) when is_list(list) do
+    Enum.map(list, &make_arg_shallow/1)
+  end
+
+  defp make_arg_shallow(other), do: other
+
+  # Special handling for :optional call arg
+  # The call tensor has its own args that need to remain as Expr structure for Tree.apply_args
+  defp make_optional_call_shallow(%Nx.Tensor{data: %Expr{args: call_args} = expr_data} = call_tensor) do
+    # Make the call's args shallow, but keep the Expr structure
+    shallow_call_args = Enum.map(call_args, &make_arg_shallow/1)
+    clean_base = Nx.to_template(call_tensor)
+    %{clean_base | data: %{expr_data | args: shallow_call_args}}
+  end
+
+  defp make_optional_call_shallow(other), do: make_arg_shallow(other)
 
   defp compute_cache(%Nx.Tensor{data: %Expr{op: :constant}}, _state, acc) do
     acc
@@ -394,6 +491,11 @@ defmodule Nx.Defn.Evaluator do
 
   ## Evaluation
 
+  # Shallow reference evaluation - unwrap and evaluate by ID
+  defp eval(%Nx.Tensor{data: {:ref, id}}, state, caches) when is_reference(id) do
+    eval(id, state, caches)
+  end
+
   # ID-based evaluation - dispatch to node_info
   defp eval(id, state, [cache | caches]) when is_reference(id) do
     case cache do
@@ -558,7 +660,8 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval_node_info({:metadata_literal, expr}, _id, state, caches) do
     # The wrapped expression is a literal (no ID), evaluate it directly
-    eval(expr, state, caches)
+    # Use composite_eval to handle tuples and other composite structures
+    composite_eval(expr, state, caches)
   end
 
   defp eval_node_info({:elem, tuple_id, i}, _id, state, caches) do
@@ -670,7 +773,9 @@ defmodule Nx.Defn.Evaluator do
     [initial, _arg, condition, block] = args
     {initial, caches} = composite_eval(initial, state, caches)
     {while_cache, caches} = pop_cache!(caches, [:while | id])
-    {while(initial, condition, block, state, [while_cache]), caches}
+    # Only pass while_cache - nested expressions should be self-contained
+    result = while(initial, condition, block, state, [while_cache])
+    {result, caches}
   end
 
   defp eval_apply(:token, %{data: %Expr{args: [token], id: id}}, state, caches) do
@@ -701,13 +806,32 @@ defmodule Nx.Defn.Evaluator do
     backend = Nx.Shared.list_impl!(args)
 
     if function_exported?(backend, call.data.op, length(args) + 1) do
-      out =
+      # Create clean output template without Expr data
+      # Backends use this template only for shape/type metadata
+      out_template =
         case call do
-          %{type: {:tuple, _}} -> out
-          _ -> call
+          %{type: {:tuple, _}} ->
+            # For tuple outputs, strip Expr data from all tuple elements
+            Composite.traverse(out, fn
+              %Nx.Tensor{shape: shape, type: type, names: names} = tensor ->
+                case tensor.data do
+                  %Expr{} -> Nx.template(shape, type, names: names)
+                  {:ref, _} -> Nx.template(shape, type, names: names)
+                  _ -> tensor
+                end
+              other -> other
+            end)
+
+          _ ->
+            # For single outputs, use call metadata to create clean template
+            case call.data do
+              %Expr{} -> Nx.template(call.shape, call.type, names: call.names)
+              {:ref, _} -> Nx.template(call.shape, call.type, names: call.names)
+              _ -> call
+            end
         end
 
-      {apply(backend, call.data.op, [out | args]), caches}
+      {apply(backend, call.data.op, [out_template | args]), caches}
     else
       params = Enum.map(args, &fn -> &1 end)
       {{expr, optional_cache}, caches} = pop_cache!(caches, [:optional | id])
@@ -852,6 +976,16 @@ defmodule Nx.Defn.Evaluator do
     end
   end
 
+  # Format an arg for debug output - handle both full Expr tensors and shallow refs
+  defp format_debug_arg(%Nx.Tensor{data: {:ref, id}}, _inspect_opts) do
+    # For shallow refs, just show a simplified representation
+    "#Nx.Tensor<ref: #{ref_to_string(id)}>"
+  end
+
+  defp format_debug_arg(arg, inspect_opts) do
+    inspect(arg, inspect_opts)
+  end
+
   defp format_node_info(%Expr{id: id, op: op, args: args}, res, inspect_limit) do
     id_str = ref_to_string(id)
 
@@ -866,7 +1000,7 @@ defmodule Nx.Defn.Evaluator do
       |> Enum.map(fn arg ->
         inspected =
           arg
-          |> inspect(inspect_opts)
+          |> format_debug_arg(inspect_opts)
           |> String.trim()
 
         "  #{inspect(inspected)}"
