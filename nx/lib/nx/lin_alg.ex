@@ -147,7 +147,7 @@ defmodule Nx.LinAlg do
 
     {output_shape, output_names} = Nx.Shape.cholesky(shape, names)
 
-    out = %{tensor | type: output_type, shape: output_shape, names: output_names}
+    out = Nx.template(output_shape, output_type, names: output_names)
 
     :cholesky
     |> Nx.Shared.optional([tensor], out, &Nx.LinAlg.Cholesky.cholesky/1)
@@ -606,7 +606,8 @@ defmodule Nx.LinAlg do
     a = Nx.devectorize(a)
     b = Nx.devectorize(b)
 
-    result = impl!(a, b).triangular_solve(%{b | type: output_type}, a, b, opts)
+    out = Nx.template(b.shape, output_type, names: b.names)
+    result = impl!(a, b).triangular_solve(out, a, b, opts)
 
     Nx.vectorize(result, vectorized_axes)
   end
@@ -1141,18 +1142,8 @@ defmodule Nx.LinAlg do
     {q_shape, r_shape} = Nx.Shape.qr(shape, opts)
 
     output =
-      {%{
-         tensor
-         | type: output_type,
-           shape: q_shape,
-           names: List.duplicate(nil, tuple_size(q_shape))
-       },
-       %{
-         tensor
-         | type: output_type,
-           shape: r_shape,
-           names: List.duplicate(nil, tuple_size(r_shape))
-       }}
+      {Nx.template(q_shape, output_type),
+       Nx.template(r_shape, output_type)}
 
     :qr
     |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.QR.qr/2)
@@ -1394,8 +1385,8 @@ defmodule Nx.LinAlg do
     eigenvals_name = tl(eigenvecs_name)
 
     output =
-      {%{tensor | names: eigenvals_name, type: output_type, shape: eigenvals_shape},
-       %{tensor | names: eigenvecs_name, type: output_type, shape: eigenvecs_shape}}
+      {Nx.template(eigenvals_shape, output_type, names: eigenvals_name),
+       Nx.template(eigenvecs_shape, output_type, names: eigenvecs_name)}
 
     :eigh
     |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.BlockEigh.eigh/2)
@@ -1508,12 +1499,11 @@ defmodule Nx.LinAlg do
     Nx.Shared.raise_complex_not_implemented_yet(type, "LinAlg.svd", 2)
     output_type = Nx.Type.to_floating(type)
     {u_shape, s_shape, v_shape} = Nx.Shape.svd(shape, opts)
-    rank = tuple_size(shape)
 
     output =
-      {%{tensor | names: List.duplicate(nil, rank), type: output_type, shape: u_shape},
-       %{tensor | names: List.duplicate(nil, rank - 1), type: output_type, shape: s_shape},
-       %{tensor | names: List.duplicate(nil, rank), type: output_type, shape: v_shape}}
+      {Nx.template(u_shape, output_type),
+       Nx.template(s_shape, output_type),
+       Nx.template(v_shape, output_type)}
 
     :svd
     |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.SVD.svd/2)
@@ -1737,12 +1727,11 @@ defmodule Nx.LinAlg do
 
     output_type = Nx.Type.to_floating(type)
     {p_shape, l_shape, u_shape} = Nx.Shape.lu(shape)
-    names = List.duplicate(nil, tuple_size(shape))
 
     output =
-      {%{tensor | type: type, shape: p_shape, names: names},
-       %{tensor | type: output_type, shape: l_shape, names: names},
-       %{tensor | type: output_type, shape: u_shape, names: names}}
+      {Nx.template(p_shape, type),
+       Nx.template(l_shape, output_type),
+       Nx.template(u_shape, output_type)}
 
     :lu
     |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.LU.lu/2)
