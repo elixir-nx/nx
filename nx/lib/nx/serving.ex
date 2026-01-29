@@ -1321,6 +1321,8 @@ defmodule Nx.Serving do
     partitions_opts = Enum.map(partitions_opts, &Keyword.put(&1, :batch_keys, batch_keys))
     {:ok, module_state} = handle_init(serving.module, :process, serving.arg, partitions_opts)
 
+    # Store everything in persistent_term, including module_state to avoid copying
+    # heavy JIT functions into task closures
     :persistent_term.put(
       persistent_key(name),
       %{
@@ -1329,7 +1331,8 @@ defmodule Nx.Serving do
         postprocessing: serving.client_postprocessing,
         distributed_postprocessing: serving.distributed_postprocessing,
         mode: mode,
-        batch_keys: Map.from_keys(batch_keys, [])
+        batch_keys: Map.from_keys(batch_keys, []),
+        module_state: module_state
       }
     )
 
@@ -1343,8 +1346,8 @@ defmodule Nx.Serving do
     # We keep batches in a stack. Once the stack is full
     # or it times out, we either execute or enqueue it.
     state = %{
+      name: name,
       module: serving.module,
-      module_state: module_state,
       limit: batch_size,
       timeout: batch_timeout,
       in_queue: @empty_queue,
@@ -1461,10 +1464,23 @@ defmodule Nx.Serving do
     end
   end
 
-  def handle_info({ref, :done}, %{tasks: tasks} = state) do
+  def handle_info({ref, {:done, new_module_state}}, %{tasks: tasks} = state) do
     case Enum.split_with(tasks, &(elem(&1, 0).ref == ref)) do
       {[{_task, partition, _ref_sizes}], tasks} ->
         Process.demonitor(ref, [:flush])
+
+        # Update module_state in persistent_term if it changed
+        # Note: In practice, module_state rarely changes (compiled functions are immutable),
+        # but the callback contract allows custom implementations to update it
+        term = :persistent_term.get(persistent_key(state.name))
+
+        if new_module_state != term.module_state do
+          :persistent_term.put(
+            persistent_key(state.name),
+            Map.put(term, :module_state, new_module_state)
+          )
+        end
+
         noreply_task_done_and_continue(state, tasks, partition)
 
       _ ->
@@ -1610,11 +1626,19 @@ defmodule Nx.Serving do
             {batch_refs, Map.put(pending_batches, key, queue)}
         end
 
-      %{module: module, module_state: module_state, hooks_table: hooks_table} = state
-      {:execute, function, module_state} = handle_batch(module, batch, partition, module_state)
+      %{name: name, module: module, hooks_table: hooks_table} = state
 
+      # Create minimal closure that fetches module_state from persistent_term inside the task
+      # This avoids copying heavy JIT functions (which can be megabytes) into the task process
       wrapped_function = fn ->
         :telemetry.span([:nx, :serving, :execute], %{module: module}, fn ->
+          # Fetch module_state from persistent_term (shared memory, no copy)
+          %{module_state: module_state} = :persistent_term.get(persistent_key(name))
+
+          # Call handle_batch inside the task to get the execution function
+          {:execute, function, new_module_state} =
+            handle_batch(module, batch, partition, module_state)
+
           if hooks_table do
             :ets.insert(hooks_table, {partition, ref_sizes})
           end
@@ -1629,7 +1653,9 @@ defmodule Nx.Serving do
             end
           end
 
-          {:done, %{metadata: metadata, module: module}}
+          # Return tuple: {result, telemetry_metadata}
+          # Result includes new_module_state for updating persistent_term if needed
+          {{:done, new_module_state}, %{metadata: metadata, module: module}}
         end)
       end
 
@@ -1638,8 +1664,7 @@ defmodule Nx.Serving do
 
       %{
         state
-        | module_state: module_state,
-          tasks: tasks,
+        | tasks: tasks,
           out_queue: out_queue,
           in_queue: in_queue,
           pending_batches: pending_batches

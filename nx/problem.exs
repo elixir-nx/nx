@@ -45,4 +45,10 @@ IO.puts("before batched_run")
 
 IO.puts("after batched_run, time: #{time / 1000}")
 
-dbg(output)
+IO.puts("second batched_run")
+{time, output} =
+  :timer.tc(fn ->
+    Nx.Serving.batched_run(StableDiffusion, %{prompt: prompt, negative_prompt: negative_prompt})
+  end)
+
+IO.puts("after batched_run, time: #{time / 1000}")
