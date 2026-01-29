@@ -251,7 +251,6 @@ defmodule Nx.Defn.Tree do
   def apply_args(%T{data: %Expr{args: args}}, _type, acc, fun) do
     Enum.map_reduce(args, acc, fn
       %T{data: %Expr{}} = arg, acc -> fun.(arg, acc)
-      %T{data: {:ref, _}} = arg, acc -> fun.(arg, acc)
       arg, acc -> {arg, acc}
     end)
   end
