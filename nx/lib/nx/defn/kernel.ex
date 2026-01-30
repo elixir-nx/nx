@@ -1669,6 +1669,32 @@ defmodule Nx.Defn.Kernel do
     end
   end
 
+  @doc """
+  Gathers tensors from all replicas along a specified dimension.
+
+  This operation concatenates tensors from multiple replicas/devices along
+  the specified dimension. Requires a backend that supports multi-device operations.
+
+  ## Parameters
+
+    * `tensor` - The input tensor to gather
+    * `all_gather_dim` - The dimension along which to gather
+    * `replica_groups` - 2D list defining how replicas are grouped (required)
+    * `opts` - Optional keyword list:
+      * `:use_global_device_ids` - Whether to use global device IDs (default: false)
+      * `:channel_id` - Channel ID for communication (optional)
+
+  ## Examples
+
+    all_gather(tensor, 0, [[0, 1, 2, 3]])
+    all_gather(tensor, 1, [[0, 1], [2, 3]], use_global_device_ids: true)
+  """
+  def all_gather(tensor, all_gather_dim, replica_groups, opts \\ []) do
+    opts = Keyword.put(opts, :all_gather_dim, all_gather_dim)
+    opts = Keyword.put(opts, :replica_groups, replica_groups)
+    Nx.Defn.Expr.all_gather(tensor, opts)
+  end
+
   @definitions (Module.definitions_in(__MODULE__, :def) ++
                   Module.definitions_in(__MODULE__, :defmacro)) --
                  [

@@ -1471,6 +1471,24 @@ defmodule EXLA.Defn do
     EXLA.Lib.argsort(state.builder, tensor, dimension, stable, comp, ans.type)
   end
 
+## to_operator collective ops
+
+  defp to_operator(:all_gather, [%Value{} = tensor, opts], ans, _state) do
+    all_gather_dim = Keyword.fetch!(opts, :all_gather_dim)
+    replica_groups = Keyword.fetch!(opts, :replica_groups)
+    use_global_device_ids = Keyword.get(opts, :use_global_device_ids, false)
+
+    Value.all_gather(
+      [tensor],
+      expr_to_typespec(ans),
+      all_gather_dim,
+      replica_groups,
+      use_global_device_ids,
+      Keyword.take(opts, [:channel_id])
+    )
+    |> hd()
+  end
+
   defp fft(exla_op, [%Value{} = tensor, opts], %{type: type} = ans, state) do
     n = opts[:length]
     axis = opts[:axis]

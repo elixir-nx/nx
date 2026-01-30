@@ -478,6 +478,11 @@ defmodule Nx.Defn.Evaluator do
           {Nx.Shared.list_impl!(args), [ans | args]}
       end
 
+    if op == :all_gather and not function_exported?(mod, :all_gather, 3) do
+      raise ArgumentError,
+        "all_gather/3 is not supported by backend #{inspect(mod)}."
+    end
+
     {apply(mod, op, args), caches}
   end
 

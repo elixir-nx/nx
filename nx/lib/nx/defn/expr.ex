@@ -1166,6 +1166,33 @@ defmodule Nx.Defn.Expr do
     expr(out, context, :gather, [tensor, indices, opts])
   end
 
+  def all_gather(tensor, opts) do
+    {[tensor], context} = to_exprs([tensor])
+
+    _all_gather_dim = opts[:all_gather_dim]
+    replica_groups = opts[:replica_groups]
+
+    # Calculate group size (number of replicas per group)
+    _group_size =
+      case replica_groups do
+        [first_group | _] -> length(first_group)
+        [] -> 1
+      end
+
+    # Calculate output shape by multiplying the gather dimension by group_size
+    input_shape = tensor.shape
+    output_shape =
+      input_shape
+#      |> Tuple.to_list()
+#      |> List.update_at(all_gather_dim, &(&1 * group_size))
+#      |> List.to_tuple()
+
+    # Create output tensor with the new shape
+    out = %{tensor | shape: output_shape}
+
+    expr(out, context, :all_gather, [tensor, opts])
+  end
+
   @impl true
   def reverse(out, tensor, axes) do
     tensor = to_expr(tensor)
