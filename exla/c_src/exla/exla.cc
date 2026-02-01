@@ -621,17 +621,11 @@ FINE_NIF(runtime_callback_reply, ERL_NIF_DIRTY_JOB_IO_BOUND);
 FINE_NIF(clear_runtime_callback_bridge, 0);
 
 // Logging
+// Note: TFLogSink API was removed in XLA 0.9.1. Log sink functionality disabled.
 
 fine::Ok<> start_log_sink(ErlNifEnv *env, ErlNifPid logger_pid) {
-  ExlaLogSink *sink = new ExlaLogSink(logger_pid);
-
-  // NO_DEFAULT_LOGGER doesn't behave right
-  for (auto *log_sink : tsl::TFGetLogSinks()) {
-    tsl::TFRemoveLogSink(log_sink);
-  }
-
-  tsl::TFAddLogSink(sink);
-
+  // TFLogSink API no longer available in XLA 0.9.1+
+  // Logging now uses absl::log directly
   return fine::Ok();
 }
 

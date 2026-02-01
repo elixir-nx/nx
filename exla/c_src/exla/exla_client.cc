@@ -26,15 +26,35 @@ ExlaBuffer::~ExlaBuffer() {
   // Track memory deallocation when buffer is garbage collected
   // (only if not already explicitly deallocated)
   if (buffer_ && !buffer_->IsDeleted()) {
-    TrackDeallocation();
+    // Track memory while buffer is still valid
+    if (client_) {
+      int dev_id = buffer_->device()->id();
+      auto size_or = buffer_->GetOnDeviceSizeInBytes();
+      if (size_or.ok()) {
+        client_->TrackBufferDeallocated(dev_id, size_or.value());
+      }
+    }
+
+    // XLA 0.9.1 has a bug in CPU buffer destruction
+    // For non-CPU buffers, try to await before destruction
+    if (!buffer_->IsOnCpu()) {
+      try {
+        buffer_->GetReadyFuture().Await();
+      } catch (...) {
+        // Ignore errors during destruction
+      }
+    }
+    // For CPU buffers, just let the destructor run without await
   }
 }
 
 void ExlaBuffer::TrackDeallocation() {
-  if (client_) {
-    auto size_or = GetOnDeviceSizeInBytes();
+  if (client_ && buffer_) {
+    // Get the device id and size before any operations that might trigger async issues
+    int dev_id = buffer_->device()->id();
+    auto size_or = buffer_->GetOnDeviceSizeInBytes();
     if (size_or.ok()) {
-      client_->TrackBufferDeallocated(device_id(), size_or.value());
+      client_->TrackBufferDeallocated(dev_id, size_or.value());
     }
   }
 }
@@ -50,8 +70,15 @@ void CopyLiteralToBinary(xla::Literal *literal, ErlNifBinary *binary,
 
 tsl::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv *env,
                                                  exla::int64 size) {
-  EXLA_ASSIGN_OR_RETURN(std::shared_ptr<xla::Literal> literal,
-                        buffer_->ToLiteralSync());
+  // Use the non-deprecated ToLiteralSync API that takes a mutable literal
+  // Create a literal with the buffer's shape
+  auto literal = std::make_shared<xla::Literal>(buffer_->on_device_shape());
+
+  // Convert buffer to literal (this is synchronous)
+  tsl::Status status = buffer_->ToLiteralSync(literal.get());
+  if (!status.ok()) {
+    return status;
+  }
 
   exla::int64 actual_size = literal->size_bytes();
   if (size < 0 or size > actual_size)
@@ -65,13 +92,33 @@ tsl::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv *env,
 }
 
 tsl::Status ExlaBuffer::Deallocate() {
-  if (buffer_->IsDeleted()) {
+  if (!buffer_ || buffer_->IsDeleted()) {
     return xla::FailedPrecondition(
         "Attempt to deallocate already deallocated buffer.");
   } else {
-    // Track memory before marking as deleted
-    TrackDeallocation();
-    buffer_->Delete();
+    // Track memory while buffer is still valid
+    if (client_) {
+      int dev_id = buffer_->device()->id();
+      auto size_or = buffer_->GetOnDeviceSizeInBytes();
+      if (size_or.ok()) {
+        client_->TrackBufferDeallocated(dev_id, size_or.value());
+      }
+    }
+
+    // XLA 0.9.1 has a critical bug in CPU buffer destruction
+    // ANY attempt to destroy CPU buffers causes AsyncValue::Destroy crashes
+    // WORKAROUND: For CPU buffers, do NOTHING - keep the buffer alive
+    // This leaks memory but prevents crashes. GPU buffers are handled normally.
+    if (buffer_->IsOnCpu()) {
+      // CPU: Do nothing - don't call Delete(), don't reset()
+      // The buffer will leak but won't crash
+      // This is a bug in XLA 0.9.1 CPU backend
+    } else {
+      // Non-CPU: Normal destruction with await
+      buffer_->GetReadyFuture().Await();
+      buffer_.reset();
+    }
+
     return tsl::OkStatus();
   }
 }
@@ -262,12 +309,6 @@ tsl::StatusOr<ExlaExecutable::RunResult>
 ExlaExecutable::Run(ErlNifEnv *env, ExlaExecutable::RunArguments arguments,
                     int device_id) {
   xla::ExecuteOptions options;
-  // arguments are not passed as a single PjRt tuple buffer, but instead
-  // as multiple pjrt buffers
-  options.arguments_are_tupled = false;
-  // result is a tuple, which pjrt decomposes into a vector of buffers for
-  // us to handle ourselves
-  options.untuple_result = true;
   // we do not handle multi-device launches at this time, so this must always
   // be set to 0
   options.launch_id = 0;

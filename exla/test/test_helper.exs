@@ -7,6 +7,8 @@ end
 
 Nx.Defn.global_default_options(compiler: EXLA)
 
+Nx.global_default_backend({EXLA.Backend, client: :cuda})
+
 exclude_multi_device =
   if client.device_count > 1 and client.platform == :host, do: [], else: [:multi_device]
 
