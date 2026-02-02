@@ -2952,4 +2952,17 @@ defmodule Nx.DefnTest do
       assert vectorized_metadata_tuple(x, z) == vec_nonvec_result
     end
   end
+
+  describe "sharding" do
+    defn all_gather_test(tensor) do
+      Nx.Defn.Kernel.all_gather(tensor, all_gather_dim: 0, replica_groups: [[0]])
+    end
+
+    @tag compiler: Evaluator
+    test "all_gather works" do
+      assert_raise UndefinedFunctionError, fn ->
+        all_gather_test(Nx.tensor([1, 2, 3, 4]))
+      end
+    end
+  end
 end

@@ -215,6 +215,21 @@ defmodule EXLA do
   The metadata is:
 
     * `:key` - the compilation key for debugging
+
+  ## Sharding
+
+  EXLA supports sharding, which is a way to partition a computation across multiple devices.
+  There are a number of collective operations that are supported by sharding.
+
+  ### [`all_gather`](https://openxla.org/stablehlo/spec#all_gather)
+
+  #### Options
+
+    * `:all_gather_dim` - the dimension along which to gather
+    * `:replica_groups` - 2D list defining how replicas are grouped
+    * `:use_global_device_ids` - Whether to use global device IDs (default: `false`)
+    * `:channel_id` - Channel ID for communication (optional)
+
   """
 
   @behaviour Nx.Defn.Compiler

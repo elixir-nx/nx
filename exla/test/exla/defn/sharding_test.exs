@@ -6,7 +6,8 @@ defmodule EXLA.Defn.ShardingTest do
   describe "MLIR module generation with sharding" do
     @moduletag :multi_device
     test "generates correct MLIR with simple 2D mesh and sharding" do
-      fun = fn x, y -> Nx.add(x, y) end
+      fun = fn x, y -> Nx.add(x, y)
+    end
 
       mesh = %Mesh{name: "mesh", shape: {2, 2}}
       # First arg: shard dim 0 on mesh axis 0, dim 1 on mesh axis 1
@@ -737,5 +738,75 @@ defmodule EXLA.Defn.ShardingTest do
       assert result.mlir_module =~ ~r/"axis_0"/
       assert result.mlir_module =~ ~r/"axis_1"/
     end
+
+    @moduletag :multi_device
+    test "generates correct MLIR with all_gather" do
+      fun = fn x, y -> Nx.add(x, y)
+      |> Nx.Defn.Kernel.all_gather(all_gather_dim: 0, replica_groups: [[0]])
+      |> Nx.Defn.Kernel.all_gather(all_gather_dim: 1, replica_groups: [[0]])
+    end
+
+      mesh = %Mesh{name: "mesh", shape: {2, 2}}
+      # First arg: shard dim 0 on mesh axis 0, dim 1 on mesh axis 1
+      # Second arg: shard dim 0 on mesh axis 0, dim 1 not sharded
+      input_shardings = [%{0 => [0], 1 => [1]}, %{0 => [0]}]
+
+      # For mesh {2, 2}, we have 4 partitions
+      # Each partition gets a shard of the inputs
+      # First input: shape {8, 2} sharded as [[0], [1]] -> each partition gets {4, 1}
+      # Second input: shape {8, 1} sharded as [[0], []] -> each partition gets {4, 1}
+      args = [
+        # partition 0
+        [Nx.iota({4, 1}), Nx.iota({4, 1})],
+        # partition 1
+        [Nx.iota({4, 1}), Nx.iota({4, 1})],
+        # partition 2
+        [Nx.iota({4, 1}), Nx.iota({4, 1})],
+        # partition 3
+        [Nx.iota({4, 1}), Nx.iota({4, 1})]
+      ]
+
+      result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
+
+      expected_mlir = """
+      module {
+        sdy.mesh @mesh = <["axis_0"=2, "axis_1"=2]>
+        func.func public @main(%arg0: tensor<8x2xi32> {sdy.sharding = #sdy.sharding<@mesh, [{"axis_0", ?}p0, {"axis_1", ?}p0]>}, %arg1: tensor<8x1xi32> {sdy.sharding = #sdy.sharding<@mesh, [{"axis_0", ?}p0, {?}p0]>}) -> tensor<8x2xi32> {
+          %0 = stablehlo.broadcast_in_dim %arg1, dims = [0, 1] : (tensor<8x1xi32>) -> tensor<8x2xi32>
+          %1 = stablehlo.add %arg0, %0 : tensor<8x2xi32>
+          %2 = "stablehlo.all_gather"(%1) <{all_gather_dim = 0 : i64, replica_groups = dense<0> : tensor<1x1xi64>}> : (tensor<8x2xi32>) -> tensor<8x2xi32>
+          %3 = "stablehlo.all_gather"(%2) <{all_gather_dim = 1 : i64, replica_groups = dense<0> : tensor<1x1xi64>}> : (tensor<8x2xi32>) -> tensor<8x2xi32>
+          return %3 : tensor<8x2xi32>
+        }
+      }
+      """
+
+      assert expected_mlir == result.mlir_module
+
+      results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      assert length(results) == 4
+
+      # After all_gather on both dims, each partition has the full tensor: add(iota, iota) -> 2*iota
+      # Each shard had iota({4,1}) = [[0],[1],[2],[3]], so add gives [[0],[2],[4],[6]]
+      # After gathering: replicated 8x2 with pattern [[0,0],[2,2],[4,4],[6,6],[0,0],[2,2],[4,4],[6,6]]
+      expected_result =
+        Nx.tensor([
+          [0, 0],
+          [2, 2],
+          [4, 4],
+          [6, 6],
+          [0, 0],
+          [2, 2],
+          [4, 4],
+          [6, 6]
+        ])
+
+      for r <- results do
+        assert_equal(r, expected_result)
+      end
+    end
+
+
   end
 end

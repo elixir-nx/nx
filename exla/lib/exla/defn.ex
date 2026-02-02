@@ -1478,15 +1478,18 @@ defmodule EXLA.Defn do
     replica_groups = Keyword.fetch!(opts, :replica_groups)
     use_global_device_ids = Keyword.get(opts, :use_global_device_ids, false)
 
-    Value.all_gather(
-      [tensor],
-      expr_to_typespec(ans),
-      all_gather_dim,
-      replica_groups,
-      use_global_device_ids,
-      Keyword.take(opts, [:channel_id])
-    )
-    |> hd()
+    # We might want to surface all_gather as an operation that takes a container of operands instead of a single one.
+    [result] =
+      Value.all_gather(
+        [tensor],
+        expr_to_typespec(ans),
+        all_gather_dim,
+        replica_groups,
+        use_global_device_ids,
+        opts[:channel_id]
+      )
+
+    result
   end
 
   defp fft(exla_op, [%Value{} = tensor, opts], %{type: type} = ans, state) do

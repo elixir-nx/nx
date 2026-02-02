@@ -1678,20 +1678,12 @@ defmodule Nx.Defn.Kernel do
   ## Parameters
 
     * `tensor` - The input tensor to gather
-    * `all_gather_dim` - The dimension along which to gather
-    * `replica_groups` - 2D list defining how replicas are grouped (required)
-    * `opts` - Optional keyword list:
-      * `:use_global_device_ids` - Whether to use global device IDs (default: false)
-      * `:channel_id` - Channel ID for communication (optional)
 
-  ## Examples
+    * `opts` - Optional keyword list. These are backend- and compiler-specific;
+    see your backend or compiler docs for supported options.
 
-    all_gather(tensor, 0, [[0, 1, 2, 3]])
-    all_gather(tensor, 1, [[0, 1], [2, 3]], use_global_device_ids: true)
   """
-  def all_gather(tensor, all_gather_dim, replica_groups, opts \\ []) do
-    opts = Keyword.put(opts, :all_gather_dim, all_gather_dim)
-    opts = Keyword.put(opts, :replica_groups, replica_groups)
+  def all_gather(tensor, opts \\ []) do
     Nx.Defn.Expr.all_gather(tensor, opts)
   end
 
