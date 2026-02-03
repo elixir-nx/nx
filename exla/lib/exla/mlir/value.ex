@@ -64,6 +64,30 @@ defmodule EXLA.MLIR.Value do
     end
   end
 
+  def all_to_all([%Value{function: func} | _] = operands, typespec, split_dimension, concat_dimension, split_count, replica_groups, channel_id \\ nil) do
+    result_types = typespecs_to_mlir_types([typespec])
+
+    num_groups = length(replica_groups)
+    group_size = if num_groups > 0, do: length(hd(replica_groups)), else: 0
+    flat_groups = List.flatten(replica_groups)
+
+    attributes = [
+      split_dimension: attr_i64(split_dimension),
+      concat_dimension: attr_i64(concat_dimension),
+      split_count: attr_i64(split_count),
+      replica_groups: attr_dense_elements(flat_groups, {:s, 64}, {num_groups, group_size})
+    ]
+
+    attributes =
+      if channel_id do
+        Keyword.put(attributes, :channel_id, attr_i64(channel_id))
+      else
+        attributes
+      end
+
+    op(func, "stablehlo.all_to_all", operands, result_types, attributes: attributes) |> one!()
+  end
+
   defp compare_and_return_bool(func, lhs, rhs, typespec, direction, total_order? \\ false) do
     %{type: lhs_type} = get_typespec(lhs)
     %{type: rhs_type} = get_typespec(rhs)

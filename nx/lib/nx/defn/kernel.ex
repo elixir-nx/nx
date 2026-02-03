@@ -1669,6 +1669,22 @@ defmodule Nx.Defn.Kernel do
     end
   end
 
+  @doc """
+  Performs an all-to-all communication operation.
+
+  This operation shuffles tensor data across all replicas/devices.
+  Requires a backend that supports multi-device operations.
+
+  ## Parameters
+    * `tensor` - The input tensor to gather
+    * `opts` - Optional keyword list. These are backend- and compiler-specific.
+    See your backend or compiler docs for supported options.
+
+  """
+  def all_to_all(tensor, opts \\ []) do
+    Nx.Defn.Expr.all_to_all(tensor, opts)
+  end
+
   @definitions (Module.definitions_in(__MODULE__, :def) ++
                   Module.definitions_in(__MODULE__, :defmacro)) --
                  [

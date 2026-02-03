@@ -215,6 +215,16 @@ defmodule EXLA do
   The metadata is:
 
     * `:key` - the compilation key for debugging
+
+  ### [`all_to_all`](https://openxla.org/stablehlo/spec#all_to_all)
+
+  #### Options
+
+    * `:split_dimension` - the dimension to split the tensor into.
+    * `:concat_dimension` - the dimension to concatenate the tensor into.
+    * `:split_count` - the number of splits.
+    * `:replica_groups` - the groups of replicas to communicate with.
+    * `:channel_id` - the channel id to use for communication.
   """
 
   @behaviour Nx.Defn.Compiler

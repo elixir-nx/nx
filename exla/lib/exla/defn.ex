@@ -1471,6 +1471,26 @@ defmodule EXLA.Defn do
     EXLA.Lib.argsort(state.builder, tensor, dimension, stable, comp, ans.type)
   end
 
+  defp to_operator(:all_to_all, [%Value{} = tensor, opts], ans, state) do
+    split_dimension = Keyword.fetch!(opts, :split_dimension)
+    concat_dimension = Keyword.fetch!(opts, :concat_dimension)
+    split_count = dimension_size(replica_groups, 1)
+    replica_groups = Keyword.fetch!(opts, :replica_groups)
+
+    [result] =
+      Value.all_to_all(
+        [tensor],
+        expr_to_typespec(ans),
+        split_dimension,
+        concat_dimension,
+        split_count,
+        replica_groups,
+        opts[:channel_id]
+      )
+
+    result
+  end
+
   defp fft(exla_op, [%Value{} = tensor, opts], %{type: type} = ans, state) do
     n = opts[:length]
     axis = opts[:axis]
