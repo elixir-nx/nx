@@ -48,12 +48,6 @@ defmodule EXLA.Defn.ShardingTest do
         ]
       ]
 
-      module =
-        EXLA.to_mlir_module(fun, args,
-          mesh: mesh,
-          input_shardings: input_shardings
-        )
-
       results =
         EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
 

@@ -407,23 +407,13 @@ defmodule EXLA.Defn do
             comp_typespecs =
               for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
 
-            # Extract mesh and sharding options
-            mesh = options[:mesh]
-            input_shardings = options[:input_shardings]
-
-            # Calculate full (logical) output shapes
-            full_outputs =
+            out_typespecs =
               [outputs]
               |> Nx.Defn.Composite.flatten_list()
               |> Enum.map(fn t ->
                 t
                 |> Nx.devectorize()
-              end)
-
-            # The MLIR function signature uses full (logical) shapes
-            out_typespecs =
-              Enum.map(full_outputs, fn t ->
-                Typespec.tensor(t.type, t.shape)
+                |> then(&Typespec.tensor(&1.type, &1.shape))
               end)
 
             EXLA.MLIR.Module.new(comp_typespecs, out_typespecs, fn builder ->
@@ -435,9 +425,6 @@ defmodule EXLA.Defn do
                 Enum.with_index(input_shardings, fn sharding, arg_index ->
                   Function.set_arg_sharding(builder, arg_index, {mesh, sharding})
                 end)
-
-                # Note: We don't add result sharding annotations.
-                # Shardy will propagate sharding from the computation automatically.
               end
 
               # Only create the token when we know it will actually be
@@ -464,8 +451,6 @@ defmodule EXLA.Defn do
                   options
                   |> Keyword.put(:num_partitions, num_partitions)
                   |> Keyword.put(:use_spmd, true)
-                  |> Keyword.put(:mesh, mesh)
-                  |> Keyword.put(:input_shardings, input_shardings)
                 else
                   options
                 end
