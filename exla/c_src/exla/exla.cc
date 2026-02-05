@@ -13,11 +13,13 @@
 #include "exla_mlir.h"
 #include "exla_nif_util.h"
 #include "ipc.h"
+#include "mlir/IR/Builders.h"
 #include "mlir/IR/MLIRContext.h"
 #include "shardy/dialect/sdy/ir/dialect.h"
 #include "shardy/dialect/sdy/ir/register.h"
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
+#include "xla/hlo/translate/hlo_to_mhlo/hlo_utils.h"
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/service/platform_util.h"
 #include "xla/tsl/platform/statusor.h"
@@ -423,9 +425,17 @@ fine::Term read_device_mem(ErlNifEnv *env, fine::Term buffer_term,
 
 FINE_NIF(read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND);
 
-xla::Shape get_buffer_typespec(ErlNifEnv *env, fine::Term buffer_term) {
+mlir::Type get_buffer_typespec(ErlNifEnv *env, fine::Term buffer_term) {
   auto buffer = decode_exla_buffer(env, buffer_term);
-  return unwrap(buffer->buffer()->logical_on_device_shape());
+  auto shape = unwrap(buffer->buffer()->logical_on_device_shape());
+  
+  // Convert xla::Shape to MLIR RankedTensorType
+  // Create a temporary context for type conversion
+  mlir::MLIRContext context(mlir::MLIRContext::Threading::DISABLED);
+  context.getOrLoadDialect<mlir::stablehlo::StablehloDialect>();
+  auto builder = mlir::Builder(&context);
+  
+  return unwrap(ConvertTensorShapeToType<mlir::RankedTensorType>(shape, builder));
 }
 
 FINE_NIF(get_buffer_typespec, 0);
