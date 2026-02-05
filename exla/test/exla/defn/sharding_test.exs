@@ -169,7 +169,8 @@ defmodule EXLA.Defn.ShardingTest do
 
       assert expected_mlir == result.mlir_module
 
-      assert [result0, result1, result2, result3] = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+      assert [result0, result1, result2, result3] =
+               EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
 
       assert_equal(result0, Nx.tensor([[100, 100], [102, 102], [104, 104], [106, 106]]))
       assert result0.data.buffer.device_id == 0
@@ -214,7 +215,8 @@ defmodule EXLA.Defn.ShardingTest do
 
       assert expected_mlir == result.mlir_module
 
-      assert [result0, result1, result2, result3]  = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+      assert [result0, result1, result2, result3] =
+               EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
 
       assert_equal(result0, Nx.tensor([[[0, 2], [4, 6]], [[8, 10], [12, 14]]]))
       assert result0.data.buffer.device_id == 0

@@ -34,7 +34,13 @@ defmodule EXLA.Executable do
 
   def run(%Executable{} = executable, [subinputs | _] = inputs, options)
       when is_list(subinputs) do
-    %{client: client, device_id: device_id, output_typespecs: output_typespecs, ref: ref, mesh: mesh} =
+    %{
+      client: client,
+      device_id: device_id,
+      output_typespecs: output_typespecs,
+      ref: ref,
+      mesh: mesh
+    } =
       executable
 
     for data_and_device_id <- run(client, ref, device_id, inputs, options) do
