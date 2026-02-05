@@ -239,23 +239,6 @@ fine::Ok<> mlir_set_function_argument_attribute(
 
 FINE_NIF(mlir_set_function_argument_attribute, 0);
 
-fine::Ok<> mlir_set_function_result_attribute(
-    ErlNifEnv *env, fine::ResourcePtr<MLIRFunction> function,
-    int64_t result_index, std::string attribute_name, std::string mesh_name,
-    std::vector<std::vector<std::string>> dim_shardings) {
-
-  auto context = function->module()->module()->getContext();
-  auto sharding_attr =
-      mlir_create_tensor_sharding_attr(context, mesh_name, dim_shardings);
-
-  function->function().setResultAttr(result_index, attribute_name,
-                                     sharding_attr);
-
-  return fine::Ok();
-}
-
-FINE_NIF(mlir_set_function_result_attribute, 0);
-
 mlir::Type mlir_get_typespec(ErlNifEnv *env,
                              fine::ResourcePtr<mlir::Value> value) {
   return value->getType();

@@ -39,15 +39,6 @@ defmodule EXLA.NIF do
       ),
       do: err!()
 
-  def mlir_set_function_result_attribute(
-        _function,
-        _result_index,
-        _attribute_name,
-        _mesh_name,
-        _dim_shardings
-      ),
-      do: err!()
-
   def mlir_build(_function, _root), do: err!()
 
   def mlir_compile(
