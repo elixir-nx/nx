@@ -6,6 +6,7 @@
 
 #include "mlir/IR/Types.h"
 #include "stablehlo/dialect/StablehloOps.h"
+#include "xla/hlo/translate/hlo_to_mhlo/hlo_utils.h"
 #include "xla/shape.h"
 #include "xla/shape_util.h"
 
@@ -247,6 +248,30 @@ private:
     }
 
     throw std::invalid_argument("encode failed, unexpected mlir type");
+  }
+};
+
+// Define encoding for xla::Shape into %EXLA.Typespec{} term
+// Converts to mlir::Type and delegates to the existing Encoder<mlir::Type>
+template <> struct Encoder<xla::Shape> {
+  static ERL_NIF_TERM encode(ErlNifEnv *env, const xla::Shape &shape) {
+    // Create a temporary MLIR context for type conversion
+    mlir::MLIRContext context(mlir::MLIRContext::Threading::DISABLED);
+    context.getOrLoadDialect<mlir::stablehlo::StablehloDialect>();
+    auto builder = mlir::Builder(&context);
+
+    // Convert xla::Shape to mlir::RankedTensorType
+    auto mlir_type_or =
+        xla::ConvertTensorShapeToType<mlir::RankedTensorType>(shape, builder);
+
+    if (!mlir_type_or.ok()) {
+      throw std::runtime_error(
+          "encode failed, could not convert xla::Shape to mlir::Type: " +
+          std::string(mlir_type_or.status().message()));
+    }
+
+    // Delegate to the existing mlir::Type encoder
+    return fine::Encoder<mlir::Type>::encode(env, mlir_type_or.value());
   }
 };
 } // namespace fine

@@ -808,5 +808,41 @@ defmodule EXLA.Defn.ShardingTest do
       assert result.mlir_module =~ ~r/"axis_0"/
       assert result.mlir_module =~ ~r/"axis_1"/
     end
+
+    test "works with all Nx types" do
+      fun = fn x -> Nx.add(x, 0) end
+      mesh = %Mesh{name: "mesh", shape: {2, 2}}
+      input_shardings = [%{0 => [0], 1 => [1]}]
+
+      # Test all standard Nx types
+      types = [
+        {:s, 8}, {:s, 16}, {:s, 32}, {:s, 64},
+        {:u, 8}, {:u, 16}, {:u, 32}, {:u, 64},
+        {:f, 16}, {:f, 32}, {:f, 64},
+        {:bf, 16},
+        {:c, 64}, {:c, 128}
+      ]
+
+      for type <- types do
+        # Create sharded input (8x2 tensor split to 4x1 per device)
+        args = List.duplicate([Nx.iota({4, 1}, type: type)], 4)
+
+        result =
+          EXLA.to_mlir_module(fun, args,
+            mesh: mesh,
+            input_shardings: input_shardings
+          )
+
+        # Verify that MLIR module is generated successfully
+        assert is_binary(result.mlir_module),
+               "Failed to generate MLIR for type #{inspect(type)}"
+
+        assert result.mlir_module =~ ~r/sdy\.sharding/,
+               "Missing sharding annotation for type #{inspect(type)}"
+
+        assert result.mlir_module =~ ~r/sdy\.mesh @mesh/,
+               "Missing mesh definition for type #{inspect(type)}"
+      end
+    end
   end
 end
