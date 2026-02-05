@@ -125,10 +125,13 @@ defmodule EXLA.Executable do
 
   defp decompose_output({data, device_id}, output_typespecs, client) do
     Enum.zip_with(data, output_typespecs, fn
-      buf, typespec when is_reference(buf) ->
-        DeviceBuffer.from_ref(buf, client, device_id, typespec)
+      buf, _logical_typespec when is_reference(buf) ->
+        # Query the actual shape from the buffer (may be sharded)
+        actual_typespec = EXLA.NIF.get_buffer_typespec(buf)
+        DeviceBuffer.from_ref(buf, client, device_id, actual_typespec)
 
       buf, typespec when is_binary(buf) ->
+        # Binary buffers use the provided typespec
         BinaryBuffer.from_binary(buf, typespec)
     end)
   end

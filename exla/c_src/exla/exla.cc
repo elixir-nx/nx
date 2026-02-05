@@ -239,6 +239,23 @@ fine::Ok<> mlir_set_function_argument_attribute(
 
 FINE_NIF(mlir_set_function_argument_attribute, 0);
 
+fine::Ok<> mlir_set_function_result_attribute(
+    ErlNifEnv *env, fine::ResourcePtr<MLIRFunction> function,
+    int64_t result_index, std::string attribute_name, std::string mesh_name,
+    std::vector<std::vector<std::string>> dim_shardings) {
+
+  auto context = function->module()->module()->getContext();
+  auto sharding_attr =
+      mlir_create_tensor_sharding_attr(context, mesh_name, dim_shardings);
+
+  function->function().setResultAttr(result_index, attribute_name,
+                                     sharding_attr);
+
+  return fine::Ok();
+}
+
+FINE_NIF(mlir_set_function_result_attribute, 0);
+
 mlir::Type mlir_get_typespec(ErlNifEnv *env,
                              fine::ResourcePtr<mlir::Value> value) {
   return value->getType();
@@ -278,6 +295,14 @@ mlir_compile(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
   build_options.set_num_replicas(num_replicas);
   build_options.set_num_partitions(num_partitions);
   build_options.set_use_spmd_partitioning(use_spmd);
+
+  // Enable Shardy partitioner when using SPMD to support output sharding
+  // Shardy runs propagation before the SPMD partitioner and properly handles
+  // FuncResultSharding custom calls that would otherwise fail the side-effect
+  // check
+  if (use_spmd) {
+    build_options.set_use_shardy_partitioner(true);
+  }
 
   auto compile_portable_executable = false;
   if (device_id >= 0) {
@@ -414,6 +439,13 @@ fine::Term read_device_mem(ErlNifEnv *env, fine::Term buffer_term,
 }
 
 FINE_NIF(read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND);
+
+xla::Shape get_buffer_typespec(ErlNifEnv *env, fine::Term buffer_term) {
+  auto buffer = decode_exla_buffer(env, buffer_term);
+  return unwrap(buffer->buffer()->logical_on_device_shape());
+}
+
+FINE_NIF(get_buffer_typespec, 0);
 
 std::variant<fine::Ok<>, fine::Error<fine::Atom>>
 deallocate_device_mem(ErlNifEnv *env, fine::Term buffer_term) {

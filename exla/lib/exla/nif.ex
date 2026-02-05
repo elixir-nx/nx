@@ -39,6 +39,15 @@ defmodule EXLA.NIF do
       ),
       do: err!()
 
+  def mlir_set_function_result_attribute(
+        _function,
+        _result_index,
+        _attribute_name,
+        _mesh_name,
+        _dim_shardings
+      ),
+      do: err!()
+
   def mlir_build(_function, _root), do: err!()
 
   def mlir_compile(
@@ -69,6 +78,7 @@ defmodule EXLA.NIF do
 
   def binary_to_device_mem(_client, _binary, _typespec, _device_ordinal), do: err!()
   def read_device_mem(_buffer, _size), do: err!()
+  def get_buffer_typespec(_buffer), do: err!()
   def deallocate_device_mem(_buffer), do: err!()
   def transfer_to_infeed(_client, _device, _buffers, _typespecs), do: err!()
   def transfer_from_outfeed(_client, _device, _typespecs, _pid, _ref), do: err!()
