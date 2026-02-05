@@ -428,14 +428,15 @@ FINE_NIF(read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND);
 mlir::Type get_buffer_typespec(ErlNifEnv *env, fine::Term buffer_term) {
   auto buffer = decode_exla_buffer(env, buffer_term);
   auto shape = unwrap(buffer->buffer()->logical_on_device_shape());
-  
+
   // Convert xla::Shape to MLIR RankedTensorType
   // Create a temporary context for type conversion
   mlir::MLIRContext context(mlir::MLIRContext::Threading::DISABLED);
   context.getOrLoadDialect<mlir::stablehlo::StablehloDialect>();
   auto builder = mlir::Builder(&context);
-  
-  return unwrap(ConvertTensorShapeToType<mlir::RankedTensorType>(shape, builder));
+
+  return unwrap(
+      xla::ConvertTensorShapeToType<mlir::RankedTensorType>(shape, builder));
 }
 
 FINE_NIF(get_buffer_typespec, 0);
