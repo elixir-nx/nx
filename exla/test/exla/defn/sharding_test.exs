@@ -809,23 +809,55 @@ defmodule EXLA.Defn.ShardingTest do
       assert result.mlir_module =~ ~r/"axis_1"/
     end
 
-    test "works with all Nx types" do
-      fun = fn x -> Nx.add(x, 0) end
-      mesh = %Mesh{name: "mesh", shape: {2, 2}}
-      input_shardings = [%{0 => [0], 1 => [1]}]
+    # Test all standard Nx types
+    @all_types [
+      {:s, 8},
+      {:s, 16},
+      {:s, 32},
+      {:s, 64},
+      {:u, 8},
+      {:u, 16},
+      {:u, 32},
+      {:u, 64},
+      {:f, 8},
+      {:f8_e4m3fn, 8},
+      {:f, 16},
+      {:f, 32},
+      {:f, 64},
+      {:bf, 16},
+      {:c, 64},
+      {:c, 128}
+    ]
 
-      # Test all standard Nx types
-      types = [
-        {:s, 8}, {:s, 16}, {:s, 32}, {:s, 64},
-        {:u, 8}, {:u, 16}, {:u, 32}, {:u, 64},
-        {:f, 16}, {:f, 32}, {:f, 64},
-        {:bf, 16},
-        {:c, 64}, {:c, 128}
-      ]
+    for nx_type <- @all_types do
+      # We use this custom conversion because Nx.Type.to_string/1 does not
+      # follow StableHLO conventions
+      type_string =
+        case nx_type do
+          {:s, size} -> "i#{size}"
+          {:u, size} -> "ui#{size}"
+          {:f, 8} -> "f8E5M2"
+          {:f8_e4m3fn, 8} -> "f8E4M3FN"
+          {:f, size} -> "f#{size}"
+          {:bf, 16} -> "bf16"
+          {:c, size} -> "complex<f#{div(size, 2)}>"
+        end
 
-      for type <- types do
+      test "works with type #{type_string}" do
+        fun = fn x ->
+          Nx.add(x, x)
+        end
+
+        mesh = %Mesh{name: "mesh", shape: {2, 2}}
+        input_shardings = [%{0 => [0]}]
+
         # Create sharded input (8x2 tensor split to 4x1 per device)
-        args = List.duplicate([Nx.iota({4, 1}, type: type)], 4)
+        args = [
+          [Nx.reshape(Nx.tensor(1, type: unquote(nx_type)), {1})],
+          [Nx.reshape(Nx.tensor(2, type: unquote(nx_type)), {1})],
+          [Nx.reshape(Nx.tensor(3, type: unquote(nx_type)), {1})],
+          [Nx.reshape(Nx.tensor(4, type: unquote(nx_type)), {1})]
+        ]
 
         result =
           EXLA.to_mlir_module(fun, args,
@@ -833,15 +865,29 @@ defmodule EXLA.Defn.ShardingTest do
             input_shardings: input_shardings
           )
 
-        # Verify that MLIR module is generated successfully
-        assert is_binary(result.mlir_module),
-               "Failed to generate MLIR for type #{inspect(type)}"
+        assert result.mlir_module == """
+               module {
+                 sdy.mesh @mesh = <["axis_0"=2, "axis_1"=2]>
+                 func.func public @main(%arg0: tensor<2x#{unquote(type_string)}> {sdy.sharding = #sdy.sharding<@mesh, [{"axis_0", ?}p0]>}) -> tensor<2x#{unquote(type_string)}> {
+                   %0 = stablehlo.add %arg0, %arg0 : tensor<2x#{unquote(type_string)}>
+                   return %0 : tensor<2x#{unquote(type_string)}>
+                 }
+               }
+               """
 
-        assert result.mlir_module =~ ~r/sdy\.sharding/,
-               "Missing sharding annotation for type #{inspect(type)}"
+        assert results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
 
-        assert result.mlir_module =~ ~r/sdy\.mesh @mesh/,
-               "Missing mesh definition for type #{inspect(type)}"
+        expected_results = [
+          Nx.tensor([2], type: unquote(nx_type)),
+          Nx.tensor([4], type: unquote(nx_type)),
+          Nx.tensor([6], type: unquote(nx_type)),
+          Nx.tensor([8], type: unquote(nx_type))
+        ]
+
+        Enum.zip_with([results, expected_results, 0..3], fn [result, expected, i] ->
+          assert_equal(result, expected)
+          assert result.data.buffer.device_id == i
+        end)
       end
     end
   end
