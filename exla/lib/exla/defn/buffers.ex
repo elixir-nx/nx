@@ -53,34 +53,69 @@ defmodule EXLA.Defn.Buffers do
 
   @doc """
   binary + EXLA.DeviceBuffer + EXLA.BinaryBuffer -> Nx.
+
+  When mesh is provided (sharded execution), shapes are taken from buffers.
+  Otherwise, shapes are validated against the template.
   """
-  def to_nx!(buffers, outputs) do
+  def to_nx!(buffers, outputs, mesh \\ nil) do
     {res, []} =
       Nx.Defn.Composite.traverse(outputs, buffers, fn
         %Nx.Tensor{} = hole, [buffer | acc] ->
-          {%{hole | data: buffer_to_data(hole, buffer)}, acc}
+          {buffer_to_tensor(hole, buffer, mesh), acc}
       end)
 
     res
   end
 
-  defp buffer_to_data(hole, buffer) when is_binary(buffer) do
+  defp buffer_to_tensor(hole, buffer, _mesh) when is_binary(buffer) do
     if Nx.byte_size(hole) != byte_size(buffer) do
       raise "internal bug! Nx.Defn expected a tensor with byte size #{inspect(Nx.byte_size(hole))} " <>
               "but got #{inspect(byte_size(buffer))}"
     end
 
-    %Nx.BinaryBackend{state: buffer}
+    %{hole | data: %Nx.BinaryBackend{state: buffer}}
   end
 
-  defp buffer_to_data(tensor, %EXLA.DeviceBuffer{typespec: typespec} = buffer) do
-    validate_shape!(tensor, typespec)
-    %EXLA.Backend{buffer: buffer}
+  defp buffer_to_tensor(tensor, %EXLA.DeviceBuffer{typespec: typespec} = buffer, mesh) do
+    %{type: type} = Nx.devectorize(tensor)
+    nx_type = to_nx_type(typespec.type)
+    nx_shape = typespec.shape
+
+    # Validate type matches
+    if type != nx_type do
+      raise "internal bug! Nx.Defn expected a tensor with type #{inspect(type)} " <>
+              "but got #{inspect(nx_type)}"
+    end
+
+    if mesh do
+      # Sharded execution: use buffer's actual shape (may be sharded)
+      %{tensor | shape: nx_shape, data: %EXLA.Backend{buffer: buffer}}
+    else
+      # Non-sharded execution: validate shape matches template
+      validate_shape!(tensor, typespec)
+      %{tensor | data: %EXLA.Backend{buffer: buffer}}
+    end
   end
 
-  defp buffer_to_data(tensor, %EXLA.BinaryBuffer{data: data, typespec: typespec}) do
-    validate_shape!(tensor, typespec)
-    %Nx.BinaryBackend{state: data}
+  defp buffer_to_tensor(tensor, %EXLA.BinaryBuffer{data: data, typespec: typespec}, mesh) do
+    %{type: type} = Nx.devectorize(tensor)
+    nx_type = to_nx_type(typespec.type)
+    nx_shape = typespec.shape
+
+    # Validate type matches
+    if type != nx_type do
+      raise "internal bug! Nx.Defn expected a tensor with type #{inspect(type)} " <>
+              "but got #{inspect(nx_type)}"
+    end
+
+    if mesh do
+      # Sharded execution: use buffer's actual shape (may be sharded)
+      %{tensor | shape: nx_shape, data: %Nx.BinaryBackend{state: data}}
+    else
+      # Non-sharded execution: validate shape matches template
+      validate_shape!(tensor, typespec)
+      %{tensor | data: %Nx.BinaryBackend{state: data}}
+    end
   end
 
   defp validate_shape!(%Nx.Tensor{} = t, typespec) do

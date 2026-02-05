@@ -39,7 +39,7 @@ defmodule EXLA.Defn do
   def __shard_jit__(key, mesh, vars, fun, args_list, options) do
     input_shardings = options[:input_shardings]
 
-    # First validate that input_shardings is a list
+    # Validate that input_shardings is a list
     if not is_list(input_shardings) do
       raise ArgumentError,
             "input_shardings are required for sharding in EXLA, see EXLA.shard_jit/3 for more information"
@@ -273,8 +273,11 @@ defmodule EXLA.Defn do
 
     receive do
       {:DOWN, ^ref, _, _, _} ->
-        [result] = EXLA.Defn.Runner.read(runner)
-        [EXLA.Defn.Buffers.to_nx!(result, outputs)]
+        results = EXLA.Defn.Runner.read(runner)
+
+        Enum.map(results, fn result ->
+          EXLA.Defn.Buffers.to_nx!(result, outputs, executable.mesh)
+        end)
     end
   end
 
@@ -304,7 +307,7 @@ defmodule EXLA.Defn do
       [_ | _] = results ->
         # For sharded execution, we get a list of results (one per partition)
         Enum.map(results, fn result ->
-          EXLA.Defn.Buffers.to_nx!(result, outputs)
+          EXLA.Defn.Buffers.to_nx!(result, outputs, executable.mesh)
         end)
     after
       EXLA.Defn.Lock.unlock(lock)
