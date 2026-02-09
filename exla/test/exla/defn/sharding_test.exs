@@ -802,11 +802,13 @@ defmodule EXLA.Defn.ShardingTest do
           [6, 6]
         ])
 
-      for r <- results do
-        assert_equal(r, expected_result)
-      end
+      device_ids =
+        for r <- results do
+          assert_equal(r, expected_result)
+          r.data.buffer.device_id
+        end
+
+      assert Enum.sort(device_ids) == [0, 1, 2, 3]
     end
-
-
   end
 end
