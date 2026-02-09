@@ -1471,11 +1471,11 @@ defmodule EXLA.Defn do
     EXLA.Lib.argsort(state.builder, tensor, dimension, stable, comp, ans.type)
   end
 
-  defp to_operator(:all_to_all, [%Value{} = tensor, opts], ans, state) do
+  defp to_operator(:all_to_all, [%Value{} = tensor, opts], ans, _state) do
     split_dimension = Keyword.fetch!(opts, :split_dimension)
     concat_dimension = Keyword.fetch!(opts, :concat_dimension)
-    split_count = dimension_size(replica_groups, 1)
     replica_groups = Keyword.fetch!(opts, :replica_groups)
+    split_count = Keyword.fetch!(opts, :split_count)
 
     [result] =
       Value.all_to_all(

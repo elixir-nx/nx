@@ -738,4 +738,18 @@ defmodule EXLA.Defn.ShardingTest do
       assert result.mlir_module =~ ~r/"axis_1"/
     end
   end
+
+  @moduletag :multi_device
+  test "generates correct MLIR with all_to_all" do
+    fun = fn x -> Nx.Defn.Kernel.all_to_all(x, split_dimension: 0, concat_dimension: 0, split_count: 2, replica_groups: [[0, 1]], channel_id: 0) end
+
+    mesh = %Mesh{name: "mesh", shape: {2, 2}}
+    input_shardings = [%{0 => [0], 1 => [1]}]
+
+    args = List.duplicate([Nx.iota({4, 2})], 4)
+
+    result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
+
+    IO.inspect(result.mlir_module)
+  end
 end
