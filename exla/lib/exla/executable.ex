@@ -34,11 +34,17 @@ defmodule EXLA.Executable do
 
   def run(%Executable{} = executable, [subinputs | _] = inputs, options)
       when is_list(subinputs) do
-    %{client: client, device_id: device_id, output_typespecs: output_typespecs, ref: ref} =
+    %{
+      client: client,
+      device_id: device_id,
+      output_typespecs: output_typespecs,
+      ref: ref,
+      mesh: mesh
+    } =
       executable
 
     for data_and_device_id <- run(client, ref, device_id, inputs, options) do
-      decompose_output(data_and_device_id, output_typespecs, client)
+      decompose_output(data_and_device_id, output_typespecs, client, mesh)
     end
   end
 
@@ -123,12 +129,21 @@ defmodule EXLA.Executable do
     end
   end
 
-  defp decompose_output({data, device_id}, output_typespecs, client) do
+  defp decompose_output({data, device_id}, output_typespecs, client, mesh) do
     Enum.zip_with(data, output_typespecs, fn
-      buf, typespec when is_reference(buf) ->
+      buf, logical_typespec when is_reference(buf) ->
+        # Query the actual shape from the buffer only in sharded execution
+        typespec =
+          if mesh != nil do
+            EXLA.NIF.get_buffer_typespec(buf)
+          else
+            logical_typespec
+          end
+
         DeviceBuffer.from_ref(buf, client, device_id, typespec)
 
       buf, typespec when is_binary(buf) ->
+        # Binary buffers use the provided typespec
         BinaryBuffer.from_binary(buf, typespec)
     end)
   end
