@@ -18,7 +18,9 @@ defmodule EXLA.BackendTest do
     erfc: 1,
     tanh: 1,
     asinh: 1,
-    logsumexp: 2
+    logsumexp: 2,
+    exp: 1,
+    expm1: 1
   ]
 
   if is_mac_arm?() do
