@@ -262,12 +262,6 @@ tsl::StatusOr<ExlaExecutable::RunResult>
 ExlaExecutable::Run(ErlNifEnv *env, ExlaExecutable::RunArguments arguments,
                     int device_id) {
   xla::ExecuteOptions options;
-  // arguments are not passed as a single PjRt tuple buffer, but instead
-  // as multiple pjrt buffers
-  options.arguments_are_tupled = false;
-  // result is a tuple, which pjrt decomposes into a vector of buffers for
-  // us to handle ourselves
-  options.untuple_result = true;
   // we do not handle multi-device launches at this time, so this must always
   // be set to 0
   options.launch_id = 0;

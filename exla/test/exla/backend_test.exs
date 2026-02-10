@@ -19,7 +19,9 @@ defmodule EXLA.BackendTest do
     sinh: 1,
     atanh: 1,
     asinh: 1,
-    logsumexp: 2
+    logsumexp: 2,
+    exp: 1,
+    expm1: 1
   ]
 
   doctest Nx,

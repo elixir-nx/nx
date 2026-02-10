@@ -24,6 +24,9 @@
 #include "xla/service/platform_util.h"
 #include "xla/tsl/platform/statusor.h"
 #include "llvm/Support/ThreadPool.h"
+#include "absl/log/log_sink_registry.h"
+#include "absl/log/initialize.h"
+#include "absl/log/globals.h"
 
 namespace exla {
 
@@ -642,12 +645,13 @@ FINE_NIF(clear_runtime_callback_bridge, 0);
 fine::Ok<> start_log_sink(ErlNifEnv *env, ErlNifPid logger_pid) {
   ExlaLogSink *sink = new ExlaLogSink(logger_pid);
 
-  // NO_DEFAULT_LOGGER doesn't behave right
-  for (auto *log_sink : tsl::TFGetLogSinks()) {
-    tsl::TFRemoveLogSink(log_sink);
-  }
-
-  tsl::TFAddLogSink(sink);
+  // In addition to sinks, logs go to stderr above the given threshold.
+  // We could disable it entirely with kInfinity, but we keep errors
+  // just to make sure they are logged, in case the process crashes
+  // right after the log, without time for Elixir to print it.
+  absl::SetStderrThreshold(absl::LogSeverityAtLeast::kError);
+  absl::InitializeLog();
+  absl::AddLogSink(sink);
 
   return fine::Ok();
 }
