@@ -249,6 +249,142 @@ private:
     throw std::invalid_argument("encode failed, unexpected mlir type");
   }
 };
+
+// Define encoding for xla::Shape into %EXLA.Typespec{} term
+template <> struct Encoder<xla::Shape> {
+  static ERL_NIF_TERM encode(ErlNifEnv *env, const xla::Shape &shape) {
+    ERL_NIF_TERM keys[] = {
+        fine::encode(env, exla::atoms::__struct__),
+        fine::encode(env, exla::atoms::type),
+        fine::encode(env, exla::atoms::shape),
+    };
+
+    ERL_NIF_TERM values[] = {
+        fine::encode(env, exla::atoms::ElixirEXLATypespec),
+        encode_type(env, shape),
+        encode_shape(env, shape),
+    };
+
+    ERL_NIF_TERM map;
+    if (!enif_make_map_from_arrays(env, keys, values, 3, &map)) {
+      throw std::runtime_error("encode: failed to make a map");
+    }
+
+    return map;
+  }
+
+private:
+  static ERL_NIF_TERM encode_type(ErlNifEnv *env, const xla::Shape &shape) {
+    auto ptype = shape.element_type();
+
+    // Tokens are encoded as the atom :token
+    if (ptype == xla::TOKEN) {
+      return fine::encode(env, exla::atoms::token);
+    }
+
+    std::optional<fine::Atom> type_name;
+    std::optional<uint64_t> type_size;
+
+    switch (ptype) {
+    case xla::PRED:
+      type_name = exla::atoms::pred;
+      type_size = 8;
+      break;
+
+    case xla::U8:
+      type_name = exla::atoms::u;
+      type_size = 8;
+      break;
+    case xla::U16:
+      type_name = exla::atoms::u;
+      type_size = 16;
+      break;
+    case xla::U32:
+      type_name = exla::atoms::u;
+      type_size = 32;
+      break;
+    case xla::U64:
+      type_name = exla::atoms::u;
+      type_size = 64;
+      break;
+
+    case xla::S8:
+      type_name = exla::atoms::s;
+      type_size = 8;
+      break;
+    case xla::S16:
+      type_name = exla::atoms::s;
+      type_size = 16;
+      break;
+    case xla::S32:
+      type_name = exla::atoms::s;
+      type_size = 32;
+      break;
+    case xla::S64:
+      type_name = exla::atoms::s;
+      type_size = 64;
+      break;
+
+    case xla::F8E5M2:
+      type_name = exla::atoms::f;
+      type_size = 8;
+      break;
+    case xla::F8E4M3FN:
+      type_name = exla::atoms::f8_e4m3fn;
+      type_size = 8;
+      break;
+
+    case xla::F16:
+      type_name = exla::atoms::f;
+      type_size = 16;
+      break;
+    case xla::F32:
+      type_name = exla::atoms::f;
+      type_size = 32;
+      break;
+    case xla::F64:
+      type_name = exla::atoms::f;
+      type_size = 64;
+      break;
+
+    case xla::BF16:
+      type_name = exla::atoms::bf;
+      type_size = 16;
+      break;
+
+    case xla::C64:
+      type_name = exla::atoms::c;
+      type_size = 64;
+      break;
+    case xla::C128:
+      type_name = exla::atoms::c;
+      type_size = 128;
+      break;
+
+    default:
+      break;
+    }
+
+    if (type_name && type_size) {
+      return fine::encode(
+          env, std::make_tuple(type_name.value(), type_size.value()));
+    }
+
+    throw std::invalid_argument("encode failed, unexpected xla::PrimitiveType");
+  }
+
+  static ERL_NIF_TERM encode_shape(ErlNifEnv *env, const xla::Shape &shape) {
+    auto dims = shape.dimensions();
+    std::vector<ERL_NIF_TERM> dim_terms;
+    dim_terms.reserve(dims.size());
+
+    for (int64_t dim : dims) {
+      dim_terms.push_back(fine::encode(env, dim));
+    }
+
+    return enif_make_tuple_from_array(env, dim_terms.data(), dim_terms.size());
+  }
+};
 } // namespace fine
 
 // Helper Macros

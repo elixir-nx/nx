@@ -2,7 +2,7 @@
 
 #include <complex>
 
-#include "tsl/platform/types.h"
+#include "xla/tsl/platform/types.h"
 #include "Eigen/Core"  // from @eigen_archive
 
 namespace exla {

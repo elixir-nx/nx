@@ -13,15 +13,20 @@
 #include "exla_mlir.h"
 #include "exla_nif_util.h"
 #include "ipc.h"
+#include "mlir/IR/Builders.h"
 #include "mlir/IR/MLIRContext.h"
 #include "shardy/dialect/sdy/ir/dialect.h"
 #include "shardy/dialect/sdy/ir/register.h"
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
+#include "xla/hlo/translate/hlo_to_mhlo/hlo_utils.h"
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/service/platform_util.h"
 #include "xla/tsl/platform/statusor.h"
 #include "llvm/Support/ThreadPool.h"
+#include "absl/log/log_sink_registry.h"
+#include "absl/log/initialize.h"
+#include "absl/log/globals.h"
 
 namespace exla {
 
@@ -279,6 +284,14 @@ mlir_compile(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
   build_options.set_num_partitions(num_partitions);
   build_options.set_use_spmd_partitioning(use_spmd);
 
+  // Enable Shardy partitioner when using SPMD to support output sharding
+  // Shardy runs propagation before the SPMD partitioner and properly handles
+  // FuncResultSharding custom calls that would otherwise fail the side-effect
+  // check
+  if (use_spmd) {
+    build_options.set_use_shardy_partitioner(true);
+  }
+
   auto compile_portable_executable = false;
   if (device_id >= 0) {
     compile_portable_executable = true;
@@ -414,6 +427,13 @@ fine::Term read_device_mem(ErlNifEnv *env, fine::Term buffer_term,
 }
 
 FINE_NIF(read_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND);
+
+xla::Shape get_buffer_typespec(ErlNifEnv *env, fine::Term buffer_term) {
+  auto buffer = decode_exla_buffer(env, buffer_term);
+  return unwrap(buffer->buffer()->logical_on_device_shape());
+}
+
+FINE_NIF(get_buffer_typespec, 0);
 
 std::variant<fine::Ok<>, fine::Error<fine::Atom>>
 deallocate_device_mem(ErlNifEnv *env, fine::Term buffer_term) {
@@ -625,12 +645,13 @@ FINE_NIF(clear_runtime_callback_bridge, 0);
 fine::Ok<> start_log_sink(ErlNifEnv *env, ErlNifPid logger_pid) {
   ExlaLogSink *sink = new ExlaLogSink(logger_pid);
 
-  // NO_DEFAULT_LOGGER doesn't behave right
-  for (auto *log_sink : tsl::TFGetLogSinks()) {
-    tsl::TFRemoveLogSink(log_sink);
-  }
-
-  tsl::TFAddLogSink(sink);
+  // In addition to sinks, logs go to stderr above the given threshold.
+  // We could disable it entirely with kInfinity, but we keep errors
+  // just to make sure they are logged, in case the process crashes
+  // right after the log, without time for Elixir to print it.
+  absl::SetStderrThreshold(absl::LogSeverityAtLeast::kError);
+  absl::InitializeLog();
+  absl::AddLogSink(sink);
 
   return fine::Ok();
 }

@@ -22,10 +22,18 @@ XLA_EXTENSION_LIB_LINK_PATH = ../$(CWD_RELATIVE_TO_PRIV_PATH)/$(XLA_EXTENSION_LI
 EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
 
 # Build flags
+#
 # Note that XLA requires c++17, Fine as well
+#
+# We need to define NDEBUG to out-out of debug mode. XLA is precompiled with
+# that flag. In EXLA we include some XLA headers that may have conditionals
+# on NDEBUG. Crucially, the conditionals may be around struct fields and if
+# we omit the flag, the struct fields will differ from what the precompiled
+# library uses leading to incompatible ABI and nasty segfaults.
 CFLAGS += -fPIC -I$(ERTS_INCLUDE_DIR) -I$(FINE_INCLUDE_DIR) -I$(XLA_INCLUDE_PATH) -Wall -Wno-sign-compare \
 	 -Wno-unused-parameter -Wno-missing-field-initializers -Wno-comment \
-	 -std=c++17 -w
+	 -std=c++17 -w \
+	 -DNDEBUG
 
 ifdef DEBUG
 	CFLAGS += -g
@@ -84,7 +92,7 @@ $(EXLA_SO): $(EXLA_CACHE_SO)
 
 SOURCES = $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_mlir.cc $(EXLA_DIR)/ipc.cc
 SOURCES += $(wildcard $(EXLA_DIR)/custom_calls/*.cc)
-HEADERS = $(EXLA_DIR)/exla_mlir.h $(EXLA_DIR)/custom_calls/qr.h $(EXLA_DIR)/custom_calls/eigh.h $(EXLA_DIR)/custom_calls/runtime_callback_bridge.h $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h $(EXLA_DIR)/ipc.h
+HEADERS = $(EXLA_DIR)/exla_mlir.h $(EXLA_DIR)/custom_calls/runtime_callback_bridge.h $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h $(EXLA_DIR)/ipc.h
 OBJECTS = $(patsubst $(EXLA_DIR)/%.cc,$(EXLA_CACHE_OBJ_DIR)/%.o,$(SOURCES)) $(EXLA_CACHE_OBJ_DIR)/exla_cuda.o
 
 
