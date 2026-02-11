@@ -798,13 +798,10 @@ defmodule EXLA.Defn.ShardingTest do
           [128, 130]
         ])
 
-      device_ids =
-        for r <- results do
-          assert_equal(r, expected_result)
-          r.data.buffer.device_id
-        end
-
-      assert Enum.sort(device_ids) == [0, 1, 2, 3]
+      for {r, partition_idx} <- Enum.with_index(results) do
+        assert_equal(r, expected_result)
+        assert r.data.buffer.device_id == partition_idx
+      end
     end
   end
 end
