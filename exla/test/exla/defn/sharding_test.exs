@@ -747,23 +747,22 @@ defmodule EXLA.Defn.ShardingTest do
     end
 
       mesh = %Mesh{name: "mesh", shape: {2, 2}}
-      # First arg: shard dim 0 on mesh axis 0, dim 1 on mesh axis 1
-      # Second arg: shard dim 0 on mesh axis 0, dim 1 not sharded
-      input_shardings = [%{0 => [0], 1 => [1]}, %{0 => [0]}]
+      # First arg: 0..15 (8x2), shard dim 0 on mesh axis 0, dim 1 on mesh axis 1
+      # Second arg: 100..115 (8x2), same sharding — makes sharded results easy to read
+      input_shardings = [%{0 => [0], 1 => [1]}, %{0 => [0], 1 => [1]}]
 
-      # For mesh {2, 2}, we have 4 partitions
-      # Each partition gets a shard of the inputs
-      # First input: shape {8, 2} sharded as [[0], [1]] -> each partition gets {4, 1}
-      # Second input: shape {8, 1} sharded as [[0], []] -> each partition gets {4, 1}
+      # For mesh {2, 2}, 4 partitions. Each gets {4, 1}. Full 8x2 row-major: [[0,1],[2,3],...,[14,15]].
+      # Partition (axis_0, axis_1): (0,0)=rows 0-3 col 0, (0,1)=rows 0-3 col 1, (1,0)=rows 4-7 col 0, (1,1)=rows 4-7 col 1.
+      # So partition 0 gets (0,0),(1,0),(2,0),(3,0) = 0,2,4,6; partition 1 gets (0,1),(1,1),... = 1,3,5,7; etc.
       args = [
-        # partition 0
-        [Nx.iota({4, 1}), Nx.iota({4, 1})],
-        # partition 1
-        [Nx.iota({4, 1}), Nx.iota({4, 1})],
-        # partition 2
-        [Nx.iota({4, 1}), Nx.iota({4, 1})],
-        # partition 3
-        [Nx.iota({4, 1}), Nx.iota({4, 1})]
+        # partition 0: rows 0–3 col 0 -> 0,2,4,6 and 100,102,104,106
+        [Nx.tensor([[0], [2], [4], [6]]), Nx.tensor([[100], [102], [104], [106]])],
+        # partition 1: rows 0–3 col 1 -> 1,3,5,7 and 101,103,105,107
+        [Nx.tensor([[1], [3], [5], [7]]), Nx.tensor([[101], [103], [105], [107]])],
+        # partition 2: rows 4–7 col 0 -> 8,10,12,14 and 108,110,112,114
+        [Nx.tensor([[8], [10], [12], [14]]), Nx.tensor([[108], [110], [112], [114]])],
+        # partition 3: rows 4–7 col 1 -> 9,11,13,15 and 109,111,113,115
+        [Nx.tensor([[9], [11], [13], [15]]), Nx.tensor([[109], [111], [113], [115]])]
       ]
 
       result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
@@ -771,12 +770,11 @@ defmodule EXLA.Defn.ShardingTest do
       expected_mlir = """
       module {
         sdy.mesh @mesh = <["axis_0"=2, "axis_1"=2]>
-        func.func public @main(%arg0: tensor<8x2xi32> {sdy.sharding = #sdy.sharding<@mesh, [{"axis_0", ?}p0, {"axis_1", ?}p0]>}, %arg1: tensor<8x1xi32> {sdy.sharding = #sdy.sharding<@mesh, [{"axis_0", ?}p0, {?}p0]>}) -> tensor<8x2xi32> {
-          %0 = stablehlo.broadcast_in_dim %arg1, dims = [0, 1] : (tensor<8x1xi32>) -> tensor<8x2xi32>
-          %1 = stablehlo.add %arg0, %0 : tensor<8x2xi32>
-          %2 = "stablehlo.all_gather"(%1) <{all_gather_dim = 0 : i64, replica_groups = dense<0> : tensor<1x1xi64>}> : (tensor<8x2xi32>) -> tensor<8x2xi32>
-          %3 = "stablehlo.all_gather"(%2) <{all_gather_dim = 1 : i64, replica_groups = dense<0> : tensor<1x1xi64>}> : (tensor<8x2xi32>) -> tensor<8x2xi32>
-          return %3 : tensor<8x2xi32>
+        func.func public @main(%arg0: tensor<8x2xi32> {sdy.sharding = #sdy.sharding<@mesh, [{"axis_0", ?}p0, {"axis_1", ?}p0]>}, %arg1: tensor<8x2xi32> {sdy.sharding = #sdy.sharding<@mesh, [{"axis_0", ?}p0, {"axis_1", ?}p0]>}) -> tensor<8x2xi32> {
+          %0 = stablehlo.add %arg0, %arg1 : tensor<8x2xi32>
+          %1 = "stablehlo.all_gather"(%0) <{all_gather_dim = 0 : i64, replica_groups = dense<0> : tensor<1x1xi64>}> : (tensor<8x2xi32>) -> tensor<8x2xi32>
+          %2 = "stablehlo.all_gather"(%1) <{all_gather_dim = 1 : i64, replica_groups = dense<0> : tensor<1x1xi64>}> : (tensor<8x2xi32>) -> tensor<8x2xi32>
+          return %2 : tensor<8x2xi32>
         }
       }
       """
@@ -787,19 +785,17 @@ defmodule EXLA.Defn.ShardingTest do
 
       assert length(results) == 4
 
-      # After all_gather on both dims, each partition has the full tensor: add(iota, iota) -> 2*iota
-      # Each shard had iota({4,1}) = [[0],[1],[2],[3]], so add gives [[0],[2],[4],[6]]
-      # After gathering: replicated 8x2 with pattern [[0,0],[2,2],[4,4],[6,6],[0,0],[2,2],[4,4],[6,6]]
+      # After all_gather: full first arg 0..15 + full second 100..115 -> 100,102,...,130
       expected_result =
         Nx.tensor([
-          [0, 0],
-          [2, 2],
-          [4, 4],
-          [6, 6],
-          [0, 0],
-          [2, 2],
-          [4, 4],
-          [6, 6]
+          [100, 102],
+          [104, 106],
+          [108, 110],
+          [112, 114],
+          [116, 118],
+          [120, 122],
+          [124, 126],
+          [128, 130]
         ])
 
       device_ids =
