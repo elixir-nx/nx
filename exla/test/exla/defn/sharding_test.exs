@@ -950,10 +950,52 @@ defmodule EXLA.Defn.ShardingTest do
           [128, 130]
         ])
 
-      for {r, partition_idx} <- Enum.with_index(results) do
-        assert_equal(r, expected_result)
-        assert r.data.buffer.device_id == partition_idx
-      end
+      Enum.zip_with([results, 0..3], fn [result, i] ->
+        assert_equal(result, expected_result)
+        assert result.data.buffer.device_id == i
+      end)
+    end
+
+    @moduletag :multi_device
+    test "can return partially sharded results" do
+      fun = fn x, y -> Nx.add(x, y) end
+
+      mesh = %Mesh{name: "mesh", shape: {2, 2}}
+      # Inputs sharded on both axes
+      input_shardings = [%{0 => [0], 1 => [1]}, %{0 => [0], 1 => [1]}]
+      # Output: sharded only on axis 0 (dim 1 replicated) -> each partition gets {4, 2}
+      output_shardings = [%{0 => [0]}]
+
+      # Logical x: 8x2, y: 8x2. Each partition gets {4, 1} of each
+      args = [
+        [Nx.tensor([[0], [1], [2], [3]]), Nx.tensor([[100], [101], [102], [103]])],
+        [Nx.tensor([[10], [11], [12], [13]]), Nx.tensor([[110], [111], [112], [113]])],
+        [Nx.tensor([[4], [5], [6], [7]]), Nx.tensor([[104], [105], [106], [107]])],
+        [Nx.tensor([[14], [15], [16], [17]]), Nx.tensor([[114], [115], [116], [117]])]
+      ]
+
+      results =
+        EXLA.shard_jit(fun, mesh,
+          input_shardings: input_shardings,
+          output_shardings: output_shardings
+        ).(args)
+
+      assert length(results) == 4
+
+      # Partially sharded output: dim 0 sharded on axis 0, dim 1 not in output spec
+      # Each device returns its local shard {4, 1} (x+y computed locally)
+      # Dev0: col0 rows 0-3, Dev1: col1 rows 0-3, Dev2: col0 rows 4-7, Dev3: col1 rows 4-7
+      expected_results = [
+        Nx.tensor([[100], [102], [104], [106]]),
+        Nx.tensor([[120], [122], [124], [126]]),
+        Nx.tensor([[108], [110], [112], [114]]),
+        Nx.tensor([[128], [130], [132], [134]])
+      ]
+
+      Enum.zip_with([results, expected_results, 0..3], fn [result, expected, i] ->
+        assert_equal(result, expected)
+        assert result.data.buffer.device_id == i
+      end)
     end
   end
 end
