@@ -1480,18 +1480,15 @@ defmodule EXLA.Defn do
     replica_groups = Keyword.fetch!(opts, :replica_groups)
     split_count = Keyword.fetch!(opts, :split_count)
 
-    [result] =
-      Value.all_to_all(
-        [tensor],
-        expr_to_typespec(ans),
-        split_dimension,
-        concat_dimension,
-        split_count,
-        replica_groups,
-        opts[:channel_id]
-      )
-
-    result
+    Value.all_to_all(
+      [tensor],
+      expr_to_typespec(ans),
+      split_dimension,
+      concat_dimension,
+      split_count,
+      replica_groups,
+      opts[:channel_id]
+    )
   end
 
   defp fft(exla_op, [%Value{} = tensor, opts], %{type: type} = ans, state) do

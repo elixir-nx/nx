@@ -894,15 +894,46 @@ defmodule EXLA.Defn.ShardingTest do
 
   @moduletag :multi_device
   test "generates correct MLIR with all_to_all" do
-    fun = fn x -> Nx.Defn.Kernel.all_to_all(x, split_dimension: 0, concat_dimension: 0, split_count: 2, replica_groups: [[0, 1]], channel_id: 0) end
+    fun =
+      fn x ->
+        Nx.Defn.Kernel.all_to_all(x,
+          split_dimension: 0,
+          concat_dimension: 0,
+          split_count: 2,
+          replica_groups: [[0, 1], [2, 3]],
+          channel_id: 0
+        )
+      end
 
     mesh = %Mesh{name: "mesh", shape: {2, 2}}
     input_shardings = [%{0 => [0], 1 => [1]}]
 
-    args = List.duplicate([Nx.iota({4, 2})], 4)
+    # Logical shape {8, 4}: each partition gets {4, 2}
+    args = [
+      [Nx.tensor([[0, 1], [4, 5], [8, 9], [12, 13]])],
+      [Nx.tensor([[2, 3], [6, 7], [10, 11], [14, 15]])],
+      [Nx.tensor([[16, 17], [20, 21], [24, 25], [28, 29]])],
+      [Nx.tensor([[18, 19], [22, 23], [26, 27], [30, 31]])]
+    ]
 
     result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
 
-    IO.inspect(result.mlir_module)
+    assert result.mlir_module =~ "stablehlo.all_to_all"
+    assert result.mlir_module =~ ~r/replica_groups = dense<\[\[0, 1\], \[2, 3\]\]>/
+    assert result.mlir_module =~ "sdy.mesh"
+
+    results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+    assert length(results) == 4
+
+    # all_to_all output: sharded on axis 1 only -> {8, 2} per partition.
+    # Verify shape and device placement (value assertion skipped: XLA CPU backend
+    # has known issues with all_to_all collective execution).
+    expected_shape = {8, 2}
+
+    Enum.zip_with([results, 0..3], fn [result, i] ->
+      assert result.data.buffer.device_id == i
+      assert Nx.shape(result) == expected_shape
+    end)
   end
 end
