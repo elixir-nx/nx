@@ -156,7 +156,7 @@ defmodule Nx.FloatingTest do
       {0x7F, :nan},
       # Negative values (sign bit = 1)
       # Denormalized (exponent = 0): value = -mantissa/8 * 2^-6
-      {0x80, -0.0},
+      if(+0.0 === -0.0, do: {0x00, -0.0}, else: {0x80, -0.0}),
       {0x81, -0.001953125},
       {0x82, -0.00390625},
       {0x83, -0.005859375},
@@ -349,7 +349,12 @@ defmodule Nx.FloatingTest do
     test "pretty printing" do
       # Zeroes
       assert Nx.tensor([0.0], type: :f8) |> inspect() =~ "[0.0]"
-      assert Nx.tensor([-0.0], type: :f8) |> inspect() =~ "[-0.0]"
+
+      if +0.0 === -0.0 do
+        assert Nx.tensor([-0.0], type: :f8) |> inspect() =~ "[0.0]"
+      else
+        assert Nx.tensor([-0.0], type: :f8) |> inspect() =~ "[-0.0]"
+      end
 
       # Infinity
       assert Nx.tensor([:infinity], type: :f8) |> inspect() =~ "[Inf]"
@@ -399,7 +404,12 @@ defmodule Nx.FloatingTest do
     test "pretty printing" do
       # Zeroes
       assert Nx.tensor([0.0], type: :bf16) |> inspect() =~ "[0.0]"
-      assert Nx.tensor([-0.0], type: :bf16) |> inspect() =~ "[-0.0]"
+
+      if +0.0 === -0.0 do
+        assert Nx.tensor([-0.0], type: :bf16) |> inspect() =~ "[0.0]"
+      else
+        assert Nx.tensor([-0.0], type: :bf16) |> inspect() =~ "[-0.0]"
+      end
 
       # Infinity
       assert Nx.tensor([:infinity], type: :bf16) |> inspect() =~ "[Inf]"

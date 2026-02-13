@@ -2952,4 +2952,30 @@ defmodule Nx.DefnTest do
       assert vectorized_metadata_tuple(x, z) == vec_nonvec_result
     end
   end
+
+  describe "sharding" do
+    defn all_gather_test(tensor) do
+      Nx.Defn.Kernel.all_gather(tensor, all_gather_dim: 0, replica_groups: [[0]])
+    end
+
+    test "all_gather produces correct expr format for compiler" do
+      # Uses debug_expr to inspect the expression without compiling.
+      # Guarantees the format passed to compilers (e.g. EXLA) stays stable.
+      assert %T{data: %Expr{op: :all_gather, args: [tensor, opts]}} =
+               Nx.Defn.debug_expr(&all_gather_test/1).(Nx.tensor([1, 2, 3, 4]))
+
+      assert %T{data: %Expr{op: :parameter, args: [0]}} = tensor
+
+      # Compilers expect opts with :all_gather_dim and :replica_groups
+      assert opts[:all_gather_dim] == 0
+      assert opts[:replica_groups] == [[0]]
+    end
+
+    @tag compiler: Evaluator
+    test "all_gather works" do
+      assert_raise UndefinedFunctionError, fn ->
+        all_gather_test(Nx.tensor([1, 2, 3, 4]))
+      end
+    end
+  end
 end
