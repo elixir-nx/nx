@@ -1670,20 +1670,15 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  Gathers tensors from all replicas along a specified dimension.
+  Gathers tensors along a specified axis across an `Nx.Mesh`.
 
-  This operation concatenates tensors from multiple replicas/devices along
-  the specified dimension. Requires a backend that supports multi-device operations.
+  Requires a backend that supports collective operations.
 
-  ## Parameters
+  ## Options
 
-    * `tensor` - The input tensor to gather
-
-    * `opts` - Optional keyword list. These are backend- and compiler-specific;
-    see your backend or compiler docs for supported options.
-
+  Refer to the chosen backend/compiler documentation for supported options.
   """
-  def all_gather(tensor, opts \\ []) do
+  def all_gather(tensor, opts) do
     Nx.Defn.Expr.all_gather(tensor, opts)
   end
 
