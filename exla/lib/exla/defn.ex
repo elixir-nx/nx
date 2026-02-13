@@ -1495,6 +1495,29 @@ defmodule EXLA.Defn do
     result
   end
 
+  defp to_operator(:all_reduce, [%Value{} = tensor, opts, fun], ans, _state) do
+    replica_groups = Keyword.fetch!(opts, :replica_groups)
+    # In automatic SPMD mode with Shardy, use cross-replica all-reduce (no channel_id).
+    # Shardy should automatically infer from sharding annotations that cross-partition
+    # communication is needed and insert the necessary collectives during partitioning.
+    use_global_device_ids = Keyword.get(opts, :use_global_device_ids, false)
+    channel_id = Keyword.get(opts, :channel_id)
+
+    tensor = to_type(tensor, ans.type)
+
+    [result] =
+      Value.all_reduce(
+        fun,
+        [tensor],
+        [expr_to_typespec(ans)],
+        replica_groups,
+        use_global_device_ids,
+        channel_id
+      )
+
+    result
+  end
+
   defp fft(exla_op, [%Value{} = tensor, opts], %{type: type} = ans, state) do
     n = opts[:length]
     axis = opts[:axis]

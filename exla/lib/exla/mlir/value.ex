@@ -86,12 +86,49 @@ defmodule EXLA.MLIR.Value do
 
     attributes =
       if channel_id do
-        Keyword.put(attributes, :channel_id, attr_i64(channel_id))
+        Keyword.put(attributes, :channel_handle, attr_channel_handle(channel_id, 0))
       else
         attributes
       end
 
     op(func, "stablehlo.all_gather", operands, result_types, attributes: attributes)
+  end
+
+  def all_reduce(
+        %Region{ref: computation},
+        [%Value{function: func} | _] = operands,
+        typespecs,
+        replica_groups,
+        use_global_device_ids,
+        channel_id \\ nil
+      ) do
+    result_types = typespecs_to_mlir_types(typespecs)
+
+    # Handle empty replica_groups specially (means all replicas/partitions)
+    replica_groups_attr =
+      if replica_groups == [] do
+        "dense<> : tensor<0x0xi64>"
+      else
+        num_groups = length(replica_groups)
+        group_size = length(hd(replica_groups))
+        flat_groups = List.flatten(replica_groups)
+        attr_dense_elements(flat_groups, {:s, 64}, {num_groups, group_size})
+      end
+
+    attributes = [
+      replica_groups: replica_groups_attr,
+      use_global_device_ids: attr_boolean(use_global_device_ids)
+    ]
+
+    attributes =
+      if channel_id do
+        Keyword.put(attributes, :channel_handle, attr_channel_handle(channel_id, 0))
+      else
+        attributes
+      end
+
+    regions = [computation]
+    op(func, "stablehlo.all_reduce", operands, result_types, attributes: attributes, regions: regions)
   end
 
   defp compare_and_return_bool(func, lhs, rhs, typespec, direction, total_order? \\ false) do
@@ -1108,6 +1145,10 @@ defmodule EXLA.MLIR.Value do
 
   defp attr_fft_type(value) when value in [:fft, :ifft],
     do: attr_enum("stablehlo", "fft_type", value)
+
+  defp attr_channel_handle(handle, type) do
+    "#stablehlo.channel_handle<handle = #{handle}, type = #{type}>"
+  end
 
   defp attr_enum(dialect, enum_name, value) do
     value = value |> Atom.to_string() |> String.upcase()

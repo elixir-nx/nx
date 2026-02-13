@@ -1171,6 +1171,24 @@ defmodule Nx.Defn.Expr do
     expr(expr, context, :all_gather, [expr, opts])
   end
 
+  def all_reduce(tensor, opts, fun) do
+    {[tensor], tensor_context} = to_exprs([tensor])
+    type = tensor.type
+
+    # Create a new context for the reduction function
+    context = new_context(:all_reduce)
+    # Create two scalar parameters for the reduction function (lhs, rhs)
+    args = [parameter(context, type, {}, 0), parameter(context, type, {}, 1)]
+    # Apply the function to get the reduction expression
+    fun = apply_fun(context, fun, args, type)
+
+    if fun.shape != {} do
+      raise "all_reduce function must return a scalar tensor, got: #{inspect(fun.shape)}"
+    end
+
+    expr(tensor, tensor_context, :all_reduce, [tensor, opts, fun])
+  end
+
   @impl true
   def reverse(out, tensor, axes) do
     tensor = to_expr(tensor)

@@ -952,4 +952,211 @@ defmodule EXLA.Defn.ShardingTest do
       assert result3.data.buffer.device_id == 3
     end
   end
+
+  describe "all_reduce" do
+    @moduletag :multi_device
+    test "sum reduction across partitions" do
+      fun = fn x ->
+        Nx.Defn.Kernel.all_reduce(x, [replica_groups: [[0]]], fn a, b ->
+          Nx.add(a, b)
+        end)
+      end
+
+      mesh = %Mesh{name: "mesh", shape: {2, 2}}
+      # Input sharded on both axes
+      input_shardings = [%{0 => [0], 1 => [1]}]
+
+      # Logical x: 8x2 tensor with values [[0,1],[2,3],...,[14,15]]
+      # Each device gets {4,1}
+      args = [
+        [Nx.tensor([[0], [2], [4], [6]])],
+        [Nx.tensor([[1], [3], [5], [7]])],
+        [Nx.tensor([[8], [10], [12], [14]])],
+        [Nx.tensor([[9], [11], [13], [15]])]
+      ]
+
+      result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
+
+      expected_mlir = """
+      module {
+        sdy.mesh @mesh = <["axis_0"=2, "axis_1"=2]>
+        func.func public @main(%arg0: tensor<8x2xi32> {sdy.sharding = #sdy.sharding<@mesh, [{"axis_0", ?}p0, {"axis_1", ?}p0]>}) -> tensor<8x2xi32> {
+          %0 = "stablehlo.all_reduce"(%arg0) <{replica_groups = dense<0> : tensor<1x1xi64>}> ({
+          ^bb0(%arg1: tensor<i32>, %arg2: tensor<i32>):
+            %1 = stablehlo.add %arg1, %arg2 : tensor<i32>
+            stablehlo.return %1 : tensor<i32>
+          }) : (tensor<8x2xi32>) -> tensor<8x2xi32>
+          return %0 : tensor<8x2xi32>
+        }
+      }
+      """
+
+      assert expected_mlir == result.mlir_module
+
+      results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      # After all_reduce with sum: each device gets same reduced shard
+      # The reduction is element-wise within each shard position
+      # Each shard {4,1} gets reduced across all 4 devices at corresponding positions
+      # But result stays sharded!
+      # Device 0 shard [0]: 0+1+8+9=18, [1]: 2+3+10+11=26, [2]: 4+5+12+13=34, [3]: 6+7+14+15=42
+      expected_result = Nx.tensor([[18], [26], [34], [42]])
+
+      Enum.with_index(results, fn result, i ->
+        assert_equal(result, expected_result)
+        assert result.data.buffer.device_id == i
+      end)
+    end
+
+    @moduletag :multi_device
+    test "max reduction across partitions" do
+      fun = fn x ->
+        Nx.Defn.Kernel.all_reduce(x, [replica_groups: [[0]]], fn a, b ->
+          Nx.max(a, b)
+        end)
+      end
+
+      mesh = %Mesh{name: "mesh", shape: {2, 2}}
+      input_shardings = [%{0 => [0], 1 => [1]}]
+
+      args = [
+        [Nx.tensor([[10], [20], [30], [40]])],
+        [Nx.tensor([[100], [200], [300], [400]])],
+        [Nx.tensor([[5], [15], [25], [35]])],
+        [Nx.tensor([[50], [150], [250], [350]])]
+      ]
+
+      results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      # All devices reduce together with max - takes max across all devices
+      # Max of [10, 100, 5, 50] at pos [0], [20, 200, 15, 150] at pos [1], etc.
+      expected_result = Nx.tensor([[100], [200], [300], [400]])
+
+      Enum.with_index(results, fn result, i ->
+        assert_equal(result, expected_result)
+        assert result.data.buffer.device_id == i
+      end)
+    end
+
+    @moduletag :multi_device
+    test "multiply reduction across partitions" do
+      fun = fn x ->
+        Nx.Defn.Kernel.all_reduce(x, [replica_groups: [[0]]], fn a, b ->
+          Nx.multiply(a, b)
+        end)
+      end
+
+      mesh = %Mesh{name: "mesh", shape: {2, 2}}
+      input_shardings = [%{0 => [0], 1 => [1]}]
+
+      # Use small values to avoid overflow
+      args = [
+        [Nx.tensor([[2], [2], [2], [2]])],
+        [Nx.tensor([[2], [2], [2], [2]])],
+        [Nx.tensor([[2], [2], [2], [2]])],
+        [Nx.tensor([[2], [2], [2], [2]])]
+      ]
+
+      out = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
+      IO.puts(out.mlir_module)
+
+      results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      # Product: 2 * 2 * 2 * 2 = 16 for each element
+      expected = Nx.tensor([[16], [16], [16], [16]])
+
+      Enum.with_index(results, fn result, i ->
+        assert_equal(result, expected)
+        assert result.data.buffer.device_id == i
+      end)
+    end
+
+    @moduletag :multi_device
+    test "sum reduction with f32 type" do
+      fun = fn x ->
+        Nx.Defn.Kernel.all_reduce(x, [replica_groups: [[0]]], fn a, b ->
+          Nx.add(a, b)
+        end)
+      end
+
+      mesh = %Mesh{name: "mesh", shape: {2, 2}}
+      input_shardings = [%{0 => [0], 1 => [1]}]
+
+      # Test with f32
+      args = [
+        [Nx.tensor([[1.0], [2.0], [3.0], [4.0]], type: :f32)],
+        [Nx.tensor([[1.0], [2.0], [3.0], [4.0]], type: :f32)],
+        [Nx.tensor([[1.0], [2.0], [3.0], [4.0]], type: :f32)],
+        [Nx.tensor([[1.0], [2.0], [3.0], [4.0]], type: :f32)]
+      ]
+
+      results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      expected = Nx.tensor([[4.0], [8.0], [12.0], [16.0]], type: :f32)
+
+      Enum.with_index(results, fn result, i ->
+        assert_equal(result, expected)
+        assert result.data.buffer.device_id == i
+      end)
+    end
+
+    @moduletag :multi_device
+    test "partially sharded input remains sharded after reduction" do
+      fun = fn x ->
+        Nx.Defn.Kernel.all_reduce(x, [replica_groups: [[0]]], fn a, b ->
+          Nx.add(a, b)
+        end)
+      end
+
+      mesh = %Mesh{name: "mesh", shape: {2, 2}}
+      # Input sharded only on first axis
+      input_shardings = [%{0 => [0]}]
+
+      # Each device gets {4,2}
+      args = [
+        [Nx.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])],
+        [Nx.tensor([[1, 2], [3, 4], [5, 6], [7, 8]])],
+        [Nx.tensor([[9, 10], [11, 12], [13, 14], [15, 16]])],
+        [Nx.tensor([[9, 10], [11, 12], [13, 14], [15, 16]])]
+      ]
+
+      results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      # Devices 0,1 have same shard, devices 2,3 have same shard
+      # After reduction: each position summed 4 times
+      expected = Nx.tensor([[4, 8], [12, 16], [20, 24], [28, 32]])
+
+      Enum.with_index(results, fn result, i ->
+        assert_equal(result, expected)
+        assert result.data.buffer.device_id == i
+      end)
+    end
+
+    @moduletag :multi_device
+    test "non-sharded input creates replicated output" do
+      fun = fn x ->
+        Nx.Defn.Kernel.all_reduce(x, [replica_groups: [[0]]], fn a, b ->
+          Nx.add(a, b)
+        end)
+      end
+
+      mesh = %Mesh{name: "mesh", shape: {2, 2}}
+      # No sharding - fully replicated input
+      input_shardings = [%{}]
+
+      # All devices get the full {8,2} tensor
+      full_tensor = Nx.iota({8, 2})
+      args = List.duplicate([full_tensor], 4)
+
+      results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      # With replicated input, all_reduce sums 4 identical copies
+      expected = Nx.multiply(full_tensor, 4)
+
+      Enum.with_index(results, fn result, i ->
+        assert_equal(result, expected)
+        assert result.data.buffer.device_id == i
+      end)
+    end
+  end
 end

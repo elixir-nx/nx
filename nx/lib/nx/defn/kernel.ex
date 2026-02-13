@@ -1682,6 +1682,31 @@ defmodule Nx.Defn.Kernel do
     Nx.Defn.Expr.all_gather(tensor, opts)
   end
 
+  @doc """
+  Reduces tensors across an `Nx.Mesh` using a custom computation.
+
+  Requires a backend that supports collective operations.
+
+  The computation function receives two scalar tensors and returns a scalar tensor
+  of the same type. The reduction is performed by applying the computation pairwise
+  across all tensors in the replica group.
+
+  ## Options
+
+  Refer to the chosen backend/compiler documentation for supported options.
+
+  ## Examples
+
+      # Sum reduction across all devices
+      all_reduce(tensor, [replica_groups: [[0, 1, 2, 3]]], fn x, y -> Nx.add(x, y) end)
+
+      # Max reduction
+      all_reduce(tensor, [replica_groups: [[0, 1]]], fn x, y -> Nx.max(x, y) end)
+  """
+  def all_reduce(tensor, opts, computation) do
+    Nx.Defn.Expr.all_reduce(tensor, opts, computation)
+  end
+
   @definitions (Module.definitions_in(__MODULE__, :def) ++
                   Module.definitions_in(__MODULE__, :defmacro)) --
                  [
