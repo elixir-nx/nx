@@ -64,7 +64,14 @@ defmodule EXLA.MLIR.Value do
     end
   end
 
-  def all_gather([%Value{function: func} | _] = operands, typespec, all_gather_dim, replica_groups, use_global_device_ids, channel_id \\ nil) do
+  def all_gather(
+        [%Value{function: func} | _] = operands,
+        typespec,
+        all_gather_dim,
+        replica_groups,
+        use_global_device_ids,
+        channel_id \\ nil
+      ) do
     result_types = typespecs_to_mlir_types([typespec])
 
     num_groups = length(replica_groups)

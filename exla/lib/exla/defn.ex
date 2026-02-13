@@ -1474,7 +1474,7 @@ defmodule EXLA.Defn do
     EXLA.Lib.argsort(state.builder, tensor, dimension, stable, comp, ans.type)
   end
 
-## to_operator collective ops
+  ## to_operator collective ops
 
   defp to_operator(:all_gather, [%Value{} = tensor, opts], ans, _state) do
     all_gather_dim = Keyword.fetch!(opts, :all_gather_dim)

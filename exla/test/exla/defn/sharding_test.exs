@@ -349,9 +349,7 @@ defmodule EXLA.Defn.ShardingTest do
       assert expected_mlir == result.mlir_module
 
       results =
-        EXLA.shard_jit(fun, mesh,
-          input_shardings: input_shardings
-        ).(args)
+        EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
 
       assert length(results) == 4
 
@@ -450,9 +448,7 @@ defmodule EXLA.Defn.ShardingTest do
       args = List.duplicate([Nx.iota({4, 2})], 4)
 
       assert_raise ArgumentError, fn ->
-        EXLA.shard_jit(fun, mesh,
-          input_shardings: input_shardings
-        ).(args)
+        EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
       end
     end
 
@@ -469,9 +465,7 @@ defmodule EXLA.Defn.ShardingTest do
       assert_raise ArgumentError,
                    ~r/axis 0 was used twice in the same input sharding/,
                    fn ->
-                     EXLA.shard_jit(fun, mesh,
-                       input_shardings: input_shardings
-                     ).(args)
+                     EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
                    end
     end
 
@@ -486,9 +480,7 @@ defmodule EXLA.Defn.ShardingTest do
       args = List.duplicate([Nx.iota({4, 2})], 4)
 
       assert_raise ArgumentError, fn ->
-        EXLA.shard_jit(fun, mesh,
-          input_shardings: input_shardings
-        ).(args)
+        EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
       end
     end
 
@@ -504,9 +496,7 @@ defmodule EXLA.Defn.ShardingTest do
       assert_raise ArgumentError,
                    ~r/given axis \(-3\) invalid for shape with rank 2/,
                    fn ->
-                     EXLA.shard_jit(fun, mesh,
-                       input_shardings: input_shardings
-                     ).(args)
+                     EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
                    end
     end
 
@@ -522,9 +512,7 @@ defmodule EXLA.Defn.ShardingTest do
       assert_raise ArgumentError,
                    ~r/given axis \(3\) invalid for shape with rank 2/,
                    fn ->
-                     EXLA.shard_jit(fun, mesh,
-                       input_shardings: input_shardings
-                     ).(args)
+                     EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
                    end
     end
   end
@@ -565,7 +553,6 @@ defmodule EXLA.Defn.ShardingTest do
       # All dimensions replicated
       input_shardings = [%{}]
 
-
       # For mesh {2, 2}, we have 4 partitions
       # Input fully replicated -> each partition gets full {8, 4}
       args = List.duplicate([Nx.iota({8, 4})], 4)
@@ -585,7 +572,6 @@ defmodule EXLA.Defn.ShardingTest do
       mesh = %Mesh{name: "mesh", shape: {2}}
       # Scalar has no dimensions to shard
       input_shardings = [%{}]
-
 
       # For mesh {2}, we have 2 partitions
       # Scalar is replicated across all partitions
@@ -646,7 +632,6 @@ defmodule EXLA.Defn.ShardingTest do
       mesh = %Mesh{name: "test_mesh", shape: {2, 2}}
       input_shardings = [%{0 => [0]}]
 
-
       # For mesh {2, 2}, we have 4 partitions
       # Input sharded [[0], []] -> each partition gets {4, 2}
       args = List.duplicate([Nx.iota({4, 2})], 4)
@@ -671,7 +656,6 @@ defmodule EXLA.Defn.ShardingTest do
 
       mesh = %Mesh{name: "mesh", shape: {2, 2}}
       input_shardings = [%{0 => [0], 1 => [1]}]
-
 
       # For mesh {2, 2}, we have 4 partitions
       # Input sharded [[0], [1]] -> each partition gets {4, 1}
@@ -698,7 +682,6 @@ defmodule EXLA.Defn.ShardingTest do
       mesh = %Mesh{name: "mesh", shape: {2}}
       # Use named dimensions instead of indices
       input_shardings = [%{:batch => [0]}]
-
 
       # For mesh {2}, we have 2 partitions
       # Named dimension :batch should map to first dimension (index 0)
@@ -854,14 +837,16 @@ defmodule EXLA.Defn.ShardingTest do
         end)
       end
     end
-end
-describe "all_gather" do
+  end
+
+  describe "all_gather" do
     @moduletag :multi_device
     test "in all dims results in the same tensor in all devices" do
-      fun = fn x, y -> Nx.add(x, y)
-      |> Nx.Defn.Kernel.all_gather(all_gather_dim: 0, replica_groups: [[0]])
-      |> Nx.Defn.Kernel.all_gather(all_gather_dim: 1, replica_groups: [[0]])
-    end
+      fun = fn x, y ->
+        Nx.add(x, y)
+        |> Nx.Defn.Kernel.all_gather(all_gather_dim: 0, replica_groups: [[0]])
+        |> Nx.Defn.Kernel.all_gather(all_gather_dim: 1, replica_groups: [[0]])
+      end
 
       mesh = %Mesh{name: "mesh", shape: {2, 2}}
       # First arg: 0..15 (8x2), shard dim 0 on mesh axis 0, dim 1 on mesh axis 1
@@ -935,14 +920,26 @@ describe "all_gather" do
 
       # Logical x: 8x2, y: 8x2. Each partition gets {4, 1} of x and {4, 2} of y
       args = [
-        [Nx.tensor([[0], [1], [2], [3]]), Nx.tensor([[100, 101], [102, 103], [104, 105], [106, 107]])],
-        [Nx.tensor([[4], [5], [6], [7]]), Nx.tensor([[100, 101], [102, 103], [104, 105], [106, 107]])],
-        [Nx.tensor([[8], [9], [10], [11]]), Nx.tensor([[110, 111], [112, 113], [114, 115], [116, 117]])],
-        [Nx.tensor([[12], [13], [14], [15]]), Nx.tensor([[110, 111], [112, 113], [114, 115], [116, 117]])]
+        [
+          Nx.tensor([[0], [1], [2], [3]]),
+          Nx.tensor([[100, 101], [102, 103], [104, 105], [106, 107]])
+        ],
+        [
+          Nx.tensor([[4], [5], [6], [7]]),
+          Nx.tensor([[100, 101], [102, 103], [104, 105], [106, 107]])
+        ],
+        [
+          Nx.tensor([[8], [9], [10], [11]]),
+          Nx.tensor([[110, 111], [112, 113], [114, 115], [116, 117]])
+        ],
+        [
+          Nx.tensor([[12], [13], [14], [15]]),
+          Nx.tensor([[110, 111], [112, 113], [114, 115], [116, 117]])
+        ]
       ]
 
       assert [result0, result1, result2, result3] =
-        EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+               EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
 
       # After gathering, devices 0 and 1 have the same data as each other, likewise for devices 2 and 3
       assert_equal(result0, Nx.tensor([[100, 105], [103, 108], [106, 111], [109, 114]]))
