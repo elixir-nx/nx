@@ -349,7 +349,12 @@ defmodule Nx.FloatingTest do
     test "pretty printing" do
       # Zeroes
       assert Nx.tensor([0.0], type: :f8) |> inspect() =~ "[0.0]"
-      assert Nx.tensor([-0.0], type: :f8) |> inspect() =~ "[-0.0]"
+
+      if +0.0 === -0.0 do
+        assert Nx.tensor([-0.0], type: :f8) |> inspect() =~ "[0.0]"
+      else
+        assert Nx.tensor([-0.0], type: :f8) |> inspect() =~ "[-0.0]"
+      end
 
       # Infinity
       assert Nx.tensor([:infinity], type: :f8) |> inspect() =~ "[Inf]"
@@ -399,7 +404,12 @@ defmodule Nx.FloatingTest do
     test "pretty printing" do
       # Zeroes
       assert Nx.tensor([0.0], type: :bf16) |> inspect() =~ "[0.0]"
-      assert Nx.tensor([-0.0], type: :bf16) |> inspect() =~ "[-0.0]"
+
+      if +0.0 === -0.0 do
+        assert Nx.tensor([-0.0], type: :bf16) |> inspect() =~ "[0.0]"
+      else
+        assert Nx.tensor([-0.0], type: :bf16) |> inspect() =~ "[-0.0]"
+      end
 
       # Infinity
       assert Nx.tensor([:infinity], type: :bf16) |> inspect() =~ "[Inf]"
