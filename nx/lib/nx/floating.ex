@@ -209,8 +209,16 @@ defmodule Nx.Floating do
   # E4M3FN: 1 sign, 4 exponent (bias 7), 3 mantissa
   # Max value: 448.0 (0x7E), Min value: -448.0 (0xFE)
   def dump_f8_e4m3fn(0), do: <<0b0000_0000>>
-  def dump_f8_e4m3fn(+0.0), do: <<0b0000_0000>>
-  def dump_f8_e4m3fn(-0.0), do: <<0b1000_0000>>
+
+  if +0.0 === -0.0 do
+    # OTP versions <= 28.0 have a bug where +0.0 === -0.0,
+    # so we need to special-case it to avoid compiler errors
+    # related to the +0.0 clause shadowing the -0.0 clause
+    def dump_f8_e4m3fn(x) when x == 0.0, do: <<0b0000_0000>>
+  else
+    def dump_f8_e4m3fn(+0.0), do: <<0b0000_0000>>
+    def dump_f8_e4m3fn(-0.0), do: <<0b1000_0000>>
+  end
 
   def dump_f8_e4m3fn(x) when is_number(x) do
     # Clamp to E4M3FN range and convert
