@@ -156,7 +156,7 @@ defmodule Nx.FloatingTest do
       {0x7F, :nan},
       # Negative values (sign bit = 1)
       # Denormalized (exponent = 0): value = -mantissa/8 * 2^-6
-      {0x80, -0.0},
+      if(+0.0 === -0.0, do: {0x80, 0.0}, else: {0x80, -0.0}),
       {0x81, -0.001953125},
       {0x82, -0.00390625},
       {0x83, -0.005859375},
