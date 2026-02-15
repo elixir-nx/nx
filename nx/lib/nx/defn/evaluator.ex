@@ -126,7 +126,7 @@ defmodule Nx.Defn.Evaluator do
     [initial, _arg, pred, block] = args
     {_, cache} = composite_compute_cache(initial, state, cache)
     {_, while_cache} = init_compute_cache({pred, block}, state)
-    {tensor, Map.put(cache, [:while | id], while_cache)}
+    {[initial, pred, block, while_cache], cache}
   end
 
   defp compute_cache(:optional, %{data: %Expr{args: args, id: id}} = tensor, state, cache) do
@@ -366,11 +366,9 @@ defmodule Nx.Defn.Evaluator do
     {res, caches}
   end
 
-  defp eval_apply(:while, %{data: %Expr{args: args, id: id}}, _ans, state, caches) do
-    [initial, _arg, condition, block] = args
+  defp eval_apply(:while, [initial, pred, block, while_cache], _ans, state, caches) do
     {initial, caches} = composite_eval(initial, state, caches)
-    {while_cache, caches} = pop_cache!(caches, [:while | id])
-    {while(initial, condition, block, state, [while_cache]), caches}
+    {while(initial, pred, block, state, [while_cache]), caches}
   end
 
   defp eval_apply(:token, %{data: %Expr{args: [token], id: id}}, _ans, state, caches) do
