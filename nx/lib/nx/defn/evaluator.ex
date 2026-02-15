@@ -106,9 +106,8 @@ defmodule Nx.Defn.Evaluator do
               %{cache | id => {:args, counter + 1, args_or_placeholder}}
 
             %{} ->
-              {args, cache} =
-                compute_cache(op, tensor, state, Map.put(cache, id, {:args, 1, nil}))
-
+              cache = Map.put(cache, id, {:args, 1, nil})
+              {args, cache} = compute_cache(op, tensor, state, cache)
               Map.update!(cache, id, fn {:args, counter, _} -> {:args, counter, args} end)
           end
       end
@@ -148,16 +147,6 @@ defmodule Nx.Defn.Evaluator do
       end
 
     {tensor, Map.put(cache, [:optional | id], optional_expr_cache)}
-  end
-
-  defp compute_cache(
-         :runtime_call,
-         %{data: %Expr{args: [expr, opts, fun, out]}} = tensor,
-         state,
-         cache
-       ) do
-    {_expr, cache} = composite_compute_cache(expr, state, cache)
-    {tensor, cache}
   end
 
   defp compute_cache(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, cache) do
@@ -411,15 +400,9 @@ defmodule Nx.Defn.Evaluator do
     end
   end
 
-  defp eval_apply(
-         :runtime_call,
-         %{data: %Expr{args: [tensor_expr, static_argument, fun, out_template]}},
-         _ans,
-         state,
-         caches
-       ) do
-    {tensor_value, caches} = composite_eval(tensor_expr, state, caches)
-    result = fun.(tensor_value, static_argument)
+  defp eval_apply(:runtime_call, [expr, static, fun, out_template], _ans, state, caches) do
+    {tensor_value, caches} = composite_eval(expr, state, caches)
+    result = fun.(tensor_value, static)
 
     if not Nx.compatible?(out_template, result) do
       raise "expected the runtime_call function to match the given output template"
