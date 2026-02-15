@@ -117,9 +117,9 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp compute_cache(:fun, %{data: %Expr{id: id, args: args}} = tensor, state, cache) do
-    [_args, expr, _mfa] = args
-    {_, fun_cache} = init_compute_cache(expr, state)
-    {tensor, Map.put(cache, [:fun | id], fun_cache)}
+    [args, expr, _mfa] = args
+    {expr, expr_cache} = init_compute_cache(expr, state)
+    {[length(args), expr, expr_cache], cache}
   end
 
   defp compute_cache(:while, %{data: %Expr{args: args, id: id}} = tensor, state, cache) do
@@ -332,22 +332,20 @@ defmodule Nx.Defn.Evaluator do
     eval(expr, state, caches)
   end
 
-  defp eval_apply(:fun, %{data: %Expr{args: [args, expr, _mfa], id: id}}, _ans, state, caches) do
-    {fun_cache, caches} = pop_cache!(caches, [:fun | id])
-
+  defp eval_apply(:fun, [length, expr, expr_cache], _ans, state, caches) do
     fun =
-      case length(args) do
+      case length do
         1 ->
           fn arg1 ->
             params = [fn -> Nx.to_tensor(arg1) end]
-            {result, _} = composite_eval(expr, %{state | params: params}, [fun_cache])
+            {result, _} = composite_eval(expr, %{state | params: params}, [expr_cache])
             result
           end
 
         2 ->
           fn arg1, arg2 ->
             params = [fn -> Nx.to_tensor(arg1) end, fn -> Nx.to_tensor(arg2) end]
-            {result, _} = composite_eval(expr, %{state | params: params}, [fun_cache])
+            {result, _} = composite_eval(expr, %{state | params: params}, [expr_cache])
             result
           end
       end
