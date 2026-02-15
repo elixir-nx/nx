@@ -73,7 +73,6 @@ defmodule Nx.MixProject do
         "guides/advanced/vectorization.livemd",
         "guides/advanced/aggregation.livemd",
         "guides/advanced/automatic_differentiation.livemd",
-        "guides/advanced/backend_comparison.livemd",
         "guides/advanced/complex_fft.livemd",
         "guides/exercises/exercises-1-20.livemd"
       ],
