@@ -116,13 +116,13 @@ defmodule Nx.Defn.Evaluator do
     {put_in(tensor.data.args, nil), cache}
   end
 
-  defp compute_cache(:fun, %{data: %Expr{id: id, args: args}} = tensor, state, cache) do
+  defp compute_cache(:fun, %{data: %Expr{id: id, args: args}}, state, cache) do
     [args, expr, _mfa] = args
     {expr, expr_cache} = init_compute_cache(expr, state)
     {[length(args), expr, expr_cache], cache}
   end
 
-  defp compute_cache(:while, %{data: %Expr{args: args, id: id}} = tensor, state, cache) do
+  defp compute_cache(:while, %{data: %Expr{args: args, id: id}}, state, cache) do
     [initial, _arg, pred, block] = args
     {_, cache} = composite_compute_cache(initial, state, cache)
     {_, while_cache} = init_compute_cache({pred, block}, state)
@@ -160,12 +160,11 @@ defmodule Nx.Defn.Evaluator do
     {tensor, cache}
   end
 
-  defp compute_cache(:cond, %{data: %Expr{args: [clauses, last], id: id}} = tensor, state, cache) do
+  defp compute_cache(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, cache) do
     %{parent_ids: parent_ids, current_ids: current_ids} = state
 
-    {[last | clauses], clause_caches} =
-      [last | clauses]
-      |> Enum.map(fn clause ->
+    clause_caches =
+      Enum.map([last | clauses], fn clause ->
         state = %{
           state
           | parent_ids: current_ids,
@@ -174,11 +173,10 @@ defmodule Nx.Defn.Evaluator do
 
         composite_compute_cache(clause, state, %{})
       end)
-      |> Enum.unzip()
 
     # Now, for each cache, split the IDs from parents from the actual cond IDs
     {[last_cache | clauses_cache], {all_ids, cache}} =
-      Enum.map_reduce(clause_caches, {%{}, cache}, fn clause_cache, seen_ids_cache ->
+      Enum.map_reduce(clause_caches, {%{}, cache}, fn {clause, clause_cache}, seen_ids_cache ->
         {clause_cache, seen_ids_cache} =
           Enum.flat_map_reduce(clause_cache, seen_ids_cache, fn
             {id, %_{} = tensor}, {seen_ids, cache} ->
@@ -201,11 +199,10 @@ defmodule Nx.Defn.Evaluator do
               {[{id, counter}], seen_ids_cache}
           end)
 
-        {Map.new(clause_cache), seen_ids_cache}
+        {{clause, Map.new(clause_cache)}, seen_ids_cache}
       end)
 
-    cache = Map.put(cache, [:cond | id], {clauses_cache, last_cache, Map.keys(all_ids)})
-    {tensor, cache}
+    {[clauses_cache, last_cache, Map.keys(all_ids)], cache}
   end
 
   defp compute_cache(:token, %{data: %Expr{args: [token], id: id}} = tensor, state, cache) do
@@ -353,14 +350,8 @@ defmodule Nx.Defn.Evaluator do
     {fun, caches}
   end
 
-  defp eval_apply(:cond, %{data: %Expr{args: [clauses, last], id: id}}, _ans, state, caches) do
-    {{clauses_cache, last_cache, parent_ids}, caches} = pop_cache!(caches, [:cond | id])
-
-    {chosen, chosen_cache} =
-      clauses
-      |> Enum.zip(clauses_cache)
-      |> cond_clause(last, last_cache, state, caches)
-
+  defp eval_apply(:cond, [clauses_cache, last_cache, parent_ids], _ans, state, caches) do
+    {chosen, chosen_cache} = cond_clause(clauses_cache, last_cache, state, caches)
     {res, [_ | caches]} = composite_eval(chosen, state, chosen_cache)
     caches = Enum.reduce(parent_ids, caches, &decrement_parents(&2, &1))
     {res, caches}
@@ -486,15 +477,15 @@ defmodule Nx.Defn.Evaluator do
     end
   end
 
-  defp cond_clause([{{pred, body}, cache} | clauses], last, last_cache, state, caches) do
+  defp cond_clause([{{pred, body}, cache} | clauses], last_cache, state, caches) do
     {pred, pred_caches} = eval(pred, state, [cache | caches])
 
     if Nx.to_number(pred) != 0,
       do: {body, pred_caches},
-      else: cond_clause(clauses, last, last_cache, state, caches)
+      else: cond_clause(clauses, last_cache, state, caches)
   end
 
-  defp cond_clause([], last, last_cache, _state, caches) do
+  defp cond_clause([], {last, last_cache}, _state, caches) do
     {last, [last_cache | caches]}
   end
 
