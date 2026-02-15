@@ -123,8 +123,8 @@ defmodule Nx.Defn.Evaluator do
 
   defp compute_cache(:while, %{data: %Expr{args: args}}, state, cache) do
     [initial, _arg, pred, block] = args
-    {_, cache} = composite_compute_cache(initial, state, cache)
-    {_, while_cache} = init_compute_cache({pred, block}, state)
+    {initial, cache} = composite_compute_cache(initial, state, cache)
+    {{pred, block}, while_cache} = init_compute_cache({pred, block}, state)
     {[initial, pred, block, while_cache], cache}
   end
 
@@ -244,11 +244,6 @@ defmodule Nx.Defn.Evaluator do
   defp eval(%Nx.Tensor{data: %Expr{op: :constant, args: [constant]}} = ans, _state, caches) do
     {backend, backend_options} = Nx.default_backend()
     {backend.constant(ans, constant, backend_options), caches}
-  end
-
-  # TODO: We can likely remove this node in the future
-  defp eval(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _meta]}}, state, caches) do
-    composite_eval(expr, state, caches)
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, [cache | caches]) do
