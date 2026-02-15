@@ -115,13 +115,13 @@ defmodule Nx.Defn.Evaluator do
     {put_in(tensor.data.args, nil), cache}
   end
 
-  defp compute_cache(:fun, %{data: %Expr{id: id, args: args}}, state, cache) do
+  defp compute_cache(:fun, %{data: %Expr{args: args}}, state, cache) do
     [args, expr, _mfa] = args
     {expr, expr_cache} = init_compute_cache(expr, state)
     {[length(args), expr, expr_cache], cache}
   end
 
-  defp compute_cache(:while, %{data: %Expr{args: args, id: id}}, state, cache) do
+  defp compute_cache(:while, %{data: %Expr{args: args}}, state, cache) do
     [initial, _arg, pred, block] = args
     {_, cache} = composite_compute_cache(initial, state, cache)
     {_, while_cache} = init_compute_cache({pred, block}, state)
@@ -149,7 +149,7 @@ defmodule Nx.Defn.Evaluator do
     {tensor, Map.put(cache, [:optional | id], optional_expr_cache)}
   end
 
-  defp compute_cache(:cond, %{data: %Expr{args: [clauses, last], id: id}}, state, cache) do
+  defp compute_cache(:cond, %{data: %Expr{args: [clauses, last]}}, state, cache) do
     %{parent_ids: parent_ids, current_ids: current_ids} = state
 
     clause_caches =
@@ -194,27 +194,29 @@ defmodule Nx.Defn.Evaluator do
     {[clauses_cache, last_cache, Map.keys(all_ids)], cache}
   end
 
-  defp compute_cache(:token, %{data: %Expr{args: [token], id: id}} = tensor, state, cache) do
+  defp compute_cache(:token, %{data: %Expr{args: [token]}}, state, cache) do
     hooks = state.hooks
 
-    {hooks, cache} =
-      Enum.map_reduce(token.hooks, cache, fn
+    {exprs_hooks, cache} =
+      Enum.flat_map_reduce(token.hooks, cache, fn
         %{callback: callback, expr: expr, name: name}, cache ->
           hook_fun = hooks[name] || callback
 
           cond do
             hook_fun ->
-              {hook_fun, composite_compute_cache(expr, state, cache) |> elem(1)}
+              {expr, cache} = composite_compute_cache(expr, state, cache)
+              {[{expr, hook_fun}], cache}
 
             Tree.has_hooks?(expr, hooks) ->
-              {true, composite_compute_cache(expr, state, cache) |> elem(1)}
+              {expr, cache} = composite_compute_cache(expr, state, cache)
+              {[{expr, nil}], cache}
 
             true ->
-              {false, cache}
+              {[], cache}
           end
       end)
 
-    {tensor, Map.put(cache, [:token | id], hooks)}
+    {[exprs_hooks], cache}
   end
 
   defp compute_cache(_op, tensor, state, cache) do
@@ -351,24 +353,12 @@ defmodule Nx.Defn.Evaluator do
     {while(initial, pred, block, state, [while_cache]), caches}
   end
 
-  defp eval_apply(:token, %{data: %Expr{args: [token], id: id}}, _ans, state, caches) do
-    {hooks, caches} = pop_cache!(caches, [:token | id])
-
+  defp eval_apply(:token, [exprs_hooks], _ans, state, caches) do
     caches =
-      token.hooks
-      |> Enum.zip(hooks)
-      |> List.foldr(caches, fn
-        {%{expr: expr}, true}, caches ->
-          {_expr, caches} = composite_eval(expr, state, caches)
-          caches
-
-        {%{}, false}, caches ->
-          caches
-
-        {%{expr: expr}, hook_fun}, caches ->
-          {res, caches} = composite_eval(expr, state, caches)
-          hook_fun.(res)
-          caches
+      List.foldr(exprs_hooks, caches, fn {expr, hook_fun}, caches ->
+        {res, caches} = composite_eval(expr, state, caches)
+        hook_fun && hook_fun.(res)
+        caches
       end)
 
     {{}, caches}
