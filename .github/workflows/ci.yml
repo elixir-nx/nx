@@ -80,7 +80,7 @@ jobs:
       - name: Set conditional variables
         working-directory: .
         run: |
-          if [ "${{ needs.detect-changes.outputs.nx-changed }}" = "true" ] && [ "${{ matrix.working_directory }}" = "nx" ]; then
+          if [ "${{ needs.detect-changes.outputs.nx-changed }}" = "true" ]; then
             echo "should_run=true" >> $GITHUB_ENV
           elif [ "${{ needs.detect-changes.outputs.exla-changed }}" = "true" ] && [ "${{ matrix.working_directory }}" = "exla" ]; then
             echo "should_run=true" >> $GITHUB_ENV
