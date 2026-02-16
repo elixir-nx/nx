@@ -168,8 +168,6 @@ defmodule EXLA.Defn.APITest do
   end
 
   describe "hooks" do
-    require Logger
-
     defp send_to_self(tag) do
       parent = self()
       fn value -> send(parent, {tag, value}) end
