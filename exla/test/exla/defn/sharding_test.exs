@@ -1,7 +1,7 @@
 defmodule EXLA.Defn.ShardingTest do
   use EXLA.Case, async: true
 
-  alias Nx.Defn.Mesh
+  alias Nx.Mesh
 
   describe "MLIR module generation with sharding" do
     @moduletag :multi_device

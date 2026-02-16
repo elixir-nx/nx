@@ -139,7 +139,7 @@ defmodule EXLA.MLIR.Module do
   @doc """
   Adds a device mesh definition to the module.
   """
-  def add_mesh(%__MODULE__{ref: module_ref}, %Nx.Defn.Mesh{name: name, shape: shape}) do
+  def add_mesh(%__MODULE__{ref: module_ref}, %Nx.Mesh{name: name, shape: shape}) do
     # Convert shape tuple to axes list with auto-generated names
     # E.g., {2, 4} -> [{"axis_0", 2}, {"axis_1", 4}]
     axes =

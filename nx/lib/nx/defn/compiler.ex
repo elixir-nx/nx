@@ -76,7 +76,7 @@ defmodule Nx.Defn.Compiler do
   @doc """
   Callback for compilation of a parallelizable computation.
 
-  Its main purpose is to compile a function for a given `Nx.Defn.Mesh`.
+  Its main purpose is to compile a function for a given `Nx.Mesh`.
 
   Receives an opaque `key` used for caching, a `mesh`, a list of `vars`
   in `[vars]`, the function `fun` which builds a defn expression, a list of
@@ -88,7 +88,7 @@ defmodule Nx.Defn.Compiler do
   """
   @callback __shard_jit__(
               key :: term,
-              mesh :: Nx.Defn.Shard.Mesh.t(),
+              mesh :: Nx.Mesh.t(),
               [vars],
               fun :: (vars -> Nx.Container.t()),
               args_list :: [[(-> Nx.Tensor.t())]],

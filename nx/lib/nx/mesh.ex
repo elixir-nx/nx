@@ -1,4 +1,4 @@
-defmodule Nx.Defn.Mesh do
+defmodule Nx.Mesh do
   @moduledoc """
   A mesh is a named collection of devices arranged in a logical shape.
 

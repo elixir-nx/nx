@@ -41,14 +41,14 @@ defmodule EXLA.MLIR.Function do
   Sets sharding annotation for a function argument.
 
   Accepts either:
-  - A tuple `{mesh, dim_shardings}` where mesh is a %Nx.Defn.Mesh{} and dim_shardings
+  - A tuple `{mesh, dim_shardings}` where mesh is a %Nx.Mesh{} and dim_shardings
     is a list of lists of axis indices (e.g., `[[0], [1]]`)
   - The old %EXLA.Sharding.TensorSharding{} struct (for backwards compatibility)
   """
   def set_arg_sharding(
         %Function{ref: ref},
         arg_index,
-        {%Nx.Defn.Mesh{name: mesh_name}, dim_shardings}
+        {%Nx.Mesh{name: mesh_name}, dim_shardings}
       ) do
     # Convert axis indices to axis names
     # E.g., [[0], [1]] -> [["axis_0"], ["axis_1"]]

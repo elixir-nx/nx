@@ -108,7 +108,7 @@ defmodule Nx.MixProject do
         Structs: [
           Nx.Batch,
           Nx.Heatmap,
-          Nx.Defn.Mesh,
+          Nx.Mesh,
           Nx.Pointer,
           Nx.Tensor
         ],

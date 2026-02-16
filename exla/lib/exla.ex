@@ -321,7 +321,7 @@ defmodule EXLA do
 
   ## Example
 
-      mesh = %Nx.Defn.Mesh{name: "mesh", shape: {2}}
+      mesh = %Nx.Mesh{name: "mesh", shape: {2}}
       fun = EXLA.shard_jit(&Nx.add(&1, &1), mesh, input_shardings: [%{0 => [0]}])
       # Pass sharded inputs (one arglist per partition)
       fun.([[Nx.tensor([1, 2, 3])], [Nx.tensor([4, 5, 6])]])
@@ -344,7 +344,7 @@ defmodule EXLA do
 
   Also accepts the same options as `compile/3`.
   """
-  def shard_jit(function, %Nx.Defn.Mesh{} = mesh, options \\ []) when is_list(options) do
+  def shard_jit(function, %Nx.Mesh{} = mesh, options \\ []) when is_list(options) do
     Nx.Defn.shard_jit(function, mesh, Keyword.put(options, :compiler, EXLA))
   end
 
