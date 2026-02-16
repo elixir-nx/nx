@@ -38,6 +38,7 @@ defmodule EXLA.MemoryTrackingTest do
 
     # Deallocate first buffer
     DeviceBuffer.deallocate(buffer)
+    :erlang.garbage_collect(self())
 
     # Check memory decreased
     stats = Client.get_memory_statistics(client)
@@ -82,6 +83,7 @@ defmodule EXLA.MemoryTrackingTest do
     assert peak_after_alloc >= baseline_allocated + 16
 
     DeviceBuffer.deallocate(buffer)
+    :erlang.garbage_collect(self())
 
     # Reset peak memory
     Client.reset_peak_memory(client)
