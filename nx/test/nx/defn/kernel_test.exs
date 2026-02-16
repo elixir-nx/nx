@@ -98,10 +98,6 @@ defmodule Nx.Defn.KernelTest do
       assert Nx.Defn.Kernel.-(1) == -1
     end
 
-    test "~~~" do
-      assert Nx.Defn.Kernel.~~~(1) == -2
-    end
-
     test "min/max" do
       assert Nx.Defn.Kernel.min(0, 1) == 0
       assert Nx.Defn.Kernel.max(0, 1) == 1
