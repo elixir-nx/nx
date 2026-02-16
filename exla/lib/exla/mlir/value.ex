@@ -1044,7 +1044,7 @@ defmodule EXLA.MLIR.Value do
 
   defp native_to_big(binary) do
     size = byte_size(binary) * 8
-    <<value::size(size)-native>> = binary
+    <<value::size(^size)-native>> = binary
     <<value::size(size)-big>>
   end
 

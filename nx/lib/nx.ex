@@ -8472,9 +8472,6 @@ defmodule Nx do
   @doc """
   Applies bitwise not to each element in the tensor.
 
-  If you're using `Nx.Defn.defn/2`, you can use the `~~~` operator
-  in place of this function: `~~~tensor`.
-
   ## Examples
 
       iex> Nx.bitwise_not(1)
@@ -9401,7 +9398,7 @@ defmodule Nx do
         dims_to_reshape = List.to_tuple(dims_to_reshape)
         weights = reshape(weights, dims_to_reshape)
         dims_to_swap = for i <- 0..(tuple_size(dims_to_reshape) - 1), do: i
-        checked_axes = if is_list(axes), do: Enum.at(axes, 0), else: axes
+        checked_axes = Enum.at(axes, 0)
         dims_to_swap = swap_last(dims_to_swap, checked_axes)
 
         transpose(weights, axes: dims_to_swap)

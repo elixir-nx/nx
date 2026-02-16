@@ -24,10 +24,10 @@ defmodule EXLA.DeviceBuffer do
     data =
       case typespec.type do
         {:u, size} when size in [2, 4] ->
-          for <<x::native-size(size) <- data>>, into: <<>>, do: <<x::native-8>>
+          for <<x::native-size(^size) <- data>>, into: <<>>, do: <<x::native-8>>
 
         {:s, size} when size in [2, 4] ->
-          for <<x::native-signed-size(size) <- data>>, into: <<>>, do: <<x::native-signed-8>>
+          for <<x::native-signed-size(^size) <- data>>, into: <<>>, do: <<x::native-signed-8>>
 
         _ ->
           data

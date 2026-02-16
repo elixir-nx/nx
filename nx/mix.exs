@@ -8,7 +8,7 @@ defmodule Nx.MixProject do
     [
       app: :nx,
       version: @version,
-      elixir: "~> 1.16",
+      elixir: "~> 1.17",
       elixirc_paths: elixirc_paths(Mix.env()),
       deps: deps(),
       docs: docs(),

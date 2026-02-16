@@ -642,20 +642,6 @@ defmodule Nx.Defn.Kernel do
   def left ||| right, do: Nx.bitwise_or(left, right)
 
   @doc """
-  Element-wise bitwise not operation.
-
-  Only integer tensors are supported.
-  It delegates to `Nx.bitwise_not/1`.
-
-  ## Examples
-
-      defn bnot(a), do: ~~~a
-
-  """
-  def ~~~tensor when is_number(tensor), do: Bitwise.~~~(tensor)
-  def ~~~tensor, do: Nx.bitwise_not(tensor)
-
-  @doc """
   Element-wise left shift operation.
 
   Only integer tensors are supported.

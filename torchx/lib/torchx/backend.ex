@@ -280,15 +280,15 @@ defmodule Torchx.Backend do
 
   defp maybe_pad_binary(bin, {:u, size}) when size in [16, 32] do
     double_size = size * 2
-    for <<x::native-size(size) <- bin>>, into: <<>>, do: <<x::native-size(double_size)>>
+    for <<x::native-size(^size) <- bin>>, into: <<>>, do: <<x::native-size(double_size)>>
   end
 
   defp maybe_pad_binary(bin, {:u, size}) when size in [2, 4] do
-    for <<x::native-size(size) <- bin>>, into: <<>>, do: <<x::native-8>>
+    for <<x::native-size(^size) <- bin>>, into: <<>>, do: <<x::native-8>>
   end
 
   defp maybe_pad_binary(bin, {:s, size}) when size in [2, 4] do
-    for <<x::native-signed-size(size) <- bin>>, into: <<>>, do: <<x::native-signed-8>>
+    for <<x::native-signed-size(^size) <- bin>>, into: <<>>, do: <<x::native-signed-8>>
   end
 
   defp maybe_pad_binary(bin, _), do: bin
@@ -1855,7 +1855,7 @@ defmodule Torchx.Backend do
     output_size = 2 * bit
 
     blob =
-      for <<x::size(bit)-signed-native <- to_binary(tensor, Nx.size(tensor))>>,
+      for <<x::size(^bit)-signed-native <- to_binary(tensor, Nx.size(tensor))>>,
         into: <<>>,
         do: <<x::size(output_size)-signed-native>>
 
