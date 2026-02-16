@@ -599,39 +599,36 @@ defmodule Nx.LinAlgTest do
       )
     end
 
-    # TODO: Remove conditional once we require 1.16+
-    if Version.match?(System.version(), "~> 1.16") do
-      test "computes eigenvalues and eigenvectors for a Hermitian matrix case" do
-        # Hermitian matrix
-        t =
-          Nx.tensor([
-            [1, Complex.new(0, 2), 2],
-            [Complex.new(0, -2), -3, Complex.new(0, 2)],
-            [2, Complex.new(0, -2), 1]
-          ])
+    test "computes eigenvalues and eigenvectors for a Hermitian matrix case" do
+      # Hermitian matrix
+      t =
+        Nx.tensor([
+          [1, Complex.new(0, 2), 2],
+          [Complex.new(0, -2), -3, Complex.new(0, 2)],
+          [2, Complex.new(0, -2), 1]
+        ])
 
-        assert {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t, max_iter: 10_000)
+      assert {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t, max_iter: 10_000)
 
-        # Eigenvalues
-        assert eigenvals ==
-                 Nx.tensor([
-                   Complex.new(-5, 0),
-                   Complex.new(3, 0),
-                   Complex.new(0.9999998807907104, 0)
-                 ])
+      # Eigenvalues
+      assert eigenvals ==
+               Nx.tensor([
+                 Complex.new(-5, 0),
+                 Complex.new(3, 0),
+                 Complex.new(0.9999998807907104, 0)
+               ])
 
-        # Eigenvectors
-        assert_all_close(
-          eigenvecs,
-          ~MAT[
+      # Eigenvectors
+      assert_all_close(
+        eigenvecs,
+        ~MAT[
             0.0000-0.4082i 0.7071-0.0i 00.5773-0.0000i
             0.8164-0.0000i 0.0000+0.0i 00.0000-0.5773i
             0.0000+0.4082i 0.7071-0.0i -0.5773-0.0000i
           ],
-          atol: 1.0e-3,
-          rtol: 1.0e-3
-        )
-      end
+        atol: 1.0e-3,
+        rtol: 1.0e-3
+      )
     end
 
     test "properties for matrices with different eigenvalues" do
