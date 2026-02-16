@@ -8472,9 +8472,6 @@ defmodule Nx do
   @doc """
   Applies bitwise not to each element in the tensor.
 
-  If you're using `Nx.Defn.defn/2`, you can use the `~~~` operator
-  in place of this function: `~~~tensor`.
-
   ## Examples
 
       iex> Nx.bitwise_not(1)

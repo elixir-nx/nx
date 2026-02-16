@@ -749,12 +749,6 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :negate, args: [_]}} = unary_minus(1)
     end
 
-    defn(unary_bnot(a), do: ~~~a)
-
-    test "~~~" do
-      assert %T{data: %Expr{op: :bitwise_not, args: [_]}} = unary_bnot(1)
-    end
-
     defn(equality(a, b), do: a == b)
 
     test "==" do
