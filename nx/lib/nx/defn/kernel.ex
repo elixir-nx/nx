@@ -1655,19 +1655,6 @@ defmodule Nx.Defn.Kernel do
     end
   end
 
-  @doc """
-  Gathers tensors along a specified axis across an `Nx.Mesh`.
-
-  Requires a backend that supports collective operations.
-
-  ## Options
-
-  Refer to the chosen backend/compiler documentation for supported options.
-  """
-  def all_gather(tensor, opts) do
-    Nx.Defn.Expr.all_gather(tensor, opts)
-  end
-
   @definitions (Module.definitions_in(__MODULE__, :def) ++
                   Module.definitions_in(__MODULE__, :defmacro)) --
                  [

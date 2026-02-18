@@ -64,36 +64,6 @@ defmodule EXLA.MLIR.Value do
     end
   end
 
-  def all_gather(
-        [%Value{function: func} | _] = operands,
-        typespec,
-        all_gather_dim,
-        replica_groups,
-        use_global_device_ids,
-        channel_id \\ nil
-      ) do
-    result_types = typespecs_to_mlir_types([typespec])
-
-    num_groups = length(replica_groups)
-    group_size = if num_groups > 0, do: length(hd(replica_groups)), else: 0
-    flat_groups = List.flatten(replica_groups)
-
-    attributes = [
-      all_gather_dim: attr_i64(all_gather_dim),
-      replica_groups: attr_dense_elements(flat_groups, {:s, 64}, {num_groups, group_size}),
-      use_global_device_ids: attr_boolean(use_global_device_ids)
-    ]
-
-    attributes =
-      if channel_id do
-        Keyword.put(attributes, :channel_id, attr_i64(channel_id))
-      else
-        attributes
-      end
-
-    op(func, "stablehlo.all_gather", operands, result_types, attributes: attributes)
-  end
-
   defp compare_and_return_bool(func, lhs, rhs, typespec, direction, total_order? \\ false) do
     %{type: lhs_type} = get_typespec(lhs)
     %{type: rhs_type} = get_typespec(rhs)
