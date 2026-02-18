@@ -623,6 +623,76 @@ defmodule EXLA.Defn.ShardingTest do
 
       assert is_binary(result.mlir_module)
     end
+
+    test "handles feathering in windowed operations" do
+      fun = fn x -> Nx.window_sum(x, {2, 2}, strides: [2, 2]) end
+
+      mesh = %Mesh{name: "mesh", shape: {2, 2}}
+      input_shardings = [%{0 => [0], 1 => [1]}]
+
+      # full tensor is [[1, 2, 3, 4], [5, 6, 7, 8]]
+      args = [
+        [Nx.tensor([[1, 2]])],
+        [Nx.tensor([[3, 4]])],
+        [Nx.tensor([[5, 6]])],
+        [Nx.tensor([[7, 8]])]
+      ]
+
+      [result0, result1, result2, result3] =
+        EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      assert_equal(result0, Nx.tensor([[14]]))
+      assert result0.data.buffer.device_id == 0
+
+      assert_equal(result1, Nx.tensor([[22]]))
+      assert result1.data.buffer.device_id == 1
+
+      assert_equal(result2, Nx.tensor([[14]]))
+      assert result2.data.buffer.device_id == 2
+
+      assert_equal(result3, Nx.tensor([[22]]))
+      assert result3.data.buffer.device_id == 3
+
+      # Strides 1, 1, padding: :same
+      # Results should be the same as sharding the output of this call
+      # because the shape is equally divisible
+      fun = fn x -> Nx.window_sum(x, {2, 2}, strides: [1, 1], padding: :same) end
+
+      [result0, result1, result2, result3] =
+        EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      assert_equal(result0, Nx.tensor([[14, 18]]))
+      assert result0.data.buffer.device_id == 0
+
+      assert_equal(result1, Nx.tensor([[22, 12]]))
+      assert result1.data.buffer.device_id == 1
+
+      assert_equal(result2, Nx.tensor([[11, 13]]))
+      assert result2.data.buffer.device_id == 2
+
+      assert_equal(result3, Nx.tensor([[15, 8]]))
+      assert result3.data.buffer.device_id == 3
+
+      # Strides 1, 1, padding: :valid
+      # Results will be replicated to all devices
+      # because the shape is not equally divisible by the sharding
+      fun = fn x -> Nx.window_sum(x, {2, 2}, strides: [1, 1], padding: :valid) end
+
+      [result0, result1, result2, result3] =
+        EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      assert_equal(result0, Nx.tensor([[14, 18, 22]]))
+      assert result0.data.buffer.device_id == 0
+
+      assert_equal(result1, Nx.tensor([[14, 18, 22]]))
+      assert result1.data.buffer.device_id == 1
+
+      assert_equal(result2, Nx.tensor([[14, 18, 22]]))
+      assert result2.data.buffer.device_id == 2
+
+      assert_equal(result3, Nx.tensor([[14, 18, 22]]))
+      assert result3.data.buffer.device_id == 3
+    end
   end
 
   describe "MLIR output format" do
@@ -836,120 +906,6 @@ defmodule EXLA.Defn.ShardingTest do
           assert result.data.buffer.device_id == i
         end)
       end
-    end
-  end
-
-  describe "all_gather" do
-    @moduletag :multi_device
-    test "in all dims results in the same tensor in all devices" do
-      fun = fn x, y ->
-        Nx.add(x, y)
-        |> Nx.Defn.Kernel.all_gather(all_gather_dim: 0, replica_groups: [[0]])
-        |> Nx.Defn.Kernel.all_gather(all_gather_dim: 1, replica_groups: [[0]])
-      end
-
-      mesh = %Mesh{name: "mesh", shape: {2, 2}}
-      # First arg: 0..15 (8x2), shard dim 0 on mesh axis 0, dim 1 on mesh axis 1
-      # Second arg: 100..115 (8x2), same sharding — makes sharded results easy to read
-      input_shardings = [%{0 => [0], 1 => [1]}, %{0 => [0], 1 => [1]}]
-
-      # For mesh {2, 2}, 4 partitions. Each gets {4, 1}. Full 8x2 row-major: [[0,1],[2,3],...,[14,15]].
-      # Partition (axis_0, axis_1): (0,0)=rows 0-3 col 0, (0,1)=rows 0-3 col 1, (1,0)=rows 4-7 col 0, (1,1)=rows 4-7 col 1.
-      # So partition 0 gets (0,0),(1,0),(2,0),(3,0) = 0,2,4,6; partition 1 gets (0,1),(1,1),... = 1,3,5,7; etc.
-      args = [
-        # partition 0: rows 0–3 col 0 -> 0,2,4,6 and 100,102,104,106
-        [Nx.tensor([[0], [2], [4], [6]]), Nx.tensor([[100], [102], [104], [106]])],
-        # partition 1: rows 0–3 col 1 -> 1,3,5,7 and 101,103,105,107
-        [Nx.tensor([[1], [3], [5], [7]]), Nx.tensor([[101], [103], [105], [107]])],
-        # partition 2: rows 4–7 col 0 -> 8,10,12,14 and 108,110,112,114
-        [Nx.tensor([[8], [10], [12], [14]]), Nx.tensor([[108], [110], [112], [114]])],
-        # partition 3: rows 4–7 col 1 -> 9,11,13,15 and 109,111,113,115
-        [Nx.tensor([[9], [11], [13], [15]]), Nx.tensor([[109], [111], [113], [115]])]
-      ]
-
-      result = EXLA.to_mlir_module(fun, args, mesh: mesh, input_shardings: input_shardings)
-
-      expected_mlir = """
-      module {
-        sdy.mesh @mesh = <["axis_0"=2, "axis_1"=2]>
-        func.func public @main(%arg0: tensor<8x2xi32> {sdy.sharding = #sdy.sharding<@mesh, [{"axis_0", ?}p0, {"axis_1", ?}p0]>}, %arg1: tensor<8x2xi32> {sdy.sharding = #sdy.sharding<@mesh, [{"axis_0", ?}p0, {"axis_1", ?}p0]>}) -> tensor<8x2xi32> {
-          %0 = stablehlo.add %arg0, %arg1 : tensor<8x2xi32>
-          %1 = "stablehlo.all_gather"(%0) <{all_gather_dim = 0 : i64, replica_groups = dense<0> : tensor<1x1xi64>}> : (tensor<8x2xi32>) -> tensor<8x2xi32>
-          %2 = "stablehlo.all_gather"(%1) <{all_gather_dim = 1 : i64, replica_groups = dense<0> : tensor<1x1xi64>}> : (tensor<8x2xi32>) -> tensor<8x2xi32>
-          return %2 : tensor<8x2xi32>
-        }
-      }
-      """
-
-      assert expected_mlir == result.mlir_module
-
-      results = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
-
-      assert length(results) == 4
-
-      # After all_gather: full first arg 0..15 + full second 100..115 -> 100,102,...,130
-      expected_result =
-        Nx.tensor([
-          [100, 102],
-          [104, 106],
-          [108, 110],
-          [112, 114],
-          [116, 118],
-          [120, 122],
-          [124, 126],
-          [128, 130]
-        ])
-
-      Enum.with_index(results, fn result, i ->
-        assert_equal(result, expected_result)
-        assert result.data.buffer.device_id == i
-      end)
-    end
-
-    @moduletag :multi_device
-    test "can return partially sharded results" do
-      fun = fn x, y ->
-        x
-        |> Nx.Defn.Kernel.all_gather(all_gather_dim: 1, replica_groups: [[0]])
-        |> Nx.add(y)
-      end
-
-      mesh = %Mesh{name: "mesh", shape: {2, 2}}
-      # Inputs sharded on both axes
-      input_shardings = [%{0 => [0], 1 => [1]}, %{0 => [0]}]
-
-      # Logical x: 8x2, y: 8x2. Each partition gets {4, 1} of x and {4, 2} of y
-      args = [
-        [
-          Nx.tensor([[0], [1], [2], [3]]),
-          Nx.tensor([[100, 101], [102, 103], [104, 105], [106, 107]])
-        ],
-        [
-          Nx.tensor([[4], [5], [6], [7]]),
-          Nx.tensor([[100, 101], [102, 103], [104, 105], [106, 107]])
-        ],
-        [
-          Nx.tensor([[8], [9], [10], [11]]),
-          Nx.tensor([[110, 111], [112, 113], [114, 115], [116, 117]])
-        ],
-        [
-          Nx.tensor([[12], [13], [14], [15]]),
-          Nx.tensor([[110, 111], [112, 113], [114, 115], [116, 117]])
-        ]
-      ]
-
-      assert [result0, result1, result2, result3] =
-               EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
-
-      # After gathering, devices 0 and 1 have the same data as each other, likewise for devices 2 and 3
-      assert_equal(result0, Nx.tensor([[100, 105], [103, 108], [106, 111], [109, 114]]))
-      assert result0.data.buffer.device_id == 0
-      assert_equal(result0, Nx.tensor([[100, 105], [103, 108], [106, 111], [109, 114]]))
-      assert result1.data.buffer.device_id == 1
-      assert_equal(result2, Nx.tensor([[118, 123], [121, 126], [124, 129], [127, 132]]))
-      assert result2.data.buffer.device_id == 2
-      assert_equal(result3, Nx.tensor([[118, 123], [121, 126], [124, 129], [127, 132]]))
-      assert result3.data.buffer.device_id == 3
     end
   end
 end

@@ -218,18 +218,11 @@ defmodule EXLA do
 
   ## Sharding
 
-  EXLA supports sharding, which is a way to partition a computation across multiple devices.
-  There are a number of collective operations that are supported by sharding.
-
-  ### [`all_gather`](https://openxla.org/stablehlo/spec#all_gather)
-
-  #### Options
-
-    * `:all_gather_dim` - the dimension along which to gather
-    * `:replica_groups` - 2D list defining how replicas are grouped
-    * `:use_global_device_ids` - Whether to use global device IDs (default: `false`)
-    * `:channel_id` - Channel ID for communication (optional)
-
+  EXLA supports sharding by default through the `EXLA.shard_jit/3` function
+  and XLA's automatic SPMD partitioning. This means that you can write a function
+  and provide input sharding information along with sharded inputs, and the function
+  will automatically propagate and partition the computation across the devices
+  in a best-effort approach.
   """
 
   @behaviour Nx.Defn.Compiler

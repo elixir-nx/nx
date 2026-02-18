@@ -55,6 +55,11 @@ defmodule Nx.Defn.Evaluator do
     end
   end
 
+  @impl true
+  def __shard_jit__(_key, _mesh, _vars, _fun, _args_list, _opts) do
+    raise "sharding is not supported by Nx.Defn.Evaluator"
+  end
+
   defp apply_output({result, _cache}, output) do
     {result, []} =
       Composite.traverse(result, output, fn result, [out | acc] ->
