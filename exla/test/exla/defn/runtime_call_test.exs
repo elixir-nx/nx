@@ -9,7 +9,7 @@ defmodule EXLA.Defn.RuntimeCallTest do
     :ok
   end
 
-  defp add_offset_callback(t, opts) do
+  deftransform add_offset_callback(t, opts) do
     t
     |> Nx.as_type(:f32)
     |> Nx.add(opts[:offset])
@@ -18,7 +18,7 @@ defmodule EXLA.Defn.RuntimeCallTest do
   defn add_offset(x) do
     out = %{x | type: Nx.Type.to_floating(x.type)}
 
-    Nx.runtime_call(out, x, [offset: 10.0], &add_offset_callback/2)
+    Nx.runtime_call(out, x, fn t -> add_offset_callback(t, offset: 10.0) end)
   end
 
   test "runtime_call with single output" do
@@ -98,7 +98,7 @@ defmodule EXLA.Defn.RuntimeCallTest do
     assert_equal(sub, Nx.subtract(x, y))
   end
 
-  def add_and_subtract_with_opts_callback({x, y}, {ref, pid}) do
+  deftransform add_and_subtract_with_opts_callback({x, y}, {ref, pid}) do
     send(pid, {:add_and_subtract_with_opts, ref})
     {Nx.add(x, y), Nx.subtract(x, y)}
   end
@@ -107,8 +107,7 @@ defmodule EXLA.Defn.RuntimeCallTest do
     Nx.runtime_call(
       {x, x},
       {x, y},
-      {opts[:ref], opts[:pid]},
-      &add_and_subtract_with_opts_callback/2
+      &add_and_subtract_with_opts_callback(&1, {opts[:ref], opts[:pid]})
     )
   end
 
