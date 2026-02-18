@@ -623,6 +623,73 @@ defmodule EXLA.Defn.ShardingTest do
 
       assert is_binary(result.mlir_module)
     end
+
+    test "handles feathering in windowed operations" do
+      fun = fn x -> Nx.window_sum(x, {2, 2}, strides: [2, 2]) end
+
+      mesh = %Mesh{name: "mesh", shape: {2, 2}}
+      input_shardings = [%{0 => [0], 1 => [1]}]
+
+      # full tensor is [[1, 2, 3, 4], [5, 6, 7, 8]]
+      args = [
+        [Nx.tensor([[1, 2]])],
+        [Nx.tensor([[3, 4]])],
+        [Nx.tensor([[5, 6]])],
+        [Nx.tensor([[7, 8]])],
+      ]
+
+      [result0, result1, result2, result3] = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      assert_equal(result0, Nx.tensor([[14]]))
+      assert result0.data.buffer.device_id == 0
+
+      assert_equal(result1, Nx.tensor([[22]]))
+      assert result1.data.buffer.device_id == 1
+
+      assert_equal(result2, Nx.tensor([[14]]))
+      assert result2.data.buffer.device_id == 2
+
+      assert_equal(result3, Nx.tensor([[22]]))
+      assert result3.data.buffer.device_id == 3
+
+      # Strides 1, 1, padding: :same
+      # Results should be the same as sharding the output of this call
+      # because the shape is equally divisible
+      fun = fn x -> Nx.window_sum(x, {2, 2}, strides: [1, 1], padding: :same) end
+
+      [result0, result1, result2, result3] = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      assert_equal(result0, Nx.tensor([[14, 18]]))
+      assert result0.data.buffer.device_id == 0
+
+      assert_equal(result1, Nx.tensor([[22, 12]]))
+      assert result1.data.buffer.device_id == 1
+
+      assert_equal(result2, Nx.tensor([[11, 13]]))
+      assert result2.data.buffer.device_id == 2
+
+      assert_equal(result3, Nx.tensor([[15, 8]]))
+      assert result3.data.buffer.device_id == 3
+
+      # Strides 1, 1, padding: :valid
+      # Results will be replicated to all devices
+      # because the shape is not equally divisible by the sharding
+      fun = fn x -> Nx.window_sum(x, {2, 2}, strides: [1, 1], padding: :valid) end
+
+      [result0, result1, result2, result3] = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+
+      assert_equal(result0, Nx.tensor([[14, 18, 22]]))
+      assert result0.data.buffer.device_id == 0
+
+      assert_equal(result1, Nx.tensor([[14, 18, 22]]))
+      assert result1.data.buffer.device_id == 1
+
+      assert_equal(result2, Nx.tensor([[14, 18, 22]]))
+      assert result2.data.buffer.device_id == 2
+
+      assert_equal(result3, Nx.tensor([[14, 18, 22]]))
+      assert result3.data.buffer.device_id == 3
+    end
   end
 
   describe "MLIR output format" do
