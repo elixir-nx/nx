@@ -55,12 +55,12 @@ defmodule EXLA.CallbackServer do
   node, which the EXLA compiler also encodes into the host `CustomCall` so the
   native side can reference the right callback.
   """
-  @spec register(pid(), term(), fun(), Nx.t() | tuple(), term(), [term()]) :: :ok
-  def register(callback_server_pid, id, fun, out_template, arg_template, static_arguments)
+  @spec register(pid(), term(), fun(), Nx.t() | tuple(), term()) :: :ok
+  def register(callback_server_pid, id, fun, out_template, arg_template)
       when is_function(fun) do
     GenServer.call(
       callback_server_pid,
-      {:register, id, fun, out_template, arg_template, static_arguments}
+      {:register, id, fun, out_template, arg_template}
     )
   end
 
@@ -85,11 +85,11 @@ defmodule EXLA.CallbackServer do
 
   @impl true
   def handle_call(
-        {:register, id, fun, out_template, arg_template, opts},
+        {:register, id, fun, out_template, arg_template},
         _from,
         %__MODULE__{} = state
       ) do
-    state = put_in(state.callbacks[id], {fun, out_template, arg_template, opts})
+    state = put_in(state.callbacks[id], {fun, out_template, arg_template})
     {:reply, :ok, state}
   end
 
@@ -98,10 +98,10 @@ defmodule EXLA.CallbackServer do
     reply_payload =
       try do
         case Map.fetch(state.callbacks, callback_id) do
-          {:ok, {fun, out_template, arg_template, opts}} ->
+          {:ok, {fun, out_template, arg_template}} ->
             args_spec
             |> decode_args(arg_template)
-            |> run_callback(fun, opts, out_template)
+            |> run_callback(fun, out_template)
             |> encode_reply()
 
           :error ->
@@ -132,12 +132,12 @@ defmodule EXLA.CallbackServer do
 
   ## Internal helpers
 
-  defp run_callback({:error, reason}, _fun, _opts, _out_template), do: {:error, reason}
+  defp run_callback({:error, reason}, _fun, _out_template), do: {:error, reason}
 
-  defp run_callback({:ok, tensor_args}, fun, opts, out_template) do
+  defp run_callback({:ok, tensor_args}, fun, out_template) do
     result =
       try do
-        fun.(tensor_args, opts)
+        fun.(tensor_args)
       rescue
         exception ->
           {:error, {:exception, exception, __STACKTRACE__}}

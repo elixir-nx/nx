@@ -193,11 +193,11 @@ defmodule Nx.Defn.Tree do
   end
 
   def apply_args(%T{data: %Expr{op: :runtime_call, args: args}}, _type, acc, fun) do
-    [tensor_expr, callback_opts, callback, out_template] = args
+    [tensor_expr, callback, out_template] = args
 
     {tensor_expr, acc} = Composite.traverse(tensor_expr, acc, fun)
 
-    {[tensor_expr, callback_opts, callback, out_template], acc}
+    {[tensor_expr, callback, out_template], acc}
   end
 
   def apply_args(%T{data: %Expr{op: :token, args: [token]}}, _type, acc, fun) do

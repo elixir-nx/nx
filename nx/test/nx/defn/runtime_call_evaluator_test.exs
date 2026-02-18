@@ -10,8 +10,8 @@ defmodule Nx.Defn.RuntimeCallEvaluatorTest do
   defn add_offset(x) do
     out = %{x | type: Nx.Type.to_floating(x.type)}
 
-    Nx.runtime_call(out, x, [offset: 10.0], fn t, opts ->
-      Nx.add(Nx.as_type(t, :f32), opts[:offset])
+    Nx.runtime_call(out, x, fn t ->
+      Nx.add(Nx.as_type(t, :f32), 10.0)
     end)
   end
 
