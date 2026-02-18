@@ -635,10 +635,11 @@ defmodule EXLA.Defn.ShardingTest do
         [Nx.tensor([[1, 2]])],
         [Nx.tensor([[3, 4]])],
         [Nx.tensor([[5, 6]])],
-        [Nx.tensor([[7, 8]])],
+        [Nx.tensor([[7, 8]])]
       ]
 
-      [result0, result1, result2, result3] = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+      [result0, result1, result2, result3] =
+        EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
 
       assert_equal(result0, Nx.tensor([[14]]))
       assert result0.data.buffer.device_id == 0
@@ -657,7 +658,8 @@ defmodule EXLA.Defn.ShardingTest do
       # because the shape is equally divisible
       fun = fn x -> Nx.window_sum(x, {2, 2}, strides: [1, 1], padding: :same) end
 
-      [result0, result1, result2, result3] = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+      [result0, result1, result2, result3] =
+        EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
 
       assert_equal(result0, Nx.tensor([[14, 18]]))
       assert result0.data.buffer.device_id == 0
@@ -676,7 +678,8 @@ defmodule EXLA.Defn.ShardingTest do
       # because the shape is not equally divisible by the sharding
       fun = fn x -> Nx.window_sum(x, {2, 2}, strides: [1, 1], padding: :valid) end
 
-      [result0, result1, result2, result3] = EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
+      [result0, result1, result2, result3] =
+        EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
 
       assert_equal(result0, Nx.tensor([[14, 18, 22]]))
       assert result0.data.buffer.device_id == 0
