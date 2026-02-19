@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.11.0 (2026-02-19)
+
+### Enhancements
+
+  * [Nx] Add FP8 E4M3FN support and add `Nx.Floating` module
+  * [Nx] Support `Nx.runtime_call/3`
+  * [Nx.Defn] Improve evaluator performance when evaluation closure is sent across processes (such as in `Nx.Serving`)
+  * [Nx.Defn] Add `Nx.Mesh` and `Nx.Defn.shard_jit/3` for execution over multiple devices
+
+### Bug fixes
+
+  * [Nx] Implement Ryu algorithm for proper pretty printing of all floating points
+  * [Nx] Fix gradient for `Nx.sort/2`
+
 ## v0.10.0 (2025-06-17)
 
 ### Enhancements

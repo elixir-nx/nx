@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.11.0 (2026-02-10)
+
+  * Update to latest Nx
+  * Add FP8 E4M3FN support
+  * Fix device handling in window scatter functions
+  * Improve MPS (Apple Silicon) support
+
 ## v0.10.2 (2025-10-27)
 
   * Allow Libtorch version 2.9

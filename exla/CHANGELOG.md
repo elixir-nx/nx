@@ -1,11 +1,21 @@
 # Changelog
 
+## v0.11.0 (2026-02-19)
+
+### Enhancements
+
+  * Update to latest Nx
+  * Update XLA to latest and improve compilation times by bundling custom functions as part of XLA
+  * Add `EXLA.MemoryTracking`
+  * Add FP8 E4M3FN support
+  * Add `EXLA.shard_jit/3` for execution over multiple devices
+
 ## v0.10.0 (2025-06-17)
 
 ### Enhancements
 
   * NIFs now use Fine for wrapping the C++ code
-  * Nx.to_pointer/2 and Nx.from_pointer/5 now raise on errors
+  * `Nx.to_pointer/2` and `Nx.from_pointer/5` now raise on errors
   * LU decomposition is now supported in all devices
   * New EXLA_CPU_ONLY compilation flag for disabling the CUDA-specific EXLA files
   * Update XLA to latest version

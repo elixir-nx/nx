@@ -2,13 +2,14 @@ defmodule Nx.Defn.Graph do
   @moduledoc """
   A module for splitting `Nx.Defn.Expr` into stages.
 
-  This module is used to split an `Nx.Defn.Expr` into stages, which are then
-  executed in a chain.
+  This module is used to split an `Nx.Defn.Expr` into stages,
+  which are then executed in a chain.
 
   `split/2` and `t:Stage.t()` describe how to split
   the graph and what's the expected result.
 
-  `run/2` executes the given graph against the provided arguments in a sequential manner.
+  `run/2` executes the given graph against the provided arguments
+  in a sequential manner.
   """
   alias Nx.Defn.Composite
 
