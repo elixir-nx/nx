@@ -1408,6 +1408,32 @@ defmodule Nx.Defn.GradTest do
       assert_all_close(lhs, rhs)
     end
 
+    defn grad_sum_window_max_same_large_kernel(t) do
+      grad(
+        t,
+        &Nx.sum(Nx.window_max(&1, {1, 3, 3, 1}, padding: :same, strides: [1, 2, 2, 1]))
+      )
+    end
+
+    test "works with window max, same padding, large kernel relative to input (#1675)" do
+      # This reproduces the crash from issue #1675 where :same padding
+      # with a large kernel causes negative padding in select_and_scatter
+      x = Nx.iota({1, 4, 4, 1}, type: {:f, 32})
+      lhs = grad_sum_window_max_same_large_kernel(x)
+
+      # With kernel=3, stride=2, same padding on 4x4:
+      # output is 2x2, max positions are at bottom-right of each window
+      # Gradient should be 1.0 at the max positions, 0.0 elsewhere
+      assert Nx.shape(lhs) == {1, 4, 4, 1}
+      assert Nx.type(lhs) == {:f, 32}
+
+      # All gradient values should be finite (no NaN/Inf)
+      assert Nx.all(Nx.is_nan(lhs) |> Nx.logical_not()) == Nx.tensor(1, type: {:u, 8})
+
+      # Gradient should sum to the number of output elements (each max gets grad 1.0)
+      assert_all_close(Nx.sum(lhs), Nx.tensor(4.0))
+    end
+
     defn grad_sum_window_min_cos(t) do
       grad(
         t,
