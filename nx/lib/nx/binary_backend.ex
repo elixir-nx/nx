@@ -1588,6 +1588,10 @@ defmodule Nx.BinaryBackend do
 
     init_value = scalar_to_number(init_value)
 
+    # Extract low-padding per dimension for coordinate adjustment
+    low_pads = Enum.map(padding, fn {lo, _hi} -> lo end)
+    original_dims = Tuple.to_list(Nx.shape(t))
+
     %T{shape: padded_shape, type: {_, size} = type} =
       tensor = Nx.pad(t, init_value, Enum.map(padding, &tuple_append(&1, 0)))
 
@@ -1625,10 +1629,17 @@ defmodule Nx.BinaryBackend do
         offset_from_anchor =
           flattened_index_to_offset(index, Tuple.to_list(window_dimensions), 0, [])
 
-        absolute_index =
+        # Compute absolute index in padded space, then adjust back to
+        # original (unpadded) coordinates by subtracting low-padding
+        padded_absolute_index =
           anchor
           |> Enum.zip(offset_from_anchor)
           |> Enum.map(fn {x, y} -> x + y end)
+
+        absolute_index =
+          padded_absolute_index
+          |> Enum.zip(low_pads)
+          |> Enum.map(fn {idx, lo} -> idx - lo end)
 
         source_consumed = i * source_size
 
@@ -1638,6 +1649,13 @@ defmodule Nx.BinaryBackend do
         source_value = binary_to_number(from_source, source_type)
         {source_value, absolute_index}
       end
+
+    # Filter out indices that fall in the padding region (outside original tensor bounds)
+    output_windows =
+      Enum.filter(output_windows, fn {_value, index} ->
+        Enum.zip(index, original_dims)
+        |> Enum.all?(fn {idx, dim} -> idx >= 0 and idx < dim end)
+      end)
 
     output_weighted_shape = weighted_shape(output_shape, output_size)
 
