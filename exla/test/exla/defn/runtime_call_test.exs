@@ -31,7 +31,7 @@ defmodule EXLA.Defn.RuntimeCallTest do
 
   @tag :cuda_required
   test "runtime_call with CUDA client (device↔host copies)" do
-    x = Nx.iota({5})
+    x = Nx.iota({5}, backend: {EXLA.Backend, client: :cuda})
     y = EXLA.jit_apply(&add_offset/1, [x], client: :cuda)
 
     expected = Nx.add(Nx.as_type(x, :f32), 10.0)
