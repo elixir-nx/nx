@@ -2,6 +2,7 @@
 
 #include "runtime_callback_bridge.h"
 
+#include <cuda.h>
 #include <cuda_runtime.h>
 #include <cstring>
 #include <vector>
@@ -14,11 +15,10 @@ namespace ffi = xla::ffi;
 namespace {
 
 ffi::Error exla_runtime_callback_cuda_impl(
-    ffi::PlatformStream<CUstream> stream_ctx, ffi::RemainingArgs args,
+    CUstream stream, ffi::RemainingArgs args,
     ffi::Span<const int64_t> callback_id_words, uint64_t callback_id_size,
     ffi::Span<const int64_t> callback_server_pid_words,
     uint64_t callback_server_pid_size, ffi::RemainingRets rets) {
-  CUstream stream = stream_ctx.stream;
 
   // Keep host buffers alive for the duration of the callback.
   std::vector<std::vector<uint8_t>> host_input_buffers;

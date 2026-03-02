@@ -29,6 +29,15 @@ defmodule EXLA.Defn.RuntimeCallTest do
     assert_equal(y, expected)
   end
 
+  @tag :cuda_required
+  test "runtime_call with CUDA client (device↔host copies)" do
+    x = Nx.iota({5})
+    y = EXLA.jit_apply(&add_offset/1, [x], client: :cuda)
+
+    expected = Nx.add(Nx.as_type(x, :f32), 10.0)
+    assert_equal(y, expected)
+  end
+
   defn split_and_sum(x) do
     fx = Nx.as_type(x, :f32)
 
