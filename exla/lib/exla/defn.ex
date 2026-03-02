@@ -799,32 +799,31 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-      :runtime_call,
-      %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template]}} = expr,
-      %{client: %EXLA.Client{platform: :cuda}, callback_server_pid: callback_server_pid} =
-        state,
-      cache
-    ) do
+         :runtime_call,
+         %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template]}} = expr,
+         %{client: %EXLA.Client{platform: :cuda}, callback_server_pid: callback_server_pid} =
+           state,
+         cache
+       ) do
+    tensor_exprs = Composite.flatten_list([tensor_expr])
 
-  tensor_exprs = Composite.flatten_list([tensor_expr])
+    {arg_values, cache} =
+      Enum.map_reduce(tensor_exprs, cache, fn arg, cache ->
+        recur_operator(arg, state, cache) |> unwrap_single_tensor!()
+      end)
 
-  {arg_values, cache} =
-    Enum.map_reduce(tensor_exprs, cache, fn arg, cache ->
-      recur_operator(arg, state, cache) |> unwrap_single_tensor!()
-    end)
+    arg_template = Nx.to_template(tensor_expr)
 
-  arg_template = Nx.to_template(tensor_expr)
+    :ok =
+      EXLA.CallbackServer.register(callback_server_pid, id, fun, out_template, arg_template)
 
-  :ok =
-    EXLA.CallbackServer.register(callback_server_pid, id, fun, out_template, arg_template)
+    typespecs = container_to_typespecs(out_template)
 
-  typespecs = container_to_typespecs(out_template)
+    results =
+      Value.runtime_call(arg_values, typespecs, callback_server_pid, id)
 
-  results =
-    Value.runtime_call(arg_values, typespecs, callback_server_pid, id)
-
-  {wrap_tuple_result(results, expr), cache}
-end
+    {wrap_tuple_result(results, expr), cache}
+  end
 
   defp cached_recur_operator(
          :runtime_call,
