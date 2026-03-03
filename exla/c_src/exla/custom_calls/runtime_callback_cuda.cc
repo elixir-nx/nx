@@ -1,9 +1,5 @@
-#ifdef CUDA_ENABLED
-
 #include "runtime_callback_bridge.h"
 
-#include <cuda.h>
-#include <cuda_runtime.h>
 #include <cstring>
 #include <vector>
 
@@ -11,6 +7,11 @@
 #include "xla/ffi/ffi_api.h"
 
 namespace ffi = xla::ffi;
+
+#ifdef CUDA_ENABLED
+
+#include <cuda.h>
+#include <cuda_runtime.h>
 
 namespace {
 
@@ -127,6 +128,32 @@ XLA_FFI_DEFINE_HANDLER_SYMBOL(
     exla_runtime_callback_cuda, exla_runtime_callback_cuda_impl,
     ffi::Ffi::Bind()
         .Ctx<ffi::PlatformStream<CUstream>>()
+        .RemainingArgs()
+        .Attr<ffi::Span<const int64_t>>("callback_id")
+        .Attr<uint64_t>("callback_id_size")
+        .Attr<ffi::Span<const int64_t>>("callback_server_pid")
+        .Attr<uint64_t>("callback_server_pid_size")
+        .RemainingRets());
+
+XLA_FFI_REGISTER_HANDLER(ffi::GetXlaFfiApi(), "exla_runtime_callback", "CUDA",
+                         exla_runtime_callback_cuda);
+
+#else  // CUDA_ENABLED
+
+namespace {
+
+ffi::Error exla_runtime_callback_cuda_stub(
+    ffi::RemainingArgs, ffi::Span<const int64_t>, uint64_t,
+    ffi::Span<const int64_t>, uint64_t, ffi::RemainingRets) {
+  return ffi::Error(ffi::ErrorCode::kUnimplemented,
+                    "EXLA was not compiled with CUDA support");
+}
+
+}  // namespace
+
+XLA_FFI_DEFINE_HANDLER_SYMBOL(
+    exla_runtime_callback_cuda, exla_runtime_callback_cuda_stub,
+    ffi::Ffi::Bind()
         .RemainingArgs()
         .Attr<ffi::Span<const int64_t>>("callback_id")
         .Attr<uint64_t>("callback_id_size")
