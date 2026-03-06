@@ -1,5 +1,6 @@
 defmodule EXLA.Defn.RuntimeCallTest do
   use ExUnit.Case, async: true
+  import ExUnit.CaptureLog
   import Nx.Defn
   import Nx.Testing
 
@@ -27,6 +28,32 @@ defmodule EXLA.Defn.RuntimeCallTest do
 
     expected = Nx.add(Nx.as_type(x, :f32), 10.0)
     assert_equal(y, expected)
+  end
+
+  @tag :cuda_required
+  test "runtime_call with CUDA client (device↔host copies)" do
+    x = Nx.iota({5}, backend: {EXLA.Backend, client: :cuda})
+    y = EXLA.jit_apply(&add_offset/1, [x], client: :cuda)
+
+    expected = Nx.add(Nx.as_type(x, :f32), 10.0)
+    assert_equal(y, expected)
+  end
+
+  test "runtime_call with CUDA client fails when CUDA not available" do
+    if Map.has_key?(EXLA.Client.get_supported_platforms(), :cuda) do
+      # CUDA is available: this test is a no-op, cuda_required covers this case.
+      :ok
+    else
+      x = Nx.iota({5})
+
+      # The BEAM must not crash or segfault: the failure must be a clean exit.
+      capture_log(fn ->
+        assert {{%RuntimeError{message: message}, _stacktrace}, _call_info} =
+                 catch_exit(EXLA.jit_apply(&add_offset/1, [x], client: :cuda))
+
+        assert message =~ "cuda"
+      end)
+    end
   end
 
   defn split_and_sum(x) do

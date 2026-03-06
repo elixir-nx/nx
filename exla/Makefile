@@ -58,6 +58,7 @@ $(info EXLA_CPU_ONLY is not set, checking for nvcc availability)
 $(info CUDA is available.)
 		NVCC = nvcc
 		NVCCFLAGS = -Xcompiler "$(CFLAGS)" -DCUDA_ENABLED
+		CFLAGS += -DCUDA_ENABLED -I$(dir $(NVCC_RESULT))../include
 	else
 $(info CUDA is not available.)
 	endif
@@ -94,7 +95,6 @@ SOURCES = $(EXLA_DIR)/exla.cc $(EXLA_DIR)/exla_client.cc $(EXLA_DIR)/exla_mlir.c
 SOURCES += $(wildcard $(EXLA_DIR)/custom_calls/*.cc)
 HEADERS = $(EXLA_DIR)/exla_mlir.h $(EXLA_DIR)/custom_calls/runtime_callback_bridge.h $(EXLA_DIR)/exla_client.h $(EXLA_DIR)/exla_nif_util.h $(EXLA_DIR)/exla_log_sink.h $(EXLA_DIR)/ipc.h
 OBJECTS = $(patsubst $(EXLA_DIR)/%.cc,$(EXLA_CACHE_OBJ_DIR)/%.o,$(SOURCES)) $(EXLA_CACHE_OBJ_DIR)/exla_cuda.o
-
 
 $(EXLA_CACHE_OBJ_DIR)/exla_cuda.o: $(EXLA_DIR)/exla_cuda.cc $(EXLA_DIR)/exla_cuda.h
 	@ mkdir -p $(EXLA_CACHE_OBJ_DIR)

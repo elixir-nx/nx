@@ -800,14 +800,41 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :runtime_call,
+         %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template]}} = expr,
+         %{client: %EXLA.Client{platform: :cuda}, callback_server_pid: callback_server_pid} =
+           state,
+         cache
+       ) do
+    tensor_exprs = Composite.flatten_list([tensor_expr])
+
+    {arg_values, cache} =
+      Enum.map_reduce(tensor_exprs, cache, fn arg, cache ->
+        recur_operator(arg, state, cache) |> unwrap_single_tensor!()
+      end)
+
+    arg_template = Nx.to_template(tensor_expr)
+
+    :ok =
+      EXLA.CallbackServer.register(callback_server_pid, id, fun, out_template, arg_template)
+
+    typespecs = container_to_typespecs(out_template)
+
+    results =
+      Value.runtime_call(arg_values, typespecs, callback_server_pid, id)
+
+    {wrap_tuple_result(results, expr), cache}
+  end
+
+  defp cached_recur_operator(
+         :runtime_call,
          _expr,
          %{client: %EXLA.Client{platform: platform}},
          _cache
        ) do
     raise """
-    Nx.runtime_call/3 is currently only supported for EXLA CPU (platform: :host),
+    Nx.runtime_call/3 is currently only supported for EXLA CPU (platform: :host) and CUDA (platform: :cuda),
     but the active EXLA client is configured for platform #{inspect(platform)}.
-    Please run on the :host client or wait for future segmentation-based support.
+    Please run on the :host or :cuda client or wait for future segmentation-based support.
     """
   end
 
