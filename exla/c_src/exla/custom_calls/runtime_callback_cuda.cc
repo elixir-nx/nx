@@ -146,7 +146,7 @@ ffi::Error exla_runtime_callback_cuda_stub(
     ffi::RemainingArgs, ffi::Span<const int64_t>, uint64_t,
     ffi::Span<const int64_t>, uint64_t, ffi::RemainingRets) {
   return ffi::Error(ffi::ErrorCode::kUnimplemented,
-                    "EXLA was not compiled with CUDA support");
+                    "EXLA was not compiled with CUDA support. This error means your EXLA compilation is out of sync with your libexla.so NIF.");
 }
 
 }  // namespace
