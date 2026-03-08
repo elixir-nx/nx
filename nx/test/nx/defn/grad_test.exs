@@ -1715,6 +1715,183 @@ defmodule Nx.Defn.GradTest do
 
       assert_all_close(lhs, rhs)
     end
+
+    defn grad_sum_window_sum_dilations_strides_same(t) do
+      grad(
+        t,
+        &Nx.sum(
+          Nx.window_sum(&1, {1, 2, 2, 1},
+            padding: :same,
+            strides: [1, 2, 2, 1],
+            window_dilations: [1, 2, 2, 1]
+          )
+        )
+      )
+    end
+
+    test "works with window sum, dilations + strides + same padding" do
+      x = Nx.iota({1, 4, 4, 1}, type: {:f, 32})
+      lhs = grad_sum_window_sum_dilations_strides_same(x)
+
+      rhs =
+        Nx.tensor([
+          [
+            [[0.0], [0.0], [0.0], [0.0]],
+            [[0.0], [4.0], [0.0], [2.0]],
+            [[0.0], [0.0], [0.0], [0.0]],
+            [[0.0], [2.0], [0.0], [1.0]]
+          ]
+        ])
+
+      assert_all_close(lhs, rhs)
+    end
+
+    defn grad_sum_window_sum_dilations_explicit(t) do
+      grad(
+        t,
+        &Nx.sum(
+          Nx.window_sum(&1, {1, 2, 2, 1},
+            padding: [{0, 0}, {1, 0}, {0, 1}, {0, 0}],
+            strides: [1, 2, 2, 1],
+            window_dilations: [1, 2, 2, 1]
+          )
+        )
+      )
+    end
+
+    test "works with window sum, dilations + strides + explicit padding" do
+      x = Nx.iota({1, 4, 4, 1}, type: {:f, 32})
+      lhs = grad_sum_window_sum_dilations_explicit(x)
+
+      rhs =
+        Nx.tensor([
+          [
+            [[0.0], [0.0], [0.0], [0.0]],
+            [[2.0], [0.0], [4.0], [0.0]],
+            [[0.0], [0.0], [0.0], [0.0]],
+            [[1.0], [0.0], [2.0], [0.0]]
+          ]
+        ])
+
+      assert_all_close(lhs, rhs)
+    end
+
+    defn grad_sum_window_sum_1d_dilations(t) do
+      grad(t, &Nx.sum(Nx.window_sum(&1, {3}, padding: :same, window_dilations: [2])))
+    end
+
+    test "works with window sum, 1D dilations gradient" do
+      x = Nx.iota({8}, type: {:f, 32})
+      lhs = grad_sum_window_sum_1d_dilations(x)
+      rhs = Nx.tensor([2.0, 2.0, 3.0, 3.0, 3.0, 3.0, 2.0, 2.0])
+      assert_all_close(lhs, rhs)
+    end
+
+    defn grad_sum_window_max_same_f64(t) do
+      grad(
+        t,
+        &Nx.sum(Nx.window_max(&1, {1, 3, 3, 1}, padding: :same, strides: [1, 2, 2, 1]))
+      )
+    end
+
+    test "works with window max, same padding, f64 precision" do
+      x = Nx.iota({1, 4, 4, 1}, type: {:f, 64})
+      lhs = grad_sum_window_max_same_f64(x)
+
+      rhs =
+        Nx.tensor(
+          [
+            [
+              [[0.0], [0.0], [0.0], [0.0]],
+              [[0.0], [1.0], [0.0], [1.0]],
+              [[0.0], [0.0], [0.0], [0.0]],
+              [[0.0], [1.0], [0.0], [1.0]]
+            ]
+          ],
+          type: {:f, 32}
+        )
+
+      assert_all_close(lhs, rhs)
+    end
+
+    test "works with window max, same padding, bf16 precision" do
+      x = Nx.iota({1, 4, 4, 1}, type: {:bf, 16})
+      lhs = grad_sum_window_max_same_large_kernel(x)
+
+      rhs =
+        Nx.tensor(
+          [
+            [
+              [[0.0], [0.0], [0.0], [0.0]],
+              [[0.0], [1.0], [0.0], [1.0]],
+              [[0.0], [0.0], [0.0], [0.0]],
+              [[0.0], [1.0], [0.0], [1.0]]
+            ]
+          ],
+          type: {:f, 32}
+        )
+
+      assert_all_close(lhs, rhs)
+    end
+
+    defn grad_sum_pad_symmetric(t) do
+      grad(t, &Nx.sum(Nx.pad(&1, 0.0, [{1, 1, 0}, {2, 2, 0}])))
+    end
+
+    test "works with pad, symmetric padding gradient" do
+      x = Nx.iota({3, 4}, type: {:f, 32})
+      lhs = grad_sum_pad_symmetric(x)
+      rhs = Nx.broadcast(1.0, {3, 4})
+      assert_all_close(lhs, rhs)
+    end
+
+    defn grad_sum_pad_interior(t) do
+      grad(t, &Nx.sum(Nx.pad(&1, 0.0, [{0, 0, 1}, {0, 0, 2}])))
+    end
+
+    test "works with pad, interior padding gradient" do
+      x = Nx.iota({3, 4}, type: {:f, 32})
+      lhs = grad_sum_pad_interior(x)
+      rhs = Nx.broadcast(1.0, {3, 4})
+      assert_all_close(lhs, rhs)
+    end
+
+    defn grad_sum_cos_pad(t) do
+      grad(t, &Nx.sum(Nx.cos(Nx.pad(&1, 0.0, [{1, 1, 0}, {1, 1, 0}]))))
+    end
+
+    test "works with pad + cos composition gradient" do
+      x = Nx.iota({3, 4}, type: {:f, 32})
+      lhs = grad_sum_cos_pad(x)
+
+      rhs =
+        Nx.tensor([
+          [-0.0, -0.84147096, -0.9092974, -0.14112],
+          [0.7568025, 0.9589243, 0.2794155, -0.6569866],
+          [-0.98935825, -0.4121185, 0.5440211, 0.9999902]
+        ])
+
+      assert_all_close(lhs, rhs)
+    end
+
+    defn grad_sum_conv_dilated_same(t) do
+      kernel = Nx.broadcast(1.0, {1, 1, 3, 3})
+      grad(t, &Nx.sum(Nx.conv(&1, kernel, padding: :same, kernel_dilation: [2, 2])))
+    end
+
+    test "works with conv gradient, dilated kernel + same padding" do
+      x = Nx.iota({1, 1, 4, 4}, type: {:f, 32})
+      lhs = grad_sum_conv_dilated_same(x)
+      rhs = Nx.broadcast(4.0, {1, 1, 4, 4})
+      assert_all_close(lhs, rhs)
+    end
+
+    test "works with conv gradient, dilated kernel + same padding, small input" do
+      x = Nx.iota({1, 1, 2, 2}, type: {:f, 32})
+      lhs = grad_sum_conv_dilated_same(x)
+      rhs = Nx.broadcast(1.0, {1, 1, 2, 2})
+      assert_all_close(lhs, rhs)
+    end
   end
 
   describe "chain rule" do
