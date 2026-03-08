@@ -850,7 +850,7 @@ defmodule NxTest do
                Nx.tensor([[3, 4, 5], [6, 7, 8], [6, 7, 8]], type: {:f, 64})
     end
 
-    test "computes a same padding window max with large kernel and strides (#1675)" do
+    test "computes a same padding window max with large kernel and strides" do
       t = Nx.iota({1, 4, 4, 1}, type: {:f, 32})
 
       assert Nx.window_max(t, {1, 3, 3, 1}, padding: :same, strides: [1, 2, 2, 1]) ==
@@ -862,7 +862,7 @@ defmodule NxTest do
                ])
     end
 
-    test "computes a same padding window max with asymmetric kernel (#1675)" do
+    test "computes a same padding window max with asymmetric kernel" do
       t = Nx.iota({1, 4, 6, 1}, type: {:f, 32})
 
       assert Nx.window_max(t, {1, 2, 3, 1}, padding: :same, strides: [1, 2, 2, 1]) ==
@@ -874,42 +874,42 @@ defmodule NxTest do
                ])
     end
 
-    test "computes a same padding window max with kernel larger than input (#1675)" do
+    test "computes a same padding window max with kernel larger than input" do
       t = Nx.iota({1, 2, 2, 1}, type: {:f, 32})
 
       assert Nx.window_max(t, {1, 3, 3, 1}, padding: :same, strides: [1, 1, 1, 1]) ==
                Nx.tensor([[[[3.0], [3.0]], [[3.0], [3.0]]]])
     end
 
-    test "computes a same padding window max with kernel equal to input (#1675)" do
+    test "computes a same padding window max with kernel equal to input" do
       t = Nx.iota({4, 4}, type: {:f, 32})
 
       assert Nx.window_max(t, {4, 4}, padding: :same, strides: [2, 2]) ==
                Nx.tensor([[10.0, 11.0], [14.0, 15.0]])
     end
 
-    test "computes a same padding window max 1D (#1675)" do
+    test "computes a same padding window max 1D" do
       t = Nx.iota({8}, type: {:f, 32})
 
       assert Nx.window_max(t, {3}, padding: :same, strides: [2]) ==
                Nx.tensor([1.0, 3.0, 5.0, 7.0])
     end
 
-    test "computes a same padding window max 2D (#1675)" do
+    test "computes a same padding window max 2D" do
       t = Nx.iota({4, 4}, type: {:f, 32})
 
       assert Nx.window_max(t, {3, 3}, padding: :same, strides: [2, 2]) ==
                Nx.tensor([[5.0, 7.0], [13.0, 15.0]])
     end
 
-    test "computes a same padding window max with stride larger than kernel (#1675)" do
+    test "computes a same padding window max with stride larger than kernel" do
       t = Nx.iota({1, 6, 6, 1}, type: {:f, 32})
 
       assert Nx.window_max(t, {1, 2, 2, 1}, padding: :same, strides: [1, 3, 3, 1]) ==
                Nx.tensor([[[[7.0], [10.0]], [[25.0], [28.0]]]])
     end
 
-    test "computes window min with same padding and large kernel (#1675)" do
+    test "computes window min with same padding and large kernel" do
       t = Nx.iota({1, 4, 4, 1}, type: {:f, 32})
 
       assert Nx.window_min(t, {1, 3, 3, 1}, padding: :same, strides: [1, 2, 2, 1]) ==
@@ -921,6 +921,195 @@ defmodule NxTest do
 
       assert Nx.window_min(t, {2, 1}, padding: :same) ==
                Nx.tensor([[0.0, 1.0, 2.0], [3.0, 4.0, 5.0], [6.0, 7.0, 8.0]], type: {:f, 64})
+    end
+
+    test "computes window max with dilations + strides + same padding" do
+      t = Nx.iota({1, 4, 4, 1}, type: {:f, 32})
+
+      assert Nx.window_max(t, {1, 2, 2, 1},
+               padding: :same,
+               strides: [1, 2, 2, 1],
+               window_dilations: [1, 2, 2, 1]
+             ) ==
+               Nx.tensor([[[[5.0], [7.0]], [[13.0], [15.0]]]])
+    end
+
+    test "computes window min with dilations + strides + same padding" do
+      t = Nx.iota({1, 4, 4, 1}, type: {:f, 32})
+
+      assert Nx.window_min(t, {1, 2, 2, 1},
+               padding: :same,
+               strides: [1, 2, 2, 1],
+               window_dilations: [1, 2, 2, 1]
+             ) ==
+               Nx.tensor([[[[5.0], [5.0]], [[5.0], [5.0]]]])
+    end
+
+    test "computes window sum with dilations + strides + same padding" do
+      t = Nx.iota({1, 4, 4, 1}, type: {:f, 32})
+
+      assert Nx.window_sum(t, {1, 2, 2, 1},
+               padding: :same,
+               strides: [1, 2, 2, 1],
+               window_dilations: [1, 2, 2, 1]
+             ) ==
+               Nx.tensor([[[[5.0], [12.0]], [[18.0], [40.0]]]])
+    end
+
+    test "computes window max with dilations + explicit asymmetric padding" do
+      t = Nx.iota({1, 4, 4, 1}, type: {:f, 32})
+
+      assert Nx.window_max(t, {1, 2, 2, 1},
+               padding: [{0, 0}, {1, 0}, {0, 1}, {0, 0}],
+               strides: [1, 2, 2, 1],
+               window_dilations: [1, 2, 2, 1]
+             ) ==
+               Nx.tensor([[[[6.0], [6.0]], [[14.0], [14.0]]]])
+    end
+
+    test "computes window product with same padding and large kernel" do
+      t = Nx.iota({1, 4, 4, 1}, type: {:f, 32}) |> Nx.add(1)
+
+      assert Nx.window_product(t, {1, 3, 3, 1}, padding: :same, strides: [1, 2, 2, 1]) ==
+               Nx.tensor([[[[60.0], [8064.0]], [[4.914e5], [1.4902272e9]]]])
+    end
+
+    test "computes window product 2D with same padding" do
+      t = Nx.iota({4, 4}, type: {:f, 32}) |> Nx.add(1)
+
+      assert Nx.window_product(t, {3, 3}, padding: :same, strides: [2, 2]) ==
+               Nx.tensor([[60.0, 8064.0], [4.914e5, 1.4902272e9]])
+    end
+
+    test "computes window product 1D with same padding" do
+      t = Nx.iota({8}, type: {:f, 32}) |> Nx.add(1)
+
+      assert Nx.window_product(t, {3}, padding: :same, strides: [2]) ==
+               Nx.tensor([2.0, 24.0, 120.0, 336.0])
+    end
+
+    test "computes 1D window max with dilations" do
+      t = Nx.iota({8}, type: {:f, 32})
+
+      assert Nx.window_max(t, {3}, padding: :same, window_dilations: [2]) ==
+               Nx.tensor([2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 6.0, 7.0])
+    end
+
+    test "computes 1D window sum with dilations" do
+      t = Nx.iota({8}, type: {:f, 32})
+
+      assert Nx.window_sum(t, {3}, padding: :same, window_dilations: [2]) ==
+               Nx.tensor([2.0, 4.0, 6.0, 9.0, 12.0, 15.0, 10.0, 12.0])
+    end
+
+    test "computes window scatter max with same padding" do
+      t =
+        Nx.tensor([
+          [1, 2, 3, 4, 5],
+          [6, 7, 8, 9, 10],
+          [11, 12, 13, 14, 15]
+        ])
+
+      source = Nx.tensor([[1, 2], [3, 4]])
+
+      assert Nx.window_scatter_max(t, source, 0, {2, 3}, padding: :same, strides: [2, 3]) ==
+               Nx.tensor([
+                 [0, 0, 0, 0, 0],
+                 [0, 1, 0, 0, 2],
+                 [0, 3, 0, 0, 4]
+               ])
+    end
+
+    test "computes window scatter min with same padding" do
+      t =
+        Nx.tensor([
+          [1, 2, 3, 4, 5],
+          [6, 7, 8, 9, 10],
+          [11, 12, 13, 14, 15]
+        ])
+
+      source = Nx.tensor([[1, 2], [3, 4]])
+
+      assert Nx.window_scatter_min(t, source, 0, {2, 3}, padding: :same, strides: [2, 3]) ==
+               Nx.tensor([
+                 [0, 0, 2, 0, 0],
+                 [0, 0, 0, 0, 0],
+                 [0, 0, 0, 0, 0]
+               ])
+    end
+
+    test "computes window scatter max with explicit padding" do
+      t =
+        Nx.tensor([
+          [1, 2, 3, 4, 5],
+          [6, 7, 8, 9, 10],
+          [11, 12, 13, 14, 15]
+        ])
+
+      source = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+
+      assert Nx.window_scatter_max(t, source, 0, {2, 3},
+               padding: [{1, 1}, {1, 1}],
+               strides: [2, 2]
+             ) ==
+               Nx.tensor([
+                 [0, 1, 0, 2, 3],
+                 [0, 0, 0, 0, 0],
+                 [0, 4, 0, 5, 6]
+               ])
+    end
+
+    test "computes window reduce (sum of squares) with same padding" do
+      t = Nx.iota({4, 4}, type: {:f, 32})
+
+      result =
+        Nx.window_reduce(t, 0.0, {3, 3}, [padding: :same, strides: [2, 2]], fn elem, acc ->
+          Nx.add(acc, Nx.multiply(elem, elem))
+        end)
+
+      assert result == Nx.tensor([[42.0, 124.0], [499.0, 1002.0]])
+    end
+
+    test "computes window reduce (custom sum) matches window_sum with same padding" do
+      t = Nx.iota({4, 4}, type: {:f, 32})
+
+      reduce_sum =
+        Nx.window_reduce(t, 0.0, {3, 3}, [padding: :same, strides: [2, 2]], fn elem, acc ->
+          Nx.add(acc, elem)
+        end)
+
+      window_sum = Nx.window_sum(t, {3, 3}, padding: :same, strides: [2, 2])
+      assert reduce_sum == window_sum
+    end
+
+    test "same padding produces correct output shapes for edge cases" do
+      # kernel larger than input
+      t1 = Nx.iota({2, 2}, type: {:f, 32})
+      assert Nx.shape(Nx.window_max(t1, {3, 3}, padding: :same)) == {2, 2}
+
+      # kernel much larger than input
+      t2 = Nx.iota({1, 1}, type: {:f, 32})
+      assert Nx.shape(Nx.window_max(t2, {5, 5}, padding: :same)) == {1, 1}
+
+      # stride > kernel, no padding needed when evenly divisible
+      t3 = Nx.iota({4, 4}, type: {:f, 32})
+      assert Nx.shape(Nx.window_max(t3, {2, 2}, padding: :same, strides: [2, 2])) == {2, 2}
+
+      # non-divisible dimensions
+      t4 = Nx.iota({5, 5}, type: {:f, 32})
+      assert Nx.shape(Nx.window_max(t4, {3, 3}, padding: :same, strides: [2, 2])) == {3, 3}
+
+      # dilated kernel with same padding
+      t5 = Nx.iota({4, 4}, type: {:f, 32})
+
+      assert Nx.shape(Nx.window_max(t5, {2, 2}, padding: :same, window_dilations: [2, 2])) ==
+               {4, 4}
+
+      # dilated kernel larger than input with same padding
+      t6 = Nx.iota({2, 2}, type: {:f, 32})
+
+      assert Nx.shape(Nx.window_max(t6, {2, 2}, padding: :same, window_dilations: [2, 2])) ==
+               {2, 2}
     end
   end
 
