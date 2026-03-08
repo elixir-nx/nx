@@ -4612,6 +4612,25 @@ defmodule Nx.Defn.GradTest do
         Nx.tensor([-0.11221229, 0.02428893, 0.82848394])
       )
     end
+
+    # Note: transform_a: :conjugate is intended for complex tensors.
+    # The forward pass raises "complex numbers not supported yet" on BinaryBackend,
+    # so we can only verify it doesn't hit a MatchError in grad.ex.
+    # When complex number support lands, these should be updated to assert values.
+    test "triangular_solve grad with transform_a: :conjugate raises from forward pass, not grad" do
+      a =
+        Nx.tensor([
+          [1, 0, 0],
+          [1, 1, 0],
+          [1, 1, 1]
+        ])
+
+      b = Nx.tensor([2, 3, 4])
+
+      assert_raise ArgumentError, "complex numbers not supported yet", fn ->
+        triangular_solve_grad_wrt_a(a, b, transform_a: :conjugate, lower: true)
+      end
+    end
   end
 
   describe "not implemented" do
