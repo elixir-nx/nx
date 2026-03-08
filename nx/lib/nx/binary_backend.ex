@@ -1636,10 +1636,7 @@ defmodule Nx.BinaryBackend do
           |> Enum.zip(offset_from_anchor)
           |> Enum.map(fn {x, y} -> x + y end)
 
-        absolute_index =
-          padded_absolute_index
-          |> Enum.zip(low_pads)
-          |> Enum.map(fn {idx, lo} -> idx - lo end)
+        absolute_index = Enum.zip_with(padded_absolute_index, low_pads, &-/2)
 
         source_consumed = i * source_size
 
@@ -1653,8 +1650,9 @@ defmodule Nx.BinaryBackend do
     # Filter out indices that fall in the padding region (outside original tensor bounds)
     output_windows =
       Enum.filter(output_windows, fn {_value, index} ->
-        Enum.zip(index, original_dims)
-        |> Enum.all?(fn {idx, dim} -> idx >= 0 and idx < dim end)
+        Enum.zip_reduce(index, original_dims, true, fn idx, dim, acc ->
+          acc and idx >= 0 and idx < dim
+        end)
       end)
 
     output_weighted_shape = weighted_shape(output_shape, output_size)

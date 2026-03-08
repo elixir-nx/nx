@@ -1416,22 +1416,68 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "works with window max, same padding, large kernel relative to input (#1675)" do
-      # This reproduces the crash from issue #1675 where :same padding
-      # with a large kernel causes negative padding in select_and_scatter
       x = Nx.iota({1, 4, 4, 1}, type: {:f, 32})
       lhs = grad_sum_window_max_same_large_kernel(x)
 
-      # With kernel=3, stride=2, same padding on 4x4:
-      # output is 2x2, max positions are at bottom-right of each window
-      # Gradient should be 1.0 at the max positions, 0.0 elsewhere
-      assert Nx.shape(lhs) == {1, 4, 4, 1}
-      assert Nx.type(lhs) == {:f, 32}
+      rhs =
+        Nx.tensor([
+          [
+            [[0.0], [0.0], [0.0], [0.0]],
+            [[0.0], [1.0], [0.0], [1.0]],
+            [[0.0], [0.0], [0.0], [0.0]],
+            [[0.0], [1.0], [0.0], [1.0]]
+          ]
+        ])
 
-      # All gradient values should be finite (no NaN/Inf)
-      assert Nx.all(Nx.is_nan(lhs) |> Nx.logical_not()) == Nx.tensor(1, type: {:u, 8})
+      assert_all_close(lhs, rhs)
+    end
 
-      # Gradient should sum to the number of output elements (each max gets grad 1.0)
-      assert_all_close(Nx.sum(lhs), Nx.tensor(4.0))
+    defn grad_sum_sin_window_max_cos_same(t) do
+      grad(
+        t,
+        &Nx.sum(Nx.sin(Nx.window_max(Nx.cos(&1), {1, 3, 3, 1}, padding: :same, strides: [1, 2, 2, 1])))
+      )
+    end
+
+    test "works with window max, non-linear composition, same padding (#1675)" do
+      x = Nx.iota({1, 4, 4, 1}, type: {:f, 32})
+      lhs = grad_sum_sin_window_max_cos_same(x)
+
+      rhs =
+        Nx.tensor([
+          [
+            [[0.0], [0.0], [0.0], [0.0]],
+            [[0.0], [0.0], [0.32042277], [0.0]],
+            [[0.0], [0.0], [0.0], [0.0]],
+            [[0.0], [-0.25872183], [0.0], [0.0]]
+          ]
+        ])
+
+      assert_all_close(lhs, rhs)
+    end
+
+    defn grad_sum_window_max_same_asymmetric(t) do
+      grad(
+        t,
+        &Nx.sum(Nx.window_max(&1, {1, 2, 3, 1}, padding: :same, strides: [1, 2, 2, 1]))
+      )
+    end
+
+    test "works with window max, same padding, asymmetric kernel (#1675)" do
+      x = Nx.iota({1, 4, 6, 1}, type: {:f, 32})
+      lhs = grad_sum_window_max_same_asymmetric(x)
+
+      rhs =
+        Nx.tensor([
+          [
+            [[0.0], [0.0], [0.0], [0.0], [0.0], [0.0]],
+            [[0.0], [1.0], [0.0], [1.0], [0.0], [1.0]],
+            [[0.0], [0.0], [0.0], [0.0], [0.0], [0.0]],
+            [[0.0], [1.0], [0.0], [1.0], [0.0], [1.0]]
+          ]
+        ])
+
+      assert_all_close(lhs, rhs)
     end
 
     defn grad_sum_window_min_cos(t) do
@@ -1452,6 +1498,218 @@ defmodule Nx.Defn.GradTest do
             [[-0.0, -0.41211849451065063], [0.0, 0.0], [0.0, -0.0], [-0.0, -0.6502878665924072]],
             [[0.2879033088684082, 0.0], [0.0, -0.0], [-0.0, -0.0], [0.008851309306919575, 0.0]],
             [[0.0, 0.0], [-0.0, -0.9563759565353394], [-0.2709057927131653, 0.0], [0.0, 0.0]]
+          ]
+        ])
+
+      assert_all_close(lhs, rhs)
+    end
+
+    defn grad_sum_window_min_same_large_kernel(t) do
+      grad(
+        t,
+        &Nx.sum(Nx.window_min(&1, {1, 3, 3, 1}, padding: :same, strides: [1, 2, 2, 1]))
+      )
+    end
+
+    test "works with window min, same padding, large kernel (#1675)" do
+      x = Nx.iota({1, 4, 4, 1}, type: {:f, 32})
+      lhs = grad_sum_window_min_same_large_kernel(x)
+
+      rhs =
+        Nx.tensor([
+          [
+            [[0.0], [0.0], [0.0], [0.0]],
+            [[0.0], [1.0], [0.0], [0.0]],
+            [[0.0], [0.0], [0.0], [0.0]],
+            [[0.0], [0.0], [0.0], [0.0]]
+          ]
+        ])
+
+      assert_all_close(lhs, rhs)
+    end
+
+    defn grad_sum_window_max_explicit_padding(t) do
+      grad(
+        t,
+        &Nx.sum(
+          Nx.window_max(&1, {1, 3, 3, 1},
+            padding: [{0, 0}, {1, 1}, {1, 1}, {0, 0}],
+            strides: [1, 2, 2, 1]
+          )
+        )
+      )
+    end
+
+    test "works with window max, explicit symmetric padding (#1675)" do
+      x = Nx.iota({1, 4, 4, 1}, type: {:f, 32})
+      lhs = grad_sum_window_max_explicit_padding(x)
+
+      rhs =
+        Nx.tensor([
+          [
+            [[0.0], [0.0], [0.0], [0.0]],
+            [[0.0], [1.0], [0.0], [1.0]],
+            [[0.0], [0.0], [0.0], [0.0]],
+            [[0.0], [1.0], [0.0], [1.0]]
+          ]
+        ])
+
+      assert_all_close(lhs, rhs)
+    end
+
+    defn grad_sum_window_max_asymmetric_explicit_padding(t) do
+      grad(
+        t,
+        &Nx.sum(
+          Nx.window_max(&1, {1, 3, 3, 1},
+            padding: [{0, 0}, {2, 0}, {0, 2}, {0, 0}],
+            strides: [1, 2, 2, 1]
+          )
+        )
+      )
+    end
+
+    test "works with window max, explicit asymmetric padding (#1675)" do
+      x = Nx.iota({1, 4, 4, 1}, type: {:f, 32})
+      lhs = grad_sum_window_max_asymmetric_explicit_padding(x)
+
+      rhs =
+        Nx.tensor([
+          [
+            [[0.0], [0.0], [1.0], [1.0]],
+            [[0.0], [0.0], [0.0], [0.0]],
+            [[0.0], [0.0], [1.0], [1.0]],
+            [[0.0], [0.0], [0.0], [0.0]]
+          ]
+        ])
+
+      assert_all_close(lhs, rhs)
+    end
+
+    defn grad_sum_window_max_extreme_ratio(t) do
+      grad(
+        t,
+        &Nx.sum(Nx.window_max(&1, {1, 3, 3, 1}, padding: :same, strides: [1, 1, 1, 1]))
+      )
+    end
+
+    test "works with window max, kernel larger than input (#1675)" do
+      x = Nx.iota({1, 2, 2, 1}, type: {:f, 32})
+      lhs = grad_sum_window_max_extreme_ratio(x)
+
+      rhs =
+        Nx.tensor([
+          [
+            [[0.0], [0.0]],
+            [[0.0], [4.0]]
+          ]
+        ])
+
+      assert_all_close(lhs, rhs)
+    end
+
+    test "works with window max, 1x1 input with large kernel (#1675)" do
+      x = Nx.tensor([[[[5.0]]]])
+      lhs = grad_sum_window_max_extreme_ratio(x)
+      assert_all_close(lhs, Nx.tensor([[[[1.0]]]]))
+    end
+
+    defn grad_sum_window_max_kernel_eq_input(t) do
+      grad(
+        t,
+        &Nx.sum(Nx.window_max(&1, {4, 4}, padding: :same, strides: [2, 2]))
+      )
+    end
+
+    test "works with window max, kernel equals input size (#1675)" do
+      x = Nx.iota({4, 4}, type: {:f, 32})
+      lhs = grad_sum_window_max_kernel_eq_input(x)
+
+      rhs =
+        Nx.tensor([
+          [0.0, 0.0, 0.0, 0.0],
+          [0.0, 0.0, 0.0, 0.0],
+          [0.0, 0.0, 1.0, 1.0],
+          [0.0, 0.0, 1.0, 1.0]
+        ])
+
+      assert_all_close(lhs, rhs)
+    end
+
+    defn grad_sum_window_max_1d(t) do
+      grad(t, &Nx.sum(Nx.window_max(&1, {3}, padding: :same, strides: [2])))
+    end
+
+    test "works with window max, 1D same padding (#1675)" do
+      x = Nx.iota({8}, type: {:f, 32})
+      lhs = grad_sum_window_max_1d(x)
+      rhs = Nx.tensor([0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0])
+      assert_all_close(lhs, rhs)
+    end
+
+    defn grad_sum_window_max_2d(t) do
+      grad(t, &Nx.sum(Nx.window_max(&1, {3, 3}, padding: :same, strides: [2, 2])))
+    end
+
+    test "works with window max, 2D same padding (#1675)" do
+      x = Nx.iota({4, 4}, type: {:f, 32})
+      lhs = grad_sum_window_max_2d(x)
+
+      rhs =
+        Nx.tensor([
+          [0.0, 0.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0, 1.0],
+          [0.0, 0.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0, 1.0]
+        ])
+
+      assert_all_close(lhs, rhs)
+    end
+
+    defn grad_sum_window_max_stride_gt_kernel(t) do
+      grad(
+        t,
+        &Nx.sum(Nx.window_max(&1, {1, 2, 2, 1}, padding: :same, strides: [1, 3, 3, 1]))
+      )
+    end
+
+    test "works with window max, stride larger than kernel (#1675)" do
+      x = Nx.iota({1, 6, 6, 1}, type: {:f, 32})
+      lhs = grad_sum_window_max_stride_gt_kernel(x)
+
+      rhs =
+        Nx.tensor([
+          [
+            [[0.0], [0.0], [0.0], [0.0], [0.0], [0.0]],
+            [[0.0], [1.0], [0.0], [0.0], [1.0], [0.0]],
+            [[0.0], [0.0], [0.0], [0.0], [0.0], [0.0]],
+            [[0.0], [0.0], [0.0], [0.0], [0.0], [0.0]],
+            [[0.0], [1.0], [0.0], [0.0], [1.0], [0.0]],
+            [[0.0], [0.0], [0.0], [0.0], [0.0], [0.0]]
+          ]
+        ])
+
+      assert_all_close(lhs, rhs)
+    end
+
+    defn grad_sum_window_sum_same(t) do
+      grad(
+        t,
+        &Nx.sum(Nx.window_sum(&1, {1, 3, 3, 1}, padding: :same, strides: [1, 2, 2, 1]))
+      )
+    end
+
+    test "works with window sum, same padding, large kernel (#1675)" do
+      x = Nx.iota({1, 4, 4, 1}, type: {:f, 32})
+      lhs = grad_sum_window_sum_same(x)
+
+      rhs =
+        Nx.tensor([
+          [
+            [[1.0], [2.0], [1.0], [1.0]],
+            [[2.0], [4.0], [2.0], [2.0]],
+            [[1.0], [2.0], [1.0], [1.0]],
+            [[1.0], [2.0], [1.0], [1.0]]
           ]
         ])
 
