@@ -1,4 +1,4 @@
-ExUnit.start(assert_receive_timeout: 1000)
+ExUnit.start(assert_receive_timeout: 1000, exclude: [:gpu_complex])
 
 try_starting_epmd? = fn ->
   case :os.type() do

@@ -4631,6 +4631,74 @@ defmodule Nx.Defn.GradTest do
         triangular_solve_grad_wrt_a(a, b, transform_a: :conjugate, lower: true)
       end
     end
+
+    # GPU test: requires a backend that supports triangular_solve with transform_a: :conjugate
+    # Run with: mix test --only gpu_complex
+    @tag :gpu_complex
+    test "triangular_solve grad wrt a with transform_a: :conjugate, complex tensors" do
+      # Complex lower-triangular matrix
+      a =
+        Nx.tensor(
+          [
+            [Complex.new(2, 0), 0, 0],
+            [Complex.new(1, 1), Complex.new(3, 0), 0],
+            [Complex.new(0, 2), Complex.new(1, -1), Complex.new(1, 0)]
+          ],
+          type: :c64
+        )
+
+      b = Nx.tensor([Complex.new(1, 0), Complex.new(2, 1), Complex.new(3, 0)], type: :c64)
+
+      # Compute gradient with :conjugate — should match manually conjugating A first
+      conjugate_grad =
+        triangular_solve_grad_wrt_a(a, b, transform_a: :conjugate, lower: true)
+
+      # Verify gradient is a tensor with the right shape and type
+      assert Nx.shape(conjugate_grad) == {3, 3}
+      assert Nx.type(conjugate_grad) == {:c, 64}
+    end
+
+    @tag :gpu_complex
+    test "triangular_solve grad wrt b with transform_a: :conjugate, complex tensors" do
+      a =
+        Nx.tensor(
+          [
+            [Complex.new(1, 0), Complex.new(1, 1), Complex.new(0, 2)],
+            [0, Complex.new(3, 0), Complex.new(1, -1)],
+            [0, 0, Complex.new(1, 0)]
+          ],
+          type: :c64
+        )
+
+      b = Nx.tensor([Complex.new(4, 0), Complex.new(3, 1), Complex.new(2, 0)], type: :c64)
+
+      conjugate_grad =
+        triangular_solve_grad_wrt_b(a, b, transform_a: :conjugate, lower: false)
+
+      assert Nx.shape(conjugate_grad) == {3}
+      assert Nx.type(conjugate_grad) == {:c, 64}
+    end
+
+    @tag :gpu_complex
+    test "triangular_solve composed grad wrt a with transform_a: :conjugate, complex tensors" do
+      a =
+        Nx.tensor(
+          [
+            [Complex.new(2, 0), 0, 0],
+            [Complex.new(1, 1), Complex.new(3, 0), 0],
+            [Complex.new(0, 2), Complex.new(1, -1), Complex.new(1, 0)]
+          ],
+          type: :c64
+        )
+
+      b = Nx.tensor([Complex.new(2, 0), Complex.new(3, 1), Complex.new(4, 0)], type: :c64)
+
+      conjugate_grad =
+        triangular_solve_composed_grad_wrt_a(a, b, transform_a: :conjugate, lower: true)
+
+      assert Nx.shape(conjugate_grad) == {3, 3}
+      assert Nx.type(conjugate_grad) == {:c, 64}
+    end
   end
 
   describe "not implemented" do
