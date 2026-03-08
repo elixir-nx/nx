@@ -3758,6 +3758,91 @@ defmodule EXLA.Defn.ExprTest do
       assert_all_close(Nx.dot(Nx.transpose(a), ts(a, b, transform_a: :transpose)), b)
     end
 
+    test "triangular_solve with transform_a: :conjugate" do
+      a = Nx.tensor([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
+      b = Nx.tensor([1, 2, 1])
+
+      # For real tensors, conjugate == identity, so result should match :none
+      assert_all_close(ts(a, b, transform_a: :conjugate, lower: true), ts(a, b, lower: true))
+
+      # Complex tensors: verify A*.x = b by checking Nx.dot(conjugate(A), x) == b
+      a_c =
+        Nx.tensor(
+          [
+            [Complex.new(2, 0), 0, 0],
+            [Complex.new(1, 1), Complex.new(3, 0), 0],
+            [Complex.new(0, 2), Complex.new(1, -1), Complex.new(1, 0)]
+          ],
+          type: :c64
+        )
+
+      b_c = Nx.tensor([Complex.new(1, 0), Complex.new(2, 1), Complex.new(3, 0)], type: :c64)
+
+      x = ts(a_c, b_c, transform_a: :conjugate, lower: true)
+      assert_all_close(Nx.dot(Nx.conjugate(a_c), x), b_c, atol: 1.0e-5)
+    end
+
+    defn ts_grad_wrt_a(a, b, opts \\ []) do
+      grad(a, fn a -> a |> Nx.LinAlg.triangular_solve(b, opts) |> Nx.sum() end)
+    end
+
+    defn ts_grad_wrt_b(a, b, opts \\ []) do
+      grad(b, fn b -> a |> Nx.LinAlg.triangular_solve(b, opts) |> Nx.sum() end)
+    end
+
+    defn ts_composed_grad_wrt_a(a, b, opts \\ []) do
+      grad(a, fn a ->
+        a |> Nx.sin() |> Nx.LinAlg.triangular_solve(Nx.cos(b), opts) |> Nx.sin() |> Nx.sum()
+      end)
+    end
+
+    test "triangular_solve gradient with transform_a: :conjugate, complex tensors" do
+      a =
+        Nx.tensor(
+          [
+            [Complex.new(2, 0), 0, 0],
+            [Complex.new(1, 1), Complex.new(3, 0), 0],
+            [Complex.new(0, 2), Complex.new(1, -1), Complex.new(1, 0)]
+          ],
+          type: :c64
+        )
+
+      b = Nx.tensor([Complex.new(1, 0), Complex.new(2, 1), Complex.new(3, 0)], type: :c64)
+
+      # Gradient wrt a should produce a 3x3 complex tensor
+      da = ts_grad_wrt_a(a, b, transform_a: :conjugate, lower: true)
+      assert Nx.shape(da) == {3, 3}
+      assert Nx.type(da) == {:c, 64}
+
+      # Gradient wrt b should produce a length-3 complex tensor
+      db = ts_grad_wrt_b(a, b, transform_a: :conjugate, lower: true)
+      assert Nx.shape(db) == {3}
+      assert Nx.type(db) == {:c, 64}
+
+      # Composed gradient should also work
+      da_composed = ts_composed_grad_wrt_a(a, b, transform_a: :conjugate, lower: true)
+      assert Nx.shape(da_composed) == {3, 3}
+      assert Nx.type(da_composed) == {:c, 64}
+    end
+
+    test "triangular_solve gradient with transform_a: :conjugate, upper triangular" do
+      a =
+        Nx.tensor(
+          [
+            [Complex.new(1, 0), Complex.new(1, 1), Complex.new(0, 2)],
+            [0, Complex.new(3, 0), Complex.new(1, -1)],
+            [0, 0, Complex.new(1, 0)]
+          ],
+          type: :c64
+        )
+
+      b = Nx.tensor([Complex.new(4, 0), Complex.new(3, 1), Complex.new(2, 0)], type: :c64)
+
+      db = ts_grad_wrt_b(a, b, transform_a: :conjugate, lower: false)
+      assert Nx.shape(db) == {3}
+      assert Nx.type(db) == {:c, 64}
+    end
+
     defn qr(t), do: Nx.LinAlg.qr(t)
     defn qr_complete(t), do: Nx.LinAlg.qr(t, mode: :complete)
 
