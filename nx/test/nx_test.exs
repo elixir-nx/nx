@@ -890,7 +890,9 @@ defmodule NxTest do
 
     test "computes a same padding window max 1D (#1675)" do
       t = Nx.iota({8}, type: {:f, 32})
-      assert Nx.window_max(t, {3}, padding: :same, strides: [2]) == Nx.tensor([1.0, 3.0, 5.0, 7.0])
+
+      assert Nx.window_max(t, {3}, padding: :same, strides: [2]) ==
+               Nx.tensor([1.0, 3.0, 5.0, 7.0])
     end
 
     test "computes a same padding window max 2D (#1675)" do

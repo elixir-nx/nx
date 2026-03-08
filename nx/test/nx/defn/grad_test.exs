@@ -1435,7 +1435,9 @@ defmodule Nx.Defn.GradTest do
     defn grad_sum_sin_window_max_cos_same(t) do
       grad(
         t,
-        &Nx.sum(Nx.sin(Nx.window_max(Nx.cos(&1), {1, 3, 3, 1}, padding: :same, strides: [1, 2, 2, 1])))
+        &Nx.sum(
+          Nx.sin(Nx.window_max(Nx.cos(&1), {1, 3, 3, 1}, padding: :same, strides: [1, 2, 2, 1]))
+        )
       )
     end
 
