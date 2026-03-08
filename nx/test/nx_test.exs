@@ -850,7 +850,7 @@ defmodule NxTest do
                Nx.tensor([[3, 4, 5], [6, 7, 8], [6, 7, 8]], type: {:f, 64})
     end
 
-    test "computes a same padding window max with large kernel and strides (#1675)" do
+    test "computes a same padding window max with large kernel and strides" do
       t = Nx.iota({1, 4, 4, 1}, type: {:f, 32})
 
       assert Nx.window_max(t, {1, 3, 3, 1}, padding: :same, strides: [1, 2, 2, 1]) ==
@@ -862,7 +862,7 @@ defmodule NxTest do
                ])
     end
 
-    test "computes a same padding window max with asymmetric kernel (#1675)" do
+    test "computes a same padding window max with asymmetric kernel" do
       t = Nx.iota({1, 4, 6, 1}, type: {:f, 32})
 
       assert Nx.window_max(t, {1, 2, 3, 1}, padding: :same, strides: [1, 2, 2, 1]) ==
@@ -874,40 +874,40 @@ defmodule NxTest do
                ])
     end
 
-    test "computes a same padding window max with kernel larger than input (#1675)" do
+    test "computes a same padding window max with kernel larger than input" do
       t = Nx.iota({1, 2, 2, 1}, type: {:f, 32})
 
       assert Nx.window_max(t, {1, 3, 3, 1}, padding: :same, strides: [1, 1, 1, 1]) ==
                Nx.tensor([[[[3.0], [3.0]], [[3.0], [3.0]]]])
     end
 
-    test "computes a same padding window max with kernel equal to input (#1675)" do
+    test "computes a same padding window max with kernel equal to input" do
       t = Nx.iota({4, 4}, type: {:f, 32})
 
       assert Nx.window_max(t, {4, 4}, padding: :same, strides: [2, 2]) ==
                Nx.tensor([[10.0, 11.0], [14.0, 15.0]])
     end
 
-    test "computes a same padding window max 1D (#1675)" do
+    test "computes a same padding window max 1D" do
       t = Nx.iota({8}, type: {:f, 32})
       assert Nx.window_max(t, {3}, padding: :same, strides: [2]) == Nx.tensor([1.0, 3.0, 5.0, 7.0])
     end
 
-    test "computes a same padding window max 2D (#1675)" do
+    test "computes a same padding window max 2D" do
       t = Nx.iota({4, 4}, type: {:f, 32})
 
       assert Nx.window_max(t, {3, 3}, padding: :same, strides: [2, 2]) ==
                Nx.tensor([[5.0, 7.0], [13.0, 15.0]])
     end
 
-    test "computes a same padding window max with stride larger than kernel (#1675)" do
+    test "computes a same padding window max with stride larger than kernel" do
       t = Nx.iota({1, 6, 6, 1}, type: {:f, 32})
 
       assert Nx.window_max(t, {1, 2, 2, 1}, padding: :same, strides: [1, 3, 3, 1]) ==
                Nx.tensor([[[[7.0], [10.0]], [[25.0], [28.0]]]])
     end
 
-    test "computes window min with same padding and large kernel (#1675)" do
+    test "computes window min with same padding and large kernel" do
       t = Nx.iota({1, 4, 4, 1}, type: {:f, 32})
 
       assert Nx.window_min(t, {1, 3, 3, 1}, padding: :same, strides: [1, 2, 2, 1]) ==
