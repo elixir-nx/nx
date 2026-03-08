@@ -890,7 +890,9 @@ defmodule NxTest do
 
     test "computes a same padding window max 1D" do
       t = Nx.iota({8}, type: {:f, 32})
-      assert Nx.window_max(t, {3}, padding: :same, strides: [2]) == Nx.tensor([1.0, 3.0, 5.0, 7.0])
+
+      assert Nx.window_max(t, {3}, padding: :same, strides: [2]) ==
+               Nx.tensor([1.0, 3.0, 5.0, 7.0])
     end
 
     test "computes a same padding window max 2D" do
@@ -1100,16 +1102,14 @@ defmodule NxTest do
       # dilated kernel with same padding
       t5 = Nx.iota({4, 4}, type: {:f, 32})
 
-      assert Nx.shape(
-               Nx.window_max(t5, {2, 2}, padding: :same, window_dilations: [2, 2])
-             ) == {4, 4}
+      assert Nx.shape(Nx.window_max(t5, {2, 2}, padding: :same, window_dilations: [2, 2])) ==
+               {4, 4}
 
       # dilated kernel larger than input with same padding
       t6 = Nx.iota({2, 2}, type: {:f, 32})
 
-      assert Nx.shape(
-               Nx.window_max(t6, {2, 2}, padding: :same, window_dilations: [2, 2])
-             ) == {2, 2}
+      assert Nx.shape(Nx.window_max(t6, {2, 2}, padding: :same, window_dilations: [2, 2])) ==
+               {2, 2}
     end
   end
 
