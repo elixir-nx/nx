@@ -4687,7 +4687,6 @@ defmodule Nx.Defn.GradTest do
         triangular_solve_grad_wrt_b(a, b, transform_a: :none, left_side: false, lower: false)
       )
     end
-
   end
 
   describe "not implemented" do
