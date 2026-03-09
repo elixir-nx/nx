@@ -70,8 +70,8 @@ defmodule EXLA.MixProject do
 
   defp deps do
     [
-      {:nx, "~> 0.11.0"},
-      # {:nx, path: "../nx"},
+      # {:nx, "~> 0.11.0"},
+      {:nx, path: "../nx"},
       {:telemetry, "~> 0.4.0 or ~> 1.0"},
       {:xla, "~> 0.10.0", runtime: false},
       {:fine, "~> 0.1", runtime: false},
