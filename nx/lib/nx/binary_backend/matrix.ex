@@ -44,7 +44,15 @@ defmodule Nx.BinaryBackend.Matrix do
 
     opt_left_side = !!input_opts[:left_side]
     opt_lower = !!input_opts[:lower]
-    opt_transpose_a = input_opts[:transform_a] == :transpose
+    transform_a = input_opts[:transform_a]
+
+    # For :conjugate, we pre-conjugate the matrix elements and treat as :none
+    {conjugate_a?, opt_transpose_a} =
+      case transform_a do
+        :conjugate -> {true, false}
+        :transpose -> {false, true}
+        _ -> {false, false}
+      end
 
     transpose_a? = opt_left_side == opt_transpose_a
     reverse_a? = opt_left_side == (opt_lower == opt_transpose_a)
@@ -58,6 +66,7 @@ defmodule Nx.BinaryBackend.Matrix do
     a_matrix =
       a_data
       |> binary_to_matrix(a_type, a_shape)
+      |> then(&if(conjugate_a?, do: conjugate_matrix(&1), else: &1))
       |> then(&if(transpose_a?, do: transpose_matrix(&1), else: &1))
       |> then(&if(reverse_a?, do: reverse_matrix(&1), else: &1))
 
@@ -132,6 +141,14 @@ defmodule Nx.BinaryBackend.Matrix do
         Enum.zip_reduce(row, col, 0, fn x, y, acc -> acc + x * Complex.conjugate(y) end)
       end)
     end)
+  end
+
+  defp conjugate_matrix([x | _] = m) when not is_list(x) do
+    Enum.map(m, &Complex.conjugate/1)
+  end
+
+  defp conjugate_matrix(m) do
+    Enum.map(m, fn row -> Enum.map(row, &Complex.conjugate/1) end)
   end
 
   defp transpose_matrix([x | _] = m) when not is_list(x) do

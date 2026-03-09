@@ -4613,11 +4613,8 @@ defmodule Nx.Defn.GradTest do
       )
     end
 
-    # Note: transform_a: :conjugate is intended for complex tensors.
-    # The forward pass raises "complex numbers not supported yet" on BinaryBackend,
-    # so we can only verify it doesn't hit a MatchError in grad.ex.
-    # When complex number support lands, these should be updated to assert values.
-    test "triangular_solve grad with transform_a: :conjugate raises from forward pass, not grad" do
+    # For real tensors, :conjugate is a no-op, so grad should match :none
+    test "triangular_solve grad with transform_a: :conjugate" do
       a =
         Nx.tensor([
           [1, 0, 0],
@@ -4627,9 +4624,68 @@ defmodule Nx.Defn.GradTest do
 
       b = Nx.tensor([2, 3, 4])
 
-      assert_raise ArgumentError, "complex numbers not supported yet", fn ->
-        triangular_solve_grad_wrt_a(a, b, transform_a: :conjugate, lower: true)
-      end
+      assert_all_close(
+        triangular_solve_grad_wrt_a(a, b, transform_a: :conjugate, lower: true),
+        triangular_solve_grad_wrt_a(a, b, transform_a: :none, lower: true)
+      )
+    end
+
+    test "triangular_solve grad wrt b with transform_a: :conjugate" do
+      a =
+        Nx.tensor([
+          [1, 0, 0],
+          [1, 1, 0],
+          [1, 1, 1]
+        ])
+
+      b = Nx.tensor([2, 3, 4])
+
+      assert_all_close(
+        triangular_solve_grad_wrt_b(a, b, transform_a: :conjugate, lower: true),
+        triangular_solve_grad_wrt_b(a, b, transform_a: :none, lower: true)
+      )
+    end
+
+    test "triangular_solve grad with transform_a: :conjugate, upper triangular" do
+      a =
+        Nx.tensor([
+          [1, 1, 1],
+          [0, 1, 1],
+          [0, 0, 1]
+        ])
+
+      b = Nx.tensor([4, 3, 2])
+
+      assert_all_close(
+        triangular_solve_grad_wrt_a(a, b, transform_a: :conjugate, lower: false),
+        triangular_solve_grad_wrt_a(a, b, transform_a: :none, lower: false)
+      )
+
+      assert_all_close(
+        triangular_solve_grad_wrt_b(a, b, transform_a: :conjugate, lower: false),
+        triangular_solve_grad_wrt_b(a, b, transform_a: :none, lower: false)
+      )
+    end
+
+    test "triangular_solve grad with transform_a: :conjugate, left_side: false" do
+      a =
+        Nx.tensor([
+          [1, 1, 1],
+          [0, 1, 1],
+          [0, 0, 1]
+        ])
+
+      b = Nx.tensor([2, 3, 4])
+
+      assert_all_close(
+        triangular_solve_grad_wrt_a(a, b, transform_a: :conjugate, left_side: false, lower: false),
+        triangular_solve_grad_wrt_a(a, b, transform_a: :none, left_side: false, lower: false)
+      )
+
+      assert_all_close(
+        triangular_solve_grad_wrt_b(a, b, transform_a: :conjugate, left_side: false, lower: false),
+        triangular_solve_grad_wrt_b(a, b, transform_a: :none, left_side: false, lower: false)
+      )
     end
 
   end

@@ -68,6 +68,27 @@ defmodule Nx.LinAlgTest do
                Nx.LinAlg.triangular_solve(a, b, transform_a: :transpose)
              ) == b
     end
+
+    test "transform_a: :conjugate with real tensors" do
+      a = Nx.tensor([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
+      b = Nx.tensor([[1.0, 2.0, 3.0], [2.0, 2.0, 4.0], [2.0, 0.0, 1.0]])
+
+      # For real tensors, conjugate is identity, so results match :none
+      assert Nx.LinAlg.triangular_solve(a, b, transform_a: :conjugate) ==
+               Nx.LinAlg.triangular_solve(a, b)
+
+      upper = Nx.transpose(a)
+
+      assert Nx.LinAlg.triangular_solve(upper, b, transform_a: :conjugate, lower: false) ==
+               Nx.LinAlg.triangular_solve(upper, b, lower: false)
+
+      assert Nx.LinAlg.triangular_solve(upper, b,
+               transform_a: :conjugate,
+               left_side: false,
+               lower: false
+             ) ==
+               Nx.LinAlg.triangular_solve(upper, b, left_side: false, lower: false)
+    end
   end
 
   describe "solve/2" do

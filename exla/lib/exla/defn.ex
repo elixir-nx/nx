@@ -1074,6 +1074,23 @@ defmodule EXLA.Defn do
     lower = Keyword.fetch!(opts, :lower)
     transform = Keyword.fetch!(opts, :transform_a)
 
+    # StableHLO triangular_solve doesn't support conjugate-only transform,
+    # so we pre-conjugate A and use :none instead.
+    # For real types, conjugate is a no-op.
+    {a, transform} =
+      case transform do
+        :conjugate ->
+          if Nx.Type.complex?(type) do
+            a_typespec = Value.get_typespec(a)
+            {Value.conjugate(to_type(a, type), Typespec.to_type(a_typespec, type)), :none}
+          else
+            {a, :none}
+          end
+
+        other ->
+          {a, other}
+      end
+
     a_shape = Value.get_typespec(a).shape
     b_shape = Value.get_typespec(b).shape
 
