@@ -117,15 +117,15 @@ void deliver_reply(ErlNifEnv *env, fine::ResourcePtr<Pending> pending,
 
 Result InvokeRuntimeCallback(
     xla::ffi::Span<const int64_t> callback_id_words, uint64_t callback_id_size,
-    xla::ffi::Span<const int64_t> callback_server_pid_words,
-    uint64_t callback_server_pid_size, const std::vector<Arg> &inputs,
+    const std::vector<Arg> &inputs,
     const std::vector<OutputBuffer> &outputs) {
   auto state = GetBridgeState();
 
   if (!state->dispatcher_set) {
     Result res;
     res.ok = false;
-    res.error = "EXLA elixir callback dispatcher is not set";
+    res.error = "EXLA elixir callback dispatcher is not set. "
+                "Make sure the outfeed task is running.";
     return res;
   }
 
@@ -134,20 +134,12 @@ Result InvokeRuntimeCallback(
   ErlNifEnv *msg_env = enif_alloc_env();
 
   // Reinterpret the 64-bit words as a contiguous byte buffer and use the
-  // original (unpadded) sizes when decoding the callback id and callback
-  // server pid terms.
+  // original (unpadded) size when decoding the callback id term.
   if (callback_id_size > callback_id_words.size() * sizeof(int64_t)) {
+    enif_free_env(msg_env);
     Result res;
     res.ok = false;
     res.error = "inconsistent callback id size";
-    return res;
-  }
-
-  if (callback_server_pid_size >
-      callback_server_pid_words.size() * sizeof(int64_t)) {
-    Result res;
-    res.ok = false;
-    res.error = "inconsistent callback server pid size";
     return res;
   }
 
@@ -160,27 +152,6 @@ Result InvokeRuntimeCallback(
     Result res;
     res.ok = false;
     res.error = "failed to decode callback id term";
-    return res;
-  }
-
-  const unsigned char *pid_bytes = reinterpret_cast<const unsigned char *>(
-      callback_server_pid_words.begin());
-
-  ERL_NIF_TERM callback_server_pid_term;
-  if (!enif_binary_to_term(msg_env, pid_bytes, callback_server_pid_size,
-                           &callback_server_pid_term, 0)) {
-    Result res;
-    res.ok = false;
-    res.error = "failed to decode callback server pid term";
-    return res;
-  }
-
-  ErlNifPid callback_server_pid;
-  if (!enif_get_local_pid(msg_env, callback_server_pid_term,
-                          &callback_server_pid)) {
-    Result res;
-    res.ok = false;
-    res.error = "failed to decode callback server pid";
     return res;
   }
 
@@ -212,7 +183,7 @@ Result InvokeRuntimeCallback(
   // but we don't know its env, therefore we cannot use enif_whereis_pid.
   // enif_whereis_pid can be called with NULL, but only from non-ERTS
   // threads, and doing so here results in a segfault.
-  enif_send(msg_env, &callback_server_pid, msg_env, fine::encode(msg_env, msg));
+  enif_send(msg_env, &state->dispatcher_pid, msg_env, fine::encode(msg_env, msg));
   enif_free_env(msg_env);
 
   std::unique_lock<std::mutex> lock(pending->mu);
