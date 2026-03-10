@@ -5,8 +5,8 @@ defmodule EXLA.Defn.RuntimeCallTest do
   import Nx.Testing
 
   setup do
-    Nx.default_backend(EXLA.Backend)
-    Nx.Defn.default_options(compiler: EXLA)
+    Nx.default_backend({EXLA.Backend, client: :host})
+    Nx.Defn.default_options(compiler: EXLA, client: :host)
     :ok
   end
 
@@ -101,7 +101,7 @@ defmodule EXLA.Defn.RuntimeCallTest do
 
   test "works when using EXLA compiler directly" do
     x = Nx.tensor([1, 2, 3])
-    y = EXLA.jit_apply(&split_and_sum/1, [x])
+    y = EXLA.jit_apply(&split_and_sum/1, [x], client: :host)
 
     fx = Nx.as_type(x, :f32)
     expected = Nx.add(Nx.multiply(fx, 2.0), Nx.add(fx, 1.0))
@@ -188,5 +188,48 @@ defmodule EXLA.Defn.RuntimeCallTest do
     assert_equal(result.x, x)
     assert_equal(result.y, y)
     assert_receive {:container_fun, ^ref}
+  end
+
+  describe "process leak regression" do
+    # A simple defn with no runtime_call nodes — previously each JIT call
+    # would leak a CallbackServer process.
+    defn simple_add(a, b), do: a + b
+
+    test "repeated JIT calls without runtime_call do not leak processes" do
+      process_count_before = length(Process.list())
+
+      for _ <- 1..1000 do
+        EXLA.jit_apply(&simple_add/2, [Nx.tensor(1), Nx.tensor(2)], client: :host)
+      end
+
+      :erlang.garbage_collect()
+      Process.sleep(100)
+
+      process_count_after = length(Process.list())
+
+      # Allow some slack for other system processes, but 1000 leaked
+      # CallbackServer processes would be obvious.
+      assert process_count_after - process_count_before < 50,
+             "Process count grew by #{process_count_after - process_count_before} " <>
+               "after 1000 JIT calls — suspected CallbackServer leak"
+    end
+
+    test "repeated JIT calls with runtime_call do not leak processes" do
+      process_count_before = length(Process.list())
+
+      for _ <- 1..100 do
+        x = Nx.iota({5})
+        add_offset(x)
+      end
+
+      :erlang.garbage_collect()
+      Process.sleep(100)
+
+      process_count_after = length(Process.list())
+
+      assert process_count_after - process_count_before < 50,
+             "Process count grew by #{process_count_after - process_count_before} " <>
+               "after 100 runtime_call JIT calls — suspected process leak"
+    end
   end
 end
