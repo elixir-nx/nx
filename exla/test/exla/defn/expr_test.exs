@@ -3875,8 +3875,11 @@ defmodule EXLA.Defn.ExprTest do
         da,
         Nx.tensor(
           [
-            [Complex.new(-4.0, -4.6666665), Complex.new(-0.33333334, 0.33333334),
-             Complex.new(-2.0, 0)],
+            [
+              Complex.new(-4.0, -4.6666665),
+              Complex.new(-0.33333334, 0.33333334),
+              Complex.new(-2.0, 0)
+            ],
             [0, Complex.new(-0.11111112, -0.11111112), Complex.new(0, -0.6666667)],
             [0, 0, Complex.new(-2.6666667, -3.3333333)]
           ],
@@ -3939,8 +3942,11 @@ defmodule EXLA.Defn.ExprTest do
           [
             [Complex.new(-1.25, -2.75), 0, 0],
             [Complex.new(0.5, 0.5), Complex.new(0, 0.33333334), 0],
-            [Complex.new(-2.5, 0.5), Complex.new(-1.0, -0.6666667),
-             Complex.new(-5.6666665, -2.3333333)]
+            [
+              Complex.new(-2.5, 0.5),
+              Complex.new(-1.0, -0.6666667),
+              Complex.new(-5.6666665, -2.3333333)
+            ]
           ],
           type: :c64
         ),
@@ -3954,10 +3960,16 @@ defmodule EXLA.Defn.ExprTest do
         db,
         Nx.tensor(
           [
-            [Complex.new(0.5, 0), Complex.new(0.16666667, -0.16666667),
-             Complex.new(1.0, -0.6666666)],
-            [Complex.new(0.5, 0), Complex.new(0.16666667, -0.16666667),
-             Complex.new(1.0, -0.6666666)]
+            [
+              Complex.new(0.5, 0),
+              Complex.new(0.16666667, -0.16666667),
+              Complex.new(1.0, -0.6666666)
+            ],
+            [
+              Complex.new(0.5, 0),
+              Complex.new(0.16666667, -0.16666667),
+              Complex.new(1.0, -0.6666666)
+            ]
           ],
           type: :c64
         ),
