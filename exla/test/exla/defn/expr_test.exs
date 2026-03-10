@@ -3758,6 +3758,225 @@ defmodule EXLA.Defn.ExprTest do
       assert_all_close(Nx.dot(Nx.transpose(a), ts(a, b, transform_a: :transpose)), b)
     end
 
+    test "triangular_solve with transform_a: :conjugate" do
+      a = Nx.tensor([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
+      b = Nx.tensor([1, 2, 1])
+
+      # For real tensors, conjugate == identity, so result should match :none
+      assert_all_close(ts(a, b, transform_a: :conjugate, lower: true), ts(a, b, lower: true))
+
+      # Complex tensors: verify A*.x = b by checking Nx.dot(conjugate(A), x) == b
+      a_c =
+        Nx.tensor(
+          [
+            [Complex.new(2, 0), 0, 0],
+            [Complex.new(1, 1), Complex.new(3, 0), 0],
+            [Complex.new(0, 2), Complex.new(1, -1), Complex.new(1, 0)]
+          ],
+          type: :c128
+        )
+
+      b_c = Nx.tensor([Complex.new(1, 0), Complex.new(2, 1), Complex.new(3, 0)], type: :c128)
+
+      x = ts(a_c, b_c, transform_a: :conjugate, lower: true)
+      assert_all_close(Nx.dot(Nx.conjugate(a_c), x), b_c, atol: 1.0e-10)
+    end
+
+    defn ts_grad_wrt_a(a, b, opts \\ []) do
+      grad(a, fn a -> a |> Nx.LinAlg.triangular_solve(b, opts) |> Nx.sum() end)
+    end
+
+    defn ts_grad_wrt_b(a, b, opts \\ []) do
+      grad(b, fn b -> a |> Nx.LinAlg.triangular_solve(b, opts) |> Nx.sum() end)
+    end
+
+    defn ts_composed_grad_wrt_a(a, b, opts \\ []) do
+      grad(a, fn a ->
+        a |> Nx.sin() |> Nx.LinAlg.triangular_solve(Nx.cos(b), opts) |> Nx.sin() |> Nx.sum()
+      end)
+    end
+
+    test "triangular_solve gradient with transform_a: :conjugate, complex tensors" do
+      a =
+        Nx.tensor(
+          [
+            [Complex.new(2, 0), 0, 0],
+            [Complex.new(1, 1), Complex.new(3, 0), 0],
+            [Complex.new(0, 2), Complex.new(1, -1), Complex.new(1, 0)]
+          ],
+          type: :c64
+        )
+
+      b = Nx.tensor([Complex.new(1, 0), Complex.new(2, 1), Complex.new(3, 0)], type: :c64)
+
+      da = ts_grad_wrt_a(a, b, transform_a: :conjugate, lower: true)
+      assert Nx.type(da) == {:c, 64}
+
+      assert_all_close(
+        da,
+        Nx.tensor(
+          [
+            [Complex.new(-0.33333334, -0.5833333), 0, 0],
+            [Complex.new(0, 0.16666667), Complex.new(-0.16666667, 0.16666667), 0],
+            [Complex.new(-0.5, 0), Complex.new(-0.5, -0.5), Complex.new(-3.0, 0)]
+          ],
+          type: :c64
+        ),
+        atol: 1.0e-5
+      )
+
+      db = ts_grad_wrt_b(a, b, transform_a: :conjugate, lower: true)
+      assert Nx.type(db) == {:c, 64}
+
+      assert_all_close(
+        db,
+        Nx.tensor(
+          [Complex.new(0.6666667, -1.1666666), Complex.new(0, 0.33333334), Complex.new(1, 0)],
+          type: :c64
+        ),
+        atol: 1.0e-5
+      )
+
+      # Composed gradient — values are numerically large; verify shape/type
+      da_composed = ts_composed_grad_wrt_a(a, b, transform_a: :conjugate, lower: true)
+      assert Nx.shape(da_composed) == {3, 3}
+      assert Nx.type(da_composed) == {:c, 64}
+    end
+
+    test "triangular_solve gradient with transform_a: :conjugate, upper triangular" do
+      a =
+        Nx.tensor(
+          [
+            [Complex.new(1, 0), Complex.new(1, 1), Complex.new(0, 2)],
+            [0, Complex.new(3, 0), Complex.new(1, -1)],
+            [0, 0, Complex.new(1, 0)]
+          ],
+          type: :c64
+        )
+
+      b = Nx.tensor([Complex.new(4, 0), Complex.new(3, 1), Complex.new(2, 0)], type: :c64)
+
+      db = ts_grad_wrt_b(a, b, transform_a: :conjugate, lower: false)
+      assert Nx.type(db) == {:c, 64}
+
+      assert_all_close(
+        db,
+        Nx.tensor(
+          [Complex.new(1, 0), Complex.new(0, -0.33333334), Complex.new(1.3333334, -1.6666666)],
+          type: :c64
+        ),
+        atol: 1.0e-5
+      )
+
+      da = ts_grad_wrt_a(a, b, transform_a: :conjugate, lower: false)
+      assert Nx.type(da) == {:c, 64}
+
+      assert_all_close(
+        da,
+        Nx.tensor(
+          [
+            [
+              Complex.new(-4.0, -4.6666665),
+              Complex.new(-0.33333334, 0.33333334),
+              Complex.new(-2.0, 0)
+            ],
+            [0, Complex.new(-0.11111112, -0.11111112), Complex.new(0, -0.6666667)],
+            [0, 0, Complex.new(-2.6666667, -3.3333333)]
+          ],
+          type: :c64
+        ),
+        atol: 1.0e-5
+      )
+    end
+
+    test "triangular_solve with transform_a: :conjugate, left_side: false" do
+      a_c =
+        Nx.tensor(
+          [
+            [Complex.new(2, 0), 0, 0],
+            [Complex.new(1, 1), Complex.new(3, 0), 0],
+            [Complex.new(0, 2), Complex.new(1, -1), Complex.new(1, 0)]
+          ],
+          type: :c128
+        )
+
+      b_c =
+        Nx.tensor(
+          [
+            [Complex.new(1, 0), Complex.new(2, 1), Complex.new(3, 0)],
+            [Complex.new(0, 1), Complex.new(1, 0), Complex.new(2, -1)]
+          ],
+          type: :c128
+        )
+
+      x = ts(a_c, b_c, transform_a: :conjugate, left_side: false, lower: true)
+      assert_all_close(Nx.dot(x, Nx.conjugate(a_c)), b_c, atol: 1.0e-10)
+    end
+
+    test "triangular_solve gradient with transform_a: :conjugate, left_side: false" do
+      a_c =
+        Nx.tensor(
+          [
+            [Complex.new(2, 0), 0, 0],
+            [Complex.new(1, 1), Complex.new(3, 0), 0],
+            [Complex.new(0, 2), Complex.new(1, -1), Complex.new(1, 0)]
+          ],
+          type: :c64
+        )
+
+      b_c =
+        Nx.tensor(
+          [
+            [Complex.new(1, 0), Complex.new(2, 1), Complex.new(3, 0)],
+            [Complex.new(0, 1), Complex.new(1, 0), Complex.new(2, -1)]
+          ],
+          type: :c64
+        )
+
+      da = ts_grad_wrt_a(a_c, b_c, transform_a: :conjugate, left_side: false, lower: true)
+      assert Nx.type(da) == {:c, 64}
+
+      assert_all_close(
+        da,
+        Nx.tensor(
+          [
+            [Complex.new(-1.25, -2.75), 0, 0],
+            [Complex.new(0.5, 0.5), Complex.new(0, 0.33333334), 0],
+            [
+              Complex.new(-2.5, 0.5),
+              Complex.new(-1.0, -0.6666667),
+              Complex.new(-5.6666665, -2.3333333)
+            ]
+          ],
+          type: :c64
+        ),
+        atol: 1.0e-5
+      )
+
+      db = ts_grad_wrt_b(a_c, b_c, transform_a: :conjugate, left_side: false, lower: true)
+      assert Nx.type(db) == {:c, 64}
+
+      assert_all_close(
+        db,
+        Nx.tensor(
+          [
+            [
+              Complex.new(0.5, 0),
+              Complex.new(0.16666667, -0.16666667),
+              Complex.new(1.0, -0.6666666)
+            ],
+            [
+              Complex.new(0.5, 0),
+              Complex.new(0.16666667, -0.16666667),
+              Complex.new(1.0, -0.6666666)
+            ]
+          ],
+          type: :c64
+        ),
+        atol: 1.0e-5
+      )
+    end
+
     defn qr(t), do: Nx.LinAlg.qr(t)
     defn qr_complete(t), do: Nx.LinAlg.qr(t, mode: :complete)
 

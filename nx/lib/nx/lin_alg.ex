@@ -574,7 +574,10 @@ defmodule Nx.LinAlg do
 
       iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: :f64)
       iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :conjugate)
-      ** (ArgumentError) complex numbers not supported yet
+      #Nx.Tensor<
+        f64[3]
+        [1.0, 1.0, -1.0]
+      >
 
       iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: :f64)
       iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :other)
@@ -585,11 +588,8 @@ defmodule Nx.LinAlg do
     opts = keyword!(opts, lower: true, left_side: true, transform_a: :none)
 
     case opts[:transform_a] do
-      t when t in [:none, :transpose] ->
+      t when t in [:none, :transpose, :conjugate] ->
         nil
-
-      :conjugate ->
-        raise ArgumentError, "complex numbers not supported yet"
 
       t ->
         raise ArgumentError,
