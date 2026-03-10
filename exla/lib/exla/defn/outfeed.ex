@@ -1,5 +1,6 @@
 defmodule EXLA.Defn.Outfeed do
   @moduledoc false
+  require Logger
 
   alias EXLA.Defn.Outfeed
   alias Nx.Defn.{Expr, Tree, Composite}
@@ -12,6 +13,7 @@ defmodule EXLA.Defn.Outfeed do
             default_hooks: %{},
             used_hooks: [],
             compiled_hooks: %{},
+            callbacks: %{},
             token: nil,
             infeeds: []
 
@@ -76,7 +78,7 @@ defmodule EXLA.Defn.Outfeed do
 
   ## Struct API
 
-  defguard will_outfeed(outfeed) when outfeed.compiled_hooks != %{}
+  defguard will_outfeed(outfeed) when outfeed.compiled_hooks != %{} or outfeed.callbacks != %{}
 
   @doc """
   An empty outfeed to be used when not outfeeding is supported.
@@ -109,6 +111,18 @@ defmodule EXLA.Defn.Outfeed do
   Sets the token to outfeed.
   """
   def with_token(%Outfeed{} = outfeed, token), do: %{outfeed | token: token}
+
+  @doc """
+  Registers a runtime_call callback in the outfeed struct.
+
+  This stores the callback function, output template, and argument template
+  so they can be passed to the outfeed task at runtime. The outfeed task
+  handles `:exla_runtime_call` messages from the native bridge.
+  """
+  def register_callback(%Outfeed{} = outfeed, id, fun, out_template, arg_template)
+      when is_function(fun) do
+    put_in(outfeed.callbacks[id], {fun, out_template, arg_template})
+  end
 
   @doc """
   Adds an infeed hook.
@@ -160,7 +174,7 @@ defmodule EXLA.Defn.Outfeed do
   """
   def close(outfeed, builder)
 
-  def close(%Outfeed{} = outfeed, %Function{} = builder) when will_outfeed(outfeed),
+  def close(%Outfeed{compiled_hooks: ch} = outfeed, %Function{} = builder) when ch != %{},
     do:
       update_in(outfeed.token, &Value.outfeed(Value.constant(builder, [0], flag_typespec()), &1))
 
@@ -190,6 +204,10 @@ defmodule EXLA.Defn.Outfeed do
   `{typespecs, {pid, ref} | {fun, template}}` pairs to
   deliver/execute the outputs. The computation must emit
   a 0 flag on exit.
+
+  When callbacks are present, the task also registers itself
+  as the runtime callback dispatcher via the NIF bridge, handling
+  `:exla_runtime_call` messages from the native side.
   """
   def start_child(
         %EXLA.Executable{} = executable,
@@ -199,26 +217,55 @@ defmodule EXLA.Defn.Outfeed do
       ) do
     %{client: client, device_id: device_id} = executable
 
-    %{compiled_hooks: compiled_hooks, default_hooks: default_hooks, user_hooks: user_hooks} =
-      outfeed
+    %{
+      compiled_hooks: compiled_hooks,
+      default_hooks: default_hooks,
+      user_hooks: user_hooks,
+      callbacks: callbacks
+    } = outfeed
 
     hooks = Map.merge(default_hooks, user_hooks)
 
     Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
-      init(client, device_id, hooks, compiled_hooks, infeeds, group_leader)
+      init(client, device_id, hooks, compiled_hooks, callbacks, infeeds, group_leader)
     end)
   end
 
-  defp init(client, device_id, hooks, compiled_hooks, infeeds, group_leader) do
+  defp init(client, device_id, hooks, compiled_hooks, callbacks, infeeds, group_leader) do
     Process.flag(:trap_exit, true)
     # Copy the group leader so we report to the proper device
     Process.group_leader(self(), group_leader)
-    ref = make_ref()
-    typespec = EXLA.Typespec.tensor({:u, 16}, {})
-    loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
+
+    # When callbacks are present, register this task as the runtime
+    # callback dispatcher so the C++ bridge sends messages here.
+    if callbacks != %{} do
+      EXLA.NIF.start_runtime_callback_bridge(self())
+    end
+
+    try do
+      if compiled_hooks != %{} do
+        # Outfeed loop that also handles runtime_call messages
+        ref = make_ref()
+        typespec = EXLA.Typespec.tensor({:u, 16}, {})
+        outfeed_loop(client, device_id, ref, typespec, hooks, compiled_hooks, callbacks, infeeds)
+      else
+        # No outfeed hooks — only runtime_call messages
+        callback_only_loop(callbacks)
+      end
+    after
+      if callbacks != %{} do
+        try do
+          EXLA.NIF.clear_runtime_callback_bridge(self())
+        rescue
+          _ -> :ok
+        end
+      end
+    end
   end
 
-  defp loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds) do
+  # Loop for when we have outfeed hooks (and possibly callbacks too).
+  # Receives XLA outfeed data via refs and runtime_call messages inline.
+  defp outfeed_loop(client, device_id, ref, typespec, hooks, compiled_hooks, callbacks, infeeds) do
     :ok = EXLA.Client.from_outfeed(client, device_id, [typespec], self(), ref)
 
     receive do
@@ -235,7 +282,17 @@ defmodule EXLA.Defn.Outfeed do
               end
 
             EXLA.Client.to_infeed(client, device_id, [{data, data_typespec}])
-            loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
+
+            outfeed_loop(
+              client,
+              device_id,
+              ref,
+              typespec,
+              hooks,
+              compiled_hooks,
+              callbacks,
+              infeeds
+            )
 
           {:function, typespecs, name, template} ->
             fun = Map.fetch!(hooks, name)
@@ -246,10 +303,176 @@ defmodule EXLA.Defn.Outfeed do
             :ok = EXLA.Client.from_outfeed(client, device_id, typespecs, pid, ref)
 
             receive do
-              ^ref -> loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
+              ^ref ->
+                outfeed_loop(
+                  client,
+                  device_id,
+                  ref,
+                  typespec,
+                  hooks,
+                  compiled_hooks,
+                  callbacks,
+                  infeeds
+                )
             end
         end
+
+      {:exla_runtime_call, callback_id, args_spec, reply_tag} ->
+        handle_runtime_call(callbacks, callback_id, args_spec, reply_tag)
+
+        outfeed_loop(
+          client,
+          device_id,
+          ref,
+          typespec,
+          hooks,
+          compiled_hooks,
+          callbacks,
+          infeeds
+        )
     end
+  end
+
+  # Loop for when we only have runtime_call callbacks (no outfeed hooks).
+  # The caller sends :done when execution completes.
+  defp callback_only_loop(callbacks) do
+    receive do
+      {:exla_runtime_call, callback_id, args_spec, reply_tag} ->
+        handle_runtime_call(callbacks, callback_id, args_spec, reply_tag)
+        callback_only_loop(callbacks)
+
+      :done ->
+        :ok
+    end
+  end
+
+  defp handle_runtime_call(callbacks, callback_id, args_spec, reply_tag) do
+    {status, result} =
+      try do
+        case Map.fetch(callbacks, callback_id) do
+          {:ok, {fun, out_template, arg_template}} ->
+            args_spec
+            |> decode_callback_args(arg_template)
+            |> run_callback(fun, out_template)
+            |> encode_callback_reply()
+
+          :error ->
+            Logger.error(
+              "EXLA runtime_call received callback id #{inspect(callback_id)} that is not registered"
+            )
+
+            encode_callback_reply({:error, :unknown_callback})
+        end
+      catch
+        kind, reason ->
+          formatted = Exception.format(kind, reason, __STACKTRACE__)
+
+          encode_callback_reply(
+            {:error, {:runtime_error, "Elixir callback crashed: #{formatted}"}}
+          )
+      end
+
+    try do
+      EXLA.NIF.runtime_callback_reply(reply_tag, status, result)
+    rescue
+      _ ->
+        Logger.error(
+          "EXLA runtime_call failed to send reply for tag #{inspect(reply_tag)}"
+        )
+    end
+  end
+
+  defp run_callback({:error, reason}, _fun, _out_template), do: {:error, reason}
+
+  defp run_callback({:ok, tensor_args}, fun, out_template) do
+    result =
+      try do
+        fun.(tensor_args)
+      rescue
+        exception ->
+          {:error, {:exception, exception, __STACKTRACE__}}
+      catch
+        kind, reason ->
+          {:error, {kind, reason}}
+      end
+
+    case result do
+      {:error, _} = error ->
+        error
+
+      value ->
+        if Nx.compatible?(value, out_template) do
+          {:ok, value}
+        else
+          {:error, {:shape_mismatch, value, out_template}}
+        end
+    end
+  end
+
+  defp decode_callback_args(args_spec, arg_template) when is_list(args_spec) do
+    {container, remaining} =
+      Nx.Defn.Composite.traverse(arg_template, args_spec, fn
+        %Nx.Tensor{} = template, [{bin, {type, shape_list}} | rest] ->
+          decoded =
+            bin
+            |> Nx.from_binary(type)
+            |> Nx.reshape(List.to_tuple(shape_list))
+
+          if Nx.compatible?(decoded, template) do
+            {decoded, rest}
+          else
+            throw({:error, {:shape_mismatch, decoded, template}})
+          end
+
+        other, acc ->
+          {other, acc}
+      end)
+
+    case remaining do
+      [] -> {:ok, container}
+      _ -> {:error, {:invalid_args_spec, :extra_values}}
+    end
+  catch
+    {:error, reason} -> {:error, reason}
+  end
+
+  defp decode_callback_args(_other, _arg_template), do: {:error, {:invalid_args_spec, :bad_format}}
+
+  defp encode_callback_reply({:ok, value}) do
+    binaries =
+      [value]
+      |> Nx.Defn.Composite.flatten_list()
+      |> Enum.map(&Nx.to_binary/1)
+
+    {:ok, binaries}
+  end
+
+  defp encode_callback_reply({:error, {:shape_mismatch, left, right}}) do
+    msg =
+      "expected the runtime_call function to match the given output template " <>
+        "#{inspect(right)}, got: #{inspect(left)}"
+
+    {:error, {:argument_error, msg}}
+  end
+
+  defp encode_callback_reply({:error, {:exception, exception, _stack}}) do
+    {:error, {:runtime_error, "Elixir callback raised: #{Exception.message(exception)}"}}
+  end
+
+  defp encode_callback_reply({:error, {:runtime_error, msg}}) do
+    {:error, {:runtime_error, msg}}
+  end
+
+  defp encode_callback_reply({:error, :unknown_callback}) do
+    {:error, {:runtime_error, "unknown EXLA runtime_call callback id"}}
+  end
+
+  defp encode_callback_reply({:error, {kind, reason}}) do
+    {:error, {:runtime_error, "Elixir callback #{kind}: #{inspect(reason)}"}}
+  end
+
+  defp encode_callback_reply({:error, reason}) do
+    {:error, {:runtime_error, "Elixir callback error: #{inspect(reason)}"}}
   end
 
   defp apply_hook(parent, ref, length, fun, template) do

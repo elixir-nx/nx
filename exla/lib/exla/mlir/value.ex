@@ -843,13 +843,9 @@ defmodule EXLA.MLIR.Value do
   def runtime_call(
         [%Value{function: func} | _] = operands,
         typespecs,
-        callback_server_pid,
         callback_id
       ) do
     result_types = typespecs_to_mlir_types(typespecs)
-
-    {callback_server_pid_words, callback_server_pid_size} =
-      term_to_int64_list(callback_server_pid)
 
     {callback_id_words, callback_id_size} =
       term_to_int64_list(callback_id)
@@ -861,9 +857,7 @@ defmodule EXLA.MLIR.Value do
       backend_config:
         attr_dict(
           callback_id: attr_array_i64_elements(callback_id_words),
-          callback_id_size: attr_ui64(callback_id_size),
-          callback_server_pid: attr_array_i64_elements(callback_server_pid_words),
-          callback_server_pid_size: attr_ui64(callback_server_pid_size)
+          callback_id_size: attr_ui64(callback_id_size)
         )
     ]
 

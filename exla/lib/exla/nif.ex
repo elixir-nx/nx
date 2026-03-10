@@ -48,8 +48,7 @@ defmodule EXLA.NIF do
         _num_replicas,
         _num_partitions,
         _use_spmd,
-        _device_id,
-        _callback_server_pid
+        _device_id
       ),
       do: err!()
 
