@@ -3809,17 +3809,35 @@ defmodule EXLA.Defn.ExprTest do
 
       b = Nx.tensor([Complex.new(1, 0), Complex.new(2, 1), Complex.new(3, 0)], type: :c64)
 
-      # Gradient wrt a should produce a 3x3 complex tensor
       da = ts_grad_wrt_a(a, b, transform_a: :conjugate, lower: true)
-      assert Nx.shape(da) == {3, 3}
       assert Nx.type(da) == {:c, 64}
 
-      # Gradient wrt b should produce a length-3 complex tensor
+      assert_all_close(
+        da,
+        Nx.tensor(
+          [
+            [Complex.new(-0.33333334, -0.5833333), 0, 0],
+            [Complex.new(0, 0.16666667), Complex.new(-0.16666667, 0.16666667), 0],
+            [Complex.new(-0.5, 0), Complex.new(-0.5, -0.5), Complex.new(-3.0, 0)]
+          ],
+          type: :c64
+        ),
+        atol: 1.0e-5
+      )
+
       db = ts_grad_wrt_b(a, b, transform_a: :conjugate, lower: true)
-      assert Nx.shape(db) == {3}
       assert Nx.type(db) == {:c, 64}
 
-      # Composed gradient should also work
+      assert_all_close(
+        db,
+        Nx.tensor(
+          [Complex.new(0.6666667, -1.1666666), Complex.new(0, 0.33333334), Complex.new(1, 0)],
+          type: :c64
+        ),
+        atol: 1.0e-5
+      )
+
+      # Composed gradient — values are numerically large; verify shape/type
       da_composed = ts_composed_grad_wrt_a(a, b, transform_a: :conjugate, lower: true)
       assert Nx.shape(da_composed) == {3, 3}
       assert Nx.type(da_composed) == {:c, 64}
@@ -3839,12 +3857,33 @@ defmodule EXLA.Defn.ExprTest do
       b = Nx.tensor([Complex.new(4, 0), Complex.new(3, 1), Complex.new(2, 0)], type: :c64)
 
       db = ts_grad_wrt_b(a, b, transform_a: :conjugate, lower: false)
-      assert Nx.shape(db) == {3}
       assert Nx.type(db) == {:c, 64}
 
+      assert_all_close(
+        db,
+        Nx.tensor(
+          [Complex.new(1, 0), Complex.new(0, -0.33333334), Complex.new(1.3333334, -1.6666666)],
+          type: :c64
+        ),
+        atol: 1.0e-5
+      )
+
       da = ts_grad_wrt_a(a, b, transform_a: :conjugate, lower: false)
-      assert Nx.shape(da) == {3, 3}
       assert Nx.type(da) == {:c, 64}
+
+      assert_all_close(
+        da,
+        Nx.tensor(
+          [
+            [Complex.new(-4.0, -4.6666665), Complex.new(-0.33333334, 0.33333334),
+             Complex.new(-2.0, 0)],
+            [0, Complex.new(-0.11111112, -0.11111112), Complex.new(0, -0.6666667)],
+            [0, 0, Complex.new(-2.6666667, -3.3333333)]
+          ],
+          type: :c64
+        ),
+        atol: 1.0e-5
+      )
     end
 
     test "triangular_solve with transform_a: :conjugate, left_side: false" do
@@ -3892,12 +3931,38 @@ defmodule EXLA.Defn.ExprTest do
         )
 
       da = ts_grad_wrt_a(a_c, b_c, transform_a: :conjugate, left_side: false, lower: true)
-      assert Nx.shape(da) == {3, 3}
       assert Nx.type(da) == {:c, 64}
 
+      assert_all_close(
+        da,
+        Nx.tensor(
+          [
+            [Complex.new(-1.25, -2.75), 0, 0],
+            [Complex.new(0.5, 0.5), Complex.new(0, 0.33333334), 0],
+            [Complex.new(-2.5, 0.5), Complex.new(-1.0, -0.6666667),
+             Complex.new(-5.6666665, -2.3333333)]
+          ],
+          type: :c64
+        ),
+        atol: 1.0e-5
+      )
+
       db = ts_grad_wrt_b(a_c, b_c, transform_a: :conjugate, left_side: false, lower: true)
-      assert Nx.shape(db) == {2, 3}
       assert Nx.type(db) == {:c, 64}
+
+      assert_all_close(
+        db,
+        Nx.tensor(
+          [
+            [Complex.new(0.5, 0), Complex.new(0.16666667, -0.16666667),
+             Complex.new(1.0, -0.6666666)],
+            [Complex.new(0.5, 0), Complex.new(0.16666667, -0.16666667),
+             Complex.new(1.0, -0.6666666)]
+          ],
+          type: :c64
+        ),
+        atol: 1.0e-5
+      )
     end
 
     defn qr(t), do: Nx.LinAlg.qr(t)
