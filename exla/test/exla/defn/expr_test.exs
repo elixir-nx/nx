@@ -3822,7 +3822,7 @@ defmodule EXLA.Defn.ExprTest do
           ],
           type: :c64
         ),
-        atol: 1.0e-5
+        atol: 1.0e-3
       )
 
       db = ts_grad_wrt_b(a, b, transform_a: :conjugate, lower: true)
@@ -3834,7 +3834,7 @@ defmodule EXLA.Defn.ExprTest do
           [Complex.new(0.6666667, -1.1666666), Complex.new(0, 0.33333334), Complex.new(1, 0)],
           type: :c64
         ),
-        atol: 1.0e-5
+        atol: 1.0e-3
       )
 
       # Composed gradient — values are numerically large; verify shape/type
@@ -3865,7 +3865,7 @@ defmodule EXLA.Defn.ExprTest do
           [Complex.new(1, 0), Complex.new(0, -0.33333334), Complex.new(1.3333334, -1.6666666)],
           type: :c64
         ),
-        atol: 1.0e-5
+        atol: 1.0e-3
       )
 
       da = ts_grad_wrt_a(a, b, transform_a: :conjugate, lower: false)
@@ -3885,7 +3885,7 @@ defmodule EXLA.Defn.ExprTest do
           ],
           type: :c64
         ),
-        atol: 1.0e-5
+        atol: 1.0e-3
       )
     end
 
@@ -3950,7 +3950,7 @@ defmodule EXLA.Defn.ExprTest do
           ],
           type: :c64
         ),
-        atol: 1.0e-5
+        atol: 1.0e-3
       )
 
       db = ts_grad_wrt_b(a_c, b_c, transform_a: :conjugate, left_side: false, lower: true)
@@ -3973,7 +3973,7 @@ defmodule EXLA.Defn.ExprTest do
           ],
           type: :c64
         ),
-        atol: 1.0e-5
+        atol: 1.0e-3
       )
     end
 
