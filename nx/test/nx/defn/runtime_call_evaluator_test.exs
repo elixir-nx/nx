@@ -47,8 +47,6 @@ defmodule Nx.Defn.RuntimeCallEvaluatorTest do
     assert expected == y
   end
 
-  # Issue #1684: runtime_call callbacks should be able to call
-  # regular defp functions without requiring deftransform.
   defp do_add_offset(t, opts) do
     t
     |> Nx.as_type(:f32)

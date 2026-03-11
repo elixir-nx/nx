@@ -631,8 +631,9 @@ defmodule Nx.Defn.Compiler do
        ) do
     {out, state} = normalize(out, state)
     {tensor_or_container, state} = normalize(tensor_or_container, state)
+    prev_runtime_callback? = state.runtime_callback?
     {fun, state} = normalize(fun, %{state | runtime_callback?: true})
-    state = %{state | runtime_callback?: false}
+    state = %{state | runtime_callback?: prev_runtime_callback?}
     {{{:., dot_meta, [Nx, :runtime_call]}, meta, [out, tensor_or_container, fun]}, state}
   end
 

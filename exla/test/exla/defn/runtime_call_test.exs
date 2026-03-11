@@ -190,8 +190,6 @@ defmodule EXLA.Defn.RuntimeCallTest do
     assert_receive {:container_fun, ^ref}
   end
 
-  # Issue #1684: runtime_call callbacks should be able to call
-  # regular defp functions without requiring deftransform.
   defp plain_add_offset(t, opts) do
     t
     |> Nx.as_type(:f32)
