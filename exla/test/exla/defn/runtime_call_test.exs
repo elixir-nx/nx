@@ -222,6 +222,62 @@ defmodule EXLA.Defn.RuntimeCallTest do
     end)
   end
 
+  defp double(t), do: Nx.multiply(t, 2)
+  defp double_and_add(t, val), do: Nx.add(double(t), val)
+
+  defn nested_defp_callback(x) do
+    out = %{x | type: Nx.Type.to_floating(x.type)}
+
+    Nx.runtime_call(out, x, fn t ->
+      double_and_add(Nx.as_type(t, :f32), 1.0)
+    end)
+  end
+
+  test "runtime_call callback with nested defp calls" do
+    x = Nx.tensor([1, 2, 3])
+    result = nested_defp_callback(x)
+
+    expected = Nx.add(Nx.multiply(Nx.as_type(x, :f32), 2), 1.0)
+    assert_equal(result, expected)
+  end
+
+  defp scale(t, factor), do: Nx.multiply(t, factor)
+
+  defn pipe_chain_callback(x) do
+    out = %{x | type: Nx.Type.to_floating(x.type)}
+
+    Nx.runtime_call(out, x, fn t ->
+      t |> Nx.as_type(:f32) |> scale(3.0) |> Nx.add(1.0) |> double()
+    end)
+  end
+
+  test "runtime_call callback with pipe chain mixing Nx and defp" do
+    x = Nx.tensor([1, 2, 3])
+    result = pipe_chain_callback(x)
+
+    fx = Nx.as_type(x, :f32)
+    expected = Nx.multiply(Nx.add(Nx.multiply(fx, 3.0), 1.0), 2)
+    assert_equal(result, expected)
+  end
+
+  defp negate_f32(t), do: Nx.negate(Nx.as_type(t, :f32))
+
+  defn two_defp_callbacks(x) do
+    fx = Nx.as_type(x, :f32)
+
+    a = Nx.runtime_call(%{fx | type: {:f, 32}}, fx, fn t -> double(t) end)
+    b = Nx.runtime_call(%{fx | type: {:f, 32}}, fx, fn t -> negate_f32(t) end)
+
+    Nx.add(a, b)
+  end
+
+  test "multiple runtime_calls with different defp callbacks" do
+    x = Nx.tensor([1.0, 2.0, 3.0])
+    result = two_defp_callbacks(x)
+
+    assert_equal(result, x)
+  end
+
   test "runtime_call callback can call non-Nx module functions" do
     x = Nx.tensor([1, 2, 3])
     result = callback_with_enum(x)
