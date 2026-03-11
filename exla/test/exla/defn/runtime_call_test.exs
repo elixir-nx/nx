@@ -569,5 +569,148 @@ defmodule EXLA.Defn.RuntimeCallTest do
       assert_equal(result, expected)
       assert Nx.type(result) == {:f, 32}
     end
+
+    defn scalar_callback(x) do
+      Nx.runtime_call(%{x | type: {:f, 32}}, x, fn t -> Nx.add(Nx.as_type(t, :f32), 42.0) end)
+    end
+
+    test "runtime_call with scalar (0-dim tensor)" do
+      x = Nx.tensor(5)
+      result = scalar_callback(x)
+
+      assert_equal(result, Nx.tensor(47.0))
+      assert Nx.shape(result) == {}
+    end
+
+    test "runtime_call with very small tensor" do
+      # A {1}-shaped tensor — minimal non-empty tensor through the bridge.
+      x = Nx.tensor([7])
+      result = scalar_callback(x)
+
+      assert_equal(result, Nx.tensor(49.0))
+      assert Nx.shape(result) == {1}
+      assert Nx.type(result) == {:f, 32}
+    end
   end
+
+  describe "runtime_call inside control flow" do
+    defn callback_in_while(x) do
+      # Repeatedly apply a runtime_call inside a while loop.
+      # The same callback_id gets invoked multiple times per execution.
+      {result, _i} =
+        while {acc = Nx.as_type(x, :f32), i = 0}, i < 3 do
+          stepped =
+            Nx.runtime_call(%{acc | type: {:f, 32}}, acc, fn t -> Nx.add(t, 1.0) end)
+
+          {stepped, i + 1}
+        end
+
+      result
+    end
+
+    test "runtime_call invoked multiple times inside while loop" do
+      x = Nx.tensor([0.0, 10.0, 20.0])
+      result = callback_in_while(x)
+
+      # Each iteration adds 1.0, 3 iterations total
+      expected = Nx.add(x, 3.0)
+      assert_equal(result, expected)
+    end
+
+    defn callback_in_cond(x, flag) do
+      fx = Nx.as_type(x, :f32)
+
+      if flag do
+        Nx.runtime_call(%{fx | type: {:f, 32}}, fx, fn t -> Nx.add(t, 100.0) end)
+      else
+        Nx.runtime_call(%{fx | type: {:f, 32}}, fx, fn t -> Nx.multiply(t, -1.0) end)
+      end
+    end
+
+    test "runtime_call in true branch of cond" do
+      x = Nx.tensor([1.0, 2.0, 3.0])
+      result = callback_in_cond(x, Nx.tensor(1, type: :u8))
+
+      expected = Nx.add(x, 100.0)
+      assert_equal(result, expected)
+    end
+
+    test "runtime_call in false branch of cond" do
+      x = Nx.tensor([1.0, 2.0, 3.0])
+      result = callback_in_cond(x, Nx.tensor(0, type: :u8))
+
+      expected = Nx.negate(x)
+      assert_equal(result, expected)
+    end
+  end
+
+  describe "error edge cases" do
+    defn callback_raises_argument_error(x) do
+      out = %{x | type: {:f, 32}}
+
+      Nx.runtime_call(out, x, fn _t ->
+        raise ArgumentError, "intentional argument error"
+      end)
+    end
+
+    defn callback_raises_arithmetic_error(x) do
+      out = %{x | type: {:f, 32}}
+
+      Nx.runtime_call(out, x, fn _t ->
+        raise ArithmeticError, "intentional arithmetic error"
+      end)
+    end
+
+    test "callback that raises ArgumentError" do
+      x = Nx.tensor([1.0, 2.0])
+
+      assert_raise RuntimeError, ~r/intentional argument error/, fn ->
+        callback_raises_argument_error(x)
+      end
+    end
+
+    test "callback that raises ArithmeticError" do
+      x = Nx.tensor([1.0, 2.0])
+
+      assert_raise RuntimeError, ~r/intentional arithmetic error/, fn ->
+        callback_raises_arithmetic_error(x)
+      end
+    end
+  end
+
+  describe "hooks + multiple runtime_calls" do
+    defp send_hook(tag) do
+      parent = self()
+      fn value -> send(parent, {tag, value}) end
+    end
+
+    defn hooks_and_two_callbacks(x) do
+      fx = Nx.as_type(x, :f32)
+      observed = hook(fx, :input, send_hook(:input))
+
+      step1 =
+        Nx.runtime_call(%{observed | type: {:f, 32}}, observed, fn t -> Nx.add(t, 10.0) end)
+
+      mid = hook(step1, :middle, send_hook(:middle))
+
+      Nx.runtime_call(%{mid | type: {:f, 32}}, mid, fn t -> Nx.multiply(t, 2.0) end)
+    end
+
+    test "two hooks and two runtime_calls interleaved" do
+      x = Nx.tensor([1, 2, 3])
+      result = hooks_and_two_callbacks(x)
+
+      assert_receive {:input, input_val}
+      assert_equal(input_val, Nx.as_type(x, :f32))
+
+      assert_receive {:middle, middle_val}
+      expected_mid = Nx.add(Nx.as_type(x, :f32), 10.0)
+      assert_equal(middle_val, expected_mid)
+
+      # (x + 10) * 2
+      expected = Nx.multiply(expected_mid, 2.0)
+      assert_equal(result, expected)
+    end
+  end
+
 end
