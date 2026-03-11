@@ -47,6 +47,46 @@ defmodule Nx.Defn.RuntimeCallEvaluatorTest do
     assert expected == y
   end
 
+  # Issue #1684: runtime_call callbacks should be able to call
+  # regular defp functions without requiring deftransform.
+  defp do_add_offset(t, opts) do
+    t
+    |> Nx.as_type(:f32)
+    |> Nx.add(opts[:offset])
+  end
+
+  defn add_offset_via_defp(x) do
+    out = %{x | type: Nx.Type.to_floating(x.type)}
+
+    Nx.runtime_call(out, x, fn t ->
+      do_add_offset(t, offset: 10.0)
+    end)
+  end
+
+  test "runtime_call callback can call regular defp functions" do
+    x = Nx.iota({5})
+    y = add_offset_via_defp(x)
+
+    expected = Nx.add(Nx.as_type(x, :f32), 10.0)
+    assert Nx.all_close(y, expected) |> Nx.to_number() == 1
+  end
+
+  defn callback_with_remote_call(x) do
+    out = %{x | type: Nx.Type.to_floating(x.type)}
+
+    Nx.runtime_call(out, x, fn t ->
+      [t] |> Enum.map(&Nx.as_type(&1, :f32)) |> hd()
+    end)
+  end
+
+  test "runtime_call callback can call functions from non-Nx modules" do
+    x = Nx.tensor([1, 2, 3])
+    result = callback_with_remote_call(x)
+
+    expected = Nx.as_type(x, :f32)
+    assert Nx.all_close(result, expected) |> Nx.to_number() == 1
+  end
+
   defn return_as_container(x, y, template_fun, container_fun) do
     Nx.runtime_call(template_fun.(x, y), {x, y}, container_fun)
   end

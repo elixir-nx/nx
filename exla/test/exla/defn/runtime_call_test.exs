@@ -189,4 +189,44 @@ defmodule EXLA.Defn.RuntimeCallTest do
     assert_equal(result.y, y)
     assert_receive {:container_fun, ^ref}
   end
+
+  # Issue #1684: runtime_call callbacks should be able to call
+  # regular defp functions without requiring deftransform.
+  defp plain_add_offset(t, opts) do
+    t
+    |> Nx.as_type(:f32)
+    |> Nx.add(opts[:offset])
+  end
+
+  defn add_offset_via_defp(x) do
+    out = %{x | type: Nx.Type.to_floating(x.type)}
+
+    Nx.runtime_call(out, x, fn t ->
+      plain_add_offset(t, offset: 10.0)
+    end)
+  end
+
+  test "runtime_call callback can call regular defp functions" do
+    x = Nx.iota({5})
+    y = add_offset_via_defp(x)
+
+    expected = Nx.add(Nx.as_type(x, :f32), 10.0)
+    assert_equal(y, expected)
+  end
+
+  defn callback_with_enum(x) do
+    out = %{x | type: Nx.Type.to_floating(x.type)}
+
+    Nx.runtime_call(out, x, fn t ->
+      [t] |> Enum.map(&Nx.as_type(&1, :f32)) |> hd()
+    end)
+  end
+
+  test "runtime_call callback can call non-Nx module functions" do
+    x = Nx.tensor([1, 2, 3])
+    result = callback_with_enum(x)
+
+    expected = Nx.as_type(x, :f32)
+    assert_equal(result, expected)
+  end
 end

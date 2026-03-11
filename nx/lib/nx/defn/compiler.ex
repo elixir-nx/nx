@@ -282,7 +282,8 @@ defmodule Nx.Defn.Compiler do
       function: nil,
       defns: defns,
       transforms: transforms,
-      rewrite_underscore?: false
+      rewrite_underscore?: false,
+      runtime_callback?: false
     }
 
     quoted =
@@ -563,6 +564,10 @@ defmodule Nx.Defn.Compiler do
         {args, state} = normalize_list(args, state)
         {{name, meta, args}, state}
 
+      state.runtime_callback? ->
+        {args, state} = normalize_list(args, state)
+        {{name, meta, args}, state}
+
       Module.defines?(state.module, {name, arity}) ->
         compile_error!(
           meta,
@@ -615,6 +620,20 @@ defmodule Nx.Defn.Compiler do
   defp normalize({{:., _, [_, :exception]} = dot, meta, [arg]}, state) do
     {arg, state} = normalize(arg, state)
     {{dot, meta, [arg]}, state}
+  end
+
+  # The runtime_call callback executes at runtime in regular Elixir,
+  # not inside the XLA computation graph. Normalize it with the
+  # runtime_callback? flag so it can call regular (non-defn) functions.
+  defp normalize(
+         {{:., dot_meta, [Nx, :runtime_call]}, meta, [out, tensor_or_container, fun]},
+         state
+       ) do
+    {out, state} = normalize(out, state)
+    {tensor_or_container, state} = normalize(tensor_or_container, state)
+    {fun, state} = normalize(fun, %{state | runtime_callback?: true})
+    state = %{state | runtime_callback?: false}
+    {{{:., dot_meta, [Nx, :runtime_call]}, meta, [out, tensor_or_container, fun]}, state}
   end
 
   defp normalize({{:., dot_meta, [Nx, name]}, meta, args}, state) do
@@ -672,10 +691,15 @@ defmodule Nx.Defn.Compiler do
 
   defp normalize({{:., dot_meta, [remote, name]}, meta, args}, state)
        when is_atom(remote) and is_atom(name) do
-    {args, state} = normalize_list(args, state)
+    if state.runtime_callback? do
+      {args, state} = normalize_list(args, state)
+      {{{:., dot_meta, [remote, name]}, meta, args}, state}
+    else
+      {args, state} = normalize_list(args, state)
 
-    {{{:., dot_meta, [__MODULE__, :__remote__]}, meta, [remote, name, defn_name(name), args]},
-     state}
+      {{{:., dot_meta, [__MODULE__, :__remote__]}, meta, [remote, name, defn_name(name), args]},
+       state}
+    end
   end
 
   defp normalize({{:., dot_meta, [remote, name]}, meta, args}, state) when is_atom(name) do
