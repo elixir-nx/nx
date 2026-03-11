@@ -712,5 +712,4 @@ defmodule EXLA.Defn.RuntimeCallTest do
       assert_equal(result, expected)
     end
   end
-
 end
