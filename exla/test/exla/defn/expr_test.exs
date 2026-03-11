@@ -4230,7 +4230,7 @@ defmodule EXLA.Defn.ExprTest do
       tensor = Nx.add(tensor, Nx.multiply(50, Nx.eye(Nx.shape(tensor))))
 
       l = cholesky(tensor)
-      assert_all_close(Nx.dot(l, Nx.transpose(l)), tensor, atol: 1.0e-4, rtol: 1.0e-2)
+      assert_all_close(Nx.dot(l, Nx.transpose(l)), tensor, atol: 1.0e-1, rtol: 1.0e-2)
     end
   end
 

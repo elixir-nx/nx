@@ -5,8 +5,8 @@ defmodule EXLA.Defn.RuntimeCallTest do
   import Nx.Testing
 
   setup do
-    Nx.default_backend(EXLA.Backend)
-    Nx.Defn.default_options(compiler: EXLA)
+    Nx.default_backend({EXLA.Backend, client: :host})
+    Nx.Defn.default_options(compiler: EXLA, client: :host)
     :ok
   end
 

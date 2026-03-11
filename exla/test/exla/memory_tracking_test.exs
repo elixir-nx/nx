@@ -99,7 +99,7 @@ defmodule EXLA.MemoryTrackingTest do
 
     assert %{allocated: baseline_allocated} = Client.get_memory_statistics(client)
 
-    t = Nx.iota({1000}, type: :u8, backend: EXLA.Backend)
+    t = Nx.iota({1000}, type: :u8, backend: {EXLA.Backend, client: :host})
     f = fn t, f -> f.(t, f) end
 
     test_pid = self()
@@ -107,7 +107,7 @@ defmodule EXLA.MemoryTrackingTest do
 
     task =
       Task.async(fn ->
-        t2 = Nx.iota({10000}, type: :u8, backend: EXLA.Backend)
+        t2 = Nx.iota({10000}, type: :u8, backend: {EXLA.Backend, client: :host})
         send(test_pid, {ref, :allocated})
         f.(t2, f)
       end)
