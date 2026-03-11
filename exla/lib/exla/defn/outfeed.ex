@@ -376,9 +376,7 @@ defmodule EXLA.Defn.Outfeed do
       EXLA.NIF.runtime_callback_reply(reply_tag, status, result)
     rescue
       _ ->
-        Logger.error(
-          "EXLA runtime_call failed to send reply for tag #{inspect(reply_tag)}"
-        )
+        Logger.error("EXLA runtime_call failed to send reply for tag #{inspect(reply_tag)}")
     end
   end
 
@@ -436,7 +434,8 @@ defmodule EXLA.Defn.Outfeed do
     {:error, reason} -> {:error, reason}
   end
 
-  defp decode_callback_args(_other, _arg_template), do: {:error, {:invalid_args_spec, :bad_format}}
+  defp decode_callback_args(_other, _arg_template),
+    do: {:error, {:invalid_args_spec, :bad_format}}
 
   defp encode_callback_reply({:ok, value}) do
     binaries =
