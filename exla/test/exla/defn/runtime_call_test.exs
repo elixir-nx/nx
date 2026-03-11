@@ -232,4 +232,342 @@ defmodule EXLA.Defn.RuntimeCallTest do
                "after 100 runtime_call JIT calls — suspected process leak"
     end
   end
+
+  describe "concurrent runtime_call" do
+    # Different defns so they get different callback_ids, exercising
+    # the ETS dispatcher routing multiple callbacks simultaneously.
+    defn add_ten(x) do
+      out = %{x | type: Nx.Type.to_floating(x.type)}
+      Nx.runtime_call(out, x, fn t -> Nx.add(Nx.as_type(t, :f32), 10.0) end)
+    end
+
+    defn mul_two(x) do
+      out = %{x | type: Nx.Type.to_floating(x.type)}
+      Nx.runtime_call(out, x, fn t -> Nx.multiply(Nx.as_type(t, :f32), 2.0) end)
+    end
+
+    test "concurrent computations with different runtime_calls" do
+      tasks =
+        for fun <- [&add_ten/1, &mul_two/1], _ <- 1..10 do
+          Task.async(fn ->
+            x = Nx.iota({5})
+            {fun, fun.(x)}
+          end)
+        end
+
+      results = Task.await_many(tasks, 30_000)
+
+      for {fun, result} <- results do
+        x = Nx.iota({5}, type: :f32)
+
+        expected =
+          if fun == (&add_ten/1),
+            do: Nx.add(x, 10.0),
+            else: Nx.multiply(x, 2.0)
+
+        assert_equal(result, expected)
+      end
+    end
+
+    test "concurrent computations with same cached function" do
+      # Multiple tasks calling the same defn concurrently. The cached
+      # executable has the same callback_ids, so each task's outfeed
+      # task registers the same keys in ETS. The dispatcher must route
+      # each message to the correct task.
+      tasks =
+        for _ <- 1..10 do
+          Task.async(fn ->
+            x = Nx.iota({5})
+            add_ten(x)
+          end)
+        end
+
+      results = Task.await_many(tasks, 30_000)
+      expected = Nx.add(Nx.as_type(Nx.iota({5}), :f32), 10.0)
+
+      for result <- results do
+        assert_equal(result, expected)
+      end
+    end
+
+    test "rapid sequential calls with same cached callback_id do not deadlock" do
+      # This specifically tests the select_delete fix: if unregister
+      # deleted by callback_id alone (without checking the pid), rapid
+      # sequential calls would race and deadlock.
+      for _ <- 1..50 do
+        x = Nx.iota({5})
+        result = add_ten(x)
+        expected = Nx.add(Nx.as_type(x, :f32), 10.0)
+        assert_equal(result, expected)
+      end
+    end
+
+    test "callback error in one task does not affect others" do
+      # Start several good tasks and one bad task concurrently.
+      # The bad task should fail without poisoning the good ones.
+      good_tasks =
+        for _ <- 1..5 do
+          Task.async(fn ->
+            x = Nx.iota({5})
+            {:ok, add_ten(x)}
+          end)
+        end
+
+      bad_task =
+        Task.async(fn ->
+          try do
+            bad_callback(Nx.iota({2}))
+            :should_not_reach
+          rescue
+            e in RuntimeError -> {:error, e.message}
+          end
+        end)
+
+      good_results = Task.await_many(good_tasks, 30_000)
+      bad_result = Task.await(bad_task, 30_000)
+
+      expected = Nx.add(Nx.as_type(Nx.iota({5}), :f32), 10.0)
+
+      for {:ok, result} <- good_results do
+        assert_equal(result, expected)
+      end
+
+      assert {:error, msg} = bad_result
+      assert msg =~ "expected the runtime_call function to match the given output template"
+    end
+
+    test "ETS table is cleaned up after execution" do
+      # Run a runtime_call and verify the dispatcher ETS table
+      # doesn't accumulate stale entries.
+      ets_count_before = :ets.info(EXLA.Defn.CallbackDispatcher, :size)
+
+      x = Nx.iota({5})
+      add_ten(x)
+
+      # Give the outfeed task time to clean up
+      Process.sleep(50)
+
+      ets_count_after = :ets.info(EXLA.Defn.CallbackDispatcher, :size)
+
+      assert ets_count_after == ets_count_before,
+             "ETS table grew by #{ets_count_after - ets_count_before} " <>
+               "entries after runtime_call — stale callback registrations"
+    end
+  end
+
+  describe "hooks and runtime_call together" do
+    defp send_to_self(tag) do
+      parent = self()
+      fn value -> send(parent, {tag, value}) end
+    end
+
+    defn hook_and_callback(x) do
+      # Hook observes the intermediate value, runtime_call transforms it.
+      hooked = hook(x + 1, :intermediate, send_to_self(:intermediate))
+      out = %{hooked | type: Nx.Type.to_floating(hooked.type)}
+      Nx.runtime_call(out, hooked, fn t -> Nx.multiply(Nx.as_type(t, :f32), 3.0) end)
+    end
+
+    test "hook and runtime_call in same computation" do
+      x = Nx.tensor([1, 2, 3])
+      result = hook_and_callback(x)
+
+      # Hook should have fired with x + 1
+      assert_receive {:intermediate, hooked_value}
+      assert_equal(hooked_value, Nx.tensor([2, 3, 4]))
+
+      # Result should be (x + 1) * 3.0
+      expected = Nx.multiply(Nx.as_type(Nx.tensor([2, 3, 4]), :f32), 3.0)
+      assert_equal(result, expected)
+    end
+
+    defn two_hooks_and_callback(x) do
+      a = hook(x, :first, send_to_self(:first))
+      b = hook(a + 1, :second, send_to_self(:second))
+      out = %{b | type: Nx.Type.to_floating(b.type)}
+      Nx.runtime_call(out, b, fn t -> Nx.add(Nx.as_type(t, :f32), 100.0) end)
+    end
+
+    test "multiple hooks and runtime_call in same computation" do
+      x = Nx.tensor([10, 20, 30])
+      result = two_hooks_and_callback(x)
+
+      assert_receive {:first, first_value}
+      assert_equal(first_value, Nx.tensor([10, 20, 30]))
+
+      assert_receive {:second, second_value}
+      assert_equal(second_value, Nx.tensor([11, 21, 31]))
+
+      # Result: (x + 1) + 100.0
+      expected = Nx.add(Nx.as_type(Nx.tensor([11, 21, 31]), :f32), 100.0)
+      assert_equal(result, expected)
+    end
+
+    defn hook_and_callback_cleanup_test(x) do
+      hooked = hook(x, :observe, send_to_self(:observe))
+      out = %{hooked | type: Nx.Type.to_floating(hooked.type)}
+      Nx.runtime_call(out, hooked, fn t -> Nx.add(Nx.as_type(t, :f32), 1.0) end)
+    end
+
+    test "callback helper process is cleaned up after hooks+callback execution" do
+      process_count_before = length(Process.list())
+
+      for _ <- 1..20 do
+        x = Nx.tensor([1, 2, 3])
+        hook_and_callback_cleanup_test(x)
+        assert_receive {:observe, _}
+      end
+
+      :erlang.garbage_collect()
+      Process.sleep(100)
+
+      process_count_after = length(Process.list())
+
+      assert process_count_after - process_count_before < 10,
+             "Process count grew by #{process_count_after - process_count_before} " <>
+               "after 20 hooks+callback calls — suspected helper process leak"
+    end
+  end
+
+  describe "chained runtime_calls" do
+    defn two_chained_calls(x) do
+      fx = Nx.as_type(x, :f32)
+      out1 = %{fx | type: {:f, 32}}
+
+      # First callback: add 10
+      step1 = Nx.runtime_call(out1, fx, fn t -> Nx.add(t, 10.0) end)
+
+      out2 = %{step1 | type: {:f, 32}}
+
+      # Second callback: multiply by 2
+      Nx.runtime_call(out2, step1, fn t -> Nx.multiply(t, 2.0) end)
+    end
+
+    test "output of one runtime_call feeds into the next" do
+      x = Nx.tensor([1, 2, 3])
+      result = two_chained_calls(x)
+
+      # (x + 10) * 2
+      expected = Nx.multiply(Nx.add(Nx.as_type(x, :f32), 10.0), 2.0)
+      assert_equal(result, expected)
+    end
+
+    defn three_chained_calls(x) do
+      fx = Nx.as_type(x, :f32)
+
+      step1 = Nx.runtime_call(%{fx | type: {:f, 32}}, fx, fn t -> Nx.add(t, 1.0) end)
+      step2 = Nx.runtime_call(%{step1 | type: {:f, 32}}, step1, fn t -> Nx.multiply(t, 2.0) end)
+      Nx.runtime_call(%{step2 | type: {:f, 32}}, step2, fn t -> Nx.subtract(t, 5.0) end)
+    end
+
+    test "three chained runtime_calls" do
+      x = Nx.tensor([10, 20, 30])
+      result = three_chained_calls(x)
+
+      # ((x + 1) * 2) - 5
+      fx = Nx.as_type(x, :f32)
+      expected = Nx.subtract(Nx.multiply(Nx.add(fx, 1.0), 2.0), 5.0)
+      assert_equal(result, expected)
+    end
+
+    defn parallel_calls_then_combine(x) do
+      fx = Nx.as_type(x, :f32)
+
+      a = Nx.runtime_call(%{fx | type: {:f, 32}}, fx, fn t -> Nx.add(t, 10.0) end)
+      b = Nx.runtime_call(%{fx | type: {:f, 32}}, fx, fn t -> Nx.multiply(t, 3.0) end)
+
+      Nx.add(a, b)
+    end
+
+    test "two independent runtime_calls whose results are combined" do
+      x = Nx.tensor([1, 2, 3])
+      result = parallel_calls_then_combine(x)
+
+      fx = Nx.as_type(x, :f32)
+      expected = Nx.add(Nx.add(fx, 10.0), Nx.multiply(fx, 3.0))
+      assert_equal(result, expected)
+    end
+  end
+
+  describe "large tensors" do
+    defn large_tensor_callback(x) do
+      out = %{x | type: {:f, 32}}
+      Nx.runtime_call(out, x, fn t -> Nx.add(Nx.as_type(t, :f32), 1.0) end)
+    end
+
+    test "runtime_call with large 1D tensor" do
+      x = Nx.iota({10_000})
+      result = large_tensor_callback(x)
+
+      expected = Nx.add(Nx.as_type(x, :f32), 1.0)
+      assert_equal(result, expected)
+    end
+
+    test "runtime_call with large 2D tensor" do
+      x = Nx.iota({100, 100})
+      result = large_tensor_callback(x)
+
+      expected = Nx.add(Nx.as_type(x, :f32), 1.0)
+      assert_equal(result, expected)
+    end
+
+    test "runtime_call with large 3D tensor" do
+      x = Nx.iota({10, 20, 30})
+      result = large_tensor_callback(x)
+
+      expected = Nx.add(Nx.as_type(x, :f32), 1.0)
+      assert_equal(result, expected)
+    end
+
+    defn large_tuple_roundtrip(x) do
+      fx = Nx.as_type(x, :f32)
+      out = {fx, fx, fx}
+
+      {a, b, c} =
+        Nx.runtime_call(out, fx, fn t ->
+          {Nx.add(t, 1.0), Nx.multiply(t, 2.0), Nx.negate(t)}
+        end)
+
+      Nx.add(Nx.add(a, b), c)
+    end
+
+    test "runtime_call with large tensor and tuple output" do
+      x = Nx.iota({1000})
+      result = large_tuple_roundtrip(x)
+
+      fx = Nx.as_type(x, :f32)
+      # (x + 1) + (x * 2) + (-x) = x + 1 + 2x - x = 2x + 1
+      expected = Nx.add(Nx.multiply(fx, 2.0), 1.0)
+      assert_equal(result, expected)
+    end
+  end
+
+  describe "data types" do
+    defn f64_callback(x) do
+      Nx.runtime_call(%{x | type: {:f, 64}}, x, fn t -> Nx.add(t, 1.0) end)
+    end
+
+    defn s32_to_f32_callback(x) do
+      out = %{x | type: {:f, 32}}
+      Nx.runtime_call(out, x, fn t -> Nx.as_type(Nx.add(t, 1), :f32) end)
+    end
+
+    test "runtime_call preserves f64 precision" do
+      x = Nx.tensor([1.0, 2.0, 3.0], type: :f64)
+      result = f64_callback(x)
+
+      expected = Nx.add(x, 1.0)
+      assert_equal(result, expected)
+      assert Nx.type(result) == {:f, 64}
+    end
+
+    test "runtime_call with integer input and float output" do
+      x = Nx.tensor([10, 20, 30], type: :s32)
+      result = s32_to_f32_callback(x)
+
+      expected = Nx.tensor([11.0, 21.0, 31.0], type: :f32)
+      assert_equal(result, expected)
+      assert Nx.type(result) == {:f, 32}
+    end
+  end
 end

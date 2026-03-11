@@ -236,36 +236,60 @@ defmodule EXLA.Defn.Outfeed do
     # Copy the group leader so we report to the proper device
     Process.group_leader(self(), group_leader)
 
-    # When callbacks are present, register this task as the runtime
-    # callback dispatcher so the C++ bridge sends messages here.
-    if callbacks != %{} do
-      EXLA.NIF.start_runtime_callback_bridge(self())
-    end
+    callback_ids = Map.keys(callbacks)
 
     try do
       if compiled_hooks != %{} do
-        # Outfeed loop that also handles runtime_call messages
+        # When both hooks and callbacks are present, the outfeed task blocks
+        # in from_outfeed (a dirty IO NIF) and can't receive runtime_call
+        # messages. Spawn a separate helper process for callback handling.
+        callback_helper =
+          if callback_ids != [] do
+            pid = spawn_link(fn -> callback_only_loop(callbacks) end)
+            EXLA.Defn.CallbackDispatcher.register(callback_ids, pid)
+            pid
+          end
+
         ref = make_ref()
         typespec = EXLA.Typespec.tensor({:u, 16}, {})
-        outfeed_loop(client, device_id, ref, typespec, hooks, compiled_hooks, callbacks, infeeds)
+        outfeed_loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
+
+        # Clean up callback helper after outfeed loop finishes
+        if callback_helper do
+          send(callback_helper, :done)
+          EXLA.Defn.CallbackDispatcher.unregister(callback_ids, callback_helper)
+        end
       else
-        # No outfeed hooks — only runtime_call messages
+        # No outfeed hooks — only runtime_call messages.
+        # This task handles them directly.
+        if callback_ids != [] do
+          EXLA.Defn.CallbackDispatcher.register(callback_ids, self())
+        end
+
         callback_only_loop(callbacks)
       end
     after
-      if callbacks != %{} do
-        try do
-          EXLA.NIF.clear_runtime_callback_bridge(self())
-        rescue
-          _ -> :ok
-        end
+      # Clean up dispatcher registration for the callbacks-only path.
+      # (The hooks+callbacks path cleans up inline above.)
+      if compiled_hooks == %{} and callback_ids != [] do
+        EXLA.Defn.CallbackDispatcher.unregister(callback_ids, self())
       end
     end
   end
 
   # Loop for when we have outfeed hooks (and possibly callbacks too).
   # Receives XLA outfeed data via refs and runtime_call messages inline.
-  defp outfeed_loop(client, device_id, ref, typespec, hooks, compiled_hooks, callbacks, infeeds) do
+  #
+  # IMPORTANT: from_outfeed sets up an async listener for the next outfeed
+  # chunk. We must only call it when we're ready for a NEW chunk — not after
+  # handling a runtime_call message, which doesn't consume outfeed data.
+  # That's why this is split into outfeed_loop (calls from_outfeed) and
+  # outfeed_receive_loop (just does receive).
+  # Loop for outfeed hooks. When callbacks are also present, they're
+  # handled by a separate helper process (see init/7) because
+  # from_outfeed is a blocking dirty IO NIF — this process can't
+  # receive runtime_call messages while blocked in the NIF.
+  defp outfeed_loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds) do
     :ok = EXLA.Client.from_outfeed(client, device_id, [typespec], self(), ref)
 
     receive do
@@ -282,17 +306,7 @@ defmodule EXLA.Defn.Outfeed do
               end
 
             EXLA.Client.to_infeed(client, device_id, [{data, data_typespec}])
-
-            outfeed_loop(
-              client,
-              device_id,
-              ref,
-              typespec,
-              hooks,
-              compiled_hooks,
-              callbacks,
-              infeeds
-            )
+            outfeed_loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
 
           {:function, typespecs, name, template} ->
             fun = Map.fetch!(hooks, name)
@@ -304,32 +318,9 @@ defmodule EXLA.Defn.Outfeed do
 
             receive do
               ^ref ->
-                outfeed_loop(
-                  client,
-                  device_id,
-                  ref,
-                  typespec,
-                  hooks,
-                  compiled_hooks,
-                  callbacks,
-                  infeeds
-                )
+                outfeed_loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
             end
         end
-
-      {:exla_runtime_call, callback_id, args_spec, reply_tag} ->
-        handle_runtime_call(callbacks, callback_id, args_spec, reply_tag)
-
-        outfeed_loop(
-          client,
-          device_id,
-          ref,
-          typespec,
-          hooks,
-          compiled_hooks,
-          callbacks,
-          infeeds
-        )
     end
   end
 
