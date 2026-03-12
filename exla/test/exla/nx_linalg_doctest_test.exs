@@ -283,30 +283,14 @@ defmodule EXLA.NxLinAlgDoctestTest do
 
       assert_all_close(t, u |> Nx.dot(s_matrix) |> Nx.dot(v), atol: 1.0e-2, rtol: 1.0e-2)
 
-      assert_all_close(
-        u,
-        Nx.tensor([
-          [0.140, 0.824, 0.521, -0.166],
-          [0.343, 0.426, -0.571, 0.611],
-          [0.547, 0.0278, -0.422, -0.722],
-          [0.750, -0.370, 0.472, 0.277]
-        ]),
-        atol: 1.0e-3,
-        rtol: 1.0e-3
-      )
+      # U and V are orthonormal (exact values are not unique across compute architectures due to differences in convergence and initialization conditions)
+      assert_all_close(Nx.dot(Nx.transpose(u), u), Nx.eye(4), atol: 1.0e-3, rtol: 1.0e-3)
+      assert_all_close(Nx.dot(u, Nx.transpose(u)), Nx.eye(4), atol: 1.0e-3, rtol: 1.0e-3)
+      assert_all_close(Nx.dot(Nx.transpose(v), v), Nx.eye(3), atol: 1.0e-3, rtol: 1.0e-3)
+      assert_all_close(Nx.dot(v, Nx.transpose(v)), Nx.eye(3), atol: 1.0e-3, rtol: 1.0e-3)
 
+      # Singular values are unique
       assert_all_close(Nx.tensor([25.462, 1.291, 0.0]), s, atol: 1.0e-3, rtol: 1.0e-3)
-
-      assert_all_close(
-        Nx.tensor([
-          [0.504, 0.574, 0.644],
-          [-0.760, -0.057, 0.646],
-          [0.408, -0.816, 0.408]
-        ]),
-        v,
-        atol: 1.0e-3,
-        rtol: 1.0e-3
-      )
     end
 
     test "works with batched matrices" do
