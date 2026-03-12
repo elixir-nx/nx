@@ -228,16 +228,23 @@ defmodule EXLA.Defn.Outfeed do
 
     caller = self()
 
-    result =
+    {:ok, pid} =
       Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
         init(caller, client, device_id, hooks, compiled_hooks, callbacks, infeeds, group_leader)
       end)
+
+    ref = Process.monitor(pid)
 
     # Wait for the task to finish registering callback handlers before
     # returning, so that XLA execution can't fire a callback before
     # the dispatcher knows where to route it.
     receive do
-      :outfeed_ready -> result
+      :outfeed_ready ->
+        Process.demonitor(ref, [:flush])
+        {:ok, pid}
+
+      {:DOWN, ^ref, _, _, reason} ->
+        {:error, {:outfeed_init_crashed, reason}}
     end
   end
 
