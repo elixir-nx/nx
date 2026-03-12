@@ -226,12 +226,22 @@ defmodule EXLA.Defn.Outfeed do
 
     hooks = Map.merge(default_hooks, user_hooks)
 
-    Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
-      init(client, device_id, hooks, compiled_hooks, callbacks, infeeds, group_leader)
-    end)
+    caller = self()
+
+    result =
+      Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
+        init(caller, client, device_id, hooks, compiled_hooks, callbacks, infeeds, group_leader)
+      end)
+
+    # Wait for the task to finish registering callback handlers before
+    # returning, so that XLA execution can't fire a callback before
+    # the dispatcher knows where to route it.
+    receive do
+      :outfeed_ready -> result
+    end
   end
 
-  defp init(client, device_id, hooks, compiled_hooks, callbacks, infeeds, group_leader) do
+  defp init(caller, client, device_id, hooks, compiled_hooks, callbacks, infeeds, group_leader) do
     Process.flag(:trap_exit, true)
     # Copy the group leader so we report to the proper device
     Process.group_leader(self(), group_leader)
@@ -249,6 +259,8 @@ defmodule EXLA.Defn.Outfeed do
           pid
         end
 
+      send(caller, :outfeed_ready)
+
       try do
         ref = make_ref()
         typespec = EXLA.Typespec.tensor({:u, 16}, {})
@@ -265,6 +277,8 @@ defmodule EXLA.Defn.Outfeed do
       if callback_ids != [] do
         EXLA.Defn.CallbackDispatcher.register(callback_ids, self())
       end
+
+      send(caller, :outfeed_ready)
 
       try do
         callback_only_loop(callbacks)
