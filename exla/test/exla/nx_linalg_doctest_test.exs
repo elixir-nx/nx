@@ -76,8 +76,8 @@ defmodule EXLA.NxLinAlgDoctestTest do
           # Eigenvalues and eigenvectors
           assert {evals, evecs} = Nx.LinAlg.eigh(a, eps: 1.0e-8)
 
-          assert_all_close(evals_test, evals[0], atol: 1.0)
-          assert_all_close(evals_test, evals[1], atol: 1.0)
+          assert_all_close(evals_test, evals[0], atol: 1.0e-8)
+          assert_all_close(evals_test, evals[1], atol: 1.0e-8)
 
           evals =
             evals
@@ -89,7 +89,7 @@ defmodule EXLA.NxLinAlgDoctestTest do
           evecs_evals = Nx.dot(evecs, [2], [0], evals, [1], [0])
           a_evecs = Nx.dot(evecs_evals, [2], [0], Nx.LinAlg.adjoint(evecs), [1], [0])
 
-          assert_all_close(a, a_evecs, atol: 1.0)
+          assert_all_close(a, a_evecs, atol: 1.0e-8)
           key
       end
     end
@@ -115,7 +115,7 @@ defmodule EXLA.NxLinAlgDoctestTest do
           a = Nx.add(b, d)
 
           assert l = Nx.LinAlg.cholesky(a)
-          assert_all_close(Nx.dot(l, [2], [0], Nx.LinAlg.adjoint(l), [1], [0]), a, atol: 5.0e-2)
+          assert_all_close(Nx.dot(l, [2], [0], Nx.LinAlg.adjoint(l), [1], [0]), a, atol: 1.0e-2)
           key
       end
     end
@@ -266,7 +266,7 @@ defmodule EXLA.NxLinAlgDoctestTest do
           assert {p, l, u} = Nx.LinAlg.lu(a)
 
           actual = p |> Nx.dot([2], [0], l, [1], [0]) |> Nx.dot([2], [0], u, [1], [0])
-          assert_all_close(actual, a, atol: 5.0e-2)
+          assert_all_close(actual, a)
           key
       end
     end
@@ -283,8 +283,30 @@ defmodule EXLA.NxLinAlgDoctestTest do
 
       assert_all_close(t, u |> Nx.dot(s_matrix) |> Nx.dot(v), atol: 1.0e-2, rtol: 1.0e-2)
 
-      # Singular values should be consistent across GPUs
-      assert_all_close(Nx.tensor([25.462, 1.291, 0.0]), s, atol: 1.0e-2, rtol: 1.0e-2)
+      assert_all_close(
+        u,
+        Nx.tensor([
+          [0.140, 0.824, 0.521, -0.166],
+          [0.343, 0.426, -0.571, 0.611],
+          [0.547, 0.0278, -0.422, -0.722],
+          [0.750, -0.370, 0.472, 0.277]
+        ]),
+        atol: 1.0e-3,
+        rtol: 1.0e-3
+      )
+
+      assert_all_close(Nx.tensor([25.462, 1.291, 0.0]), s, atol: 1.0e-3, rtol: 1.0e-3)
+
+      assert_all_close(
+        Nx.tensor([
+          [0.504, 0.574, 0.644],
+          [-0.760, -0.057, 0.646],
+          [0.408, -0.816, 0.408]
+        ]),
+        v,
+        atol: 1.0e-3,
+        rtol: 1.0e-3
+      )
     end
 
     test "works with batched matrices" do
