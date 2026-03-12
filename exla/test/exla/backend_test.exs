@@ -8,29 +8,20 @@ defmodule EXLA.BackendTest do
     :ok
   end
 
-  # Some doctests use exact f32 string matching which fails on Blackwell GPUs
-  # (SM 12.0a) due to 1 ULP differences in transcendental/reduction ops.
   @excluded_doctests [
     asin: 1,
     atan: 1,
-    atan2: 2,
     tan: 1,
     acos: 1,
-    conv: 3,
     cosh: 1,
-    covariance: 3,
     erf_inv: 1,
     erfc: 1,
-    rsqrt: 1,
     sinh: 1,
-    standard_deviation: 2,
     atanh: 1,
     asinh: 1,
     logsumexp: 2,
     exp: 1,
-    expm1: 1,
-    variance: 2,
-    weighted_mean: 3
+    expm1: 1
   ]
 
   doctest Nx,

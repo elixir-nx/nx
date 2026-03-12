@@ -283,8 +283,12 @@ defmodule EXLA.NxLinAlgDoctestTest do
 
       assert_all_close(t, u |> Nx.dot(s_matrix) |> Nx.dot(v), atol: 1.0e-2, rtol: 1.0e-2)
 
-      # Singular values are unique and should be consistent across GPUs
-      assert_all_close(Nx.tensor([25.462, 1.291, 0.0]), s, atol: 1.0e-2, rtol: 1.0e-2)
+      # U and V are orthonormal (exact values are not unique across GPU architectures)
+      assert_all_close(Nx.dot(Nx.transpose(u), u), Nx.eye(4), atol: 1.0e-3, rtol: 1.0e-3)
+      assert_all_close(Nx.dot(Nx.transpose(v), v), Nx.eye(3), atol: 1.0e-3, rtol: 1.0e-3)
+
+      # Singular values are unique
+      assert_all_close(Nx.tensor([25.462, 1.291, 0.0]), s, atol: 1.0e-3, rtol: 1.0e-3)
     end
 
     test "works with batched matrices" do
