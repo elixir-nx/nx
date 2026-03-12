@@ -283,9 +283,11 @@ defmodule EXLA.NxLinAlgDoctestTest do
 
       assert_all_close(t, u |> Nx.dot(s_matrix) |> Nx.dot(v), atol: 1.0e-2, rtol: 1.0e-2)
 
-      # U and V are orthonormal (exact values are not unique across GPU architectures)
+      # U and V are orthonormal (exact values are not unique across compute architectures due to differences in convergence and initialization conditions)
       assert_all_close(Nx.dot(Nx.transpose(u), u), Nx.eye(4), atol: 1.0e-3, rtol: 1.0e-3)
+      assert_all_close(Nx.dot(u, Nx.transpose(u)), Nx.eye(4), atol: 1.0e-3, rtol: 1.0e-3)
       assert_all_close(Nx.dot(Nx.transpose(v), v), Nx.eye(3), atol: 1.0e-3, rtol: 1.0e-3)
+      assert_all_close(Nx.dot(v, Nx.transpose(v)), Nx.eye(3), atol: 1.0e-3, rtol: 1.0e-3)
 
       # Singular values are unique
       assert_all_close(Nx.tensor([25.462, 1.291, 0.0]), s, atol: 1.0e-3, rtol: 1.0e-3)
