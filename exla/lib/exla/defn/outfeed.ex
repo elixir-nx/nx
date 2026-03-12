@@ -238,53 +238,44 @@ defmodule EXLA.Defn.Outfeed do
 
     callback_ids = Map.keys(callbacks)
 
-    try do
-      if compiled_hooks != %{} do
-        # When both hooks and callbacks are present, the outfeed task blocks
-        # in from_outfeed (a dirty IO NIF) and can't receive runtime_call
-        # messages. Spawn a separate helper process for callback handling.
-        callback_helper =
-          if callback_ids != [] do
-            pid = spawn_link(fn -> callback_only_loop(callbacks) end)
-            EXLA.Defn.CallbackDispatcher.register(callback_ids, pid)
-            pid
-          end
+    if compiled_hooks != %{} do
+      # When both hooks and callbacks are present, the outfeed task blocks
+      # in from_outfeed (a dirty IO NIF) and can't receive runtime_call
+      # messages. Spawn a separate helper process for callback handling.
+      callback_helper =
+        if callback_ids != [] do
+          pid = spawn_link(fn -> callback_only_loop(callbacks) end)
+          EXLA.Defn.CallbackDispatcher.register(callback_ids, pid)
+          pid
+        end
 
+      try do
         ref = make_ref()
         typespec = EXLA.Typespec.tensor({:u, 16}, {})
         outfeed_loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds)
-
-        # Clean up callback helper after outfeed loop finishes
+      after
         if callback_helper do
           send(callback_helper, :done)
           EXLA.Defn.CallbackDispatcher.unregister(callback_ids, callback_helper)
         end
-      else
-        # No outfeed hooks — only runtime_call messages.
-        # This task handles them directly.
-        if callback_ids != [] do
-          EXLA.Defn.CallbackDispatcher.register(callback_ids, self())
-        end
-
-        callback_only_loop(callbacks)
       end
-    after
-      # Clean up dispatcher registration for the callbacks-only path.
-      # (The hooks+callbacks path cleans up inline above.)
-      if compiled_hooks == %{} and callback_ids != [] do
-        EXLA.Defn.CallbackDispatcher.unregister(callback_ids, self())
+    else
+      # No outfeed hooks — only runtime_call messages.
+      # This task handles them directly.
+      if callback_ids != [] do
+        EXLA.Defn.CallbackDispatcher.register(callback_ids, self())
+      end
+
+      try do
+        callback_only_loop(callbacks)
+      after
+        if callback_ids != [] do
+          EXLA.Defn.CallbackDispatcher.unregister(callback_ids, self())
+        end
       end
     end
   end
 
-  # Loop for when we have outfeed hooks (and possibly callbacks too).
-  # Receives XLA outfeed data via refs and runtime_call messages inline.
-  #
-  # IMPORTANT: from_outfeed sets up an async listener for the next outfeed
-  # chunk. We must only call it when we're ready for a NEW chunk — not after
-  # handling a runtime_call message, which doesn't consume outfeed data.
-  # That's why this is split into outfeed_loop (calls from_outfeed) and
-  # outfeed_receive_loop (just does receive).
   # Loop for outfeed hooks. When callbacks are also present, they're
   # handled by a separate helper process (see init/7) because
   # from_outfeed is a blocking dirty IO NIF — this process can't
@@ -325,7 +316,8 @@ defmodule EXLA.Defn.Outfeed do
   end
 
   # Loop for when we only have runtime_call callbacks (no outfeed hooks).
-  # The caller sends :done when execution completes.
+  # The caller sends :done when execution completes. Also handles EXIT
+  # signals so the process doesn't hang if the parent crashes.
   defp callback_only_loop(callbacks) do
     receive do
       {:exla_runtime_call, callback_id, args_spec, reply_tag} ->
@@ -333,6 +325,9 @@ defmodule EXLA.Defn.Outfeed do
         callback_only_loop(callbacks)
 
       :done ->
+        :ok
+
+      {:EXIT, _pid, _reason} ->
         :ok
     end
   end
