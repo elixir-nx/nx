@@ -1,6 +1,6 @@
 defmodule EXLA.CallbackServer do
   @moduledoc """
-  Dispatcher and registry for `Nx.runtime_call/3` callbacks used by EXLA.
+  Dispatcher and registry for `Nx.runtime_call/4` callbacks used by EXLA.
 
   This server has two responsibilities:
 
@@ -33,7 +33,7 @@ defmodule EXLA.CallbackServer do
           # We store the original function, its output template, and any
           # static (non-tensor) arguments that should always be appended to
           # the decoded tensor arguments coming from native.
-          callbacks: %{term() => {fun(), Nx.t() | tuple(), [term()]}}
+          callbacks: %{term() => {fun(), Nx.t() | tuple(), [term()], [term()]}}
         }
 
   ## Public API
@@ -55,12 +55,12 @@ defmodule EXLA.CallbackServer do
   node, which the EXLA compiler also encodes into the host `CustomCall` so the
   native side can reference the right callback.
   """
-  @spec register(pid(), term(), fun(), Nx.t() | tuple(), term()) :: :ok
-  def register(callback_server_pid, id, fun, out_template, arg_template)
-      when is_function(fun) do
+  @spec register(pid(), term(), fun(), Nx.t() | tuple(), term(), [term()]) :: :ok
+  def register(callback_server_pid, id, fun, out_template, arg_template, opts)
+      when is_function(fun, 2) do
     GenServer.call(
       callback_server_pid,
-      {:register, id, fun, out_template, arg_template}
+      {:register, id, fun, out_template, arg_template, opts}
     )
   end
 
@@ -85,11 +85,11 @@ defmodule EXLA.CallbackServer do
 
   @impl true
   def handle_call(
-        {:register, id, fun, out_template, arg_template},
+        {:register, id, fun, out_template, arg_template, opts},
         _from,
         %__MODULE__{} = state
       ) do
-    state = put_in(state.callbacks[id], {fun, out_template, arg_template})
+    state = put_in(state.callbacks[id], {fun, out_template, arg_template, opts})
     {:reply, :ok, state}
   end
 
@@ -98,10 +98,10 @@ defmodule EXLA.CallbackServer do
     reply_payload =
       try do
         case Map.fetch(state.callbacks, callback_id) do
-          {:ok, {fun, out_template, arg_template}} ->
+          {:ok, {fun, out_template, arg_template, opts}} ->
             args_spec
             |> decode_args(arg_template)
-            |> run_callback(fun, out_template)
+            |> run_callback(fun, out_template, opts)
             |> encode_reply()
 
           :error ->
@@ -132,12 +132,12 @@ defmodule EXLA.CallbackServer do
 
   ## Internal helpers
 
-  defp run_callback({:error, reason}, _fun, _out_template), do: {:error, reason}
+  defp run_callback({:error, reason}, _fun, _out_template, _opts), do: {:error, reason}
 
-  defp run_callback({:ok, tensor_args}, fun, out_template) do
+  defp run_callback({:ok, tensor_args}, fun, out_template, opts) do
     result =
       try do
-        fun.(tensor_args)
+        fun.(tensor_args, opts)
       rescue
         exception ->
           {:error, {:exception, exception, __STACKTRACE__}}
