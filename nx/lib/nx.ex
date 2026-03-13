@@ -2265,7 +2265,7 @@ defmodule Nx do
   directly and validates that the result matches the provided template.
   """
   @doc type: :backend
-  def runtime_call(output, tensor_or_container, opts, fun) when is_function(fun, 2) do
+  def runtime_call(output, tensor_or_container, opts \\ [], fun) when is_function(fun, 2) do
     # Outside of defn, we execute the callback directly or via the backend if it
     # provides a specialized implementation. We resolve the backend from all
     # tensors inside the container to support tuple/map containers.
