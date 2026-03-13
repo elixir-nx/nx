@@ -385,9 +385,9 @@ defmodule Nx.Defn.Evaluator do
     end
   end
 
-  defp eval_apply(:runtime_call, [expr, fun, out_template], _ans, state, caches) do
+  defp eval_apply(:runtime_call, [expr, fun, out_template, opts], _ans, state, caches) do
     {tensor_value, caches} = composite_eval(expr, state, caches)
-    result = fun.(tensor_value)
+    result = fun.(tensor_value, opts)
 
     if not Nx.compatible?(out_template, result) do
       raise "expected the runtime_call function to match the given output template"
