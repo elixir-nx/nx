@@ -300,9 +300,14 @@ defmodule EXLA.Defn.APITest do
       parent = self()
       hook_fn = fn value -> send(parent, {:hooked, value}) end
 
-      # Run hooks on :host and :other_host concurrently on device 0.
-      # Before the device-level lock fix, this could corrupt the XLA
-      # outfeed queue and SIGABRT the runtime.
+      # Exercises the pattern that previously caused SIGABRT: multiple EXLA
+      # clients running hooks (outfeed) concurrently on the same device.
+      # The device-level lock key ensures these serialize rather than
+      # corrupting XLA's global per-device outfeed queue.
+      #
+      # Note: this test documents the unsafe pattern but cannot reliably
+      # trigger the race on its own — the original crash required concurrent
+      # outfeed from separate ExUnit async modules, not just concurrent tasks.
       tasks =
         for client <- [:host, :other_host], _ <- 1..4 do
           Task.async(fn ->
