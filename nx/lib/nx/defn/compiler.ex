@@ -758,12 +758,15 @@ defmodule Nx.Defn.Compiler do
   # Require :& with only argument being {:/, _, [name, 2]} or remote form {{:., _, [mod, name]}, _, [2]}
   defp validate_runtime_call_capture!({:&, _, [arg]}, _expected_arity, meta, state) do
     case arg do
-      {:/, _, [name, 2]} when is_atom(name) or
-                               (is_tuple(name) and tuple_size(name) == 3 and is_atom(elem(name, 0))) ->
+      {:/, _, [name, 2]}
+      when is_atom(name) or
+             (is_tuple(name) and tuple_size(name) == 3 and is_atom(elem(name, 0))) ->
         :ok
 
-      {{:., _, [mod, name]}, _, [2]} when (is_atom(mod) or (is_tuple(mod) and elem(mod, 0) == :__aliases__)) and
-                                          (is_atom(name) or (is_tuple(name) and tuple_size(name) == 3 and is_atom(elem(name, 0)))) ->
+      {{:., _, [mod, name]}, _, [2]}
+      when (is_atom(mod) or (is_tuple(mod) and elem(mod, 0) == :__aliases__)) and
+             (is_atom(name) or
+                (is_tuple(name) and tuple_size(name) == 3 and is_atom(elem(name, 0)))) ->
         :ok
 
       _ ->

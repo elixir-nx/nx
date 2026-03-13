@@ -65,7 +65,12 @@ defmodule Nx.Defn.RuntimeCallEvaluatorTest do
   end
 
   defn return_as_container_map(x, y, opts) do
-    Nx.runtime_call(%{x: x, y: {%{key: y}, Nx.s32(1)}}, {x, y}, opts, &return_as_container_map_callback/2)
+    Nx.runtime_call(
+      %{x: x, y: {%{key: y}, Nx.s32(1)}},
+      {x, y},
+      opts,
+      &return_as_container_map_callback/2
+    )
   end
 
   test "runtime_call with container output" do
@@ -108,7 +113,7 @@ defmodule Nx.Defn.RuntimeCallEvaluatorTest do
           import Nx.Defn
 
           defn bad(x) do
-            Nx.runtime_call(x, x, & &1 + &2)
+            Nx.runtime_call(x, x, &(&1 + &2))
           end
         end
       end
