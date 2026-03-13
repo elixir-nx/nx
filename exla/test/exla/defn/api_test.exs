@@ -291,6 +291,35 @@ defmodule EXLA.Defn.APITest do
     end
   end
 
+  describe "cross-client hooks" do
+    defn hooked_add(a, b) do
+      hook(a + b, :add)
+    end
+
+    test "concurrent hooks on different clients serialize on same device" do
+      parent = self()
+      hook_fn = fn value -> send(parent, {:hooked, value}) end
+
+      # Exercises the pattern that previously caused SIGABRT: multiple EXLA
+      # clients running hooks (outfeed) concurrently on the same device.
+      # The device-level lock key ensures these serialize rather than
+      # corrupting XLA's global per-device outfeed queue.
+      #
+      # Note: this test documents the unsafe pattern but cannot reliably
+      # trigger the race on its own — the original crash required concurrent
+      # outfeed from separate ExUnit async modules, not just concurrent tasks.
+      tasks =
+        for client <- [:host, :other_host], _ <- 1..4 do
+          Task.async(fn ->
+            EXLA.jit(&hooked_add/2, client: client, hooks: %{add: hook_fn}).(2, 3)
+          end)
+        end
+
+      results = Task.await_many(tasks, 30_000)
+      assert Enum.all?(results, &(Nx.to_number(&1) == 5))
+    end
+  end
+
   describe "telemetry" do
     defn telemetry_add_two(a, b), do: a + b
 

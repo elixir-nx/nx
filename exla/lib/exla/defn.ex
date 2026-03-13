@@ -314,6 +314,7 @@ defmodule EXLA.Defn do
     end
   end
 
+  defp run_key(%{client: %{platform: :host}, device_id: device_id}), do: [:host | device_id]
   defp run_key(%{client: %{ref: ref}, device_id: device_id}), do: [ref | device_id]
 
   ## Compile
