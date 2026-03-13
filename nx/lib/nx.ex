@@ -2248,15 +2248,23 @@ defmodule Nx do
   ## Examples
 
   While most code inside `defn` is restricted, `runtime_call/4` allows you
-  to perform arbitrary Elixir operations, such as message passing:
+  to perform arbitrary Elixir operations, such as message passing.
+  The callback must be a named capture (e.g. `&my_callback/2`):
 
+      iex> defmodule RuntimeCallExample do
+      ...>   def callback(t, opts) do
+      ...>     send(opts[:pid], {:sum, Enum.sum(Nx.to_flat_list(t))})
+      ...>     t
+      ...>   end
+      ...> end
       iex> pid = self()
       iex> x = Nx.tensor([1, 2, 3])
       iex> out = Nx.template({3}, {:s, 32})
-      iex> Nx.runtime_call(out, x, [], &my_callback/2, _opts ->
-      ...>   send(pid, {:sum, Enum.sum(Nx.to_flat_list(t))})
-      ...>   t
-      ...> end)
+      iex> Nx.runtime_call(out, x, [pid: pid], &RuntimeCallExample.callback/2)
+      #Nx.Tensor<
+        s32[3]
+        [1, 2, 3]
+      >
       iex> receive do {:sum, value} -> value end
       6
 
