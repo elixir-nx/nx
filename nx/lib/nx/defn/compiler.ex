@@ -638,6 +638,17 @@ defmodule Nx.Defn.Compiler do
     end
 
     {args, state} = normalize_list(args, state)
+
+    if name == :runtime_call and length(args) == 4 do
+      fun_arg = Enum.at(args, 3)
+      unless match?({:&, _, _}, fun_arg) do
+        compile_error!(
+          meta,
+          state,
+          "Nx.runtime_call/4 requires a named capture (e.g. &my_fun/2), got: #{Macro.to_string(fun_arg)}"
+        )
+      end
+    end
     {{{:., dot_meta, [Nx, name]}, meta, args}, state}
   end
 
