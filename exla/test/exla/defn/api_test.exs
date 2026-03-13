@@ -291,6 +291,30 @@ defmodule EXLA.Defn.APITest do
     end
   end
 
+  describe "cross-client hooks" do
+    defn hooked_add(a, b) do
+      hook(a + b, :add)
+    end
+
+    test "concurrent hooks on different clients serialize on same device" do
+      parent = self()
+      hook_fn = fn value -> send(parent, {:hooked, value}) end
+
+      # Run hooks on :host and :other_host concurrently on device 0.
+      # Before the device-level lock fix, this could corrupt the XLA
+      # outfeed queue and SIGABRT the runtime.
+      tasks =
+        for client <- [:host, :other_host], _ <- 1..4 do
+          Task.async(fn ->
+            EXLA.jit(&hooked_add/2, client: client, hooks: %{add: hook_fn}).(2, 3)
+          end)
+        end
+
+      results = Task.await_many(tasks, 30_000)
+      assert Enum.all?(results, &(Nx.to_number(&1) == 5))
+    end
+  end
+
   describe "telemetry" do
     defn telemetry_add_two(a, b), do: a + b
 
