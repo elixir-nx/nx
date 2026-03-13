@@ -56,7 +56,7 @@ defmodule EXLA.Defn.RuntimeCallTest do
     end
   end
 
-  defp split_and_sum_callback(t, _opts) do
+  def split_and_sum_callback(t, _opts) do
     {Nx.multiply(t, 2.0), Nx.add(t, 1.0)}
   end
 
@@ -67,7 +67,7 @@ defmodule EXLA.Defn.RuntimeCallTest do
     out1 = fx
     out_template = {out0, out1}
 
-    {a, b} = Nx.runtime_call(out_template, fx, [], &split_and_sum_callback/2)
+    {a, b} = Nx.runtime_call(out_template, fx, &split_and_sum_callback/2)
 
     Nx.add(a, b)
   end

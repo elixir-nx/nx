@@ -639,16 +639,10 @@ defmodule Nx.Defn.Compiler do
 
     {args, state} = normalize_list(args, state)
 
-    if name == :runtime_call and length(args) == 4 do
-      fun_arg = Enum.at(args, 3)
-      unless match?({:&, _, _}, fun_arg) do
-        compile_error!(
-          meta,
-          state,
-          "Nx.runtime_call/4 requires a named capture (e.g. &my_fun/2), got: #{Macro.to_string(fun_arg)}"
-        )
-      end
+    if name == :runtime_call do
+      validate_runtime_call!(args, meta, state)
     end
+
     {{{:., dot_meta, [Nx, name]}, meta, args}, state}
   end
 
@@ -732,6 +726,62 @@ defmodule Nx.Defn.Compiler do
       maybe_meta(expr),
       state,
       "invalid numerical expression:\n\n    #{string}\n"
+    )
+  end
+
+  defp validate_runtime_call!(args, meta, state) do
+    case args do
+      [_out, _arg, fun] ->
+        validate_runtime_call_capture!(fun, 2, meta, state)
+
+      [_out, _arg, _opts, fun] ->
+        validate_runtime_call_capture!(fun, 2, meta, state)
+
+      _ ->
+        compile_error!(
+          meta,
+          state,
+          "Nx.runtime_call/3 expects (out, arg, &fun/2) and Nx.runtime_call/4 expects (out, arg, opts, &fun/2), got #{length(args)} arguments"
+        )
+    end
+  end
+
+  defp validate_runtime_call_capture!({:fn, _, _}, _expected_arity, meta, state) do
+    compile_error!(
+      meta,
+      state,
+      "Nx.runtime_call inside defn requires a named capture (e.g. &my_callback/2), " <>
+        "anonymous functions are not allowed. Use a defp or def function and pass it as &name/2."
+    )
+  end
+
+  # Require :& with only argument being {:/, _, [name, 2]} or remote form {{:., _, [mod, name]}, _, [2]}
+  defp validate_runtime_call_capture!({:&, _, [arg]}, _expected_arity, meta, state) do
+    case arg do
+      {:/, _, [name, 2]} when is_atom(name) or
+                               (is_tuple(name) and tuple_size(name) == 3 and is_atom(elem(name, 0))) ->
+        :ok
+
+      {{:., _, [mod, name]}, _, [2]} when (is_atom(mod) or (is_tuple(mod) and elem(mod, 0) == :__aliases__)) and
+                                          (is_atom(name) or (is_tuple(name) and tuple_size(name) == 3 and is_atom(elem(name, 0)))) ->
+        :ok
+
+      _ ->
+        compile_error!(
+          meta,
+          state,
+          "Nx.runtime_call inside defn requires a named capture (e.g. &my_callback/2), " <>
+            "got: #{Macro.to_string({:&, [], [arg]})}"
+        )
+    end
+  end
+
+  defp validate_runtime_call_capture!(capture, _expected_arity, meta, state) do
+    compile_error!(
+      meta,
+      state,
+      "Nx.runtime_call inside defn requires a named capture with arity 2 (e.g. &my_callback/2), " <>
+        "got: #{Macro.to_string(capture)}"
     )
   end
 

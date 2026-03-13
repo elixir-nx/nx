@@ -7,14 +7,14 @@ defmodule Nx.Defn.RuntimeCallEvaluatorTest do
     :ok
   end
 
-  defp add_offset_callback(t, _opts) do
+  def add_offset_callback(t, _opts) do
     Nx.add(Nx.as_type(t, :f32), 10.0)
   end
 
   defn add_offset(x) do
     out = %{x | type: Nx.Type.to_floating(x.type)}
 
-    Nx.runtime_call(out, x, [], &add_offset_callback/2)
+    Nx.runtime_call(out, x, &add_offset_callback/2)
   end
 
   test "runtime_call with single output" do
@@ -25,7 +25,7 @@ defmodule Nx.Defn.RuntimeCallEvaluatorTest do
     assert Nx.all_close(y, expected) |> Nx.to_number() == 1
   end
 
-  defp split_and_sum_callback(t, _opts) do
+  def split_and_sum_callback(t, _opts) do
     {Nx.multiply(t, 2.0), Nx.add(t, 1.0)}
   end
 
@@ -36,7 +36,7 @@ defmodule Nx.Defn.RuntimeCallEvaluatorTest do
     out1 = fx
     out_template = {out0, out1}
 
-    {a, b} = Nx.runtime_call(out_template, fx, [], &split_and_sum_callback/2)
+    {a, b} = Nx.runtime_call(out_template, fx, &split_and_sum_callback/2)
 
     Nx.add(a, b)
   end
@@ -87,5 +87,45 @@ defmodule Nx.Defn.RuntimeCallEvaluatorTest do
     assert result.x == x
     assert result.y == {%{key: y}, Nx.s32(1)}
     assert_receive {:container_fun, ^ref}
+  end
+
+  describe "invalid callback" do
+    test "rejects anonymous function (fn x, y -> x + y end)" do
+      assert_raise CompileError, ~r/anonymous functions are not allowed/, fn ->
+        defmodule BadAnonFn do
+          import Nx.Defn
+
+          defn bad(x) do
+            Nx.runtime_call(x, x, fn x, y -> x + y end)
+          end
+        end
+      end
+    end
+
+    test "rejects anonymous capture (& &1 + &2)" do
+      assert_raise CompileError, ~r/requires a named capture/, fn ->
+        defmodule BadAnonCapture do
+          import Nx.Defn
+
+          defn bad(x) do
+            Nx.runtime_call(x, x, & &1 + &2)
+          end
+        end
+      end
+    end
+
+    test "rejects wrong arity (&fun/1)" do
+      assert_raise CompileError, ~r/requires a named capture.*got:.*&callback\/1/, fn ->
+        defmodule BadArity do
+          import Nx.Defn
+
+          def callback(_t), do: Nx.tensor(0)
+
+          defn bad(x) do
+            Nx.runtime_call(x, x, &callback/1)
+          end
+        end
+      end
+    end
   end
 end
