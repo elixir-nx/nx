@@ -738,11 +738,7 @@ defmodule Nx.Defn.Compiler do
         validate_runtime_call_capture!(fun, 2, meta, state)
 
       _ ->
-        compile_error!(
-          meta,
-          state,
-          "Nx.runtime_call/3 expects (out, arg, &fun/2) and Nx.runtime_call/4 expects (out, arg, opts, &fun/2), got #{length(args)} arguments"
-        )
+        raise UndefinedFunctionError, "function Nx.runtime_call/#{length(args)} is undefined. Did you mean runtime_call/3 or runtime_call/4?"
     end
   end
 
