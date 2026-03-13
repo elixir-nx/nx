@@ -149,7 +149,7 @@ defmodule Nx.Defn.RuntimeCallEvaluatorTest do
           import Nx.Defn
 
           defn bad(x) do
-            Nx.runtime_call(x, x, &(&1 + &2))
+            Nx.runtime_call(x, x, &(&1 / &2))
           end
         end
       end
