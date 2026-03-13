@@ -1,6 +1,14 @@
+defmodule Nx.Defn.RuntimeCallEvaluatorTest.RemoteCallback do
+  def callback(t, _opts) do
+    Nx.add(Nx.as_type(t, :f32), 10.0)
+  end
+end
+
 defmodule Nx.Defn.RuntimeCallEvaluatorTest do
   use ExUnit.Case, async: true
   import Nx.Defn
+
+  alias Nx.Defn.RuntimeCallEvaluatorTest.RemoteCallback, as: AliasMod
 
   setup do
     Nx.Defn.default_options(compiler: Nx.Defn.Evaluator)
@@ -20,6 +28,34 @@ defmodule Nx.Defn.RuntimeCallEvaluatorTest do
   test "runtime_call with single output" do
     x = Nx.iota({5})
     y = add_offset(x)
+
+    expected = Nx.add(Nx.as_type(x, :f32), 10.0)
+    assert Nx.all_close(y, expected) |> Nx.to_number() == 1
+  end
+
+  defn add_offset_remote_unaliased(x) do
+    out = %{x | type: Nx.Type.to_floating(x.type)}
+
+    Nx.runtime_call(out, x, &Nx.Defn.RuntimeCallEvaluatorTest.RemoteCallback.callback/2)
+  end
+
+  defn add_offset_remote_aliased(x) do
+    out = %{x | type: Nx.Type.to_floating(x.type)}
+
+    Nx.runtime_call(out, x, &AliasMod.callback/2)
+  end
+
+  test "runtime_call with fully-qualified unaliased module (&Mod.fun/2)" do
+    x = Nx.iota({5})
+    y = add_offset_remote_unaliased(x)
+
+    expected = Nx.add(Nx.as_type(x, :f32), 10.0)
+    assert Nx.all_close(y, expected) |> Nx.to_number() == 1
+  end
+
+  test "runtime_call with fully-qualified aliased module (&Alias.fun/2)" do
+    x = Nx.iota({5})
+    y = add_offset_remote_aliased(x)
 
     expected = Nx.add(Nx.as_type(x, :f32), 10.0)
     assert Nx.all_close(y, expected) |> Nx.to_number() == 1
@@ -120,7 +156,7 @@ defmodule Nx.Defn.RuntimeCallEvaluatorTest do
     end
 
     test "rejects wrong arity (&fun/1)" do
-      assert_raise CompileError, ~r/requires a named capture.*got:.*&callback\/1/, fn ->
+      assert_raise CompileError, ~r/requires a named capture with arity 2.*got arity 1/, fn ->
         defmodule BadArity do
           import Nx.Defn
 
