@@ -224,7 +224,7 @@ defmodule EXLA.Defn.Outfeed do
       outfeed
 
     hooks = Map.merge(default_hooks, user_hooks)
-    stream_outfeed? = Outfeed.will_outfeed(outfeed) or map_size(infeeds) > 0
+    stream_outfeed? = will_outfeed(outfeed) or map_size(infeeds) > 0
 
     Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
       init(
@@ -254,17 +254,16 @@ defmodule EXLA.Defn.Outfeed do
     # Copy the group leader so we report to the proper device
     Process.group_leader(self(), group_leader)
 
-    if stream_outfeed? do
-      ref = make_ref()
-      typespec = EXLA.Typespec.tensor({:u, 16}, {})
-      loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, runtime_callbacks)
-    else
-      callback_loop(runtime_callbacks)
-    end
+    ref = make_ref()
+    typespec = EXLA.Typespec.tensor({:u, 16}, {})
+    loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, runtime_callbacks, stream_outfeed?)
   end
 
-  defp loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, runtime_callbacks) do
-    :ok = EXLA.Client.from_outfeed(client, device_id, [typespec], self(), ref)
+  defp loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, runtime_callbacks, stream_outfeed?) do
+    if stream_outfeed? do
+      # If we're not outfeeding, we only need to handle the runtime callback messaging.
+      :ok = EXLA.Client.from_outfeed(client, device_id, [typespec], self(), ref)
+    end
 
     receive do
       {^ref, <<0::native-unsigned-16>>} ->
@@ -280,7 +279,7 @@ defmodule EXLA.Defn.Outfeed do
               end
 
             EXLA.Client.to_infeed(client, device_id, [{data, data_typespec}])
-            loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, runtime_callbacks)
+            loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, runtime_callbacks, stream_outfeed?)
 
           {:function, typespecs, name, template} ->
             fun = Map.fetch!(hooks, name)
@@ -299,20 +298,21 @@ defmodule EXLA.Defn.Outfeed do
               hooks,
               compiled_hooks,
               infeeds,
-              runtime_callbacks
+              runtime_callbacks,
+              stream_outfeed?
             )
         end
 
       {:exla_runtime_call, callback_id, args_spec, reply_tag} ->
         send_runtime_callback_reply(runtime_callbacks, callback_id, args_spec, reply_tag)
-        loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, runtime_callbacks)
+        loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, runtime_callbacks, stream_outfeed?)
 
       :stop ->
         :ok
 
       other ->
         Logger.debug("EXLA.Outfeed ignoring unexpected message: #{inspect(other)}")
-        loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, runtime_callbacks)
+        loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, runtime_callbacks, stream_outfeed?)
     end
   end
 
@@ -325,11 +325,12 @@ defmodule EXLA.Defn.Outfeed do
          hooks,
          compiled_hooks,
          infeeds,
-         runtime_callbacks
+         runtime_callbacks,
+         stream_outfeed?
        ) do
     receive do
       ^hook_ref ->
-        loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, runtime_callbacks)
+        loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, runtime_callbacks, stream_outfeed?)
 
       {:exla_runtime_call, callback_id, args_spec, reply_tag} ->
         send_runtime_callback_reply(runtime_callbacks, callback_id, args_spec, reply_tag)
@@ -343,7 +344,8 @@ defmodule EXLA.Defn.Outfeed do
           hooks,
           compiled_hooks,
           infeeds,
-          runtime_callbacks
+          runtime_callbacks,
+          stream_outfeed?
         )
 
       :exla_runtime_call_executable_dropped ->
@@ -364,26 +366,9 @@ defmodule EXLA.Defn.Outfeed do
           hooks,
           compiled_hooks,
           infeeds,
-          runtime_callbacks
+          runtime_callbacks,
+          stream_outfeed?
         )
-    end
-  end
-
-  defp callback_loop(runtime_callbacks) do
-    receive do
-      {:exla_runtime_call, callback_id, args_spec, reply_tag} ->
-        send_runtime_callback_reply(runtime_callbacks, callback_id, args_spec, reply_tag)
-        callback_loop(runtime_callbacks)
-
-      :exla_runtime_call_executable_dropped ->
-        :ok
-
-      :stop ->
-        :ok
-
-      other ->
-        Logger.debug("EXLA.Outfeed ignoring unexpected message: #{inspect(other)}")
-        callback_loop(runtime_callbacks)
     end
   end
 
