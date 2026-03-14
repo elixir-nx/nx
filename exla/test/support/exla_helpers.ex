@@ -12,9 +12,10 @@ defmodule EXLAHelpers do
   def compile(typespecs, opts \\ [], output \\ nil, fun) do
     compile_fn = fn builder ->
       params = EXLA.MLIR.Function.get_arguments(builder)
+      [_callback_pid_param | params_without_callback_pid] = params
 
       fun
-      |> apply([builder | params])
+      |> apply([builder | params_without_callback_pid])
       |> then(&EXLA.MLIR.Value.func_return(builder, List.wrap(&1)))
 
       EXLA.MLIR.Module.compile(
@@ -26,7 +27,8 @@ defmodule EXLAHelpers do
       )
     end
 
-    EXLA.MLIR.Module.new(List.wrap(typespecs), List.wrap(output), compile_fn)
+    typespecs = [EXLA.Executable.callback_server_pid_typespec() | List.wrap(typespecs)]
+    EXLA.MLIR.Module.new(typespecs, List.wrap(output), compile_fn)
   end
 
   @doc """
