@@ -153,7 +153,7 @@ defmodule EXLA.Defn do
 
     callback = &to_computation(&1, &2, &3, &4, &5, compile_options)
 
-    {executable, {used_inputs, outputs, outfeed, _input_typespecs?, runtime_callbacks}} =
+    {executable, {used_inputs, outputs, outfeed, _input_typespecs?}} =
       compile(key, vars, fun, compile_options, 0, [], callback)
 
     if compile_options[:module_compilation] == :to_mlir do
@@ -167,9 +167,6 @@ defmodule EXLA.Defn do
         end)
 
       debug? && Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
-
-      run_options = Keyword.put(run_options, :runtime_callbacks, runtime_callbacks)
-
       {time, res} =
         :timer.tc(fn ->
           maybe_outfeed(
@@ -199,8 +196,10 @@ defmodule EXLA.Defn do
          client,
          options
        ) do
+    [callback_pid_value | function_args] = Function.get_arguments(function)
+
     params =
-      Enum.zip_with(used_typespecs, Function.get_arguments(function), fn {pos, _typespec}, arg ->
+      Enum.zip_with(used_typespecs, function_args, fn {pos, _typespec}, arg ->
         {pos, arg}
       end)
 
@@ -214,14 +213,19 @@ defmodule EXLA.Defn do
       builder: function,
       params: Map.new(params ++ outfeed.infeeds),
       scope_ids: Tree.scope_ids(expr),
-      callback_pid_value: List.last(Function.get_arguments(function))
+      callback_pid_value: callback_pid_value
     }
 
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
-    outfeed = cache |> get_outfeed() |> Outfeed.close(function)
     runtime_callbacks = cache |> get_runtime_callbacks() |> Enum.reverse()
+    outfeed =
+      cache
+      |> get_outfeed()
+      |> Outfeed.with_runtime_callbacks(runtime_callbacks)
+      |> Outfeed.close(function)
+
     Value.func_return(function, res)
-    {outfeed, runtime_callbacks}
+    outfeed
   end
 
   defp maybe_outfeed(
@@ -234,7 +238,7 @@ defmodule EXLA.Defn do
          run_options,
          is_sharded?
        )
-       when Outfeed.will_outfeed(outfeed) do
+       when Outfeed.will_outfeed(outfeed) or Outfeed.has_runtime_calls(outfeed) do
     if is_sharded? do
       raise ArgumentError, "outfeed is not supported for sharded execution yet"
     end
@@ -245,24 +249,50 @@ defmodule EXLA.Defn do
         arg, i, _depth -> {i, EXLA.Defn.Buffers.from_nx!(arg, executable, false)}
       end)
 
+    infeeds = Map.new(infeeds)
+
+    {:ok, outfeed_pid} =
+      Outfeed.start_child(executable, outfeed, Process.group_leader(), infeeds)
+
+    run_options = Keyword.put(run_options, :callback_server_pid, outfeed_pid)
+
     {:ok, runner} =
       EXLA.Defn.Runner.start_link(lock, fn ->
         EXLA.Executable.run(executable, [Enum.reverse(buffers)], run_options)
       end)
 
-    {:ok, outfeed_pid} =
-      Outfeed.start_child(executable, outfeed, Process.group_leader(), Map.new(infeeds))
+    Process.unlink(runner)
 
     _ = EXLA.Defn.Lock.transfer(lock, fn -> send(runner, lock) end, outfeed_pid)
     ref = Process.monitor(outfeed_pid)
 
-    receive do
-      {:DOWN, ^ref, _, _, _} ->
-        results = EXLA.Defn.Runner.read(runner)
+    try do
+      # This will block until the runner is done.
+      # Then, we need to wait for the outfeed process to terminate.
+      results = read_runner!(runner)
 
-        Enum.map(results, fn result ->
-          EXLA.Defn.Buffers.to_nx!(result, outputs, executable.mesh)
-        end)
+      if not Outfeed.will_outfeed(outfeed) do
+        # We need the process to not wait for the stream to complete if
+        # there won't be any stream in this case.
+        send(outfeed_pid, :stop)
+      end
+
+      # Ensure the outfeed process is terminated cleanly
+      receive do
+        {:DOWN, ^ref, _, _, _} -> :ok
+      end
+
+      Enum.map(results, fn result ->
+        EXLA.Defn.Buffers.to_nx!(result, outputs, executable.mesh)
+      end)
+    after
+      if Process.alive?(outfeed_pid) do
+        send(outfeed_pid, :stop)
+
+        receive do
+          {:DOWN, ^ref, _, _, _} -> :ok
+        end
+      end
     end
   end
 
@@ -297,6 +327,13 @@ defmodule EXLA.Defn do
     after
       EXLA.Defn.Lock.unlock(lock)
     end
+  end
+
+  defp read_runner!(runner) do
+    EXLA.Defn.Runner.read(runner)
+  catch
+    :exit, {{%RuntimeError{} = error, _stacktrace}, _call_info} ->
+      raise error
   end
 
   defp run_key(%{client: %{platform: :host}, device_id: device_id}), do: [:host | device_id]
@@ -376,8 +413,7 @@ defmodule EXLA.Defn do
       outfeed = Outfeed.new(hooks, defined_hooks)
       comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
 
-      {comp_time,
-       {evaled, {xla_time, executable, inputs_and_typespecs, outfeed, runtime_callbacks}}} =
+      {comp_time, {evaled, {xla_time, executable, inputs_and_typespecs, outfeed}}} =
         :timer.tc(fn ->
           comp_cache_fun.(comp_key, fn ->
             {reverse_inputs_and_typespecs, reverse_infeeds} =
@@ -406,7 +442,7 @@ defmodule EXLA.Defn do
             comp_typespecs =
               for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
 
-            comp_typespecs = comp_typespecs ++ [callback_pid_typespec]
+            comp_typespecs = [callback_pid_typespec | comp_typespecs]
 
             EXLA.MLIR.Module.new(comp_typespecs, out_typespecs, fn builder ->
               # Add device mesh to module if provided
@@ -415,7 +451,7 @@ defmodule EXLA.Defn do
 
                 # Apply sharding annotations to function arguments if provided
                 Enum.with_index(input_shardings, fn sharding, arg_index ->
-                  Function.set_arg_sharding(builder, arg_index, {mesh, sharding})
+                  Function.set_arg_sharding(builder, arg_index + 1, {mesh, sharding})
                 end)
               end
 
@@ -430,14 +466,7 @@ defmodule EXLA.Defn do
                   outfeed
                 end
 
-              {outfeed, runtime_callbacks} =
-                to_computation.(
-                  builder,
-                  expr,
-                  inputs_and_typespecs,
-                  outfeed,
-                  client
-                )
+              outfeed = to_computation.(builder, expr, inputs_and_typespecs, outfeed, client)
 
               # Compute num_partitions from mesh and enable SPMD if mesh is provided
               options =
@@ -462,9 +491,7 @@ defmodule EXLA.Defn do
                   )
                 end)
 
-              {:ok,
-               {xla_time, executable, inputs_and_typespecs, %{outfeed | infeeds: []},
-                runtime_callbacks}}
+              {:ok, {xla_time, executable, inputs_and_typespecs, %{outfeed | infeeds: []}}}
             end)
           end)
         end)
@@ -493,7 +520,7 @@ defmodule EXLA.Defn do
       end
 
       outfeed = Outfeed.with_user_hooks(outfeed, hooks)
-      {executable, {used_inputs, outputs, outfeed, inputs_and_typespecs, runtime_callbacks}}
+      {executable, {used_inputs, outputs, outfeed, inputs_and_typespecs}}
     end)
   end
 
@@ -794,7 +821,7 @@ defmodule EXLA.Defn do
     end
 
     results =
-      Value.runtime_call(arg_values ++ [callback_pid_value], typespecs, id)
+      Value.runtime_call([callback_pid_value | arg_values], typespecs, id)
 
     {wrap_tuple_result(results, expr), cache}
   end
@@ -824,7 +851,7 @@ defmodule EXLA.Defn do
     end
 
     results =
-      Value.runtime_call(arg_values ++ [callback_pid_value], typespecs, id)
+      Value.runtime_call([callback_pid_value | arg_values], typespecs, id)
 
     {wrap_tuple_result(results, expr), cache}
   end

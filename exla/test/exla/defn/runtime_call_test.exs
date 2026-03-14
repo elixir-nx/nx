@@ -89,6 +89,7 @@ defmodule EXLA.Defn.RuntimeCallTest do
     end)
   end
 
+  @tag :capture_log
   test "runtime_call errors when result shape does not match template" do
     x = Nx.iota({2})
 
