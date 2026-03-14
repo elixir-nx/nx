@@ -55,9 +55,11 @@ defmodule EXLATest do
           assert %{mlir_module: module, output_container: container, used_inputs: used_inputs} =
                    result
 
+          callback_pid_size = EXLA.Executable.callback_server_pid_size()
+
           assert module == """
                  module {
-                   func.func public @main(%arg0: tensor<i32>, %arg1: tensor<i32>) -> tensor<i32> {
+                   func.func public @main(%arg0: tensor<i32>, %arg1: tensor<i32>, %arg2: tensor<#{callback_pid_size}xui8>) -> tensor<i32> {
                      %0 = stablehlo.add %arg0, %arg1 : tensor<i32>
                      return %0 : tensor<i32>
                    }
@@ -68,6 +70,14 @@ defmodule EXLATest do
 
           assert MapSet.equal?(used_inputs, MapSet.new([0, 1]))
       end
+    end
+  end
+
+  describe "callback server pid encoding" do
+    test "encodes local pid to fixed-size binary" do
+      encoded = EXLA.NIF.encode_local_pid(self())
+
+      assert byte_size(encoded) == EXLA.NIF.callback_server_pid_size()
     end
   end
 end

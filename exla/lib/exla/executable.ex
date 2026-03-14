@@ -5,6 +5,7 @@ defmodule EXLA.Executable do
 
   alias __MODULE__
   alias EXLA.{BinaryBuffer, DeviceBuffer}
+  alias EXLA.Typespec
 
   @enforce_keys [:client, :ref, :output_typespecs, :num_replicas, :num_partitions, :device_id]
   defstruct [
@@ -43,9 +44,32 @@ defmodule EXLA.Executable do
     } =
       executable
 
-    for data_and_device_id <- run(client, ref, device_id, inputs, options) do
-      decompose_output(data_and_device_id, output_typespecs, client, mesh)
+    runtime_callbacks = Keyword.get(options, :runtime_callbacks)
+
+    {inputs, callback_server_pid} =
+      prepare_runtime_callback_inputs(inputs, runtime_callbacks)
+
+    try do
+      for data_and_device_id <- run(client, ref, device_id, inputs, options) do
+        decompose_output(data_and_device_id, output_typespecs, client, mesh)
+      end
+    after
+      if callback_server_pid do
+        stop_callback_server(callback_server_pid)
+      end
     end
+  end
+
+  # callback_server_pid_size is generally 8 bytes,
+  # but we expose these functions so that we don't
+  # hardcode the size in the codebase and are
+  # more future-proof.
+  def callback_server_pid_size do
+    EXLA.NIF.callback_server_pid_size()
+  end
+
+  def callback_server_pid_typespec do
+    Typespec.tensor({:u, 8}, {callback_server_pid_size()})
   end
 
   @doc """
@@ -146,5 +170,82 @@ defmodule EXLA.Executable do
         # Binary buffers use the provided typespec
         BinaryBuffer.from_binary(buf, typespec)
     end)
+  end
+
+  defp prepare_runtime_callback_inputs(inputs, nil), do: {inputs, nil}
+
+  defp prepare_runtime_callback_inputs(inputs, []) do
+    callback_server_pid_buffer =
+      callback_server_pid_buffer(<<0::size(callback_server_pid_size())-unit(8)>>)
+
+    updated_inputs =
+      Enum.map(inputs, fn replica_inputs ->
+        replica_inputs ++ [callback_server_pid_buffer]
+      end)
+
+    {updated_inputs, nil}
+  end
+
+  defp prepare_runtime_callback_inputs(inputs, runtime_callbacks) do
+    callback_server_pid = start_callback_server!()
+
+    try do
+      register_runtime_callbacks!(callback_server_pid, runtime_callbacks)
+
+      callback_server_pid_buffer =
+        callback_server_pid
+        |> encode_callback_server_pid!()
+        |> callback_server_pid_buffer()
+
+      updated_inputs =
+        Enum.map(inputs, fn replica_inputs ->
+          replica_inputs ++ [callback_server_pid_buffer]
+        end)
+
+      {updated_inputs, callback_server_pid}
+    rescue
+      error ->
+        stop_callback_server(callback_server_pid)
+        reraise error, __STACKTRACE__
+    end
+  end
+
+  defp start_callback_server! do
+    case DynamicSupervisor.start_child(EXLA.CallbackServer.Supervisor, {EXLA.CallbackServer, []}) do
+      {:ok, pid} -> pid
+      {:error, reason} -> raise "failed to start EXLA.CallbackServer: #{inspect(reason)}"
+    end
+  end
+
+  defp register_runtime_callbacks!(callback_server_pid, runtime_callbacks) do
+    Enum.each(runtime_callbacks, fn {id, fun, out_template, arg_template} ->
+      :ok = EXLA.CallbackServer.register(callback_server_pid, id, fun, out_template, arg_template)
+    end)
+  end
+
+  defp encode_callback_server_pid!(callback_server_pid) do
+    callback_server_pid_bin = EXLA.NIF.encode_local_pid(callback_server_pid)
+    callback_server_pid_size = callback_server_pid_size()
+
+    case byte_size(callback_server_pid_bin) do
+      ^callback_server_pid_size ->
+        callback_server_pid_bin
+
+      size ->
+        raise ArgumentError,
+              "expected encoded callback server pid size to be #{callback_server_pid_size} bytes, got #{size}"
+    end
+  end
+
+  defp callback_server_pid_buffer(callback_server_pid_bin) do
+    BinaryBuffer.from_binary(
+      callback_server_pid_bin,
+      callback_server_pid_typespec()
+    )
+  end
+
+  defp stop_callback_server(callback_server_pid) do
+    _ = DynamicSupervisor.terminate_child(EXLA.CallbackServer.Supervisor, callback_server_pid)
+    :ok
   end
 end

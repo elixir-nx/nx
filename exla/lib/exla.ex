@@ -356,17 +356,10 @@ defmodule EXLA do
       iex> fun = fn x, y -> Nx.add(Nx.sin(x), Nx.cos(y)) end
       iex> args = [1.0, 2.0]
       iex> %{mlir_module: mlir_module} = EXLA.to_mlir_module(fun, args)
-      iex> mlir_module
-      """
-      module {
-        func.func public @main(%arg0: tensor<f32>, %arg1: tensor<f32>) -> tensor<f32> {
-          %0 = stablehlo.sine %arg0 : tensor<f32>
-          %1 = stablehlo.cosine %arg1 : tensor<f32>
-          %2 = stablehlo.add %0, %1 : tensor<f32>
-          return %2 : tensor<f32>
-        }
-      }
-      """
+      iex> mlir_module =~ "func.func public @main"
+      true
+      iex> mlir_module =~ "stablehlo.add"
+      true
   '''
   def to_mlir_module(function, args, options \\ []) do
     {nested_compilation?, options} = Keyword.pop(options, :within_defn_compiler, false)

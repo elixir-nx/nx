@@ -68,19 +68,7 @@ defmodule EXLA.CallbackServer do
 
   @impl true
   def init(:ok) do
-    # Inform native side that this process is the dispatcher for elixir callbacks
-    _ = EXLA.NIF.start_runtime_callback_bridge(self())
-
     {:ok, %__MODULE__{}}
-  end
-
-  @impl true
-  def terminate(_reason, _state) do
-    try do
-      EXLA.NIF.clear_runtime_callback_bridge(self())
-    rescue
-      _ -> :ok
-    end
   end
 
   @impl true

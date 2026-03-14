@@ -276,8 +276,7 @@ fine::ResourcePtr<ExlaExecutable>
 mlir_compile(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
              fine::ResourcePtr<MLIRModule> module,
              std::vector<xla::Shape> argument_layouts, int64_t num_replicas,
-             int64_t num_partitions, bool use_spmd, int64_t device_id,
-             fine::Term callback_server_pid_term) {
+             int64_t num_partitions, bool use_spmd, int64_t device_id) {
   auto build_options = xla::ExecutableBuildOptions();
 
   build_options.set_num_replicas(num_replicas);
@@ -298,21 +297,8 @@ mlir_compile(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
     build_options.set_device_ordinal(device_id);
   }
 
-  // Decode the optional callback server pid. If the term is a pid, we convert
-  // it to an ErlNifPid; otherwise we treat it as "no pid" (e.g. nil).
-  absl::optional<ErlNifPid> pid_opt;
-  ERL_NIF_TERM pid_term = callback_server_pid_term;
-
-  if (enif_is_pid(env, pid_term)) {
-    ErlNifPid pid;
-    if (enif_get_local_pid(env, pid_term, &pid)) {
-      pid_opt = pid;
-    }
-  }
-
   return unwrap(client->Compile(module->module(), argument_layouts,
-                                build_options, compile_portable_executable,
-                                pid_opt));
+                                build_options, compile_portable_executable));
 }
 
 FINE_NIF(mlir_compile, ERL_NIF_DIRTY_JOB_CPU_BOUND);
@@ -630,15 +616,25 @@ get_per_device_memory(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client) {
 
 FINE_NIF(get_per_device_memory, 0);
 
+int64_t callback_server_pid_size(ErlNifEnv *env) {
+  (void)env;
+  return static_cast<int64_t>(sizeof(ErlNifPid));
+}
+
+FINE_NIF(callback_server_pid_size, 0);
+
+std::string encode_local_pid(ErlNifEnv *env, ErlNifPid pid) {
+  (void)env;
+  return std::string(reinterpret_cast<const char *>(&pid), sizeof(ErlNifPid));
+}
+
+FINE_NIF(encode_local_pid, 0);
+
 // Elixir callback bridge NIF registrations
 
-using callback_bridge::clear_runtime_callback_bridge;
 using callback_bridge::runtime_callback_reply;
-using callback_bridge::start_runtime_callback_bridge;
 
-FINE_NIF(start_runtime_callback_bridge, 0);
 FINE_NIF(runtime_callback_reply, ERL_NIF_DIRTY_JOB_IO_BOUND);
-FINE_NIF(clear_runtime_callback_bridge, 0);
 
 // Logging
 
