@@ -54,6 +54,7 @@ defmodule EXLATest do
         {__MODULE__.ValidCompiler, result} ->
           assert %{mlir_module: module, output_container: container, used_inputs: used_inputs} =
                    result
+
           callback_pid_size = EXLA.Executable.callback_server_pid_size()
 
           assert module == """
