@@ -75,15 +75,9 @@ Result InvokeRuntimeCallback(
     const Arg &callback_server_pid_arg, const std::vector<Arg> &inputs,
     const std::vector<OutputBuffer> &outputs);
 
-fine::Ok<> start_runtime_callback_bridge(ErlNifEnv *env,
-                                         ErlNifPid dispatcher_pid);
-
 fine::Ok<> runtime_callback_reply(ErlNifEnv *env,
                                   fine::ResourcePtr<Pending> pending,
                                   fine::Atom status, fine::Term result);
-
-fine::Ok<> clear_runtime_callback_bridge(ErlNifEnv *env,
-                                         ErlNifPid dispatcher_pid);
 
 } // namespace callback_bridge
 

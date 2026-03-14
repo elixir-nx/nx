@@ -632,13 +632,9 @@ FINE_NIF(encode_local_pid, 0);
 
 // Elixir callback bridge NIF registrations
 
-using callback_bridge::clear_runtime_callback_bridge;
 using callback_bridge::runtime_callback_reply;
-using callback_bridge::start_runtime_callback_bridge;
 
-FINE_NIF(start_runtime_callback_bridge, 0);
 FINE_NIF(runtime_callback_reply, ERL_NIF_DIRTY_JOB_IO_BOUND);
-FINE_NIF(clear_runtime_callback_bridge, 0);
 
 // Logging
 

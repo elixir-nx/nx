@@ -6,43 +6,10 @@ namespace exla {
 
 namespace callback_bridge {
 
-struct BridgeState {
-  ErlNifPid dispatcher_pid;
-  bool dispatcher_set = false;
-};
-
-BridgeState *GetBridgeState() {
-  static BridgeState *state = new BridgeState();
-  return state;
-}
-
-fine::Ok<> start_runtime_callback_bridge(ErlNifEnv *env,
-                                         ErlNifPid dispatcher_pid) {
-  (void)env;
-  auto state = GetBridgeState();
-  state->dispatcher_pid = dispatcher_pid;
-  state->dispatcher_set = true;
-  return fine::Ok();
-}
-
 fine::Ok<> runtime_callback_reply(ErlNifEnv *env,
                                   fine::ResourcePtr<Pending> pending,
                                   fine::Atom status, fine::Term result) {
   deliver_reply(env, pending, status, result);
-  return fine::Ok();
-}
-
-fine::Ok<> clear_runtime_callback_bridge(ErlNifEnv *env,
-                                         ErlNifPid dispatcher_pid) {
-  (void)env;
-  auto state = GetBridgeState();
-
-  if (state->dispatcher_set &&
-      std::memcmp(&state->dispatcher_pid, &dispatcher_pid, sizeof(ErlNifPid)) ==
-          0) {
-    state->dispatcher_set = false;
-  }
-
   return fine::Ok();
 }
 
@@ -121,14 +88,6 @@ Result InvokeRuntimeCallback(
     const std::vector<OutputBuffer> &outputs) {
   const int64_t callback_server_pid_dim = static_cast<int64_t>(sizeof(ErlNifPid));
   const size_t callback_server_pid_size = sizeof(ErlNifPid);
-  auto state = GetBridgeState();
-
-  if (!state->dispatcher_set) {
-    Result res;
-    res.ok = false;
-    res.error = "EXLA elixir callback dispatcher is not set";
-    return res;
-  }
 
   auto pending = fine::make_resource<Pending>(outputs);
 
@@ -204,7 +163,6 @@ Result InvokeRuntimeCallback(
   auto msg = std::make_tuple(fine::Atom("exla_runtime_call"),
                              fine::Term(callback_id_term), args_terms, pending);
 
-  // Use the dispatcher pid registered via start_runtime_callback_bridge/1.
   // We still are within the NIF thread that started the computation,
   // but we don't know its env, therefore we cannot use enif_whereis_pid.
   // enif_whereis_pid can be called with NULL, but only from non-ERTS
