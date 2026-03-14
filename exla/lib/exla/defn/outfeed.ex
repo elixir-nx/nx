@@ -177,12 +177,8 @@ defmodule EXLA.Defn.Outfeed do
   def close(outfeed, builder)
 
   def close(%Outfeed{} = outfeed, %Function{} = builder)
-      when will_outfeed(outfeed) and not is_nil(outfeed.token),
-    do:
+      when will_outfeed(outfeed), do:
       update_in(outfeed.token, &Value.outfeed(Value.constant(builder, [0], flag_typespec()), &1))
-
-  def close(%Outfeed{} = outfeed, %Function{}) when will_outfeed(outfeed),
-    do: outfeed
 
   def close(%Outfeed{} = outfeed, _builder),
     do: outfeed
@@ -228,7 +224,7 @@ defmodule EXLA.Defn.Outfeed do
       outfeed
 
     hooks = Map.merge(default_hooks, user_hooks)
-    stream_outfeed? = compiled_hooks != %{} or map_size(infeeds) > 0
+    stream_outfeed? = Outfeed.will_outfeed(outfeed) or map_size(infeeds) > 0
 
     Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
       init(
@@ -310,9 +306,6 @@ defmodule EXLA.Defn.Outfeed do
       {:exla_runtime_call, callback_id, args_spec, reply_tag} ->
         send_runtime_callback_reply(runtime_callbacks, callback_id, args_spec, reply_tag)
         loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, runtime_callbacks)
-
-      :exla_runtime_call_executable_dropped ->
-        :ok
 
       :stop ->
         :ok
