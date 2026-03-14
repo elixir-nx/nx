@@ -329,6 +329,7 @@ defmodule EXLA.Defn.Outfeed do
             |> decode_callback_args(arg_template)
             |> run_runtime_callback(fun, out_template)
             |> encode_runtime_callback_reply()
+            |> halt_on_runtime_callback_error()
 
           :error ->
             Logger.error(
@@ -441,6 +442,12 @@ defmodule EXLA.Defn.Outfeed do
     msg = "Elixir callback error: #{inspect(reason)}"
     {:error, {:runtime_error, msg}}
   end
+
+  defp halt_on_runtime_callback_error({:error, _} = val) do
+    send(self(), :stop)
+    val
+  end
+  defp halt_on_runtime_callback_error(val), do: val
 
   defp materialize_callback_args(arg_template, args_spec) do
     {container, remaining} =

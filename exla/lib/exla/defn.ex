@@ -253,20 +253,18 @@ defmodule EXLA.Defn do
 
     {:ok, outfeed_pid} =
       Outfeed.start_child(executable, outfeed, Process.group_leader(), infeeds)
+    ref = Process.monitor(outfeed_pid)
 
     run_options = Keyword.put(run_options, :callback_server_pid, outfeed_pid)
 
-    {:ok, runner} =
-      EXLA.Defn.Runner.start_link(lock, fn ->
-        EXLA.Executable.run(executable, [Enum.reverse(buffers)], run_options)
-      end)
-
-    Process.unlink(runner)
-
-    _ = EXLA.Defn.Lock.transfer(lock, fn -> send(runner, lock) end, outfeed_pid)
-    ref = Process.monitor(outfeed_pid)
-
     try do
+      {:ok, runner} =
+        EXLA.Defn.Runner.start_link(lock, fn ->
+          EXLA.Executable.run(executable, [Enum.reverse(buffers)], run_options)
+        end)
+
+      _ = EXLA.Defn.Lock.transfer(lock, fn -> send(runner, lock) end, outfeed_pid)
+
       # This will block until the runner is done.
       # Then, we need to wait for the outfeed process to terminate.
       results = read_runner!(runner)
