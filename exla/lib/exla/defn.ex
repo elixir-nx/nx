@@ -151,58 +151,43 @@ defmodule EXLA.Defn do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
     debug? = Keyword.get(compile_options, :debug, false)
 
-    # We start the callback server regardless if it's needed
-    # as it's relatively cheap to start it.
-    callback_server_pid =
-      case DynamicSupervisor.start_child(
-             EXLA.CallbackServer.Supervisor,
-             {EXLA.CallbackServer, []}
-           ) do
-        {:ok, pid} -> pid
-        {:error, reason} -> raise "Failed to start EXLA.CallbackServer: #{inspect(reason)}"
-      end
+    callback = &to_computation(&1, &2, &3, &4, &5, compile_options, &6)
 
-    try do
-      callback = &to_computation(&1, &2, &3, &4, &5, compile_options, callback_server_pid)
+    {executable, {used_inputs, outputs, outfeed, _input_typespecs?, runtime_callbacks}} =
+      compile(key, vars, fun, compile_options, 0, [], callback)
 
-      {executable, {used_inputs, outputs, outfeed, _input_typespecs?}} =
-        compile(key, vars, fun, compile_options, 0, [], callback, callback_server_pid)
+    if compile_options[:module_compilation] == :to_mlir do
+      throw({:mlir_module, executable.ref, MapSet.new(Map.keys(used_inputs)), outputs})
+    end
 
-      if compile_options[:module_compilation] == :to_mlir do
-        throw({:mlir_module, executable.ref, MapSet.new(Map.keys(used_inputs)), outputs})
-      end
+    fn [args] ->
+      {time, lock} =
+        :timer.tc(fn ->
+          EXLA.Defn.Lock.lock(run_key(executable))
+        end)
 
-      fn [args] ->
-        {time, lock} =
-          :timer.tc(fn ->
-            EXLA.Defn.Lock.lock(run_key(executable))
-          end)
+      debug? && Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
 
-        debug? && Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
+      run_options = Keyword.put(run_options, :runtime_callbacks, runtime_callbacks)
 
-        {time, res} =
-          :timer.tc(fn ->
-            maybe_outfeed(
-              lock,
-              executable,
-              args,
-              used_inputs,
-              outputs,
-              outfeed,
-              run_options,
-              !!options[:mesh]
-            )
-          end)
+      {time, res} =
+        :timer.tc(fn ->
+          maybe_outfeed(
+            lock,
+            executable,
+            args,
+            used_inputs,
+            outputs,
+            outfeed,
+            run_options,
+            !!options[:mesh]
+          )
+        end)
 
-        debug? &&
-          Logger.debug("EXLA execution on device #{executable.device_id} in #{us_to_ms(time)}ms")
+      debug? &&
+        Logger.debug("EXLA execution on device #{executable.device_id} in #{us_to_ms(time)}ms")
 
-        res
-      end
-    catch
-      kind, reason ->
-        DynamicSupervisor.terminate_child(EXLA.CallbackServer.Supervisor, callback_server_pid)
-        :erlang.raise(kind, reason, __STACKTRACE__)
+      res
     end
   end
 
@@ -213,7 +198,7 @@ defmodule EXLA.Defn do
          outfeed,
          client,
          options,
-         callback_server_pid
+         runtime_callbacks?
        ) do
     params =
       Enum.zip_with(used_typespecs, Function.get_arguments(function), fn {pos, _typespec}, arg ->
@@ -230,13 +215,14 @@ defmodule EXLA.Defn do
       builder: function,
       params: Map.new(params ++ outfeed.infeeds),
       scope_ids: Tree.scope_ids(expr),
-      callback_server_pid: callback_server_pid
+      callback_pid_value: if(runtime_callbacks?, do: List.last(Function.get_arguments(function)))
     }
 
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
     outfeed = cache |> get_outfeed() |> Outfeed.close(function)
+    runtime_callbacks = cache |> get_runtime_callbacks() |> Enum.reverse()
     Value.func_return(function, res)
-    outfeed
+    {outfeed, runtime_callbacks}
   end
 
   defp maybe_outfeed(
@@ -326,8 +312,7 @@ defmodule EXLA.Defn do
          options,
          used_buffers,
          used_inputs,
-         to_computation,
-         callback_server_pid
+         to_computation
        ) do
     {cache, options} = Keyword.pop(options, :cache, true)
     {hooks, options} = Keyword.pop(options, :hooks, %{})
@@ -392,7 +377,8 @@ defmodule EXLA.Defn do
       outfeed = Outfeed.new(hooks, defined_hooks)
       comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
 
-      {comp_time, {evaled, {xla_time, executable, inputs_and_typespecs, outfeed}}} =
+      {comp_time,
+       {evaled, {xla_time, executable, inputs_and_typespecs, outfeed, runtime_callbacks}}} =
         :timer.tc(fn ->
           comp_cache_fun.(comp_key, fn ->
             {reverse_inputs_and_typespecs, reverse_infeeds} =
@@ -405,9 +391,6 @@ defmodule EXLA.Defn do
 
             inputs_and_typespecs = Enum.reverse(reverse_inputs_and_typespecs)
 
-            comp_typespecs =
-              for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
-
             out_typespecs =
               [outputs]
               |> Nx.Defn.Composite.flatten_list()
@@ -416,6 +399,23 @@ defmodule EXLA.Defn do
                 |> Nx.devectorize()
                 |> then(&Typespec.tensor(&1.type, &1.shape))
               end)
+
+            expr = expr || fun.(vars)
+            runtime_callbacks? = has_runtime_call?(expr)
+            expr = Nx.Defn.Composite.traverse(expr, &Nx.devectorize/1)
+            # TODO: {29} is the pre-known number of bytes for a term_to_binary(pid) encoding
+            # This doesn't work when the node is named and a different approach must be used.
+            callback_pid_typespec = Typespec.tensor({:u, 8}, {29})
+
+            comp_typespecs =
+              for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
+
+            comp_typespecs =
+              if runtime_callbacks? do
+                comp_typespecs ++ [callback_pid_typespec]
+              else
+                comp_typespecs
+              end
 
             EXLA.MLIR.Module.new(comp_typespecs, out_typespecs, fn builder ->
               # Add device mesh to module if provided
@@ -439,10 +439,15 @@ defmodule EXLA.Defn do
                   outfeed
                 end
 
-              expr = Nx.Defn.Composite.traverse(expr || fun.(vars), &Nx.devectorize/1)
-              outfeed = to_computation.(builder, expr, inputs_and_typespecs, outfeed, client)
-
-              options = Keyword.put(options, :callback_server_pid, callback_server_pid)
+              {outfeed, runtime_callbacks} =
+                to_computation.(
+                  builder,
+                  expr,
+                  inputs_and_typespecs,
+                  outfeed,
+                  client,
+                  runtime_callbacks?
+                )
 
               # Compute num_partitions from mesh and enable SPMD if mesh is provided
               options =
@@ -467,7 +472,9 @@ defmodule EXLA.Defn do
                   )
                 end)
 
-              {:ok, {xla_time, executable, inputs_and_typespecs, %{outfeed | infeeds: []}}}
+              {:ok,
+               {xla_time, executable, inputs_and_typespecs, %{outfeed | infeeds: []},
+                runtime_callbacks}}
             end)
           end)
         end)
@@ -496,7 +503,7 @@ defmodule EXLA.Defn do
       end
 
       outfeed = Outfeed.with_user_hooks(outfeed, hooks)
-      {executable, {used_inputs, outputs, outfeed, inputs_and_typespecs}}
+      {executable, {used_inputs, outputs, outfeed, inputs_and_typespecs, runtime_callbacks}}
     end)
   end
 
@@ -770,7 +777,7 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(
          :runtime_call,
          %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template]}} = expr,
-         %{client: %EXLA.Client{platform: :host}, callback_server_pid: callback_server_pid} =
+         %{client: %EXLA.Client{platform: :host}, callback_pid_value: callback_pid_value} =
            state,
          cache
        ) do
@@ -788,13 +795,16 @@ defmodule EXLA.Defn do
     # decoded tensors.
     arg_template = Nx.to_template(tensor_expr)
 
-    :ok =
-      EXLA.CallbackServer.register(callback_server_pid, id, fun, out_template, arg_template)
+    cache = add_runtime_callback(cache, {id, fun, out_template, arg_template})
 
     typespecs = container_to_typespecs(out_template)
 
+    unless callback_pid_value do
+      raise "internal bug: runtime_call callback pid operand is missing"
+    end
+
     results =
-      Value.runtime_call(arg_values, typespecs, callback_server_pid, id)
+      Value.runtime_call(arg_values ++ [callback_pid_value], typespecs, id)
 
     {wrap_tuple_result(results, expr), cache}
   end
@@ -802,7 +812,7 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(
          :runtime_call,
          %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template]}} = expr,
-         %{client: %EXLA.Client{platform: :cuda}, callback_server_pid: callback_server_pid} =
+         %{client: %EXLA.Client{platform: :cuda}, callback_pid_value: callback_pid_value} =
            state,
          cache
        ) do
@@ -815,13 +825,16 @@ defmodule EXLA.Defn do
 
     arg_template = Nx.to_template(tensor_expr)
 
-    :ok =
-      EXLA.CallbackServer.register(callback_server_pid, id, fun, out_template, arg_template)
+    cache = add_runtime_callback(cache, {id, fun, out_template, arg_template})
 
     typespecs = container_to_typespecs(out_template)
 
+    unless callback_pid_value do
+      raise "internal bug: runtime_call callback pid operand is missing"
+    end
+
     results =
-      Value.runtime_call(arg_values, typespecs, callback_server_pid, id)
+      Value.runtime_call(arg_values ++ [callback_pid_value], typespecs, id)
 
     {wrap_tuple_result(results, expr), cache}
   end
@@ -1651,10 +1664,10 @@ defmodule EXLA.Defn do
   ## Cache and hook helpers helpers
 
   defp no_token_cache(),
-    do: %{__MODULE__ => Outfeed.empty()}
+    do: %{__MODULE__ => Outfeed.empty(), runtime_callbacks_key() => []}
 
   defp new_cache(outfeed),
-    do: %{__MODULE__ => outfeed}
+    do: %{__MODULE__ => outfeed, runtime_callbacks_key() => []}
 
   defp merge_outfeed(%{__MODULE__ => outfeed} = cache, %{__MODULE__ => new_outfeed}),
     do: %{cache | __MODULE__ => Outfeed.with_token(new_outfeed, outfeed.token)}
@@ -1670,6 +1683,19 @@ defmodule EXLA.Defn do
   defp get_outfeed(%{__MODULE__ => value}), do: value
 
   defp put_outfeed(cache, outfeed), do: %{cache | __MODULE__ => outfeed}
+
+  defp runtime_callbacks_key, do: {__MODULE__, :runtime_callbacks}
+
+  defp get_runtime_callbacks(cache), do: Map.get(cache, runtime_callbacks_key(), [])
+
+  defp add_runtime_callback(cache, runtime_callback) do
+    Map.update(
+      cache,
+      runtime_callbacks_key(),
+      [runtime_callback],
+      &[runtime_callback | &1]
+    )
+  end
 
   ## Computation helpers
 
@@ -2235,6 +2261,28 @@ defmodule EXLA.Defn do
   defp expr_to_typespec(expr) do
     Typespec.tensor(expr.type, expr.shape)
   end
+
+  defp has_runtime_call?(%T{data: %Expr{op: :runtime_call}}), do: true
+
+  defp has_runtime_call?(%T{data: %Expr{args: args}}) do
+    Enum.any?(args, &has_runtime_call?/1)
+  end
+
+  defp has_runtime_call?(tuple) when is_tuple(tuple) do
+    tuple
+    |> Tuple.to_list()
+    |> Enum.any?(&has_runtime_call?/1)
+  end
+
+  defp has_runtime_call?(list) when is_list(list), do: Enum.any?(list, &has_runtime_call?/1)
+
+  defp has_runtime_call?(map) when is_map(map) do
+    map
+    |> Map.values()
+    |> Enum.any?(&has_runtime_call?/1)
+  end
+
+  defp has_runtime_call?(_other), do: false
 
   defp calculate_unsharded_inputs(vars, input_shardings) do
     # We use only the first input list in the collection,

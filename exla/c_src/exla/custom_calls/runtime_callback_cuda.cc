@@ -18,8 +18,11 @@ namespace {
 ffi::Error exla_runtime_callback_cuda_impl(
     CUstream stream, ffi::RemainingArgs args,
     ffi::Span<const int64_t> callback_id_words, uint64_t callback_id_size,
-    ffi::Span<const int64_t> callback_server_pid_words,
-    uint64_t callback_server_pid_size, ffi::RemainingRets rets) {
+    ffi::RemainingRets rets) {
+  if (args.size() == 0) {
+    return ffi::Error(ffi::ErrorCode::kInternal,
+                      "runtime callback missing callback server pid operand");
+  }
 
   // Keep host buffers alive for the duration of the callback.
   std::vector<std::vector<uint8_t>> host_input_buffers;
@@ -65,6 +68,9 @@ ffi::Error exla_runtime_callback_cuda_impl(
     inputs.push_back(std::move(tensor));
   }
 
+  exla::callback_bridge::Arg callback_server_pid_arg = inputs.back();
+  inputs.pop_back();
+
   // Outputs: host staging buffers; bridge will write into these, then we H→D.
   std::vector<std::vector<uint8_t>> host_output_buffers;
   host_output_buffers.reserve(rets.size());
@@ -100,8 +106,8 @@ ffi::Error exla_runtime_callback_cuda_impl(
 
   exla::callback_bridge::Result result =
       exla::callback_bridge::InvokeRuntimeCallback(
-          callback_id_words, callback_id_size, callback_server_pid_words,
-          callback_server_pid_size, inputs, outputs);
+          callback_id_words, callback_id_size, callback_server_pid_arg, inputs,
+          outputs);
 
   if (!result.ok) {
     return ffi::Error(ffi::ErrorCode::kInternal, result.error);
@@ -131,8 +137,6 @@ XLA_FFI_DEFINE_HANDLER_SYMBOL(
         .RemainingArgs()
         .Attr<ffi::Span<const int64_t>>("callback_id")
         .Attr<uint64_t>("callback_id_size")
-        .Attr<ffi::Span<const int64_t>>("callback_server_pid")
-        .Attr<uint64_t>("callback_server_pid_size")
         .RemainingRets());
 
 XLA_FFI_REGISTER_HANDLER(ffi::GetXlaFfiApi(), "exla_runtime_callback", "CUDA",
@@ -144,7 +148,7 @@ namespace {
 
 ffi::Error exla_runtime_callback_cuda_stub(
     ffi::RemainingArgs, ffi::Span<const int64_t>, uint64_t,
-    ffi::Span<const int64_t>, uint64_t, ffi::RemainingRets) {
+    ffi::RemainingRets) {
   return ffi::Error(ffi::ErrorCode::kUnimplemented,
                     "EXLA was not compiled with CUDA support. This error means your EXLA compilation is out of sync with your libexla.so NIF.");
 }
@@ -157,8 +161,6 @@ XLA_FFI_DEFINE_HANDLER_SYMBOL(
         .RemainingArgs()
         .Attr<ffi::Span<const int64_t>>("callback_id")
         .Attr<uint64_t>("callback_id_size")
-        .Attr<ffi::Span<const int64_t>>("callback_server_pid")
-        .Attr<uint64_t>("callback_server_pid_size")
         .RemainingRets());
 
 XLA_FFI_REGISTER_HANDLER(ffi::GetXlaFfiApi(), "exla_runtime_callback", "CUDA",

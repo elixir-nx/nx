@@ -117,8 +117,7 @@ void deliver_reply(ErlNifEnv *env, fine::ResourcePtr<Pending> pending,
 
 Result InvokeRuntimeCallback(
     xla::ffi::Span<const int64_t> callback_id_words, uint64_t callback_id_size,
-    xla::ffi::Span<const int64_t> callback_server_pid_words,
-    uint64_t callback_server_pid_size, const std::vector<Arg> &inputs,
+    const Arg &callback_server_pid_arg, const std::vector<Arg> &inputs,
     const std::vector<OutputBuffer> &outputs) {
   auto state = GetBridgeState();
 
@@ -134,8 +133,7 @@ Result InvokeRuntimeCallback(
   ErlNifEnv *msg_env = enif_alloc_env();
 
   // Reinterpret the 64-bit words as a contiguous byte buffer and use the
-  // original (unpadded) sizes when decoding the callback id and callback
-  // server pid terms.
+  // original (unpadded) size when decoding the callback id term.
   if (callback_id_size > callback_id_words.size() * sizeof(int64_t)) {
     Result res;
     res.ok = false;
@@ -143,11 +141,25 @@ Result InvokeRuntimeCallback(
     return res;
   }
 
-  if (callback_server_pid_size >
-      callback_server_pid_words.size() * sizeof(int64_t)) {
+  if (callback_server_pid_arg.dtype != xla::ffi::DataType::U8) {
     Result res;
     res.ok = false;
-    res.error = "inconsistent callback server pid size";
+    res.error = "callback server pid tensor must have dtype u8";
+    return res;
+  }
+
+  if (callback_server_pid_arg.dims.size() != 1 ||
+      callback_server_pid_arg.dims[0] != 29) {
+    Result res;
+    res.ok = false;
+    res.error = "callback server pid tensor must have shape {29}";
+    return res;
+  }
+
+  if (callback_server_pid_arg.size_bytes != 29) {
+    Result res;
+    res.ok = false;
+    res.error = "callback server pid tensor must contain exactly 29 bytes";
     return res;
   }
 
@@ -163,11 +175,11 @@ Result InvokeRuntimeCallback(
     return res;
   }
 
-  const unsigned char *pid_bytes = reinterpret_cast<const unsigned char *>(
-      callback_server_pid_words.begin());
+  const unsigned char *pid_bytes =
+      reinterpret_cast<const unsigned char *>(callback_server_pid_arg.data);
 
   ERL_NIF_TERM callback_server_pid_term;
-  if (!enif_binary_to_term(msg_env, pid_bytes, callback_server_pid_size,
+  if (!enif_binary_to_term(msg_env, pid_bytes, callback_server_pid_arg.size_bytes,
                            &callback_server_pid_term, 0)) {
     Result res;
     res.ok = false;
