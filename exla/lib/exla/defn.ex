@@ -267,7 +267,7 @@ defmodule EXLA.Defn do
 
       # This will block until the runner is done.
       # Then, we need to wait for the outfeed process to terminate.
-      results = read_runner!(runner)
+      results = EXLA.Defn.Runner.read(runner)
 
       if not Outfeed.will_outfeed(outfeed) do
         # We need the process to not wait for the stream to complete if
@@ -325,13 +325,6 @@ defmodule EXLA.Defn do
     after
       EXLA.Defn.Lock.unlock(lock)
     end
-  end
-
-  defp read_runner!(runner) do
-    EXLA.Defn.Runner.read(runner)
-  catch
-    :exit, {{%RuntimeError{} = error, _stacktrace}, _call_info} ->
-      raise error
   end
 
   defp run_key(%{client: %{platform: :host}, device_id: device_id}), do: [:host | device_id]
