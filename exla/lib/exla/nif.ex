@@ -94,6 +94,8 @@ defmodule EXLA.NIF do
   def start_runtime_callback_bridge(_dispatcher_pid), do: err!()
   def clear_runtime_callback_bridge(_dispatcher_pid), do: err!()
   def runtime_callback_reply(_reply_tag, _status, _result), do: err!()
+  def callback_server_pid_size(), do: err!()
+  def encode_local_pid(_pid), do: err!()
 
   defp err!(), do: :erlang.nif_error(:undef)
 end

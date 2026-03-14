@@ -119,6 +119,8 @@ Result InvokeRuntimeCallback(
     xla::ffi::Span<const int64_t> callback_id_words, uint64_t callback_id_size,
     const Arg &callback_server_pid_arg, const std::vector<Arg> &inputs,
     const std::vector<OutputBuffer> &outputs) {
+  const int64_t callback_server_pid_dim = static_cast<int64_t>(sizeof(ErlNifPid));
+  const size_t callback_server_pid_size = sizeof(ErlNifPid);
   auto state = GetBridgeState();
 
   if (!state->dispatcher_set) {
@@ -149,17 +151,17 @@ Result InvokeRuntimeCallback(
   }
 
   if (callback_server_pid_arg.dims.size() != 1 ||
-      callback_server_pid_arg.dims[0] != 29) {
+      callback_server_pid_arg.dims[0] != callback_server_pid_dim) {
     Result res;
     res.ok = false;
-    res.error = "callback server pid tensor must have shape {29}";
+    res.error = "callback server pid tensor has unexpected shape";
     return res;
   }
 
-  if (callback_server_pid_arg.size_bytes != 29) {
+  if (callback_server_pid_arg.size_bytes != callback_server_pid_size) {
     Result res;
     res.ok = false;
-    res.error = "callback server pid tensor must contain exactly 29 bytes";
+    res.error = "callback server pid tensor must contain encoded ErlNifPid bytes";
     return res;
   }
 
@@ -175,26 +177,9 @@ Result InvokeRuntimeCallback(
     return res;
   }
 
-  const unsigned char *pid_bytes =
-      reinterpret_cast<const unsigned char *>(callback_server_pid_arg.data);
-
-  ERL_NIF_TERM callback_server_pid_term;
-  if (!enif_binary_to_term(msg_env, pid_bytes, callback_server_pid_arg.size_bytes,
-                           &callback_server_pid_term, 0)) {
-    Result res;
-    res.ok = false;
-    res.error = "failed to decode callback server pid term";
-    return res;
-  }
-
   ErlNifPid callback_server_pid;
-  if (!enif_get_local_pid(msg_env, callback_server_pid_term,
-                          &callback_server_pid)) {
-    Result res;
-    res.ok = false;
-    res.error = "failed to decode callback server pid";
-    return res;
-  }
+  std::memcpy(&callback_server_pid, callback_server_pid_arg.data,
+              sizeof(ErlNifPid));
 
   // Encode arguments as [{bin, %EXLA.Typespec{}}, ...]. We currently send
   // plain binaries because the BEAM callback needs to own the data lifetime.

@@ -616,6 +616,20 @@ get_per_device_memory(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client) {
 
 FINE_NIF(get_per_device_memory, 0);
 
+int64_t callback_server_pid_size(ErlNifEnv *env) {
+  (void)env;
+  return static_cast<int64_t>(sizeof(ErlNifPid));
+}
+
+FINE_NIF(callback_server_pid_size, 0);
+
+std::string encode_local_pid(ErlNifEnv *env, ErlNifPid pid) {
+  (void)env;
+  return std::string(reinterpret_cast<const char *>(&pid), sizeof(ErlNifPid));
+}
+
+FINE_NIF(encode_local_pid, 0);
+
 // Elixir callback bridge NIF registrations
 
 using callback_bridge::clear_runtime_callback_bridge;

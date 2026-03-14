@@ -60,6 +60,18 @@ defmodule EXLA.Executable do
     end
   end
 
+  # callback_server_pid_size is generally 8 bytes,
+  # but we expose these functions so that we don't
+  # hardcode the size in the codebase and are
+  # more future-proof.
+  def callback_server_pid_size do
+    EXLA.NIF.callback_server_pid_size()
+  end
+
+  def callback_server_pid_typespec do
+    Typespec.tensor({:u, 8}, {callback_server_pid_size()})
+  end
+
   @doc """
   Dumps the executable to a data structure that can be serialized
   with `term_to_binary`.
@@ -163,7 +175,8 @@ defmodule EXLA.Executable do
   defp prepare_runtime_callback_inputs(inputs, nil), do: {inputs, nil}
 
   defp prepare_runtime_callback_inputs(inputs, []) do
-    callback_server_pid_buffer = callback_server_pid_buffer(<<0::size(29)-unit(8)>>)
+    callback_server_pid_buffer =
+      callback_server_pid_buffer(<<0::size(callback_server_pid_size())-unit(8)>>)
 
     updated_inputs =
       Enum.map(inputs, fn replica_inputs ->
@@ -211,22 +224,23 @@ defmodule EXLA.Executable do
   end
 
   defp encode_callback_server_pid!(callback_server_pid) do
-    callback_server_pid_bin = :erlang.term_to_binary(callback_server_pid)
+    callback_server_pid_bin = EXLA.NIF.encode_local_pid(callback_server_pid)
+    callback_server_pid_size = callback_server_pid_size()
 
     case byte_size(callback_server_pid_bin) do
-      29 ->
+      ^callback_server_pid_size ->
         callback_server_pid_bin
 
       size ->
         raise ArgumentError,
-              "expected encoded callback server pid size to be 29 bytes, got #{size}"
+              "expected encoded callback server pid size to be #{callback_server_pid_size} bytes, got #{size}"
     end
   end
 
   defp callback_server_pid_buffer(callback_server_pid_bin) do
     BinaryBuffer.from_binary(
       callback_server_pid_bin,
-      Typespec.tensor({:u, 8}, {29})
+      callback_server_pid_typespec()
     )
   end
 

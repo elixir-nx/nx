@@ -401,9 +401,7 @@ defmodule EXLA.Defn do
 
             expr = expr || fun.(vars)
             expr = Nx.Defn.Composite.traverse(expr, &Nx.devectorize/1)
-            # TODO: {29} is the pre-known number of bytes for a term_to_binary(pid) encoding
-            # This doesn't work when the node is named and a different approach must be used.
-            callback_pid_typespec = Typespec.tensor({:u, 8}, {29})
+            callback_pid_typespec = EXLA.Executable.callback_server_pid_typespec()
 
             comp_typespecs =
               for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
