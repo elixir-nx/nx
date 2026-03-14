@@ -151,7 +151,7 @@ defmodule EXLA.Defn do
     {run_options, compile_options} = Keyword.pop(options, :run_options, [])
     debug? = Keyword.get(compile_options, :debug, false)
 
-    callback = &to_computation(&1, &2, &3, &4, &5, compile_options, &6)
+    callback = &to_computation(&1, &2, &3, &4, &5, compile_options)
 
     {executable, {used_inputs, outputs, outfeed, _input_typespecs?, runtime_callbacks}} =
       compile(key, vars, fun, compile_options, 0, [], callback)
@@ -197,8 +197,7 @@ defmodule EXLA.Defn do
          used_typespecs,
          outfeed,
          client,
-         options,
-         runtime_callbacks?
+         options
        ) do
     params =
       Enum.zip_with(used_typespecs, Function.get_arguments(function), fn {pos, _typespec}, arg ->
@@ -215,7 +214,7 @@ defmodule EXLA.Defn do
       builder: function,
       params: Map.new(params ++ outfeed.infeeds),
       scope_ids: Tree.scope_ids(expr),
-      callback_pid_value: if(runtime_callbacks?, do: List.last(Function.get_arguments(function)))
+      callback_pid_value: List.last(Function.get_arguments(function))
     }
 
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
@@ -401,7 +400,6 @@ defmodule EXLA.Defn do
               end)
 
             expr = expr || fun.(vars)
-            runtime_callbacks? = has_runtime_call?(expr)
             expr = Nx.Defn.Composite.traverse(expr, &Nx.devectorize/1)
             # TODO: {29} is the pre-known number of bytes for a term_to_binary(pid) encoding
             # This doesn't work when the node is named and a different approach must be used.
@@ -410,12 +408,7 @@ defmodule EXLA.Defn do
             comp_typespecs =
               for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
 
-            comp_typespecs =
-              if runtime_callbacks? do
-                comp_typespecs ++ [callback_pid_typespec]
-              else
-                comp_typespecs
-              end
+            comp_typespecs = comp_typespecs ++ [callback_pid_typespec]
 
             EXLA.MLIR.Module.new(comp_typespecs, out_typespecs, fn builder ->
               # Add device mesh to module if provided
@@ -445,8 +438,7 @@ defmodule EXLA.Defn do
                   expr,
                   inputs_and_typespecs,
                   outfeed,
-                  client,
-                  runtime_callbacks?
+                  client
                 )
 
               # Compute num_partitions from mesh and enable SPMD if mesh is provided
@@ -2261,28 +2253,6 @@ defmodule EXLA.Defn do
   defp expr_to_typespec(expr) do
     Typespec.tensor(expr.type, expr.shape)
   end
-
-  defp has_runtime_call?(%T{data: %Expr{op: :runtime_call}}), do: true
-
-  defp has_runtime_call?(%T{data: %Expr{args: args}}) do
-    Enum.any?(args, &has_runtime_call?/1)
-  end
-
-  defp has_runtime_call?(tuple) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.any?(&has_runtime_call?/1)
-  end
-
-  defp has_runtime_call?(list) when is_list(list), do: Enum.any?(list, &has_runtime_call?/1)
-
-  defp has_runtime_call?(map) when is_map(map) do
-    map
-    |> Map.values()
-    |> Enum.any?(&has_runtime_call?/1)
-  end
-
-  defp has_runtime_call?(_other), do: false
 
   defp calculate_unsharded_inputs(vars, input_shardings) do
     # We use only the first input list in the collection,

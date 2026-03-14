@@ -44,7 +44,7 @@ defmodule EXLA.Executable do
     } =
       executable
 
-    runtime_callbacks = Keyword.get(options, :runtime_callbacks, [])
+    runtime_callbacks = Keyword.get(options, :runtime_callbacks)
 
     {inputs, callback_server_pid} =
       prepare_runtime_callback_inputs(inputs, runtime_callbacks)
@@ -160,7 +160,18 @@ defmodule EXLA.Executable do
     end)
   end
 
-  defp prepare_runtime_callback_inputs(inputs, []), do: {inputs, nil}
+  defp prepare_runtime_callback_inputs(inputs, nil), do: {inputs, nil}
+
+  defp prepare_runtime_callback_inputs(inputs, []) do
+    callback_server_pid_buffer = callback_server_pid_buffer(<<0::size(29)-unit(8)>>)
+
+    updated_inputs =
+      Enum.map(inputs, fn replica_inputs ->
+        replica_inputs ++ [callback_server_pid_buffer]
+      end)
+
+    {updated_inputs, nil}
+  end
 
   defp prepare_runtime_callback_inputs(inputs, runtime_callbacks) do
     callback_server_pid = start_callback_server!()
@@ -168,13 +179,10 @@ defmodule EXLA.Executable do
     try do
       register_runtime_callbacks!(callback_server_pid, runtime_callbacks)
 
-      callback_server_pid_bin = encode_callback_server_pid!(callback_server_pid)
-
       callback_server_pid_buffer =
-        BinaryBuffer.from_binary(
-          callback_server_pid_bin,
-          Typespec.tensor({:u, 8}, {29})
-        )
+        callback_server_pid
+        |> encode_callback_server_pid!()
+        |> callback_server_pid_buffer()
 
       updated_inputs =
         Enum.map(inputs, fn replica_inputs ->
@@ -213,6 +221,13 @@ defmodule EXLA.Executable do
         raise ArgumentError,
               "expected encoded callback server pid size to be 29 bytes, got #{size}"
     end
+  end
+
+  defp callback_server_pid_buffer(callback_server_pid_bin) do
+    BinaryBuffer.from_binary(
+      callback_server_pid_bin,
+      Typespec.tensor({:u, 8}, {29})
+    )
   end
 
   defp stop_callback_server(callback_server_pid) do

@@ -57,7 +57,7 @@ defmodule EXLATest do
 
           assert module == """
                  module {
-                   func.func public @main(%arg0: tensor<i32>, %arg1: tensor<i32>) -> tensor<i32> {
+                   func.func public @main(%arg0: tensor<i32>, %arg1: tensor<i32>, %arg2: tensor<29xui8>) -> tensor<i32> {
                      %0 = stablehlo.add %arg0, %arg1 : tensor<i32>
                      return %0 : tensor<i32>
                    }

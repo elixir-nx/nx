@@ -359,7 +359,7 @@ defmodule EXLA do
       iex> mlir_module
       """
       module {
-        func.func public @main(%arg0: tensor<f32>, %arg1: tensor<f32>) -> tensor<f32> {
+        func.func public @main(%arg0: tensor<f32>, %arg1: tensor<f32>, %arg2: tensor<29xui8>) -> tensor<f32> {
           %0 = stablehlo.sine %arg0 : tensor<f32>
           %1 = stablehlo.cosine %arg1 : tensor<f32>
           %2 = stablehlo.add %0, %1 : tensor<f32>
