@@ -285,22 +285,14 @@ defmodule EXLA.Defn.Outfeed do
             fun = Map.fetch!(hooks, name)
             length = length(typespecs)
             parent = self()
-            hook_ref = make_ref()
-            pid = spawn(fn -> apply_hook(parent, hook_ref, length, fun, template) end)
-            :ok = EXLA.Client.from_outfeed(client, device_id, typespecs, pid, hook_ref)
+            ref = make_ref()
+            pid = spawn(fn -> apply_hook(parent, ref, length, fun, template) end)
+            :ok = EXLA.Client.from_outfeed(client, device_id, typespecs, pid, ref)
 
-            wait_for_hook_completion(
-              hook_ref,
-              client,
-              device_id,
-              ref,
-              typespec,
-              hooks,
-              compiled_hooks,
-              infeeds,
-              runtime_callbacks,
-              stream_outfeed?
-            )
+            receive do
+              ^ref ->
+                loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, runtime_callbacks, stream_outfeed?)
+            end
         end
 
       {:exla_runtime_call, callback_id, args_spec, reply_tag} ->
@@ -313,62 +305,6 @@ defmodule EXLA.Defn.Outfeed do
       other ->
         Logger.debug("EXLA.Outfeed ignoring unexpected message: #{inspect(other)}")
         loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, runtime_callbacks, stream_outfeed?)
-    end
-  end
-
-  defp wait_for_hook_completion(
-         hook_ref,
-         client,
-         device_id,
-         ref,
-         typespec,
-         hooks,
-         compiled_hooks,
-         infeeds,
-         runtime_callbacks,
-         stream_outfeed?
-       ) do
-    receive do
-      ^hook_ref ->
-        loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, runtime_callbacks, stream_outfeed?)
-
-      {:exla_runtime_call, callback_id, args_spec, reply_tag} ->
-        send_runtime_callback_reply(runtime_callbacks, callback_id, args_spec, reply_tag)
-
-        wait_for_hook_completion(
-          hook_ref,
-          client,
-          device_id,
-          ref,
-          typespec,
-          hooks,
-          compiled_hooks,
-          infeeds,
-          runtime_callbacks,
-          stream_outfeed?
-        )
-
-      :exla_runtime_call_executable_dropped ->
-        :ok
-
-      :stop ->
-        :ok
-
-      other ->
-        Logger.debug("EXLA.Outfeed ignoring unexpected message: #{inspect(other)}")
-
-        wait_for_hook_completion(
-          hook_ref,
-          client,
-          device_id,
-          ref,
-          typespec,
-          hooks,
-          compiled_hooks,
-          infeeds,
-          runtime_callbacks,
-          stream_outfeed?
-        )
     end
   end
 
