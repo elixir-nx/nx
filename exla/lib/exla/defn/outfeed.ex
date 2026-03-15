@@ -421,7 +421,6 @@ defmodule EXLA.Defn.Outfeed do
         exception ->
           send(self(), :stop)
           {:error, {:exception, Exception.message(exception)}}
-
       catch
         kind, reason ->
           send(self(), :stop)
@@ -490,10 +489,12 @@ defmodule EXLA.Defn.Outfeed do
     materialize_callback_args(arg_template, args_spec)
   catch
     {:error, reason} ->
-      {:error, reason}
+      raise ArgumentError, "invalid args_spec #{inspect(reason)}"
   end
 
-  defp decode_callback_args(other, _arg_template), do: {:error, {:invalid_args_spec, other}}
+  defp decode_callback_args(other, _arg_template) do
+    raise ArgumentError, "invalid args_spec #{inspect(other)}"
+  end
 
   defp encode_runtime_callback_reply(:ok), do: {:ok, []}
   defp encode_runtime_callback_reply({:ok, value}), do: {:ok, encode_callback_outputs(value)}

@@ -1706,7 +1706,10 @@ defmodule EXLA.Defn do
         :ok
       end
 
-      Outfeed.add_runtime_callback(outfeed, {stop_id, fun, nil, Nx.template({EXLA.Executable.callback_server_pid_size()}, {:u, 8})})
+      Outfeed.add_runtime_callback(
+        outfeed,
+        {stop_id, fun, nil, Nx.template({EXLA.Executable.callback_server_pid_size()}, {:u, 8})}
+      )
     else
       outfeed
     end
