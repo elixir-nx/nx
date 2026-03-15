@@ -243,6 +243,39 @@ defmodule EXLA.Defn.APITest do
       assert tuple == {Nx.tensor(120.0), Nx.tensor(1)}
     end
 
+    defn hook_countdown(x) do
+      while x, Nx.greater(x, 0) do
+        hook(Nx.subtract(x, 1), :countdown)
+      end
+    end
+
+    test "hook messages within while arrive in iteration order" do
+      # Hook messages must arrive in the order their iterations executed.
+      # The hook sleeps proportional to the value, so without serialized
+      # hook execution, earlier iterations (higher values, longer sleep)
+      # finish after later ones, reversing the order.
+      parent = self()
+
+      ordered_hook = fn x ->
+        val = Nx.to_number(x)
+        Process.sleep(val * 50)
+        send(parent, {:countdown, val})
+      end
+
+      EXLA.jit(&hook_countdown/1, hooks: %{countdown: ordered_hook}).(5)
+
+      values =
+        for _ <- 1..5 do
+          receive do
+            {:countdown, val} -> val
+          after
+            5_000 -> flunk("timed out waiting for hook message")
+          end
+        end
+
+      assert values == [4, 3, 2, 1, 0]
+    end
+
     defn hook_cond(a, b) do
       cond do
         a == -1 -> hook(b * 2, :cond)

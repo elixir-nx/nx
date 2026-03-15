@@ -260,7 +260,10 @@ defmodule EXLA.Defn.Outfeed do
         end
       end
 
-    send(parent, ref)
-    fun.(EXLA.Defn.Buffers.to_nx!(buffers, template))
+    try do
+      fun.(EXLA.Defn.Buffers.to_nx!(buffers, template))
+    after
+      send(parent, ref)
+    end
   end
 end
