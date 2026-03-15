@@ -1688,6 +1688,8 @@ defmodule EXLA.Defn do
 
       # We include the callback pid value twice because the first one
       # is popped from the runtime callback handler args.
+      # h is included so that the custom_call is pinned to the end of the function.
+      # ignored_trailing_args: 1 makes it so that h is not read and passed to the callback.
       Value.runtime_call(
         [callback_pid_value, callback_pid_value, h],
         [],
