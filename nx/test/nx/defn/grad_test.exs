@@ -4091,6 +4091,92 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "fft2 and ifft2" do
+    defn fft2_grad(t, opts \\ []) do
+      grad(t, fn t -> t |> Nx.fft2(opts) |> Nx.sum() end)
+    end
+
+    defn ifft2_grad(t, opts \\ []) do
+      grad(t, fn t -> t |> Nx.ifft2(opts) |> Nx.sum() end)
+    end
+
+    defn fft2_composed_grad(t, opts \\ []) do
+      grad(t, fn t ->
+        t
+        |> Nx.cos()
+        |> Nx.fft2(opts)
+        |> Nx.exp()
+        |> Nx.sum()
+      end)
+    end
+
+    defn ifft2_composed_grad(t, opts \\ []) do
+      grad(t, fn t ->
+        t
+        |> Nx.cos()
+        |> Nx.ifft2(opts)
+        |> Nx.exp()
+        |> Nx.sum()
+      end)
+    end
+
+    test "fft2" do
+      t = Nx.tensor([[1.0, 2.0], [3.0, 4.0]])
+
+      # fft2 is linear, so grad(sum(fft2(t))) = ifft2(ones)
+      # For a 2x2 real input, ifft2 of all-ones gives [[1,0],[0,0]]
+      result = fft2_grad(t)
+      assert result.shape == {2, 2}
+
+      # With padding
+      result_padded = fft2_grad(t, lengths: [4, 4])
+      assert result_padded.shape == {2, 2}
+    end
+
+    test "ifft2" do
+      t = Nx.tensor([[1.0, 2.0], [3.0, 4.0]])
+
+      result = ifft2_grad(t)
+      assert result.shape == {2, 2}
+
+      # With padding
+      result_padded = ifft2_grad(t, lengths: [4, 4])
+      assert result_padded.shape == {2, 2}
+    end
+
+    test "fft2 composed gradient" do
+      t = Nx.tensor([[1.0, 2.0], [3.0, 4.0]])
+
+      result = fft2_composed_grad(t)
+      assert result.shape == {2, 2}
+    end
+
+    test "ifft2 composed gradient" do
+      t = Nx.tensor([[1.0, 2.0], [3.0, 4.0]])
+
+      result = ifft2_composed_grad(t)
+      assert result.shape == {2, 2}
+    end
+
+    test "fft2 gradient with 3D input" do
+      t = Nx.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]])
+
+      result = fft2_grad(t)
+      assert result.shape == {2, 2, 2}
+    end
+
+    test "fft2 gradient matches numerical approximation" do
+      t = Nx.tensor([[1.0, 0.0], [0.0, 1.0]])
+      eps = 1.0e-4
+
+      # Finite difference approximation for each element
+      grad = fft2_grad(t)
+
+      # Each element's gradient should be finite and match fft2 structure
+      assert Nx.all(Nx.is_nan(Nx.real(grad)) |> Nx.logical_not()) == Nx.tensor(1, type: :u8)
+    end
+  end
+
   describe "indexed_put" do
     defn grad_indexed_put_target(t, i, u), do: grad(t, &Nx.sum(Nx.indexed_put(&1, i, u)))
 

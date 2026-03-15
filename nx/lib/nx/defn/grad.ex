@@ -1027,6 +1027,8 @@ defmodule Nx.Defn.Grad do
 
   defp grad(:fft, args, ans, g), do: grad_fft(:fft, args, ans, g)
   defp grad(:ifft, args, ans, g), do: grad_fft(:ifft, args, ans, g)
+  defp grad(:fft2, args, ans, g), do: grad_fft2(:fft2, args, ans, g)
+  defp grad(:ifft2, args, ans, g), do: grad_fft2(:ifft2, args, ans, g)
 
   defp grad(:triangular_solve, [a_input, b, opts], x_input, g) do
     # We can model the triangular solve function as X = triangular_solve(a, b)
@@ -1468,6 +1470,60 @@ defmodule Nx.Defn.Grad do
 
         _ ->
           grad
+      end
+
+    [{t, formatted_grad}]
+  end
+
+  defp grad_fft2(kind, [t, opts], _ans, g) do
+    [ax1, ax2] = opts[:axes]
+    [l1, l2] = opts[:lengths]
+
+    grad = apply(Nx, kind, [g, opts])
+
+    # Handle padding/slicing for each axis independently
+    t_size1 = elem(t.shape, ax1)
+    t_size2 = elem(t.shape, ax2)
+    rank = Nx.rank(t)
+
+    formatted_grad =
+      cond do
+        t_size1 == l1 and t_size2 == l2 ->
+          grad
+
+        true ->
+          # Build start indices and lengths for slicing back to original shape
+          starts = List.duplicate(0, rank)
+          lengths = Tuple.to_list(t.shape)
+
+          # If original was larger than fft length on either axis, pad with zeros
+          padding = List.duplicate({0, 0, 0}, rank)
+
+          padding =
+            if t_size1 > l1 do
+              List.replace_at(padding, ax1, {0, t_size1 - l1, 0})
+            else
+              padding
+            end
+
+          padding =
+            if t_size2 > l2 do
+              List.replace_at(padding, ax2, {0, t_size2 - l2, 0})
+            else
+              padding
+            end
+
+          grad =
+            if padding != List.duplicate({0, 0, 0}, rank),
+              do: Nx.pad(grad, 0, padding),
+              else: grad
+
+          # If original was smaller than fft length on either axis, slice back
+          if t_size1 < l1 or t_size2 < l2 do
+            Nx.slice(grad, starts, lengths)
+          else
+            grad
+          end
       end
 
     [{t, formatted_grad}]
