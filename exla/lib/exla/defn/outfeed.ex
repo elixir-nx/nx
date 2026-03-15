@@ -128,6 +128,17 @@ defmodule EXLA.Defn.Outfeed do
   end
 
   @doc """
+  Adds a runtime callback to outfeed.
+  """
+  def add_runtime_callback(
+        %Outfeed{runtime_callbacks: runtime_callbacks} = outfeed,
+        {id, fun, out_template, arg_template}
+      ) do
+    callback = {fun, out_template, arg_template}
+    %{outfeed | runtime_callbacks: Map.put(runtime_callbacks, id, callback)}
+  end
+
+  @doc """
   Adds an infeed hook.
   """
   def add_infeeds(%Outfeed{} = outfeed, builder, entries) do

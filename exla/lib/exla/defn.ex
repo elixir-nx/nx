@@ -218,11 +218,7 @@ defmodule EXLA.Defn do
     }
 
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
-    runtime_callbacks = cache |> get_runtime_callbacks() |> Enum.reverse()
-    outfeed = cache |> get_outfeed() |> Outfeed.with_runtime_callbacks(runtime_callbacks)
-
-    outfeed =
-      maybe_add_runtime_callbacks_stop(outfeed, runtime_callbacks, res, callback_pid_value)
+    outfeed = cache |> get_outfeed() |> maybe_add_runtime_callbacks_stop(res, callback_pid_value)
 
     outfeed = Outfeed.close(outfeed, function)
 
@@ -1655,10 +1651,10 @@ defmodule EXLA.Defn do
   ## Cache and hook helpers helpers
 
   defp no_token_cache(),
-    do: %{__MODULE__ => Outfeed.empty(), runtime_callbacks_key() => []}
+    do: %{__MODULE__ => Outfeed.empty()}
 
   defp new_cache(outfeed),
-    do: %{__MODULE__ => outfeed, runtime_callbacks_key() => []}
+    do: %{__MODULE__ => outfeed}
 
   defp merge_outfeed(%{__MODULE__ => outfeed} = cache, %{__MODULE__ => new_outfeed}),
     do: %{cache | __MODULE__ => Outfeed.with_token(new_outfeed, outfeed.token)}
@@ -1675,20 +1671,14 @@ defmodule EXLA.Defn do
 
   defp put_outfeed(cache, outfeed), do: %{cache | __MODULE__ => outfeed}
 
-  defp runtime_callbacks_key, do: {__MODULE__, :runtime_callbacks}
-
-  defp get_runtime_callbacks(cache), do: Map.get(cache, runtime_callbacks_key(), [])
-
   defp add_runtime_callback(cache, runtime_callback) do
-    Map.update(
-      cache,
-      runtime_callbacks_key(),
-      [runtime_callback],
-      &[runtime_callback | &1]
-    )
+    cache
+    |> get_outfeed()
+    |> Outfeed.add_runtime_callback(runtime_callback)
+    |> then(&put_outfeed(cache, &1))
   end
 
-  defp maybe_add_runtime_callbacks_stop(outfeed, runtime_callbacks, [h | _], callback_pid_value) do
+  defp maybe_add_runtime_callbacks_stop(outfeed, [h | _], callback_pid_value) do
     if Outfeed.has_runtime_calls(outfeed) do
       unless callback_pid_value do
         raise "internal bug: runtime_call callback pid operand is missing"
@@ -1706,31 +1696,29 @@ defmodule EXLA.Defn do
         stop_id
       )
 
-      Outfeed.with_runtime_callbacks(
+      Outfeed.add_runtime_callback(
         outfeed,
-        runtime_callbacks ++
-          [
-            {
-              stop_id,
-              fn {callback_server_pid_tensor, _result} ->
-                callback_server_pid =
-                  callback_server_pid_tensor
-                  |> Nx.to_binary()
-                  |> EXLA.NIF.decode_local_pid()
+        {
+          stop_id,
+          fn {callback_server_pid_tensor, _result} ->
+            callback_server_pid =
+              callback_server_pid_tensor
+              |> Nx.to_binary()
+              |> EXLA.NIF.decode_local_pid()
 
-                send(callback_server_pid, :stop)
-                Nx.tensor(0, type: {:u, 8})
-              end,
-              Nx.template({}, {:u, 8}),
-              {Nx.template({EXLA.Executable.callback_server_pid_size()}, {:u, 8}),
-               Nx.template(shape, type)}
-            }
-          ]
+            send(callback_server_pid, :stop)
+            Nx.tensor(0, type: {:u, 8})
+          end,
+          Nx.template({}, {:u, 8}),
+          {Nx.template({EXLA.Executable.callback_server_pid_size()}, {:u, 8}), Nx.template(shape, type)}
+        }
       )
     else
       outfeed
     end
   end
+
+  defp maybe_add_runtime_callbacks_stop(outfeed, [], _callback_pid_value), do: outfeed
 
   ## Computation helpers
 
