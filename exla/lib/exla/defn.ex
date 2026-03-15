@@ -1690,28 +1690,22 @@ defmodule EXLA.Defn do
       # is popped from the runtime callback handler args.
       Value.runtime_call(
         [callback_pid_value, callback_pid_value, h],
-        [Typespec.tensor({:u, 8}, {})],
+        [],
         stop_id,
         ignored_trailing_args: 1
       )
 
-      Outfeed.add_runtime_callback(
-        outfeed,
-        {
-          stop_id,
-          fn callback_server_pid_tensor ->
-            callback_server_pid =
-              callback_server_pid_tensor
-              |> Nx.to_binary()
-              |> EXLA.NIF.decode_local_pid()
+      fun = fn callback_server_pid_tensor ->
+        callback_server_pid =
+          callback_server_pid_tensor
+          |> Nx.to_binary()
+          |> EXLA.NIF.decode_local_pid()
 
-            send(callback_server_pid, :stop)
-            Nx.tensor(0, type: {:u, 8})
-          end,
-          Nx.template({}, {:u, 8}),
-          Nx.template({EXLA.Executable.callback_server_pid_size()}, {:u, 8})
-        }
-      )
+        send(callback_server_pid, :stop)
+        :ok
+      end
+
+      Outfeed.add_runtime_callback(outfeed, {stop_id, fun, nil, Nx.template({EXLA.Executable.callback_server_pid_size()}, {:u, 8})})
     else
       outfeed
     end

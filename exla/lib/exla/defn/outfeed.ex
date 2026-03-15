@@ -439,6 +439,18 @@ defmodule EXLA.Defn.Outfeed do
 
   defp run_runtime_callback({:error, reason}, _fun, _out_template), do: {:error, reason}
 
+  defp run_runtime_callback({:ok, tensor_args}, fun, nil) do
+    try do
+      fun.(tensor_args)
+    rescue
+      exception ->
+        {:error, {:exception, exception, __STACKTRACE__}}
+    catch
+      kind, reason ->
+        {:error, {kind, reason}}
+    end
+  end
+
   defp run_runtime_callback({:ok, tensor_args}, fun, out_template) do
     result =
       try do
@@ -473,6 +485,7 @@ defmodule EXLA.Defn.Outfeed do
 
   defp decode_callback_args(other, _arg_template), do: {:error, {:invalid_args_spec, other}}
 
+  defp encode_runtime_callback_reply(:ok), do: {:ok, []}
   defp encode_runtime_callback_reply({:ok, value}), do: {:ok, encode_callback_outputs(value)}
 
   defp encode_runtime_callback_reply({:error, {:shape_mismatch, left, right}}) do
