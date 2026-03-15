@@ -1686,21 +1686,20 @@ defmodule EXLA.Defn do
 
       stop_id = make_ref()
 
-      %{type: type, shape: shape} = Value.get_typespec(h)
-
       # We include the callback pid value twice because the first one
       # is popped from the runtime callback handler args.
       Value.runtime_call(
         [callback_pid_value, callback_pid_value, h],
         [Typespec.tensor({:u, 8}, {})],
-        stop_id
+        stop_id,
+        ignored_trailing_args: 1
       )
 
       Outfeed.add_runtime_callback(
         outfeed,
         {
           stop_id,
-          fn {callback_server_pid_tensor, _result} ->
+          fn callback_server_pid_tensor ->
             callback_server_pid =
               callback_server_pid_tensor
               |> Nx.to_binary()
@@ -1710,7 +1709,7 @@ defmodule EXLA.Defn do
             Nx.tensor(0, type: {:u, 8})
           end,
           Nx.template({}, {:u, 8}),
-          {Nx.template({EXLA.Executable.callback_server_pid_size()}, {:u, 8}), Nx.template(shape, type)}
+          Nx.template({EXLA.Executable.callback_server_pid_size()}, {:u, 8})
         }
       )
     else

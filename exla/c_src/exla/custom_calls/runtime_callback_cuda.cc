@@ -18,21 +18,28 @@ namespace {
 ffi::Error exla_runtime_callback_cuda_impl(
     CUstream stream, ffi::RemainingArgs args,
     ffi::Span<const int64_t> callback_id_words, uint64_t callback_id_size,
-    ffi::RemainingRets rets) {
+    uint64_t ignored_trailing_args, ffi::RemainingRets rets) {
   if (args.size() == 0) {
     return ffi::Error(ffi::ErrorCode::kInternal,
                       "runtime callback missing callback server pid operand");
   }
 
+  if (ignored_trailing_args > args.size() - 1) {
+    return ffi::Error(ffi::ErrorCode::kInternal,
+                      "runtime callback ignored trailing arg count is invalid");
+  }
+
+  const size_t callback_args_end = args.size() - ignored_trailing_args;
+
   // Keep host buffers alive for the duration of the callback.
   std::vector<std::vector<uint8_t>> host_input_buffers;
-  host_input_buffers.reserve(args.size());
+  host_input_buffers.reserve(callback_args_end);
 
   std::vector<exla::callback_bridge::Arg> inputs;
-  inputs.reserve(args.size() - 1);
+  inputs.reserve(callback_args_end - 1);
   exla::callback_bridge::Arg callback_server_pid_arg;
 
-  for (size_t i = 0; i < args.size(); ++i) {
+  for (size_t i = 0; i < args.size() - ignored_trailing_args; ++i) {
     auto maybe_buf_or = args.get<ffi::AnyBuffer>(i);
     if (!maybe_buf_or) {
       return maybe_buf_or.error();
@@ -139,6 +146,7 @@ XLA_FFI_DEFINE_HANDLER_SYMBOL(
         .RemainingArgs()
         .Attr<ffi::Span<const int64_t>>("callback_id")
         .Attr<uint64_t>("callback_id_size")
+        .Attr<uint64_t>("ignored_trailing_args")
         .RemainingRets());
 
 XLA_FFI_REGISTER_HANDLER(ffi::GetXlaFfiApi(), "exla_runtime_callback", "CUDA",
@@ -149,7 +157,7 @@ XLA_FFI_REGISTER_HANDLER(ffi::GetXlaFfiApi(), "exla_runtime_callback", "CUDA",
 namespace {
 
 ffi::Error exla_runtime_callback_cuda_stub(
-    ffi::RemainingArgs, ffi::Span<const int64_t>, uint64_t,
+    ffi::RemainingArgs, ffi::Span<const int64_t>, uint64_t, uint64_t,
     ffi::RemainingRets) {
   return ffi::Error(ffi::ErrorCode::kUnimplemented,
                     "EXLA was not compiled with CUDA support. This error means your EXLA compilation is out of sync with your libexla.so NIF.");
@@ -163,6 +171,7 @@ XLA_FFI_DEFINE_HANDLER_SYMBOL(
         .RemainingArgs()
         .Attr<ffi::Span<const int64_t>>("callback_id")
         .Attr<uint64_t>("callback_id_size")
+        .Attr<uint64_t>("ignored_trailing_args")
         .RemainingRets());
 
 XLA_FFI_REGISTER_HANDLER(ffi::GetXlaFfiApi(), "exla_runtime_callback", "CUDA",
