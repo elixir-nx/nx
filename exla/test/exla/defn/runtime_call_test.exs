@@ -208,4 +208,15 @@ defmodule EXLA.Defn.RuntimeCallTest do
     assert_equal(result.y, y)
     assert_receive {:container_fun, ^ref}
   end
+
+  defn runtime_call_in_while(x) do
+    while x, Nx.less(x, 10) do
+      Nx.runtime_call(x, x, fn t -> Nx.add(t, 1) end)
+    end
+  end
+
+  test "runtime_call inside while loop" do
+    result = runtime_call_in_while(Nx.tensor(0))
+    assert_equal(result, Nx.tensor(10))
+  end
 end
