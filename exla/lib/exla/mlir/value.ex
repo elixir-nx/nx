@@ -853,6 +853,7 @@ defmodule EXLA.MLIR.Value do
       call_target_name: attr_string("exla_runtime_callback"),
       # api_version 4 enables the typed FFI API used by our callback handler.
       api_version: attr_i32(4),
+      has_side_effect: attr_boolean(true),
       backend_config:
         attr_dict(
           callback_id: attr_array_i64_elements(callback_id_words),

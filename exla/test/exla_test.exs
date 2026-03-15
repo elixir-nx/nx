@@ -79,5 +79,11 @@ defmodule EXLATest do
 
       assert byte_size(encoded) == EXLA.NIF.callback_server_pid_size()
     end
+
+    test "decodes local pid from binary" do
+      encoded = EXLA.NIF.encode_local_pid(self())
+
+      assert EXLA.NIF.decode_local_pid(encoded) == self()
+    end
   end
 end

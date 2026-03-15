@@ -630,6 +630,18 @@ std::string encode_local_pid(ErlNifEnv *env, ErlNifPid pid) {
 
 FINE_NIF(encode_local_pid, 0);
 
+fine::Term decode_local_pid(ErlNifEnv *env, std::string pid_binary) {
+  if (pid_binary.size() != sizeof(ErlNifPid)) {
+    throw std::invalid_argument("invalid encoded local pid size");
+  }
+
+  ErlNifPid pid;
+  std::memcpy(&pid, pid_binary.data(), sizeof(ErlNifPid));
+  return fine::Term(enif_make_pid(env, &pid));
+}
+
+FINE_NIF(decode_local_pid, 0);
+
 // Elixir callback bridge NIF registrations
 
 using callback_bridge::runtime_callback_reply;

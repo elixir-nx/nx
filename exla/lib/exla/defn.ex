@@ -167,6 +167,7 @@ defmodule EXLA.Defn do
         end)
 
       debug? && Logger.debug("EXLA device #{executable.device_id} lock in #{us_to_ms(time)}ms")
+
       {time, res} =
         :timer.tc(fn ->
           maybe_outfeed(
@@ -218,11 +219,12 @@ defmodule EXLA.Defn do
 
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
     runtime_callbacks = cache |> get_runtime_callbacks() |> Enum.reverse()
+    outfeed = cache |> get_outfeed() |> Outfeed.with_runtime_callbacks(runtime_callbacks)
+
     outfeed =
-      cache
-      |> get_outfeed()
-      |> Outfeed.with_runtime_callbacks(runtime_callbacks)
-      |> Outfeed.close(function)
+      maybe_add_runtime_callbacks_stop(outfeed, runtime_callbacks, res, callback_pid_value)
+
+    outfeed = Outfeed.close(outfeed, function)
 
     Value.func_return(function, res)
     outfeed
@@ -253,44 +255,25 @@ defmodule EXLA.Defn do
 
     {:ok, outfeed_pid} =
       Outfeed.start_child(executable, outfeed, Process.group_leader(), infeeds)
+
     ref = Process.monitor(outfeed_pid)
 
     run_options = Keyword.put(run_options, :callback_server_pid, outfeed_pid)
 
-    try do
-      {:ok, runner} =
-        EXLA.Defn.Runner.start_link(lock, fn ->
-          EXLA.Executable.run(executable, [Enum.reverse(buffers)], run_options)
-        end)
-
-      _ = EXLA.Defn.Lock.transfer(lock, fn -> send(runner, lock) end, outfeed_pid)
-
-      # This will block until the runner is done.
-      # Then, we need to wait for the outfeed process to terminate.
-      results = EXLA.Defn.Runner.read(runner)
-
-      if not Outfeed.will_outfeed(outfeed) do
-        # We need the process to not wait for the stream to complete if
-        # there won't be any stream in this case.
-        send(outfeed_pid, :stop)
-      end
-
-      # Ensure the outfeed process is terminated cleanly
-      receive do
-        {:DOWN, ^ref, _, _, _} -> :ok
-      end
-
-      Enum.map(results, fn result ->
-        EXLA.Defn.Buffers.to_nx!(result, outputs, executable.mesh)
+    {:ok, runner} =
+      EXLA.Defn.Runner.start_link(lock, fn ->
+        EXLA.Executable.run(executable, [Enum.reverse(buffers)], run_options)
       end)
-    after
-      if Process.alive?(outfeed_pid) do
-        send(outfeed_pid, :stop)
 
-        receive do
-          {:DOWN, ^ref, _, _, _} -> :ok
-        end
-      end
+    _ = EXLA.Defn.Lock.transfer(lock, fn -> send(runner, lock) end, outfeed_pid)
+
+    receive do
+      {:DOWN, ^ref, _, _, _} ->
+        results = EXLA.Defn.Runner.read(runner)
+
+        Enum.map(results, fn result ->
+          EXLA.Defn.Buffers.to_nx!(result, outputs, executable.mesh)
+        end)
     end
   end
 
@@ -1703,6 +1686,50 @@ defmodule EXLA.Defn do
       [runtime_callback],
       &[runtime_callback | &1]
     )
+  end
+
+  defp maybe_add_runtime_callbacks_stop(outfeed, runtime_callbacks, [h | _], callback_pid_value) do
+    if Outfeed.has_runtime_calls(outfeed) do
+      unless callback_pid_value do
+        raise "internal bug: runtime_call callback pid operand is missing"
+      end
+
+      stop_id = make_ref()
+
+      %{type: type, shape: shape} = Value.get_typespec(h)
+
+      # We include the callback pid value twice because the first one
+      # is popped from the runtime callback handler args.
+      Value.runtime_call(
+        [callback_pid_value, callback_pid_value, h],
+        [Typespec.tensor({:u, 8}, {})],
+        stop_id
+      )
+
+      Outfeed.with_runtime_callbacks(
+        outfeed,
+        runtime_callbacks ++
+          [
+            {
+              stop_id,
+              fn {callback_server_pid_tensor, _result} ->
+                callback_server_pid =
+                  callback_server_pid_tensor
+                  |> Nx.to_binary()
+                  |> EXLA.NIF.decode_local_pid()
+
+                send(callback_server_pid, :stop)
+                Nx.tensor(0, type: {:u, 8})
+              end,
+              Nx.template({}, {:u, 8}),
+              {Nx.template({EXLA.Executable.callback_server_pid_size()}, {:u, 8}),
+               Nx.template(shape, type)}
+            }
+          ]
+      )
+    else
+      outfeed
+    end
   end
 
   ## Computation helpers
