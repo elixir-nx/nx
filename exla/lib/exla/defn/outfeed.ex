@@ -401,7 +401,7 @@ defmodule EXLA.Defn.Outfeed do
   end
 
   defp send_runtime_callback_reply(runtime_callbacks, callback_id, args_spec, reply_tag) do
-    reply_payload =
+    reply =
       try do
         case Map.fetch(runtime_callbacks, callback_id) do
           {:ok, {fun, out_template, arg_template}} ->
@@ -409,7 +409,6 @@ defmodule EXLA.Defn.Outfeed do
             |> decode_callback_args(arg_template)
             |> run_runtime_callback(fun, out_template)
             |> encode_runtime_callback_reply()
-            |> halt_on_runtime_callback_error()
 
           :error ->
             Logger.error(
@@ -418,17 +417,25 @@ defmodule EXLA.Defn.Outfeed do
 
             encode_runtime_callback_reply({:error, :unknown_callback})
         end
+      rescue
+        exception ->
+          send(self(), :stop)
+          {:error, {:exception, Exception.message(exception)}}
+
       catch
         kind, reason ->
-          formatted = Exception.format(kind, reason, __STACKTRACE__)
-
-          encode_runtime_callback_reply(
-            {:error, {:runtime_error, "Elixir callback server crashed: #{formatted}"}}
-          )
+          send(self(), :stop)
+          {:error, {kind, format_runtime_callback_reason(reason)}}
       end
 
     try do
-      EXLA.NIF.runtime_callback_reply(reply_tag, elem(reply_payload, 0), elem(reply_payload, 1))
+      case reply do
+        {:ok, payload} ->
+          EXLA.NIF.runtime_callback_reply(reply_tag, :ok, payload)
+
+        {:error, {tag, reason}} ->
+          EXLA.NIF.runtime_callback_reply(reply_tag, :error, {tag, reason})
+      end
     rescue
       _ ->
         Logger.error(
@@ -436,6 +443,9 @@ defmodule EXLA.Defn.Outfeed do
         )
     end
   end
+
+  defp format_runtime_callback_reason(reason) when is_binary(reason), do: reason
+  defp format_runtime_callback_reason(reason), do: inspect(reason)
 
   defp run_runtime_callback({:error, reason}, _fun, _out_template), do: {:error, reason}
 
@@ -493,7 +503,7 @@ defmodule EXLA.Defn.Outfeed do
       "expected the runtime_call function to match the given output template " <>
         "#{inspect(right)}, got: #{inspect(left)}"
 
-    {:error, {:argument_error, msg}}
+    raise ArgumentError.exception(msg)
   end
 
   defp encode_runtime_callback_reply({:error, {:invalid_result, left, right}}) do
@@ -501,47 +511,38 @@ defmodule EXLA.Defn.Outfeed do
       "expected the runtime_call function to return a value compatible with the output " <>
         "template #{inspect(right)}, got: #{inspect(left)}"
 
-    {:error, {:argument_error, msg}}
+    raise ArgumentError.exception(msg)
   end
 
   defp encode_runtime_callback_reply({:error, {:decode_failed, exception}}) do
     msg = Exception.message(exception)
     msg = "failed to decode Elixir callback arguments: #{msg}"
-    {:error, {:runtime_error, msg}}
+    raise ArgumentError.exception(msg)
   end
 
   defp encode_runtime_callback_reply({:error, {:invalid_args_spec, other}}) do
     msg = "invalid args_spec for Elixir callback: #{inspect(other)}"
-    {:error, {:runtime_error, msg}}
+    raise ArgumentError.exception(msg)
   end
 
   defp encode_runtime_callback_reply({:error, :unknown_callback}) do
     msg = "unknown EXLA runtime_call callback id"
-    {:error, {:runtime_error, msg}}
+    raise RuntimeError.exception(msg)
   end
 
   defp encode_runtime_callback_reply({:error, {:exception, exception, _stack}}) do
-    msg = Exception.message(exception)
-    msg = "Elixir callback raised: #{msg}"
-    {:error, {:runtime_error, msg}}
+    raise exception
   end
 
   defp encode_runtime_callback_reply({:error, {kind, reason}}) do
     msg = "Elixir callback #{kind}: #{inspect(reason)}"
-    {:error, {:runtime_error, msg}}
+    raise RuntimeError.exception(msg)
   end
 
   defp encode_runtime_callback_reply({:error, reason}) do
     msg = "Elixir callback error: #{inspect(reason)}"
-    {:error, {:runtime_error, msg}}
+    raise RuntimeError.exception(msg)
   end
-
-  defp halt_on_runtime_callback_error({:error, _} = val) do
-    send(self(), :stop)
-    val
-  end
-
-  defp halt_on_runtime_callback_error(val), do: val
 
   defp materialize_callback_args(arg_template, args_spec) do
     {container, remaining} =

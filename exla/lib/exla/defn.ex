@@ -1698,12 +1698,11 @@ defmodule EXLA.Defn do
       )
 
       fun = fn callback_server_pid_tensor ->
-        callback_server_pid =
-          callback_server_pid_tensor
-          |> Nx.to_binary()
-          |> EXLA.NIF.decode_local_pid()
+        callback_server_pid_tensor
+        |> Nx.to_binary()
+        |> EXLA.NIF.decode_local_pid()
+        |> send(:stop)
 
-        send(callback_server_pid, :stop)
         :ok
       end
 
