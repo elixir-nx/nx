@@ -1051,6 +1051,76 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
+  describe "fft/fft2 gradients" do
+    defn fft_grad(t, opts \\ []) do
+      grad(t, fn t -> t |> Nx.fft(opts) |> Nx.sum() end)
+    end
+
+    defn fft2_grad(t, opts \\ []) do
+      grad(t, fn t -> t |> Nx.fft2(opts) |> Nx.sum() end)
+    end
+
+    defn ifft2_grad(t, opts \\ []) do
+      grad(t, fn t -> t |> Nx.ifft2(opts) |> Nx.sum() end)
+    end
+
+    defn fft_composed_grad(t) do
+      grad(t, fn t -> t |> Nx.cos() |> Nx.fft() |> Nx.exp() |> Nx.sum() end)
+    end
+
+    defn fft2_composed_grad(t) do
+      grad(t, fn t -> t |> Nx.cos() |> Nx.fft2() |> Nx.exp() |> Nx.sum() end)
+    end
+
+    test "fft grad" do
+      t = Nx.tensor([1.0, 2.0, 3.0, 4.0])
+      result = fft_grad(t)
+      assert result.shape == {4}
+    end
+
+    test "fft grad with length option" do
+      t = Nx.tensor([1.0, 2.0, 3.0, 4.0])
+      result = fft_grad(t, length: 8)
+      assert result.shape == {4}
+    end
+
+    test "fft composed grad" do
+      t = Nx.tensor([1.0, 2.0, 3.0, 4.0])
+      result = fft_composed_grad(t)
+      assert result.shape == {4}
+    end
+
+    test "fft2 grad" do
+      t = Nx.tensor([[1.0, 2.0], [3.0, 4.0]])
+      result = fft2_grad(t)
+      assert result.shape == {2, 2}
+    end
+
+    test "ifft2 grad" do
+      t = Nx.tensor([[1.0, 2.0], [3.0, 4.0]])
+      result = ifft2_grad(t)
+      assert result.shape == {2, 2}
+    end
+
+    test "fft2 grad with lengths" do
+      t = Nx.tensor([[1.0, 2.0], [3.0, 4.0]])
+      result = fft2_grad(t, lengths: [4, 4])
+      assert result.shape == {2, 2}
+    end
+
+    test "fft2 composed grad" do
+      t = Nx.tensor([[1.0, 2.0], [3.0, 4.0]])
+      result = fft2_composed_grad(t)
+      assert result.shape == {2, 2}
+    end
+
+    test "fft2 grad with 3D input" do
+      t = Nx.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]])
+      result = fft2_grad(t)
+      assert result.shape == {2, 2, 2}
+    end
+  end
+
   describe "unary float ops, restricted domain" do
     @int_tensor Nx.tensor([0.1, 0.5, 0.9])
     @float_tensor Nx.tensor([0.1, 0.5, 0.9])
