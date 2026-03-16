@@ -80,8 +80,8 @@ defmodule EXLA.NIF do
   def load_pjrt_plugin(_device_type, _library_path), do: err!()
   def get_device_count(_client), do: err!()
   def get_supported_platforms, do: err!()
-  def run_cpu(_executable, _arguments, _device_id), do: err!()
-  def run_io(_executable, _arguments, _device_id), do: err!()
+  def run_cpu(_executable, _arguments, _device_id, _callback_server_pid), do: err!()
+  def run_io(_executable, _arguments, _device_id, _callback_server_pid), do: err!()
   def serialize_executable(_executable), do: err!()
   def deserialize_executable(_client, _string), do: err!()
   def start_log_sink(_sink_pid), do: err!()
@@ -94,6 +94,7 @@ defmodule EXLA.NIF do
   def runtime_callback_reply(_reply_tag, _status, _result), do: err!()
   def callback_server_pid_size(), do: err!()
   def encode_local_pid(_pid), do: err!()
+  def decode_local_pid(_pid_bin), do: err!()
 
   defp err!(), do: :erlang.nif_error(:undef)
 end

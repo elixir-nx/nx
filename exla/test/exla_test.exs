@@ -59,8 +59,8 @@ defmodule EXLATest do
 
           assert module == """
                  module {
-                   func.func public @main(%arg0: tensor<i32>, %arg1: tensor<i32>, %arg2: tensor<#{callback_pid_size}xui8>) -> tensor<i32> {
-                     %0 = stablehlo.add %arg0, %arg1 : tensor<i32>
+                   func.func public @main(%arg0: tensor<#{callback_pid_size}xui8>, %arg1: tensor<i32>, %arg2: tensor<i32>) -> tensor<i32> {
+                     %0 = stablehlo.add %arg1, %arg2 : tensor<i32>
                      return %0 : tensor<i32>
                    }
                  }
@@ -78,6 +78,12 @@ defmodule EXLATest do
       encoded = EXLA.NIF.encode_local_pid(self())
 
       assert byte_size(encoded) == EXLA.NIF.callback_server_pid_size()
+    end
+
+    test "decodes local pid from binary" do
+      encoded = EXLA.NIF.encode_local_pid(self())
+
+      assert EXLA.NIF.decode_local_pid(encoded) == self()
     end
   end
 end

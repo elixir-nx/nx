@@ -11,17 +11,21 @@ namespace ffi = xla::ffi;
 
 namespace {
 
-ffi::Error exla_runtime_callback_impl(
-    ffi::RemainingArgs args, ffi::Span<const int64_t> callback_id_words,
-    uint64_t callback_id_size, ffi::RemainingRets rets) {
+ffi::Error
+exla_runtime_callback_impl(ffi::RemainingArgs args,
+                           ffi::Span<const int64_t> callback_id_words,
+                           uint64_t callback_id_size, ffi::RemainingRets rets) {
   if (args.size() == 0) {
     return ffi::Error(ffi::ErrorCode::kInternal,
                       "runtime callback missing callback server pid operand");
   }
 
+  const size_t callback_args_end = args.size();
+
   // Collect all input tensors into lightweight payload views.
   std::vector<exla::callback_bridge::Arg> inputs;
-  inputs.reserve(args.size());
+  inputs.reserve(callback_args_end - 1);
+  exla::callback_bridge::Arg callback_server_pid_arg;
 
   for (size_t i = 0; i < args.size(); ++i) {
     auto maybe_buf_or = args.get<ffi::AnyBuffer>(i);
@@ -40,11 +44,12 @@ ffi::Error exla_runtime_callback_impl(
     tensor.data = reinterpret_cast<const uint8_t *>(buf.untyped_data());
     tensor.size_bytes = buf.size_bytes();
 
-    inputs.push_back(std::move(tensor));
+    if (i == 0) {
+      callback_server_pid_arg = std::move(tensor);
+    } else {
+      inputs.push_back(std::move(tensor));
+    }
   }
-
-  exla::callback_bridge::Arg callback_server_pid_arg = inputs.back();
-  inputs.pop_back();
 
   // Prepare output buffer descriptors so the callback bridge can write results
   // directly into the final destination buffers.
@@ -84,13 +89,12 @@ ffi::Error exla_runtime_callback_impl(
 
 } // namespace
 
-XLA_FFI_DEFINE_HANDLER_SYMBOL(
-    exla_runtime_callback, exla_runtime_callback_impl,
-    ffi::Ffi::Bind()
-        .RemainingArgs()
-        .Attr<ffi::Span<const int64_t>>("callback_id")
-        .Attr<uint64_t>("callback_id_size")
-        .RemainingRets());
+XLA_FFI_DEFINE_HANDLER_SYMBOL(exla_runtime_callback, exla_runtime_callback_impl,
+                              ffi::Ffi::Bind()
+                                  .RemainingArgs()
+                                  .Attr<ffi::Span<const int64_t>>("callback_id")
+                                  .Attr<uint64_t>("callback_id_size")
+                                  .RemainingRets());
 
 XLA_FFI_REGISTER_HANDLER(ffi::GetXlaFfiApi(), "exla_runtime_callback", "Host",
                          exla_runtime_callback);

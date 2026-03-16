@@ -44,19 +44,11 @@ defmodule EXLA.Executable do
     } =
       executable
 
-    runtime_callbacks = Keyword.get(options, :runtime_callbacks)
+    callback_server_pid = Keyword.get(options, :callback_server_pid)
+    inputs = prepare_runtime_callback_inputs(inputs, callback_server_pid)
 
-    {inputs, callback_server_pid} =
-      prepare_runtime_callback_inputs(inputs, runtime_callbacks)
-
-    try do
-      for data_and_device_id <- run(client, ref, device_id, inputs, options) do
-        decompose_output(data_and_device_id, output_typespecs, client, mesh)
-      end
-    after
-      if callback_server_pid do
-        stop_callback_server(callback_server_pid)
-      end
+    for data_and_device_id <- run(client, ref, device_id, inputs, options) do
+      decompose_output(data_and_device_id, output_typespecs, client, mesh)
     end
   end
 
@@ -135,7 +127,9 @@ defmodule EXLA.Executable do
     }
   end
 
-  defp run(client, ref, device_id, inputs, _options) do
+  defp run(client, ref, device_id, inputs, options) do
+    callback_server_pid = Keyword.get(options, :callback_server_pid)
+
     inputs =
       for subinputs <- inputs do
         Enum.map(subinputs, fn
@@ -148,8 +142,8 @@ defmodule EXLA.Executable do
       end
 
     case client.platform do
-      :host -> EXLA.NIF.run_cpu(ref, inputs, device_id)
-      _ -> EXLA.NIF.run_io(ref, inputs, device_id)
+      :host -> EXLA.NIF.run_cpu(ref, inputs, device_id, callback_server_pid)
+      _ -> EXLA.NIF.run_io(ref, inputs, device_id, callback_server_pid)
     end
   end
 
@@ -172,54 +166,23 @@ defmodule EXLA.Executable do
     end)
   end
 
-  defp prepare_runtime_callback_inputs(inputs, nil), do: {inputs, nil}
-
-  defp prepare_runtime_callback_inputs(inputs, []) do
+  defp prepare_runtime_callback_inputs(inputs, nil) do
     callback_server_pid_buffer =
       callback_server_pid_buffer(<<0::size(callback_server_pid_size())-unit(8)>>)
 
-    updated_inputs =
-      Enum.map(inputs, fn replica_inputs ->
-        replica_inputs ++ [callback_server_pid_buffer]
-      end)
-
-    {updated_inputs, nil}
+    Enum.map(inputs, fn replica_inputs ->
+      [callback_server_pid_buffer | replica_inputs]
+    end)
   end
 
-  defp prepare_runtime_callback_inputs(inputs, runtime_callbacks) do
-    callback_server_pid = start_callback_server!()
+  defp prepare_runtime_callback_inputs(inputs, callback_server_pid) do
+    callback_server_pid_buffer =
+      callback_server_pid
+      |> encode_callback_server_pid!()
+      |> callback_server_pid_buffer()
 
-    try do
-      register_runtime_callbacks!(callback_server_pid, runtime_callbacks)
-
-      callback_server_pid_buffer =
-        callback_server_pid
-        |> encode_callback_server_pid!()
-        |> callback_server_pid_buffer()
-
-      updated_inputs =
-        Enum.map(inputs, fn replica_inputs ->
-          replica_inputs ++ [callback_server_pid_buffer]
-        end)
-
-      {updated_inputs, callback_server_pid}
-    rescue
-      error ->
-        stop_callback_server(callback_server_pid)
-        reraise error, __STACKTRACE__
-    end
-  end
-
-  defp start_callback_server! do
-    case DynamicSupervisor.start_child(EXLA.CallbackServer.Supervisor, {EXLA.CallbackServer, []}) do
-      {:ok, pid} -> pid
-      {:error, reason} -> raise "failed to start EXLA.CallbackServer: #{inspect(reason)}"
-    end
-  end
-
-  defp register_runtime_callbacks!(callback_server_pid, runtime_callbacks) do
-    Enum.each(runtime_callbacks, fn {id, fun, out_template, arg_template} ->
-      :ok = EXLA.CallbackServer.register(callback_server_pid, id, fun, out_template, arg_template)
+    Enum.map(inputs, fn replica_inputs ->
+      [callback_server_pid_buffer | replica_inputs]
     end)
   end
 
@@ -242,10 +205,5 @@ defmodule EXLA.Executable do
       callback_server_pid_bin,
       callback_server_pid_typespec()
     )
-  end
-
-  defp stop_callback_server(callback_server_pid) do
-    _ = DynamicSupervisor.terminate_child(EXLA.CallbackServer.Supervisor, callback_server_pid)
-    :ok
   end
 end

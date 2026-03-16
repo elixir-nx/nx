@@ -24,12 +24,15 @@ ffi::Error exla_runtime_callback_cuda_impl(
                       "runtime callback missing callback server pid operand");
   }
 
+  const size_t callback_args_end = args.size();
+
   // Keep host buffers alive for the duration of the callback.
   std::vector<std::vector<uint8_t>> host_input_buffers;
-  host_input_buffers.reserve(args.size());
+  host_input_buffers.reserve(callback_args_end);
 
   std::vector<exla::callback_bridge::Arg> inputs;
-  inputs.reserve(args.size());
+  inputs.reserve(callback_args_end - 1);
+  exla::callback_bridge::Arg callback_server_pid_arg;
 
   for (size_t i = 0; i < args.size(); ++i) {
     auto maybe_buf_or = args.get<ffi::AnyBuffer>(i);
@@ -65,11 +68,12 @@ ffi::Error exla_runtime_callback_cuda_impl(
     tensor.dims.assign(dims.begin(), dims.end());
     tensor.data = host_buf.data();
     tensor.size_bytes = size_bytes;
-    inputs.push_back(std::move(tensor));
+    if (i == 0) {
+      callback_server_pid_arg = std::move(tensor);
+    } else {
+      inputs.push_back(std::move(tensor));
+    }
   }
-
-  exla::callback_bridge::Arg callback_server_pid_arg = inputs.back();
-  inputs.pop_back();
 
   // Outputs: host staging buffers; bridge will write into these, then we H→D.
   std::vector<std::vector<uint8_t>> host_output_buffers;

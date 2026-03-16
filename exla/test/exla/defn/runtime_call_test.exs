@@ -89,15 +89,35 @@ defmodule EXLA.Defn.RuntimeCallTest do
     end)
   end
 
+  @tag :capture_log
   test "runtime_call errors when result shape does not match template" do
     x = Nx.iota({2})
+    test_pid = self()
 
-    assert_raise RuntimeError,
-                 ~r/expected the runtime_call function to match the given output template/,
-                 fn ->
-                   bad_callback(x)
-                 end
+    {pid, ref} =
+      spawn_monitor(fn ->
+        bad_callback(x)
+        send(test_pid, :unexpected_success)
+      end)
+
+    assert_receive {:DOWN, ^ref, :process, ^pid, reason}
+    message = runtime_error_message(reason)
+
+    assert message =~ "expected the runtime_call function to match the given output template"
+    refute_received :unexpected_success
   end
+
+  defp runtime_error_message({{%RuntimeError{message: message}, _stacktrace}, _call_info}),
+    do: message
+
+  defp runtime_error_message({%RuntimeError{message: message}, _stacktrace}),
+    do: message
+
+  defp runtime_error_message({:error, {:runtime_error, message}}),
+    do: message
+
+  defp runtime_error_message(other),
+    do: inspect(other)
 
   test "works when using EXLA compiler directly" do
     x = Nx.tensor([1, 2, 3])
