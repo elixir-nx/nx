@@ -637,11 +637,11 @@ defmodule Nx.Defn.Compiler do
       """)
     end
 
-    {args, state} = normalize_list(args, state)
-
     if name == :runtime_call do
       validate_runtime_call!(args, meta, state)
     end
+
+    {args, state} = normalize_list(args, state)
 
     {{{:., dot_meta, [Nx, name]}, meta, args}, state}
   end
@@ -743,7 +743,7 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
-  defp validate_runtime_call_capture!({:fn, _, _}, _expected_arity, meta, state) do
+  defp validate_runtime_call_capture!({:fn, _, _}, meta, state) do
     compile_error!(
       meta,
       state,
@@ -757,7 +757,7 @@ defmodule Nx.Defn.Compiler do
   # Name must be atom (static) or var-style {atom, _, _} (compile-time variable), not a dynamic expression.
   # Reject special names that indicate anonymous captures confused with &function/arity:
   #   - {:&, _, [n]} - the &1, &2 placeholders (e.g. & &1/2 parses as &(&1)/2 with name=&1)
-  defp validate_runtime_call_capture!({:&, _, [arg]}, _expected_arity, meta, state) do
+  defp validate_runtime_call_capture!({:&, _, [arg]}, meta, state) do
     case arg do
       {:/, _, [_, 2]} ->
         :ok
@@ -772,7 +772,7 @@ defmodule Nx.Defn.Compiler do
     end
   end
 
-  defp validate_runtime_call_capture!(capture, _expected_arity, meta, state) do
+  defp validate_runtime_call_capture!(capture, meta, state) do
     compile_error!(
       meta,
       state,
