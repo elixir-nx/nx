@@ -763,8 +763,7 @@ defmodule Nx.Defn.Compiler do
       {:/, _, [name, 2]} when is_atom(name) and name != :/ ->
         :ok
 
-      {:/, _, [name, 2]}
-      when is_tuple(name) and tuple_size(name) == 3 and is_atom(elem(name, 0)) and
+      {:/, _, [{name, _, _}, 2]} when is_atom(name) and name != :&
              elem(name, 0) != :& ->
         :ok
 
