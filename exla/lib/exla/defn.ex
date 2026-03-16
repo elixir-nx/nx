@@ -218,10 +218,7 @@ defmodule EXLA.Defn do
     }
 
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
-    outfeed = get_outfeed(cache)
-
-    outfeed = Outfeed.close(outfeed, function)
-
+    outfeed = cache |> get_outfeed() |> Outfeed.close(function)
     Value.func_return(function, res)
     outfeed
   end
