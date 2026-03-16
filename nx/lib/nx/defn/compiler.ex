@@ -757,53 +757,17 @@ defmodule Nx.Defn.Compiler do
   # Name must be atom (static) or var-style {atom, _, _} (compile-time variable), not a dynamic expression.
   # Reject special names that indicate anonymous captures confused with &function/arity:
   #   - {:&, _, [n]} - the &1, &2 placeholders (e.g. & &1/2 parses as &(&1)/2 with name=&1)
-  #   - :/ - division operator (e.g. &(&1 / &2) expands to &Kernel.//2)
   defp validate_runtime_call_capture!({:&, _, [arg]}, _expected_arity, meta, state) do
     case arg do
-      {:/, _, [name, 2]} when is_atom(name) and name != :/ ->
+      {:/, _, [_, 2]} ->
         :ok
 
-      {:/, _, [{name, _, _}, 2]} when is_atom(name) and name != :&
-             elem(name, 0) != :& ->
-        :ok
-
-      # Remote capture: {:/, _, [{{:., _, [mod, name]}, _, []}, 2]}
-      {:/, _, [{{:., _, [mod, name]}, _, []}, 2]}
-      when is_atom(mod) and name != :/ and
-             (is_atom(name) or
-               (is_tuple(name) and tuple_size(name) == 3 and is_atom(elem(name, 0)) and
-                  elem(name, 0) != :&)) ->
-        :ok
-
-      {:/, _, [{{:., _, [mod, name]}, _, []}, 2]}
-      when is_tuple(mod) and elem(mod, 0) == :__aliases__ and name != :/ and
-             (is_atom(name) or
-               (is_tuple(name) and tuple_size(name) == 3 and is_atom(elem(name, 0)) and
-                  elem(name, 0) != :&)) ->
-        :ok
-
-      {:/, _, [_name, arity]} when is_integer(arity) and arity != 2 ->
+      {:/, _, [_, arity]} ->
         compile_error!(
           meta,
           state,
           "Nx.runtime_call inside defn requires a named capture with arity 2 (e.g. &my_callback/2), " <>
             "got arity #{arity}"
-        )
-
-      {:/, _, [{{:., _, [_mod, _name]}, _, []}, arity]} when is_integer(arity) and arity != 2 ->
-        compile_error!(
-          meta,
-          state,
-          "Nx.runtime_call inside defn requires a named capture with arity 2 (e.g. &my_callback/2), " <>
-            "got arity #{arity}"
-        )
-
-      _ ->
-        compile_error!(
-          meta,
-          state,
-          "Nx.runtime_call inside defn requires a named capture (e.g. &my_callback/2), " <>
-            "got: #{Macro.to_string({:&, [], [arg]})}"
         )
     end
   end
