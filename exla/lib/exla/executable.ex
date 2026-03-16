@@ -127,7 +127,9 @@ defmodule EXLA.Executable do
     }
   end
 
-  defp run(client, ref, device_id, inputs, _options) do
+  defp run(client, ref, device_id, inputs, options) do
+    callback_server_pid = Keyword.get(options, :callback_server_pid)
+
     inputs =
       for subinputs <- inputs do
         Enum.map(subinputs, fn
@@ -140,8 +142,8 @@ defmodule EXLA.Executable do
       end
 
     case client.platform do
-      :host -> EXLA.NIF.run_cpu(ref, inputs, device_id)
-      _ -> EXLA.NIF.run_io(ref, inputs, device_id)
+      :host -> EXLA.NIF.run_cpu(ref, inputs, device_id, callback_server_pid)
+      _ -> EXLA.NIF.run_io(ref, inputs, device_id, callback_server_pid)
     end
   end
 

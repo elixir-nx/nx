@@ -218,7 +218,7 @@ defmodule EXLA.Defn do
     }
 
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
-    outfeed = cache |> get_outfeed() |> maybe_add_runtime_callbacks_stop(res, callback_pid_value)
+    outfeed = get_outfeed(cache)
 
     outfeed = Outfeed.close(outfeed, function)
 
@@ -1677,45 +1677,6 @@ defmodule EXLA.Defn do
     |> Outfeed.add_runtime_callback(runtime_callback)
     |> then(&put_outfeed(cache, &1))
   end
-
-  defp maybe_add_runtime_callbacks_stop(outfeed, [h | _], callback_pid_value) do
-    if Outfeed.has_runtime_calls(outfeed) do
-      unless callback_pid_value do
-        raise "internal bug: runtime_call callback pid operand is missing"
-      end
-
-      stop_id = make_ref()
-
-      # We include the callback pid value twice because the first one
-      # is popped from the runtime callback handler args.
-      # h is included so that the custom_call is pinned to the end of the function.
-      # ignored_trailing_args: 1 makes it so that h is not read and passed to the callback.
-      Value.runtime_call(
-        [callback_pid_value, callback_pid_value, h],
-        [],
-        stop_id,
-        ignored_trailing_args: 1
-      )
-
-      fun = fn callback_server_pid_tensor ->
-        callback_server_pid_tensor
-        |> Nx.to_binary()
-        |> EXLA.NIF.decode_local_pid()
-        |> send(:stop)
-
-        :ok
-      end
-
-      Outfeed.add_runtime_callback(
-        outfeed,
-        {stop_id, fun, nil, Nx.template({EXLA.Executable.callback_server_pid_size()}, {:u, 8})}
-      )
-    else
-      outfeed
-    end
-  end
-
-  defp maybe_add_runtime_callbacks_stop(outfeed, [], _callback_pid_value), do: outfeed
 
   ## Computation helpers
 

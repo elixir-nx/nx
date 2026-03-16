@@ -842,15 +842,8 @@ defmodule EXLA.MLIR.Value do
   def runtime_call(
         [%Value{function: func} | _] = operands,
         typespecs,
-        callback_id,
-        opts \\ []
+        callback_id
       ) do
-    ignored_trailing_args = Keyword.get(opts, :ignored_trailing_args, 0)
-
-    if not is_integer(ignored_trailing_args) or ignored_trailing_args < 0 do
-      raise ArgumentError, ":ignored_trailing_args must be a non-negative integer"
-    end
-
     result_types = typespecs_to_mlir_types(typespecs)
 
     {callback_id_words, callback_id_size} =
@@ -864,8 +857,7 @@ defmodule EXLA.MLIR.Value do
       backend_config:
         attr_dict(
           callback_id: attr_array_i64_elements(callback_id_words),
-          callback_id_size: attr_ui64(callback_id_size),
-          ignored_trailing_args: attr_ui64(ignored_trailing_args)
+          callback_id_size: attr_ui64(callback_id_size)
         )
     ]
 

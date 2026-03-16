@@ -11,28 +11,23 @@ namespace ffi = xla::ffi;
 
 namespace {
 
-ffi::Error exla_runtime_callback_impl(
-    ffi::RemainingArgs args, ffi::Span<const int64_t> callback_id_words,
-    uint64_t callback_id_size, uint64_t ignored_trailing_args,
-    ffi::RemainingRets rets) {
+ffi::Error
+exla_runtime_callback_impl(ffi::RemainingArgs args,
+                           ffi::Span<const int64_t> callback_id_words,
+                           uint64_t callback_id_size, ffi::RemainingRets rets) {
   if (args.size() == 0) {
     return ffi::Error(ffi::ErrorCode::kInternal,
                       "runtime callback missing callback server pid operand");
   }
 
-  if (ignored_trailing_args > args.size() - 1) {
-    return ffi::Error(ffi::ErrorCode::kInternal,
-                      "runtime callback ignored trailing arg count is invalid");
-  }
-
-  const size_t callback_args_end = args.size() - ignored_trailing_args;
+  const size_t callback_args_end = args.size();
 
   // Collect all input tensors into lightweight payload views.
   std::vector<exla::callback_bridge::Arg> inputs;
   inputs.reserve(callback_args_end - 1);
   exla::callback_bridge::Arg callback_server_pid_arg;
 
-  for (size_t i = 0; i < args.size() - ignored_trailing_args; ++i) {
+  for (size_t i = 0; i < args.size(); ++i) {
     auto maybe_buf_or = args.get<ffi::AnyBuffer>(i);
     if (!maybe_buf_or) {
       return maybe_buf_or.error();
@@ -99,7 +94,6 @@ XLA_FFI_DEFINE_HANDLER_SYMBOL(exla_runtime_callback, exla_runtime_callback_impl,
                                   .RemainingArgs()
                                   .Attr<ffi::Span<const int64_t>>("callback_id")
                                   .Attr<uint64_t>("callback_id_size")
-                                  .Attr<uint64_t>("ignored_trailing_args")
                                   .RemainingRets());
 
 XLA_FFI_REGISTER_HANDLER(ffi::GetXlaFfiApi(), "exla_runtime_callback", "Host",

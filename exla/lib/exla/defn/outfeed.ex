@@ -115,19 +115,6 @@ defmodule EXLA.Defn.Outfeed do
   def with_token(%Outfeed{} = outfeed, token), do: %{outfeed | token: token}
 
   @doc """
-  Sets runtime callbacks on outfeed.
-  """
-  def with_runtime_callbacks(%Outfeed{} = outfeed, runtime_callbacks)
-      when is_list(runtime_callbacks) do
-    callbacks =
-      Map.new(runtime_callbacks, fn {id, fun, out_template, arg_template} ->
-        {id, {fun, out_template, arg_template}}
-      end)
-
-    %{outfeed | runtime_callbacks: callbacks}
-  end
-
-  @doc """
   Adds a runtime callback to outfeed.
   """
   def add_runtime_callback(
@@ -298,13 +285,26 @@ defmodule EXLA.Defn.Outfeed do
          stream_outfeed?
        ) do
     if stream_outfeed? do
-      # If we're not outfeeding, we only need to handle the runtime callback messaging.
+      # If we're not outfeeding, we only need to handle the runtime callback
+      # and executable stop messaging
       :ok = EXLA.Client.from_outfeed(client, device_id, [typespec], self(), ref)
     end
 
     receive do
       {^ref, <<0::native-unsigned-16>>} ->
-        :ok
+        # Outfeed is done, now we wait for the computation to finish
+
+        loop(
+          client,
+          device_id,
+          ref,
+          typespec,
+          hooks,
+          compiled_hooks,
+          infeeds,
+          runtime_callbacks,
+          false
+        )
 
       {^ref, <<flag::native-unsigned-16>>} ->
         case Map.fetch!(compiled_hooks, flag) do
@@ -338,6 +338,9 @@ defmodule EXLA.Defn.Outfeed do
             :ok = EXLA.Client.from_outfeed(client, device_id, typespecs, pid, ref)
 
             receive do
+              :stop ->
+                :ok
+
               ^ref ->
                 loop(
                   client,
