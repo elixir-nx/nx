@@ -549,7 +549,7 @@ ExlaExecutable::RunResult run(ErlNifEnv *env,
   if (callback_server_pid.has_value()) {
     auto pid = callback_server_pid.value();
     auto msg_env = enif_alloc_env();
-    enif_send(msg_env, &pid, msg_env, exla::atoms::stop);
+    enif_send(msg_env, &pid, msg_env, fine::encode(msg_env, exla::atoms::stop));
     enif_free_env(msg_env);
   }
 
