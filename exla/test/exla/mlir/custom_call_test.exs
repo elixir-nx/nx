@@ -6,7 +6,8 @@ defmodule EXLA.MLIR.CustomCallTest do
       tol_opts =
         case type do
           {:f, 16} ->
-            [atol: 1.0e-10, rtol: 1.0e-2]
+            # f16 machine epsilon is ~9.77e-4; atol must be above that
+            [atol: 1.0e-2, rtol: 1.0e-2]
 
           {:bf, 16} ->
             [atol: 1.0e-1, rtol: 1.0e-1]
