@@ -227,32 +227,13 @@ defmodule EXLA.Defn.Outfeed do
       outfeed
 
     hooks = Map.merge(default_hooks, user_hooks)
-    stream_outfeed? = will_outfeed(outfeed) or map_size(infeeds) > 0
 
     Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
-      init(
-        client,
-        device_id,
-        hooks,
-        compiled_hooks,
-        infeeds,
-        runtime_callbacks,
-        stream_outfeed?,
-        group_leader
-      )
+      init(client, device_id, hooks, compiled_hooks, infeeds, runtime_callbacks, group_leader)
     end)
   end
 
-  defp init(
-         client,
-         device_id,
-         hooks,
-         compiled_hooks,
-         infeeds,
-         runtime_callbacks,
-         stream_outfeed?,
-         group_leader
-       ) do
+  defp init(client, device_id, hooks, compiled_hooks, infeeds, rt_callbacks, group_leader) do
     Process.flag(:trap_exit, true)
     # Copy the group leader so we report to the proper device
     Process.group_leader(self(), group_leader)
@@ -260,31 +241,11 @@ defmodule EXLA.Defn.Outfeed do
     ref = make_ref()
     typespec = EXLA.Typespec.tensor({:u, 16}, {})
 
-    loop(
-      client,
-      device_id,
-      ref,
-      typespec,
-      hooks,
-      compiled_hooks,
-      infeeds,
-      runtime_callbacks,
-      stream_outfeed?
-    )
+    loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks)
   end
 
-  defp loop(
-         client,
-         device_id,
-         ref,
-         typespec,
-         hooks,
-         compiled_hooks,
-         infeeds,
-         runtime_callbacks,
-         stream_outfeed?
-       ) do
-    if stream_outfeed? do
+  defp loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks) do
+    if compiled_hooks != %{} do
       # If we're not outfeeding, we only need to handle the runtime callback
       # and executable stop messaging
       :ok = EXLA.Client.from_outfeed(client, device_id, [typespec], self(), ref)
@@ -293,18 +254,7 @@ defmodule EXLA.Defn.Outfeed do
     receive do
       {^ref, <<0::native-unsigned-16>>} ->
         # Outfeed is done, now we wait for the computation to finish
-
-        loop(
-          client,
-          device_id,
-          ref,
-          typespec,
-          hooks,
-          compiled_hooks,
-          infeeds,
-          runtime_callbacks,
-          false
-        )
+        loop(client, device_id, ref, typespec, hooks, %{}, infeeds, rt_callbacks)
 
       {^ref, <<flag::native-unsigned-16>>} ->
         case Map.fetch!(compiled_hooks, flag) do
@@ -316,18 +266,7 @@ defmodule EXLA.Defn.Outfeed do
               end
 
             EXLA.Client.to_infeed(client, device_id, [{data, data_typespec}])
-
-            loop(
-              client,
-              device_id,
-              ref,
-              typespec,
-              hooks,
-              compiled_hooks,
-              infeeds,
-              runtime_callbacks,
-              stream_outfeed?
-            )
+            loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks)
 
           {:function, typespecs, name, template} ->
             fun = Map.fetch!(hooks, name)
@@ -347,44 +286,21 @@ defmodule EXLA.Defn.Outfeed do
                   hooks,
                   compiled_hooks,
                   infeeds,
-                  runtime_callbacks,
-                  stream_outfeed?
+                  rt_callbacks
                 )
             end
         end
 
       {:exla_runtime_call, callback_id, args_spec, reply_tag} ->
-        send_runtime_callback_reply(runtime_callbacks, callback_id, args_spec, reply_tag)
-
-        loop(
-          client,
-          device_id,
-          ref,
-          typespec,
-          hooks,
-          compiled_hooks,
-          infeeds,
-          runtime_callbacks,
-          stream_outfeed?
-        )
+        send_runtime_callback_reply(rt_callbacks, callback_id, args_spec, reply_tag)
+        loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks)
 
       :stop ->
         :ok
 
       other ->
         Logger.debug("EXLA.Outfeed ignoring unexpected message: #{inspect(other)}")
-
-        loop(
-          client,
-          device_id,
-          ref,
-          typespec,
-          hooks,
-          compiled_hooks,
-          infeeds,
-          runtime_callbacks,
-          stream_outfeed?
-        )
+        loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks)
     end
   end
 
