@@ -3741,6 +3741,11 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "decompositions" do
+    setup do
+      Nx.Defn.default_options(compiler: EXLA, precision: :highest)
+      :ok
+    end
+
     defn ts(a, b, opts \\ []), do: Nx.LinAlg.triangular_solve(a, b, opts)
 
     test "triangular_solve" do
@@ -4184,6 +4189,11 @@ defmodule EXLA.Defn.ExprTest do
   end
 
   describe "cholesky" do
+    setup do
+      Nx.Defn.default_options(compiler: EXLA, precision: :highest)
+      :ok
+    end
+
     defn cholesky(t), do: Nx.LinAlg.cholesky(t)
 
     test "works on 2x2 matrix" do
