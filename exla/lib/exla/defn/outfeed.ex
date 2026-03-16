@@ -338,9 +338,6 @@ defmodule EXLA.Defn.Outfeed do
             :ok = EXLA.Client.from_outfeed(client, device_id, typespecs, pid, ref)
 
             receive do
-              :stop ->
-                :ok
-
               ^ref ->
                 loop(
                   client,
