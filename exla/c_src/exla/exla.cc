@@ -6,6 +6,9 @@
 #include <tuple>
 #include <unordered_map>
 
+#include "absl/log/globals.h"
+#include "absl/log/initialize.h"
+#include "absl/log/log_sink_registry.h"
 #include "custom_calls/runtime_callback_bridge.h"
 #include "exla_client.h"
 #include "exla_cuda.h"
@@ -24,9 +27,6 @@
 #include "xla/service/platform_util.h"
 #include "xla/tsl/platform/statusor.h"
 #include "llvm/Support/ThreadPool.h"
-#include "absl/log/log_sink_registry.h"
-#include "absl/log/initialize.h"
-#include "absl/log/globals.h"
 
 namespace exla {
 
@@ -276,8 +276,7 @@ fine::ResourcePtr<ExlaExecutable>
 mlir_compile(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
              fine::ResourcePtr<MLIRModule> module,
              std::vector<xla::Shape> argument_layouts, int64_t num_replicas,
-             int64_t num_partitions, bool use_spmd, int64_t device_id,
-             fine::Term callback_server_pid_term) {
+             int64_t num_partitions, bool use_spmd, int64_t device_id) {
   auto build_options = xla::ExecutableBuildOptions();
 
   build_options.set_num_replicas(num_replicas);
@@ -298,21 +297,8 @@ mlir_compile(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
     build_options.set_device_ordinal(device_id);
   }
 
-  // Decode the optional callback server pid. If the term is a pid, we convert
-  // it to an ErlNifPid; otherwise we treat it as "no pid" (e.g. nil).
-  absl::optional<ErlNifPid> pid_opt;
-  ERL_NIF_TERM pid_term = callback_server_pid_term;
-
-  if (enif_is_pid(env, pid_term)) {
-    ErlNifPid pid;
-    if (enif_get_local_pid(env, pid_term, &pid)) {
-      pid_opt = pid;
-    }
-  }
-
   return unwrap(client->Compile(module->module(), argument_layouts,
-                                build_options, compile_portable_executable,
-                                pid_opt));
+                                build_options, compile_portable_executable));
 }
 
 FINE_NIF(mlir_compile, ERL_NIF_DIRTY_JOB_CPU_BOUND);
@@ -556,15 +542,25 @@ FINE_NIF(get_supported_platforms, 0);
 ExlaExecutable::RunResult run(ErlNifEnv *env,
                               fine::ResourcePtr<ExlaExecutable> executable,
                               ExlaExecutable::RunArguments arguments,
-                              int64_t device_id) {
-  return unwrap(executable->Run(env, arguments, device_id));
+                              int64_t device_id,
+                              std::optional<ErlNifPid> callback_server_pid) {
+  auto result = unwrap(executable->Run(env, arguments, device_id));
+
+  if (callback_server_pid.has_value()) {
+    auto pid = callback_server_pid.value();
+    auto msg_env = enif_alloc_env();
+    enif_send(msg_env, &pid, msg_env, fine::encode(msg_env, exla::atoms::stop));
+    enif_free_env(msg_env);
+  }
+
+  return result;
 }
 
-ExlaExecutable::RunResult run_cpu(ErlNifEnv *env,
-                                  fine::ResourcePtr<ExlaExecutable> executable,
-                                  ExlaExecutable::RunArguments arguments,
-                                  int64_t device_id) {
-  return run(env, executable, arguments, device_id);
+ExlaExecutable::RunResult
+run_cpu(ErlNifEnv *env, fine::ResourcePtr<ExlaExecutable> executable,
+        ExlaExecutable::RunArguments arguments, int64_t device_id,
+        std::optional<ErlNifPid> callback_server_pid) {
+  return run(env, executable, arguments, device_id, callback_server_pid);
 }
 
 FINE_NIF(run_cpu, ERL_NIF_DIRTY_JOB_CPU_BOUND);
@@ -572,8 +568,9 @@ FINE_NIF(run_cpu, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 ExlaExecutable::RunResult run_io(ErlNifEnv *env,
                                  fine::ResourcePtr<ExlaExecutable> executable,
                                  ExlaExecutable::RunArguments arguments,
-                                 int64_t device_id) {
-  return run(env, executable, arguments, device_id);
+                                 int64_t device_id,
+                                 std::optional<ErlNifPid> callback_server_pid) {
+  return run(env, executable, arguments, device_id, callback_server_pid);
 }
 
 FINE_NIF(run_io, ERL_NIF_DIRTY_JOB_IO_BOUND);
@@ -630,15 +627,37 @@ get_per_device_memory(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client) {
 
 FINE_NIF(get_per_device_memory, 0);
 
+int64_t callback_server_pid_size(ErlNifEnv *env) {
+  (void)env;
+  return static_cast<int64_t>(sizeof(ErlNifPid));
+}
+
+FINE_NIF(callback_server_pid_size, 0);
+
+std::string encode_local_pid(ErlNifEnv *env, ErlNifPid pid) {
+  (void)env;
+  return std::string(reinterpret_cast<const char *>(&pid), sizeof(ErlNifPid));
+}
+
+FINE_NIF(encode_local_pid, 0);
+
+fine::Term decode_local_pid(ErlNifEnv *env, std::string pid_binary) {
+  if (pid_binary.size() != sizeof(ErlNifPid)) {
+    throw std::invalid_argument("invalid encoded local pid size");
+  }
+
+  ErlNifPid pid;
+  std::memcpy(&pid, pid_binary.data(), sizeof(ErlNifPid));
+  return fine::Term(enif_make_pid(env, &pid));
+}
+
+FINE_NIF(decode_local_pid, 0);
+
 // Elixir callback bridge NIF registrations
 
-using callback_bridge::clear_runtime_callback_bridge;
 using callback_bridge::runtime_callback_reply;
-using callback_bridge::start_runtime_callback_bridge;
 
-FINE_NIF(start_runtime_callback_bridge, 0);
 FINE_NIF(runtime_callback_reply, ERL_NIF_DIRTY_JOB_IO_BOUND);
-FINE_NIF(clear_runtime_callback_bridge, 0);
 
 // Logging
 

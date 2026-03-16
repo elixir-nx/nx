@@ -6,43 +6,10 @@ namespace exla {
 
 namespace callback_bridge {
 
-struct BridgeState {
-  ErlNifPid dispatcher_pid;
-  bool dispatcher_set = false;
-};
-
-BridgeState *GetBridgeState() {
-  static BridgeState *state = new BridgeState();
-  return state;
-}
-
-fine::Ok<> start_runtime_callback_bridge(ErlNifEnv *env,
-                                         ErlNifPid dispatcher_pid) {
-  (void)env;
-  auto state = GetBridgeState();
-  state->dispatcher_pid = dispatcher_pid;
-  state->dispatcher_set = true;
-  return fine::Ok();
-}
-
 fine::Ok<> runtime_callback_reply(ErlNifEnv *env,
                                   fine::ResourcePtr<Pending> pending,
                                   fine::Atom status, fine::Term result) {
   deliver_reply(env, pending, status, result);
-  return fine::Ok();
-}
-
-fine::Ok<> clear_runtime_callback_bridge(ErlNifEnv *env,
-                                         ErlNifPid dispatcher_pid) {
-  (void)env;
-  auto state = GetBridgeState();
-
-  if (state->dispatcher_set &&
-      std::memcmp(&state->dispatcher_pid, &dispatcher_pid, sizeof(ErlNifPid)) ==
-          0) {
-    state->dispatcher_set = false;
-  }
-
   return fine::Ok();
 }
 
@@ -117,25 +84,17 @@ void deliver_reply(ErlNifEnv *env, fine::ResourcePtr<Pending> pending,
 
 Result InvokeRuntimeCallback(
     xla::ffi::Span<const int64_t> callback_id_words, uint64_t callback_id_size,
-    xla::ffi::Span<const int64_t> callback_server_pid_words,
-    uint64_t callback_server_pid_size, const std::vector<Arg> &inputs,
+    const Arg &callback_server_pid_arg, const std::vector<Arg> &inputs,
     const std::vector<OutputBuffer> &outputs) {
-  auto state = GetBridgeState();
-
-  if (!state->dispatcher_set) {
-    Result res;
-    res.ok = false;
-    res.error = "EXLA elixir callback dispatcher is not set";
-    return res;
-  }
+  const int64_t callback_server_pid_dim = static_cast<int64_t>(sizeof(ErlNifPid));
+  const size_t callback_server_pid_size = sizeof(ErlNifPid);
 
   auto pending = fine::make_resource<Pending>(outputs);
 
   ErlNifEnv *msg_env = enif_alloc_env();
 
   // Reinterpret the 64-bit words as a contiguous byte buffer and use the
-  // original (unpadded) sizes when decoding the callback id and callback
-  // server pid terms.
+  // original (unpadded) size when decoding the callback id term.
   if (callback_id_size > callback_id_words.size() * sizeof(int64_t)) {
     Result res;
     res.ok = false;
@@ -143,11 +102,25 @@ Result InvokeRuntimeCallback(
     return res;
   }
 
-  if (callback_server_pid_size >
-      callback_server_pid_words.size() * sizeof(int64_t)) {
+  if (callback_server_pid_arg.dtype != xla::ffi::DataType::U8) {
     Result res;
     res.ok = false;
-    res.error = "inconsistent callback server pid size";
+    res.error = "callback server pid tensor must have dtype u8";
+    return res;
+  }
+
+  if (callback_server_pid_arg.dims.size() != 1 ||
+      callback_server_pid_arg.dims[0] != callback_server_pid_dim) {
+    Result res;
+    res.ok = false;
+    res.error = "callback server pid tensor has unexpected shape";
+    return res;
+  }
+
+  if (callback_server_pid_arg.size_bytes != callback_server_pid_size) {
+    Result res;
+    res.ok = false;
+    res.error = "callback server pid tensor must contain encoded ErlNifPid bytes";
     return res;
   }
 
@@ -163,26 +136,9 @@ Result InvokeRuntimeCallback(
     return res;
   }
 
-  const unsigned char *pid_bytes = reinterpret_cast<const unsigned char *>(
-      callback_server_pid_words.begin());
-
-  ERL_NIF_TERM callback_server_pid_term;
-  if (!enif_binary_to_term(msg_env, pid_bytes, callback_server_pid_size,
-                           &callback_server_pid_term, 0)) {
-    Result res;
-    res.ok = false;
-    res.error = "failed to decode callback server pid term";
-    return res;
-  }
-
   ErlNifPid callback_server_pid;
-  if (!enif_get_local_pid(msg_env, callback_server_pid_term,
-                          &callback_server_pid)) {
-    Result res;
-    res.ok = false;
-    res.error = "failed to decode callback server pid";
-    return res;
-  }
+  std::memcpy(&callback_server_pid, callback_server_pid_arg.data,
+              sizeof(ErlNifPid));
 
   // Encode arguments as [{bin, %EXLA.Typespec{}}, ...]. We currently send
   // plain binaries because the BEAM callback needs to own the data lifetime.
@@ -207,7 +163,6 @@ Result InvokeRuntimeCallback(
   auto msg = std::make_tuple(fine::Atom("exla_runtime_call"),
                              fine::Term(callback_id_term), args_terms, pending);
 
-  // Use the dispatcher pid registered via start_runtime_callback_bridge/1.
   // We still are within the NIF thread that started the computation,
   // but we don't know its env, therefore we cannot use enif_whereis_pid.
   // enif_whereis_pid can be called with NULL, but only from non-ERTS

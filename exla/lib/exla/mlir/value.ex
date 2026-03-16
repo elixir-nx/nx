@@ -837,19 +837,14 @@ defmodule EXLA.MLIR.Value do
 
   The `callback_id` is typically the underlying `Nx.Defn.Expr` id of the
   `:runtime_call` node. It is encoded as a binary (via `:erlang.term_to_binary/1`)
-  and then represented as a list of 64-bit words in the custom call attributes,
-  similar to how we encode the callback server PID.
+  and then represented as a list of 64-bit words in the custom call attributes.
   """
   def runtime_call(
         [%Value{function: func} | _] = operands,
         typespecs,
-        callback_server_pid,
         callback_id
       ) do
     result_types = typespecs_to_mlir_types(typespecs)
-
-    {callback_server_pid_words, callback_server_pid_size} =
-      term_to_int64_list(callback_server_pid)
 
     {callback_id_words, callback_id_size} =
       term_to_int64_list(callback_id)
@@ -858,12 +853,11 @@ defmodule EXLA.MLIR.Value do
       call_target_name: attr_string("exla_runtime_callback"),
       # api_version 4 enables the typed FFI API used by our callback handler.
       api_version: attr_i32(4),
+      has_side_effect: attr_boolean(true),
       backend_config:
         attr_dict(
           callback_id: attr_array_i64_elements(callback_id_words),
-          callback_id_size: attr_ui64(callback_id_size),
-          callback_server_pid: attr_array_i64_elements(callback_server_pid_words),
-          callback_server_pid_size: attr_ui64(callback_server_pid_size)
+          callback_id_size: attr_ui64(callback_id_size)
         )
     ]
 
