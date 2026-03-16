@@ -543,26 +543,23 @@ ExlaExecutable::RunResult run(ErlNifEnv *env,
                               fine::ResourcePtr<ExlaExecutable> executable,
                               ExlaExecutable::RunArguments arguments,
                               int64_t device_id,
-                              fine::Term callback_server_pid) {
+                              std::optional<ErlNifPid> callback_server_pid) {
   auto result = unwrap(executable->Run(env, arguments, device_id));
 
-  try {
-    ErlNifPid pid = fine::decode<ErlNifPid>(env, callback_server_pid);
+  if (callback_server_pid.has_value()) {
+    auto pid = callback_server_pid.value();
     auto msg_env = enif_alloc_env();
-    ERL_NIF_TERM stop_atom = fine::encode(msg_env, fine::Atom("stop"));
-    enif_send(msg_env, &pid, msg_env, stop_atom);
+    enif_send(msg_env, &pid, msg_env, exla::atoms::stop);
     enif_free_env(msg_env);
-  } catch (const std::exception &e) {
-  };
+  }
 
   return result;
 }
 
-ExlaExecutable::RunResult run_cpu(ErlNifEnv *env,
-                                  fine::ResourcePtr<ExlaExecutable> executable,
-                                  ExlaExecutable::RunArguments arguments,
-                                  int64_t device_id,
-                                  fine::Term callback_server_pid) {
+ExlaExecutable::RunResult
+run_cpu(ErlNifEnv *env, fine::ResourcePtr<ExlaExecutable> executable,
+        ExlaExecutable::RunArguments arguments, int64_t device_id,
+        std::optional<ErlNifPid> callback_server_pid) {
   return run(env, executable, arguments, device_id, callback_server_pid);
 }
 
@@ -572,7 +569,7 @@ ExlaExecutable::RunResult run_io(ErlNifEnv *env,
                                  fine::ResourcePtr<ExlaExecutable> executable,
                                  ExlaExecutable::RunArguments arguments,
                                  int64_t device_id,
-                                 fine::Term callback_server_pid) {
+                                 std::optional<ErlNifPid> callback_server_pid) {
   return run(env, executable, arguments, device_id, callback_server_pid);
 }
 
