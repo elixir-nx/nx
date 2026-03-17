@@ -762,7 +762,6 @@ defmodule EXLA.Defn do
       end
 
     has_token = get_token(cache) != nil
-    has_pid = state.callback_pid_value != nil
 
     typespecs = container_to_typespecs(expr)
     call_inputs = call_args
@@ -774,13 +773,10 @@ defmodule EXLA.Defn do
         {typespecs, call_inputs}
       end
 
-    {typespecs, call_inputs} =
-      if has_pid do
-        pid_typespec = Value.get_typespec(state.callback_pid_value)
-        {typespecs ++ [pid_typespec], call_inputs ++ [state.callback_pid_value]}
-      else
-        {typespecs, call_inputs}
-      end
+    # PID is always present — prepend it (consistent with while loop ordering)
+    pid_typespec = Value.get_typespec(state.callback_pid_value)
+    typespecs = [pid_typespec | typespecs]
+    call_inputs = [state.callback_pid_value | call_inputs]
 
     result = Value.call(state.builder, call_inputs, call_body, typespecs)
 
@@ -792,7 +788,8 @@ defmodule EXLA.Defn do
         {nil, result}
       end
 
-    result = if has_pid, do: Enum.slice(result, 0..-2//1), else: result
+    # Drop the PID from results (it was prepended)
+    [_pid | result] = result
     cache = if token, do: update_token(cache, token), else: cache
     {wrap_tuple_result(result, expr), cache}
   end
@@ -1874,12 +1871,9 @@ defmodule EXLA.Defn do
         {arg_typespecs, out_typespecs}
       end
 
-    {arg_typespecs, out_typespecs} =
-      if outer_pid do
-        {arg_typespecs ++ [pid_typespec], out_typespecs ++ [pid_typespec]}
-      else
-        {arg_typespecs, out_typespecs}
-      end
+    # PID is always present — prepend (consistent with while loop ordering)
+    arg_typespecs = [pid_typespec | arg_typespecs]
+    out_typespecs = [pid_typespec | out_typespecs]
 
     function = EXLA.MLIR.Module.add_function(module, name, arg_typespecs, out_typespecs)
     args = EXLA.MLIR.Function.get_arguments(function)
@@ -1892,13 +1886,8 @@ defmodule EXLA.Defn do
         {nil, args}
       end
 
-    {inner_pid, args} =
-      if outer_pid do
-        inner_pid = List.last(args)
-        {inner_pid, Enum.slice(args, 0..-2//1)}
-      else
-        {nil, args}
-      end
+    # PID is always the next arg after token
+    [inner_pid | args] = args
 
     params = Enum.with_index(args, fn param, i -> {i, param} end)
 
@@ -1913,7 +1902,7 @@ defmodule EXLA.Defn do
     {res, comp_cache} = recur_composite(expr, state, reset_token(cache, inner_token))
 
     ret = List.flatten(res)
-    ret = if outer_pid, do: ret ++ [state.callback_pid_value], else: ret
+    ret = [state.callback_pid_value | ret]
     ret = if outer_token, do: [get_token(comp_cache) | ret], else: ret
     Value.func_return(function, ret)
 
