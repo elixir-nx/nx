@@ -835,7 +835,6 @@ defmodule Nx.Defn.Kernel do
 
   defp boolean_to_number(true), do: 1
   defp boolean_to_number(false), do: 0
-  defp boolean_to_number(value), do: value
 
   @doc """
   Ensures the first argument is a `keyword` with the given
