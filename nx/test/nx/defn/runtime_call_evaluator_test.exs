@@ -143,13 +143,13 @@ defmodule Nx.Defn.RuntimeCallEvaluatorTest do
       end
     end
 
-    test "rejects anonymous capture (&(&1 / &2))" do
+    test "rejects anonymous capture (&(&1 / 2))" do
       assert_raise CompileError, ~r/requires a named capture/, fn ->
         defmodule BadAnonCapture do
           import Nx.Defn
 
           defn bad(x) do
-            Nx.runtime_call(x, x, &(&1 / &2))
+            Nx.runtime_call(x, x, &(&1 / 2))
           end
         end
       end

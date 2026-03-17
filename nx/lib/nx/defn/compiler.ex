@@ -732,10 +732,10 @@ defmodule Nx.Defn.Compiler do
   defp validate_runtime_call!(args, meta, state) do
     case args do
       [_out, _arg, fun] ->
-        validate_runtime_call_capture!(fun, 2, meta, state)
+        validate_runtime_call_capture!(fun, meta, state)
 
       [_out, _arg, _opts, fun] ->
-        validate_runtime_call_capture!(fun, 2, meta, state)
+        validate_runtime_call_capture!(fun, meta, state)
 
       _ ->
         raise UndefinedFunctionError,
