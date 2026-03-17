@@ -760,10 +760,8 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :runtime_call,
-         %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template]}} = expr,
-         %{client: %EXLA.Client{platform: :host}, callback_pid_value: callback_pid_value} =
          %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template, opts]}} = expr,
-         %{client: %EXLA.Client{platform: :host}, callback_server_pid: callback_server_pid} =
+         %{client: %EXLA.Client{platform: :host}, callback_pid_value: callback_pid_value} =
            state,
          cache
        ) do
