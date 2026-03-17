@@ -23,7 +23,6 @@ defmodule EXLA.BackendTest do
     logsumexp: 2,
     exp: 1,
     expm1: 1
-    # rsqrt: 1
   ]
 
   doctest Nx,
