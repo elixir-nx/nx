@@ -752,11 +752,7 @@ defmodule Nx.Defn.Compiler do
     )
   end
 
-  # Require :& with only argument being {:/, _, [name, 2]} (local) or {:/, _, [{{:., _, [mod, name]}, _, []}, 2]} (remote).
-  # Arity must be the literal 2 to reject dynamic captures like &fun/arity where arity is a variable.
-  # Name must be atom (static) or var-style {atom, _, _} (compile-time variable), not a dynamic expression.
-  # Reject special names that indicate anonymous captures confused with &function/arity:
-  #   - {:&, _, [n]} - the &1, &2 placeholders (e.g. & &1/2 parses as &(&1)/2 with name=&1)
+  # Require :& with only argument being {:/, _, [_, 2]}, which covers local and remote captures
   defp validate_runtime_call_capture!({:&, _, [arg]}, meta, state) do
     case arg do
       {:/, _, [_, 2]} ->
