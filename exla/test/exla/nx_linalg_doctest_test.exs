@@ -4,6 +4,11 @@ defmodule EXLA.NxLinAlgDoctestTest do
 
   setup do
     Nx.default_backend(EXLA.Backend)
+    # Use full f32 precision for linalg property tests that verify
+    # decompositions via matmul reconstruction (e.g. dot(L, L^T) ≈ A).
+    # Default precision uses TF32 tensor cores (~1e-3 accuracy) which
+    # is insufficient for these tests' tolerances.
+    Nx.Defn.default_options(compiler: EXLA, precision: :highest)
     :ok
   end
 
