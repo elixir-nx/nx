@@ -2234,7 +2234,7 @@ defmodule Nx do
 
   > #### Device locks {: .warning}
   >
-  > `runtime_call/3` will generally operate on tensors allocated on a given physical device, such as a GPU.
+  > `runtime_call/4` will generally operate on tensors allocated on a given physical device, such as a GPU.
   > For example, EXLA will have one or more CPU clients.
   >
   > When calling other Nx computations from within the callback, these other computations cannot operate
@@ -2242,21 +2242,29 @@ defmodule Nx do
 
   > #### Backend transfers {: .warning}
   >
-  > When executing a `runtime_call/3` in `Nx.Defn.Evaluator`, the tensors should not be transferred with `Nx.backend_transfer/2`,
+  > When executing a `runtime_call/4` in `Nx.Defn.Evaluator`, the tensors should not be transferred with `Nx.backend_transfer/2`,
   > because the values passed might still be used in the rest of the computation. If needed, you can use `Nx.backend_copy/2` to another backend instead.
 
   ## Examples
 
   While most code inside `defn` is restricted, `runtime_call/4` allows you
-  to perform arbitrary Elixir operations, such as message passing:
+  to perform arbitrary Elixir operations, such as message passing.
+  The callback must be a named capture (e.g. `&my_callback/2`):
 
+      iex> defmodule RuntimeCallExample do
+      ...>   def callback(t, opts) do
+      ...>     send(opts[:pid], {:sum, Enum.sum(Nx.to_flat_list(t))})
+      ...>     t
+      ...>   end
+      ...> end
       iex> pid = self()
       iex> x = Nx.tensor([1, 2, 3])
       iex> out = Nx.template({3}, {:s, 32})
-      iex> Nx.runtime_call(out, x, fn t ->
-      ...>   send(pid, {:sum, Enum.sum(Nx.to_flat_list(t))})
-      ...>   t
-      ...> end)
+      iex> Nx.runtime_call(out, x, [pid: pid], &RuntimeCallExample.callback/2)
+      #Nx.Tensor<
+        s32[3]
+        [1, 2, 3]
+      >
       iex> receive do {:sum, value} -> value end
       6
 
@@ -2265,7 +2273,7 @@ defmodule Nx do
   directly and validates that the result matches the provided template.
   """
   @doc type: :backend
-  def runtime_call(output, tensor_or_container, fun) when is_function(fun, 1) do
+  def runtime_call(output, tensor_or_container, opts \\ [], fun) when is_function(fun, 2) do
     # Outside of defn, we execute the callback directly or via the backend if it
     # provides a specialized implementation. We resolve the backend from all
     # tensors inside the container to support tuple/map containers.
@@ -2274,9 +2282,9 @@ defmodule Nx do
 
     result =
       if backend == Nx.Defn.Expr do
-        backend.runtime_call(output, tensor_or_container, fun)
+        backend.runtime_call(output, tensor_or_container, opts, fun)
       else
-        fun.(tensor_or_container)
+        fun.(tensor_or_container, opts)
       end
 
     ensure_call_compatible!(result, output)

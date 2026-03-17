@@ -760,7 +760,7 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :runtime_call,
-         %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template]}} = expr,
+         %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template, opts]}} = expr,
          %{client: %EXLA.Client{platform: :host}, callback_pid_value: callback_pid_value} =
            state,
          cache
@@ -779,7 +779,7 @@ defmodule EXLA.Defn do
     # decoded tensors.
     arg_template = Nx.to_template(tensor_expr)
 
-    cache = add_runtime_callback(cache, {id, fun, out_template, arg_template})
+    cache = add_runtime_callback(cache, {id, fun, out_template, arg_template, opts})
 
     typespecs = container_to_typespecs(out_template)
 
@@ -795,7 +795,7 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :runtime_call,
-         %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template]}} = expr,
+         %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template, opts]}} = expr,
          %{client: %EXLA.Client{platform: :cuda}, callback_pid_value: callback_pid_value} =
            state,
          cache
@@ -809,7 +809,7 @@ defmodule EXLA.Defn do
 
     arg_template = Nx.to_template(tensor_expr)
 
-    cache = add_runtime_callback(cache, {id, fun, out_template, arg_template})
+    cache = add_runtime_callback(cache, {id, fun, out_template, arg_template, opts})
 
     typespecs = container_to_typespecs(out_template)
 
@@ -830,7 +830,7 @@ defmodule EXLA.Defn do
          _cache
        ) do
     raise """
-    Nx.runtime_call/3 is currently only supported for EXLA CPU (platform: :host) and CUDA (platform: :cuda),
+    Nx.runtime_call/4 is currently only supported for EXLA CPU (platform: :host) and CUDA (platform: :cuda),
     but the active EXLA client is configured for platform #{inspect(platform)}.
     Please run on the :host or :cuda client or wait for future segmentation-based support.
     """

@@ -637,7 +637,12 @@ defmodule Nx.Defn.Compiler do
       """)
     end
 
+    if name == :runtime_call do
+      validate_runtime_call!(args, meta, state)
+    end
+
     {args, state} = normalize_list(args, state)
+
     {{{:., dot_meta, [Nx, name]}, meta, args}, state}
   end
 
@@ -721,6 +726,54 @@ defmodule Nx.Defn.Compiler do
       maybe_meta(expr),
       state,
       "invalid numerical expression:\n\n    #{string}\n"
+    )
+  end
+
+  defp validate_runtime_call!(args, meta, state) do
+    case args do
+      [_out, _arg, fun] ->
+        validate_runtime_call_capture!(fun, meta, state)
+
+      [_out, _arg, _opts, fun] ->
+        validate_runtime_call_capture!(fun, meta, state)
+
+      _ ->
+        raise UndefinedFunctionError,
+              "function Nx.runtime_call/#{length(args)} is undefined. Did you mean runtime_call/3 or runtime_call/4?"
+    end
+  end
+
+  defp validate_runtime_call_capture!({:fn, _, _}, meta, state) do
+    compile_error!(
+      meta,
+      state,
+      "Nx.runtime_call inside defn requires a named capture (e.g. &my_callback/2), " <>
+        "anonymous functions are not allowed. Use a defp or def function and pass it as &name/2."
+    )
+  end
+
+  # Require :& with only argument being {:/, _, [_, 2]}, which covers local and remote captures
+  defp validate_runtime_call_capture!({:&, _, [arg]}, meta, state) do
+    case arg do
+      {:/, _, [_, 2]} ->
+        :ok
+
+      {:/, _, [_, arity]} ->
+        compile_error!(
+          meta,
+          state,
+          "Nx.runtime_call inside defn requires a named capture with arity 2 (e.g. &my_callback/2), " <>
+            "got arity #{arity}"
+        )
+    end
+  end
+
+  defp validate_runtime_call_capture!(capture, meta, state) do
+    compile_error!(
+      meta,
+      state,
+      "Nx.runtime_call inside defn requires a named capture with arity 2 (e.g. &my_callback/2), " <>
+        "got: #{Macro.to_string(capture)}"
     )
   end
 

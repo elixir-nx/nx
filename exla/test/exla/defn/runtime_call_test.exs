@@ -19,7 +19,7 @@ defmodule EXLA.Defn.RuntimeCallTest do
   defn add_offset(x) do
     out = %{x | type: Nx.Type.to_floating(x.type)}
 
-    Nx.runtime_call(out, x, fn t -> add_offset_callback(t, offset: 10.0) end)
+    Nx.runtime_call(out, x, [offset: 10.0], &add_offset_callback/2)
   end
 
   test "runtime_call with single output" do
@@ -56,6 +56,10 @@ defmodule EXLA.Defn.RuntimeCallTest do
     end
   end
 
+  def split_and_sum_callback(t, _opts) do
+    {Nx.multiply(t, 2.0), Nx.add(t, 1.0)}
+  end
+
   defn split_and_sum(x) do
     fx = Nx.as_type(x, :f32)
 
@@ -63,10 +67,7 @@ defmodule EXLA.Defn.RuntimeCallTest do
     out1 = fx
     out_template = {out0, out1}
 
-    {a, b} =
-      Nx.runtime_call(out_template, fx, fn t ->
-        {Nx.multiply(t, 2.0), Nx.add(t, 1.0)}
-      end)
+    {a, b} = Nx.runtime_call(out_template, fx, &split_and_sum_callback/2)
 
     Nx.add(a, b)
   end
@@ -80,13 +81,15 @@ defmodule EXLA.Defn.RuntimeCallTest do
     assert_equal(y, expected)
   end
 
+  defp bad_callback_fn(_t, _opts) do
+    # Wrong shape on purpose
+    Nx.tensor([1.0, 2.0, 3.0])
+  end
+
   defn bad_callback(x) do
     out = %{x | type: Nx.Type.to_floating(x.type)}
 
-    Nx.runtime_call(out, x, fn _t ->
-      # Wrong shape on purpose
-      Nx.tensor([1.0, 2.0, 3.0])
-    end)
+    Nx.runtime_call(out, x, [], &bad_callback_fn/2)
   end
 
   @tag :capture_log
@@ -128,12 +131,12 @@ defmodule EXLA.Defn.RuntimeCallTest do
     assert_equal(y, expected)
   end
 
-  def add_and_subtract_callback({x, y}) do
+  def add_and_subtract_callback({x, y}, _opts) do
     {Nx.add(x, y), Nx.subtract(x, y)}
   end
 
   defn add_and_subtract(x, y) do
-    Nx.runtime_call({x, x}, {x, y}, &add_and_subtract_callback/1)
+    Nx.runtime_call({x, x}, {x, y}, [], &add_and_subtract_callback/2)
   end
 
   test "runtime_call with tuple input" do
@@ -145,17 +148,13 @@ defmodule EXLA.Defn.RuntimeCallTest do
     assert_equal(sub, Nx.subtract(x, y))
   end
 
-  deftransform add_and_subtract_with_opts_callback({x, y}, {ref, pid}) do
-    send(pid, {:add_and_subtract_with_opts, ref})
+  deftransform add_and_subtract_with_opts_callback({x, y}, opts) do
+    send(opts[:pid], {:add_and_subtract_with_opts, opts[:ref]})
     {Nx.add(x, y), Nx.subtract(x, y)}
   end
 
   defn add_and_subtract_with_opts(x, y, opts) do
-    Nx.runtime_call(
-      {x, x},
-      {x, y},
-      &add_and_subtract_with_opts_callback(&1, {opts[:ref], opts[:pid]})
-    )
+    Nx.runtime_call({x, x}, {x, y}, opts, &add_and_subtract_with_opts_callback/2)
   end
 
   test "runtime_call with non-list second argument" do
@@ -171,8 +170,22 @@ defmodule EXLA.Defn.RuntimeCallTest do
     assert_receive {:add_and_subtract_with_opts, ^ref}
   end
 
-  defn return_as_container(x, y, template_fun, container_fun) do
-    Nx.runtime_call(template_fun.(x, y), {x, y}, container_fun)
+  defp return_as_container_tuple_callback({x, y}, opts) do
+    send(opts[:pid], {:container_fun, opts[:ref]})
+    {x, y}
+  end
+
+  defn return_as_container_tuple(x, y, opts) do
+    Nx.runtime_call({x, y}, {x, y}, opts, &return_as_container_tuple_callback/2)
+  end
+
+  defp return_as_container_map_callback({x, y}, opts) do
+    send(opts[:pid], {:container_fun, opts[:ref]})
+    %{x: x, y: y}
+  end
+
+  defn return_as_container_map(x, y, opts) do
+    Nx.runtime_call(%{x: x, y: y}, {x, y}, opts, &return_as_container_map_callback/2)
   end
 
   test "runtime_call with container output" do
@@ -182,28 +195,14 @@ defmodule EXLA.Defn.RuntimeCallTest do
     ref = make_ref()
     pid = self()
 
-    container_fun = fn {x, y} ->
-      send(pid, {:container_fun, ref})
-      {x, y}
-    end
-
-    template_fun = fn x, y -> {x, y} end
-
-    assert {x_res, y_res} = return_as_container(x, y, template_fun, container_fun)
+    assert {x_res, y_res} = return_as_container_tuple(x, y, ref: ref, pid: pid)
     assert_equal(x_res, x)
     assert_equal(y_res, y)
     assert_receive {:container_fun, ^ref}
 
     ref = make_ref()
 
-    container_fun = fn {x, y} ->
-      send(pid, {:container_fun, ref})
-      %{x: x, y: y}
-    end
-
-    template_fun = fn x, y -> %{x: x, y: y} end
-
-    assert result = return_as_container(x, y, template_fun, container_fun)
+    assert result = return_as_container_map(x, y, ref: ref, pid: pid)
     assert %{x: _, y: _} = result
     assert_equal(result.x, x)
     assert_equal(result.y, y)

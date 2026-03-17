@@ -121,7 +121,15 @@ defmodule EXLA.Defn.Outfeed do
         %Outfeed{runtime_callbacks: runtime_callbacks} = outfeed,
         {id, fun, out_template, arg_template}
       ) do
-    callback = {fun, out_template, arg_template}
+    callback = {fun, out_template, arg_template, nil}
+    %{outfeed | runtime_callbacks: Map.put(runtime_callbacks, id, callback)}
+  end
+
+  def add_runtime_callback(
+        %Outfeed{runtime_callbacks: runtime_callbacks} = outfeed,
+        {id, fun, out_template, arg_template, opts}
+      ) do
+    callback = {fun, out_template, arg_template, opts}
     %{outfeed | runtime_callbacks: Map.put(runtime_callbacks, id, callback)}
   end
 
@@ -320,10 +328,10 @@ defmodule EXLA.Defn.Outfeed do
     reply =
       try do
         case Map.fetch(runtime_callbacks, callback_id) do
-          {:ok, {fun, out_template, arg_template}} ->
+          {:ok, {fun, out_template, arg_template, opts}} ->
             args_spec
             |> decode_callback_args(arg_template)
-            |> run_runtime_callback(fun, out_template)
+            |> run_runtime_callback(fun, out_template, opts)
             |> encode_runtime_callback_reply()
 
           :error ->
@@ -362,11 +370,15 @@ defmodule EXLA.Defn.Outfeed do
   defp format_runtime_callback_reason(reason) when is_binary(reason), do: reason
   defp format_runtime_callback_reason(reason), do: inspect(reason)
 
-  defp run_runtime_callback({:error, reason}, _fun, _out_template), do: {:error, reason}
+  defp run_runtime_callback({:error, reason}, _fun, _out_template, _opts), do: {:error, reason}
 
-  defp run_runtime_callback({:ok, tensor_args}, fun, nil) do
+  defp run_runtime_callback({:ok, tensor_args}, fun, nil, opts) do
     try do
-      fun.(tensor_args)
+      if opts do
+        fun.(tensor_args, opts)
+      else
+        fun.(tensor_args)
+      end
     rescue
       exception ->
         {:error, {:exception, exception, __STACKTRACE__}}
@@ -376,10 +388,14 @@ defmodule EXLA.Defn.Outfeed do
     end
   end
 
-  defp run_runtime_callback({:ok, tensor_args}, fun, out_template) do
+  defp run_runtime_callback({:ok, tensor_args}, fun, out_template, opts) do
     result =
       try do
-        fun.(tensor_args)
+        if opts do
+          fun.(tensor_args, opts)
+        else
+          fun.(tensor_args)
+        end
       rescue
         exception ->
           {:error, {:exception, exception, __STACKTRACE__}}
