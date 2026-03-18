@@ -14602,6 +14602,10 @@ defmodule Nx do
     [%T{vectorized_axes: vectorized_axes} = tensor, indices] =
       broadcast_vectors([tensor, indices], align_ranks: false)
 
+    if indices.shape == {} do
+      raise ArgumentError, "expected indices rank to be at least 1, got: 0"
+    end
+
     axes = indexed_axes(tensor, indices, opts)
 
     unless Nx.Type.integer?(indices.type) do
@@ -16823,32 +16827,37 @@ defmodule Nx do
       raise ArgumentError, "expected n to be a non-negative integer, got: #{inspect(n)}"
     end
 
-    {iota_shape, start, stop} =
-      case {start.shape, stop.shape} do
-        {shape, shape} ->
-          iota_shape = Tuple.insert_at(shape, tuple_size(shape), n)
-          {iota_shape, new_axis(start, -1, opts[:name]), new_axis(stop, -1, opts[:name])}
+    if n == 1 do
+      # Special case: single point returns start value
+      start |> new_axis(-1, opts[:name]) |> as_type(opts[:type])
+    else
+      {iota_shape, start, stop} =
+        case {start.shape, stop.shape} do
+          {shape, shape} ->
+            iota_shape = Tuple.insert_at(shape, tuple_size(shape), n)
+            {iota_shape, new_axis(start, -1, opts[:name]), new_axis(stop, -1, opts[:name])}
 
-        {start_shape, stop_shape} ->
-          raise ArgumentError,
-                "expected start and stop to have the same shape. Got shapes #{inspect(start_shape)} and #{inspect(stop_shape)}"
-      end
+          {start_shape, stop_shape} ->
+            raise ArgumentError,
+                  "expected start and stop to have the same shape. Got shapes #{inspect(start_shape)} and #{inspect(stop_shape)}"
+        end
 
-    iota = iota(iota_shape, axis: -1, type: opts[:type], vectorized_axes: vectorized_axes)
+      iota = iota(iota_shape, axis: -1, type: opts[:type], vectorized_axes: vectorized_axes)
 
-    divisor =
-      if opts[:endpoint] do
-        n - 1
-      else
-        n
-      end
+      divisor =
+        if opts[:endpoint] do
+          n - 1
+        else
+          n
+        end
 
-    step = Nx.subtract(stop, start) |> Nx.divide(divisor)
+      step = Nx.subtract(stop, start) |> Nx.divide(divisor)
 
-    iota
-    |> multiply(step)
-    |> add(start)
-    |> as_type(opts[:type])
+      iota
+      |> multiply(step)
+      |> add(start)
+      |> as_type(opts[:type])
+    end
   end
 
   @doc """

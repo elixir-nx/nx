@@ -714,7 +714,26 @@ defmodule Nx.BinaryBackend do
   defp element_add(_, a, b), do: Complex.add(a, b)
   defp element_subtract(_, a, b), do: Complex.subtract(a, b)
   defp element_multiply(_, a, b), do: Complex.multiply(a, b)
+  defp element_divide(_, a, b) when is_number(a) and is_number(b) and b != 0 do
+    Complex.divide(a, b)
+  end
+
+  defp element_divide(_, a, b) when is_number(a) and is_number(b) do
+    # b is zero (0 or 0.0 or -0.0)
+    cond do
+      a == 0 -> :nan
+      a > 0 and neg_zero?(b) -> :neg_infinity
+      a > 0 -> :infinity
+      a < 0 and neg_zero?(b) -> :infinity
+      a < 0 -> :neg_infinity
+      true -> :nan
+    end
+  end
+
   defp element_divide(_, a, b), do: Complex.divide(a, b)
+
+  defp neg_zero?(v) when is_float(v), do: <<v::float-64>> == <<-0.0::float-64>>
+  defp neg_zero?(_), do: false
   defp element_quotient(_, a, b), do: div(a, b)
 
   defp element_remainder(_, a, b) when is_integer(a) and is_integer(b), do: rem(a, b)
@@ -833,9 +852,49 @@ defmodule Nx.BinaryBackend do
   for {name, {_desc, code, _formula}} <- Nx.Shared.unary_math_funs() do
     @impl true
     def unquote(name)(out, tensor) do
-      element_wise_unary_op(out, tensor, fn x -> unquote(code) end)
+      element_wise_unary_op(out, tensor, fn x ->
+        try do
+          unquote(code)
+        rescue
+          ArithmeticError -> ieee754_fallback(unquote(name), x)
+        end
+      end)
     end
   end
+
+  # When Erlang's :math raises ArithmeticError (overflow or domain error),
+  # return the correct IEEE 754 result based on the operation and input.
+  defp ieee754_fallback(op, x) when is_number(x) do
+    cond do
+      # Domain errors -> NaN
+      op in [:asin, :acos] and (x > 1 or x < -1) -> :nan
+      op == :acosh and x < 1 -> :nan
+      op == :atanh and (x > 1 or x < -1) -> :nan
+      op == :log and x < 0 -> :nan
+      op == :log1p and x < -1 -> :nan
+      op == :sqrt and x < 0 -> :nan
+      # atanh(1) = +Inf, atanh(-1) = -Inf
+      op == :atanh and x == 1 -> :infinity
+      op == :atanh and x == -1 -> :neg_infinity
+      # log(0) = -Inf
+      op == :log and x == 0 -> :neg_infinity
+      op == :log and x == 0.0 -> :neg_infinity
+      op == :log1p and x == -1 -> :neg_infinity
+      op == :log1p and x == -1.0 -> :neg_infinity
+      # Overflow -> Inf or -Inf based on sign
+      op in [:exp, :expm1] -> :infinity
+      op == :sinh and x > 0 -> :infinity
+      op == :sinh and x < 0 -> :neg_infinity
+      op == :cosh -> :infinity
+      # sigmoid(x) = 1/(1+exp(-x)). For large positive x: 1.0, for large negative x: 0.0
+      op == :sigmoid and x > 0 -> 1.0
+      op == :sigmoid and x <= 0 -> 0.0
+      # General fallback
+      true -> :nan
+    end
+  end
+
+  defp ieee754_fallback(_op, x), do: x
 
   @impl true
   def count_leading_zeros(out, %{type: {_, size}} = tensor) do
@@ -1675,7 +1734,7 @@ defmodule Nx.BinaryBackend do
         {acc_offset, acc_binary} ->
           num_vals_before = div(offset - acc_offset, output_size)
           vals_before = List.duplicate(init_binary, num_vals_before)
-          source_val = to_binary(value)
+          source_val = value |> Nx.as_type(output_type) |> to_binary()
           new_binary = :erlang.list_to_bitstring([vals_before, source_val])
 
           {offset + output_size, <<acc_binary::bitstring, new_binary::bitstring>>}
@@ -1848,6 +1907,8 @@ defmodule Nx.BinaryBackend do
     |> bin_slice(shape, size, start_indices, lengths, strides, output_shape)
     |> then(&from_binary(out, &1))
   end
+
+  defp bin_slice(data, _shape, _size, [], [], [], _output_shape), do: data
 
   defp bin_slice(data, shape, size, start_indices, lengths, strides, output_shape) do
     start_indices = clamp_indices(start_indices, shape, lengths)
