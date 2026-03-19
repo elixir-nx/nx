@@ -526,15 +526,6 @@ defmodule EXLA.Defn do
 
     {initial, cache} = recur_composite(initial_arg, state, cache)
 
-    # Prepend PID before token so the order in the while state is [token, pid | values].
-    # Both must be threaded explicitly because while regions are IsolatedFromAbove.
-    initial =
-      if state.callback_pid_value do
-        [state.callback_pid_value | initial]
-      else
-        initial
-      end
-
     initial =
       if token = get_token(cache) do
         [token | initial]
@@ -548,19 +539,14 @@ defmodule EXLA.Defn do
     results =
       Value.while(function, pred_computation, body_computation, List.flatten(initial))
 
-    # Extract token and PID from results in the same order they were prepended.
-    {token, results} =
-      if get_token(cache) do
-        [token | rest] = results
-        {token, rest}
-      else
-        {nil, results}
-      end
-
-    results = if state.callback_pid_value, do: tl(results), else: results
-    result = wrap_tuple_result(results, initial_arg)
-    cache = if token, do: update_token(cache, token), else: cache
-    {result, cache}
+    if get_token(cache) do
+      [token | results] = results
+      result = wrap_tuple_result(results, initial_arg)
+      {result, update_token(cache, token)}
+    else
+      result = wrap_tuple_result(results, initial_arg)
+      {result, cache}
+    end
   end
 
   defp cached_recur_operator(:cond, %T{data: %Expr{args: args}} = t, state, cache) do
@@ -761,37 +747,15 @@ defmodule EXLA.Defn do
           {computation, Map.put(cache, key, computation)}
       end
 
-    has_token = get_token(cache) != nil
-
-    typespecs = container_to_typespecs(expr)
-    call_inputs = call_args
-
-    {typespecs, call_inputs} =
-      if has_token do
-        {[Typespec.token() | typespecs], [get_token(cache) | call_inputs]}
-      else
-        {typespecs, call_inputs}
-      end
-
-    # PID is always present — prepend it (consistent with while loop ordering)
-    pid_typespec = Value.get_typespec(state.callback_pid_value)
-    typespecs = [pid_typespec | typespecs]
-    call_inputs = [state.callback_pid_value | call_inputs]
-
-    result = Value.call(state.builder, call_inputs, call_body, typespecs)
-
-    {token, result} =
-      if has_token do
-        [token | rest] = result
-        {token, rest}
-      else
-        {nil, result}
-      end
-
-    # Drop the PID from results (it was prepended)
-    [_pid | result] = result
-    cache = if token, do: update_token(cache, token), else: cache
-    {wrap_tuple_result(result, expr), cache}
+    if token = get_token(cache) do
+      typespecs = [Typespec.token() | container_to_typespecs(expr)]
+      [token | result] = Value.call(state.builder, [token | call_args], call_body, typespecs)
+      {wrap_tuple_result(result, expr), update_token(cache, token)}
+    else
+      typespecs = container_to_typespecs(expr)
+      result = Value.call(state.builder, call_args, call_body, typespecs)
+      {wrap_tuple_result(result, expr), cache}
+    end
   end
 
   defp cached_recur_operator(
@@ -1689,21 +1653,11 @@ defmodule EXLA.Defn do
   defp new_cache(outfeed),
     do: %{__MODULE__ => outfeed}
 
-  defp merge_outfeed(%{__MODULE__ => outfeed} = cache, new_cache) do
-    new_outfeed = new_cache[__MODULE__]
-    inner_callbacks = Map.get(new_cache, runtime_callbacks_key(), [])
+  defp merge_outfeed(%{__MODULE__ => outfeed} = cache, %{__MODULE__ => new_outfeed}),
+    do: %{cache | __MODULE__ => Outfeed.with_token(new_outfeed, outfeed.token)}
 
-    cache
-    |> Map.put(__MODULE__, Outfeed.with_token(new_outfeed, outfeed.token))
-    |> Map.update(runtime_callbacks_key(), inner_callbacks, &(inner_callbacks ++ &1))
-  end
-
-  defp reset_token(cache, token) do
-    %{
-      __MODULE__ => Outfeed.with_token(cache[__MODULE__], token),
-      runtime_callbacks_key() => Map.get(cache, runtime_callbacks_key(), [])
-    }
-  end
+  defp reset_token(%{__MODULE__ => outfeed}, token),
+    do: %{__MODULE__ => Outfeed.with_token(outfeed, token)}
 
   defp update_token(%{__MODULE__ => outfeed} = cache, token),
     do: %{cache | __MODULE__ => Outfeed.with_token(outfeed, token)}
@@ -1801,20 +1755,11 @@ defmodule EXLA.Defn do
     {region, args} = Function.push_region(state.builder, arg_typespecs)
 
     outer_token = get_token(cache)
-    outer_pid = state.callback_pid_value
 
-    {inner_token, args} =
+    {inner_token, arg_params} =
       if outer_token do
-        [arg_token | rest] = args
-        {arg_token, rest}
-      else
-        {nil, args}
-      end
-
-    {inner_pid, arg_params} =
-      if outer_pid do
-        [arg_pid | rest] = args
-        {arg_pid, rest}
+        [arg_token | arg_params] = args
+        {arg_token, arg_params}
       else
         {nil, args}
       end
@@ -1824,8 +1769,7 @@ defmodule EXLA.Defn do
     state = %{
       state
       | params: Map.new(params),
-        scope_ids: Tree.scope_ids(expr),
-        callback_pid_value: inner_pid
+        scope_ids: Tree.scope_ids(expr)
     }
 
     expr =
@@ -1839,10 +1783,11 @@ defmodule EXLA.Defn do
 
     res =
       if type == :with_token do
-        flat = List.flatten(res)
-        flat = if outer_pid, do: [state.callback_pid_value | flat], else: flat
-        flat = if outer_token, do: [get_token(comp_cache) | flat], else: flat
-        flat
+        if outer_token do
+          [get_token(comp_cache) | List.flatten(res)]
+        else
+          List.flatten(res)
+        end
       else
         Enum.map(res, &to_type(&1, type))
       end
@@ -1860,9 +1805,7 @@ defmodule EXLA.Defn do
     out_typespecs = container_to_typespecs(expr)
 
     outer_token = get_token(cache)
-    outer_pid = state.callback_pid_value
     token_typespec = Typespec.token()
-    pid_typespec = if outer_pid, do: Value.get_typespec(outer_pid)
 
     {arg_typespecs, out_typespecs} =
       if outer_token do
@@ -1870,10 +1813,6 @@ defmodule EXLA.Defn do
       else
         {arg_typespecs, out_typespecs}
       end
-
-    # PID is always present — prepend (consistent with while loop ordering)
-    arg_typespecs = [pid_typespec | arg_typespecs]
-    out_typespecs = [pid_typespec | out_typespecs]
 
     function = EXLA.MLIR.Module.add_function(module, name, arg_typespecs, out_typespecs)
     args = EXLA.MLIR.Function.get_arguments(function)
@@ -1886,25 +1825,22 @@ defmodule EXLA.Defn do
         {nil, args}
       end
 
-    # PID is always the next arg after token
-    [inner_pid | args] = args
-
     params = Enum.with_index(args, fn param, i -> {i, param} end)
 
     state = %{
       state
       | builder: function,
         params: Map.new(params),
-        scope_ids: Tree.scope_ids(expr),
-        callback_pid_value: inner_pid
+        scope_ids: Tree.scope_ids(expr)
     }
 
     {res, comp_cache} = recur_composite(expr, state, reset_token(cache, inner_token))
 
-    ret = List.flatten(res)
-    ret = [state.callback_pid_value | ret]
-    ret = if outer_token, do: [get_token(comp_cache) | ret], else: ret
-    Value.func_return(function, ret)
+    if outer_token do
+      Value.func_return(function, [get_token(comp_cache) | List.flatten(res)])
+    else
+      Value.func_return(function, List.flatten(res))
+    end
 
     {function, merge_outfeed(cache, comp_cache)}
   end
