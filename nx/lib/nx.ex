@@ -6874,13 +6874,47 @@ defmodule Nx do
   @doc type: :element
   def logical_not(tensor) do
     apply_vectorized(tensor, fn tensor ->
-      output = Nx.template(tensor.shape, {:u, 8}, names: tensor.names)
-
-      Nx.Shared.optional(:logical_not, [tensor], output, fn tensor ->
+      block(%Nx.Block.LogicalNot{}, tensor, fn tensor, %Nx.Block.LogicalNot{} ->
         element_wise_pred_op(tensor, 0, :equal)
       end)
     end)
   end
+
+  @doc """
+  Executes an extensible computation block.
+  `struct` identifies the block and carries static configuration,
+  `container` holds the tensor inputs (which may be a tensor or any
+  supported container of tensors), and `fun` is the default implementation
+  `fn container, struct -> expr end`.
+
+  Backends may optionally implement a fast path via `c:block/3` or reuse
+  existing optional callbacks. If no backend path exists, the default
+  implementation is used.
+  """
+  @doc type: :element
+  def block(struct, container, fun) when is_function(fun, 2) do
+    backend =
+      container
+      |> List.wrap()
+      |> Nx.Defn.Composite.flatten_list()
+      |> Nx.Shared.list_impl!()
+
+    cond do
+      function_exported?(backend, :block, 3) ->
+        backend.block(struct, container, fun)
+
+      function_exported?(backend, :optional, 3) ->
+        backend.optional(struct_to_optional_callback_name(struct), [container], fn [c] ->
+          fun.(c, struct)
+        end)
+
+      true ->
+        fun.(container, struct)
+    end
+  end
+
+  defp struct_to_optional_callback_name(%Nx.Block.LogicalNot{}), do: :logical_not
+  defp struct_to_optional_callback_name(%Nx.Block.Phase{}), do: :phase
 
   @doc """
   Element-wise not-equal comparison of two tensors.
@@ -8316,9 +8350,7 @@ defmodule Nx do
   @doc type: :element
   def phase(tensor) do
     apply_vectorized(tensor, fn tensor ->
-      output = %{tensor | type: Nx.Type.to_real(tensor.type)}
-
-      Nx.Shared.optional(:phase, [tensor], output, fn tensor ->
+      block(%Nx.Block.Phase{}, tensor, fn tensor, %Nx.Block.Phase{} ->
         tensor
         |> imag
         |> atan2(real(tensor))
