@@ -13659,7 +13659,7 @@ defmodule Nx do
       Slicing a scalar tensor returns the scalar itself.
 
       iex> Nx.slice(Nx.tensor(42), [], [])
-      #Nx.tensor<
+      #Nx.Tensor<
         s32
         42
       >
