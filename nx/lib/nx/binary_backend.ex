@@ -1675,7 +1675,7 @@ defmodule Nx.BinaryBackend do
         {acc_offset, acc_binary} ->
           num_vals_before = div(offset - acc_offset, output_size)
           vals_before = List.duplicate(init_binary, num_vals_before)
-          source_val = to_binary(value)
+          source_val = value |> Nx.as_type(output_type) |> to_binary()
           new_binary = :erlang.list_to_bitstring([vals_before, source_val])
 
           {offset + output_size, <<acc_binary::bitstring, new_binary::bitstring>>}
