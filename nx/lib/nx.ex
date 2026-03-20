@@ -14594,6 +14594,9 @@ defmodule Nx do
 
       iex> Nx.gather(Nx.tensor([[1, 2], [3, 4]]), Nx.tensor([[0, 0]], type: :f32))
       ** (ArgumentError) indices must be an integer tensor, got {:f, 32}
+
+      iex> Nx.gather(Nx.iota({3}), Nx.tensor(0))
+      ** (ArgumentError) expected indices rank to be at least 1, got: 0
   """
   @doc type: :indexed
   def gather(tensor, indices, opts \\ []) do
@@ -14601,6 +14604,10 @@ defmodule Nx do
 
     [%T{vectorized_axes: vectorized_axes} = tensor, indices] =
       broadcast_vectors([tensor, indices], align_ranks: false)
+
+    if indices.shape == {} do
+      raise ArgumentError, "expected indices rank to be at least 1, got: 0"
+    end
 
     axes = indexed_axes(tensor, indices, opts)
 
