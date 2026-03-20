@@ -1849,8 +1849,6 @@ defmodule Nx.BinaryBackend do
     |> then(&from_binary(out, &1))
   end
 
-  defp bin_slice(data, _shape, _size, [], [], [], _output_shape), do: data
-
   defp bin_slice(data, shape, size, start_indices, lengths, strides, output_shape) do
     start_indices = clamp_indices(start_indices, shape, lengths)
 
