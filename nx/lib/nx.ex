@@ -6904,7 +6904,7 @@ defmodule Nx do
         backend.block(struct, container, fun)
 
       function_exported?(backend, :optional, 3) ->
-        backend.optional(struct_to_optional_callback_name(struct), [container], fn [c] ->
+        backend.optional(struct_to_optional_callback_name(struct), [container], fn c ->
           fun.(c, struct)
         end)
 
