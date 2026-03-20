@@ -140,6 +140,7 @@ defmodule Nx.Backend do
   to call this callback (which is also optional), then we
   fallback to the default implementation.
   """
+  @callback block(struct, container, fun) :: tensor
   @callback optional(atom, [term], fun) :: tensor
   @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: tensor
   @callback cholesky(out :: tensor, tensor) :: tensor
@@ -160,6 +161,7 @@ defmodule Nx.Backend do
   @callback take_along_axis(out :: tensor, input :: tensor, indices :: tensor, keyword) :: tensor
 
   @optional_callbacks [
+    block: 3,
     optional: 3,
     solve: 3,
     determinant: 2,
