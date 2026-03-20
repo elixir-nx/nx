@@ -13654,6 +13654,15 @@ defmodule Nx do
 
       iex> Nx.slice(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [Nx.tensor(1.0), Nx.tensor(0)], [1, 1])
       ** (ArgumentError) index must be integer type, got {:f, 32} for axis 0
+
+  ## No Op
+      Slicing a scalar tensor returns the scalar itself.
+
+      iex> Nx.slice(Nx.tensor(42), [], [])
+      #Nx.tensor<
+        s32
+        42
+      >
   """
   @doc type: :indexed
   def slice(tensor, start_indices, lengths, opts \\ [])
