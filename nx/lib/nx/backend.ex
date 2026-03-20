@@ -140,7 +140,7 @@ defmodule Nx.Backend do
   to call this callback (which is also optional), then we
   fallback to the default implementation.
   """
-  @callback block(struct, container, fun) :: tensor
+  @callback block(struct, term, fun) :: tensor
   @callback optional(atom, [term], fun) :: tensor
   @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: tensor
   @callback cholesky(out :: tensor, tensor) :: tensor
