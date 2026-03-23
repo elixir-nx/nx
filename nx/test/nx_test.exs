@@ -2863,6 +2863,12 @@ defmodule NxTest do
         Nx.gather(t, Nx.tensor([[0, -1]]))
       end
     end
+
+    test "raises correct error on scalar indices" do
+      assert_raise ArgumentError, ~r/expected indices rank to be at least 1/, fn ->
+        Nx.gather(Nx.iota({3}), Nx.tensor(0))
+      end
+    end
   end
 
   describe "variance/1" do
