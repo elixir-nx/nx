@@ -581,7 +581,7 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-         :optional,
+         op,
          %T{
            data: %Expr{
              args: [
@@ -594,7 +594,7 @@ defmodule EXLA.Defn do
          %{client: %EXLA.Client{platform: :host}, builder: %Function{}} = state,
          cache
        )
-       when type_kind != :c do
+       when op == :block and type_kind != :c do
     # We match only on platform: :host for MLIR, as we want to support
     # QR-on-cpu as a custom call only in this case
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
@@ -611,7 +611,7 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-         :optional,
+         op,
          %T{
            data: %Expr{
              args: [
@@ -625,7 +625,7 @@ defmodule EXLA.Defn do
          %{client: %EXLA.Client{platform: :host}, builder: %Function{}} = state,
          cache
        )
-       when evec_type_kind != :c and eval_type_kind != :c do
+       when op == :block and evec_type_kind != :c and eval_type_kind != :c do
     # We match only on platform: :host for MLIR, as we want to support
     # eigh-on-cpu as a custom call only in this case
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
@@ -652,7 +652,7 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-         :optional,
+         op,
          %T{
            data: %Expr{
              args: [%{data: %{op: :take, args: [tensor, indices, opts]}}, expr, _callback]
@@ -660,7 +660,8 @@ defmodule EXLA.Defn do
          },
          state,
          cache
-       ) do
+       )
+       when op == :block do
     axis = opts[:axis]
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
     {indices, cache} = recur_operator(indices, state, cache) |> unwrap_single_tensor!()
@@ -694,11 +695,12 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-         :optional,
+         op,
          %T{data: %Expr{args: [%{data: %{op: :top_k, args: [tensor, opts]}}, expr, _callback]}},
          state,
          cache
-       ) do
+       )
+       when op == :block do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
     {values, idx} = expr
     typespecs = [expr_to_typespec(values), expr_to_typespec(idx)]
@@ -707,28 +709,30 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-         :optional,
+         op,
          %T{data: %Expr{args: [%{data: %{op: :fft2, args: [tensor, opts]}}, expr, _callback]}},
          state,
          cache
-       ) do
+       )
+       when op == :block do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     {fft2(&Value.fft(&1, :fft, &2, &3), [tensor, opts], expr, state), cache}
   end
 
   defp cached_recur_operator(
-         :optional,
+         op,
          %T{data: %Expr{args: [%{data: %{op: :ifft2, args: [tensor, opts]}}, expr, _callback]}},
          state,
          cache
-       ) do
+       )
+       when op == :block do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     {fft2(&Value.fft(&1, :ifft, &2, &3), [tensor, opts], expr, state), cache}
   end
 
-  defp cached_recur_operator(:optional, %T{data: %Expr{args: args}}, state, cache) do
+  defp cached_recur_operator(:block, %T{data: %Expr{args: args}}, state, cache) do
     [call, expr, _callback] = args
     %{data: %{args: in_args, op: op}} = call
 
@@ -743,7 +747,7 @@ defmodule EXLA.Defn do
           {computation, cache}
 
         %{} ->
-          {computation, cache} = optional_computation("optional", call_args, expr, state, cache)
+          {computation, cache} = block_computation("block", call_args, expr, state, cache)
           {computation, Map.put(cache, key, computation)}
       end
 
@@ -1798,7 +1802,7 @@ defmodule EXLA.Defn do
     {region, merge_outfeed(cache, comp_cache)}
   end
 
-  defp optional_computation(name, args, expr, %{builder: %Function{}} = state, cache) do
+  defp block_computation(name, args, expr, %{builder: %Function{}} = state, cache) do
     %Function{module: module, name: name} = subbuilder(state.builder, name)
 
     arg_typespecs = Enum.map(args, &Value.get_typespec/1)

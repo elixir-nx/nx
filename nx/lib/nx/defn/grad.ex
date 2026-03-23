@@ -127,7 +127,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp parents_args(
-         :optional,
+         :block,
          %{data: %{args: [call, _expr, callback]}} = t,
          id,
          acc,
@@ -292,7 +292,7 @@ defmodule Nx.Defn.Grad do
     end)
   end
 
-  defp update_grads(:optional, [_call, expr, _callback], _ans, gs, _to_grad_ids, grads) do
+  defp update_grads(:block, [_call, expr, _callback], _ans, gs, _to_grad_ids, grads) do
     gs = List.wrap(gs)
 
     {grads, []} =

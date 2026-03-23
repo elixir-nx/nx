@@ -133,7 +133,7 @@ defmodule Nx.Defn.Evaluator do
     {[initial, pred, block, while_cache], cache}
   end
 
-  defp compute_cache(:optional, %{data: %Expr{args: args}}, state, cache) do
+  defp compute_cache(:block, %{data: %Expr{args: args}}, state, cache) do
     [call, expr, _callback] = args
     %{data: %{args: call_args, op: call_name}} = call
 
@@ -366,7 +366,7 @@ defmodule Nx.Defn.Evaluator do
     {{}, caches}
   end
 
-  defp eval_apply(:optional, [call, expr, expr_cache], _ans, state, caches) do
+  defp eval_apply(:block, [call, expr, expr_cache], _ans, state, caches) do
     {args, caches} = Tree.apply_args(call, caches, &eval(&1, state, &2))
     backend = Nx.Shared.list_impl!(args)
 
