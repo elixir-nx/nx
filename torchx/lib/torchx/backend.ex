@@ -46,10 +46,16 @@ defmodule Torchx.Backend do
     Keyword.validate!(opts, [:device])
   end
 
-  ## Optional callback for MPS compatibility
+  ## Block callback for MPS compatibility
 
   @impl true
-  def optional(function_name, args, default_impl) do
+  def block(struct, args, fun) do
+    function_name = Nx.Block.name(struct)
+
+    default_impl = fn args ->
+      apply(fun, [struct | args])
+    end
+
     # For MPS device, some linear algebra operations are not supported
     # Delegate to default implementation which will fall back to elementary Nx operations.
     mps_unsupported = [
@@ -69,7 +75,7 @@ defmodule Torchx.Backend do
 
     if device == :mps and function_name in mps_unsupported do
       # Use default implementation for unsupported MPS operations
-      apply(default_impl, args)
+      default_impl.(args)
     else
       # Use custom Torchx implementation for CPU and supported operations
       case function_name do
@@ -80,7 +86,7 @@ defmodule Torchx.Backend do
         :cholesky -> apply(&cholesky_impl/1, args)
         :svd -> apply(&svd_impl/2, args)
         :determinant -> apply(&determinant_impl/1, args)
-        _ -> apply(default_impl, args)
+        _ -> default_impl.(args)
       end
     end
   end

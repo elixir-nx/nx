@@ -133,15 +133,9 @@ defmodule Nx.Backend do
   ## Optional Callbacks
 
   @doc """
-  Invoked for execution of optional callbacks with a default implementation.
-
-  First we will attempt to call the optional callback itself
-  (one of the many callbacks defined below), then we attempt
-  to call this callback (which is also optional), then we
-  fallback to the default implementation.
+  Invoked for execution of block callbacks with a default implementation.
   """
-  @callback block(struct, term, fun) :: tensor
-  @callback optional(atom, [term], fun) :: tensor
+  @callback block(struct, [term], fun) :: tensor
   @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: tensor
   @callback cholesky(out :: tensor, tensor) :: tensor
   @callback eigh({eigenvals :: tensor, eigenvecs :: tensor}, tensor, keyword) :: tensor
@@ -162,7 +156,6 @@ defmodule Nx.Backend do
 
   @optional_callbacks [
     block: 3,
-    optional: 3,
     solve: 3,
     determinant: 2,
     logical_not: 2,

@@ -371,18 +371,19 @@ defmodule Nx.Defn.Expr do
   end
 
   @impl true
-  def optional(name, in_args, fun) do
+  def block(struct, in_args, fun) do
+    name = Nx.Block.name(struct)
     {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
     params = Enum.with_index(args, &parameter/2)
 
-    case apply(fun, params ++ opts) do
+    case apply(fun, [struct | params ++ opts]) do
       %{data: %{context: context}} = res ->
-        expr(res, context, :optional, [expr(res, context, name, in_args), res, fun])
+        expr(res, context, :block, [expr(res, context, name, in_args), res, fun])
 
       t when is_tuple(t) ->
         context = elem(t, 0).data.context
         out = expr(tuple_out(tuple_size(t)), context, name, in_args)
-        tuple(expr(out, context, :optional, [out, t, fun]), Tuple.to_list(t))
+        tuple(expr(out, context, :block, [out, t, fun]), Tuple.to_list(t))
     end
   end
 
@@ -1628,7 +1629,7 @@ defmodule Nx.Defn.Expr do
     recur_inspect(tensor, state)
   end
 
-  defp recur_inspect(%T{data: %Expr{op: :optional, args: [expr, _default, _callback]}}, state) do
+  defp recur_inspect(%T{data: %Expr{op: :block, args: [expr, _default, _callback]}}, state) do
     recur_inspect(expr, state)
   end
 

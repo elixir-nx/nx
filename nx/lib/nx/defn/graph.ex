@@ -565,7 +565,7 @@ defmodule Nx.Defn.Graph do
   end
 
   defp rewrite_subtree(
-         %T{data: %Expr{op: :optional, id: id, args: [call, subexpr, fun]}} = expr,
+         %T{data: %Expr{op: :block, id: id, args: [call, subexpr, fun]}} = expr,
          state,
          acc
        ) do

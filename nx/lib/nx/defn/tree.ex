@@ -179,7 +179,7 @@ defmodule Nx.Defn.Tree do
     end
   end
 
-  def apply_args(%T{data: %Expr{op: :optional, args: args}}, type, acc, fun) do
+  def apply_args(%T{data: %Expr{op: :block, args: args}}, type, acc, fun) do
     [call, expr, callback] = args
     {call, acc} = fun.(call, acc)
 

@@ -149,8 +149,9 @@ defmodule Nx.LinAlg do
 
     out = %{tensor | type: output_type, shape: output_shape, names: output_names}
 
-    :cholesky
-    |> Nx.Shared.optional([tensor], out, &Nx.LinAlg.Cholesky.cholesky/1)
+    Nx.block(%Nx.Block.Cholesky{}, [tensor], out, fn %Nx.Block.Cholesky{}, t ->
+      Nx.LinAlg.Cholesky.cholesky(t)
+    end)
     |> Nx.vectorize(vectorized_axes)
   end
 
@@ -714,7 +715,7 @@ defmodule Nx.LinAlg do
     output = Nx.template(output_shape, output_type)
 
     result =
-      Nx.Shared.optional(:solve, [a, b], output, fn a, b ->
+      Nx.block(%Nx.Block.Solve{}, [a, b], output, fn %Nx.Block.Solve{}, a, b ->
         # Since we have triangular solve, which accepts upper
         # triangular matrices with the `lower: false` option,
         # we can solve a system as follows:
@@ -1154,8 +1155,9 @@ defmodule Nx.LinAlg do
            names: List.duplicate(nil, tuple_size(r_shape))
        }}
 
-    :qr
-    |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.QR.qr/2)
+    Nx.block(%Nx.Block.QR{}, [tensor, opts], output, fn %Nx.Block.QR{}, t, opts ->
+      Nx.LinAlg.QR.qr(t, opts)
+    end)
     |> Nx.vectorize(vectorized_axes)
   end
 
@@ -1397,8 +1399,9 @@ defmodule Nx.LinAlg do
       {%{tensor | names: eigenvals_name, type: output_type, shape: eigenvals_shape},
        %{tensor | names: eigenvecs_name, type: output_type, shape: eigenvecs_shape}}
 
-    :eigh
-    |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.BlockEigh.eigh/2)
+    Nx.block(%Nx.Block.Eigh{}, [tensor, opts], output, fn %Nx.Block.Eigh{}, t, opts ->
+      Nx.LinAlg.BlockEigh.eigh(t, opts)
+    end)
     |> Nx.vectorize(vectorized_axes)
   end
 
@@ -1515,8 +1518,9 @@ defmodule Nx.LinAlg do
        %{tensor | names: List.duplicate(nil, rank - 1), type: output_type, shape: s_shape},
        %{tensor | names: List.duplicate(nil, rank), type: output_type, shape: v_shape}}
 
-    :svd
-    |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.SVD.svd/2)
+    Nx.block(%Nx.Block.SVD{}, [tensor, opts], output, fn %Nx.Block.SVD{}, t, opts ->
+      Nx.LinAlg.SVD.svd(t, opts)
+    end)
     |> Nx.vectorize(vectorized_axes)
   end
 
@@ -1744,8 +1748,9 @@ defmodule Nx.LinAlg do
        %{tensor | type: output_type, shape: l_shape, names: names},
        %{tensor | type: output_type, shape: u_shape, names: names}}
 
-    :lu
-    |> Nx.Shared.optional([tensor, opts], output, &Nx.LinAlg.LU.lu/2)
+    Nx.block(%Nx.Block.LU{}, [tensor, opts], output, fn %Nx.Block.LU{}, t, opts ->
+      Nx.LinAlg.LU.lu(t, opts)
+    end)
     |> Nx.vectorize(vectorized_axes)
   end
 
@@ -1996,16 +2001,16 @@ defmodule Nx.LinAlg do
                 "determinant/1 expects a square tensor, got tensor with shape: #{inspect(shape)}"
       end
 
-      Nx.Shared.optional(:determinant, [tensor], output, fn tensor ->
+      Nx.block(%Nx.Block.Determinant{}, [tensor], output, fn %Nx.Block.Determinant{}, t ->
         case matrix_shape do
           [2, 2] ->
-            determinant_2by2(tensor)
+            determinant_2by2(t)
 
           [3, 3] ->
-            determinant_3by3(tensor)
+            determinant_3by3(t)
 
           [n, n] ->
-            determinant_NbyN(tensor, batch_shape_n: List.to_tuple(batch_shape ++ [n]))
+            determinant_NbyN(t, batch_shape_n: List.to_tuple(batch_shape ++ [n]))
         end
       end)
     end)
