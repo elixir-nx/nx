@@ -16826,6 +16826,14 @@ defmodule Nx do
         ]
       >
 
+  Linspace with a single point returns the start value:
+
+      iex> Nx.linspace(0, 10, n: 1)
+      #Nx.Tensor<
+        f32[1]
+        [0.0]
+      >
+
   ## Error cases
 
       iex> Nx.linspace(0, 24, n: 1.0)
@@ -16849,6 +16857,15 @@ defmodule Nx do
       raise ArgumentError, "expected n to be a non-negative integer, got: #{inspect(n)}"
     end
 
+    if n == 1 do
+      # Special case: single point returns start value
+      new_axis(start, -1, opts[:name])
+    else
+      linspace_n(start, stop, n, opts, vectorized_axes)
+    end
+  end
+
+  defp linspace_n(start, stop, n, opts, vectorized_axes) do
     {iota_shape, start, stop} =
       case {start.shape, stop.shape} do
         {shape, shape} ->

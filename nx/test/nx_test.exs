@@ -3095,6 +3095,14 @@ defmodule NxTest do
       expected_linear = Nx.tensor([0.0, 0.1, 0.2, 0.3, 0.4, 0.5], type: :f64)
       assert_all_close(linear, expected_linear, atol: 1.0e-15, rtol: 1.0e-15)
     end
+
+    test "n=1 returns start value" do
+      assert Nx.linspace(0, 10, n: 1) == Nx.tensor([0.0])
+    end
+
+    test "n=1 with same start/stop" do
+      assert Nx.linspace(5, 5, n: 1) == Nx.tensor([5.0])
+    end
   end
 
   describe "reflect/2" do
