@@ -3580,4 +3580,18 @@ defmodule NxTest do
       assert 28 = Nx.bit_size(tensor)
     end
   end
+
+  describe "slice of scalar tensor" do
+    test "returns scalar" do
+      t = Nx.tensor(42)
+      result = Nx.slice(t, [], [])
+      assert Nx.to_number(result) == 42
+    end
+
+    test "slice of scalar f64 tensor" do
+      t = Nx.tensor(3.14, type: :f64)
+      result = Nx.slice(t, [], [])
+      assert_in_delta Nx.to_number(result), 3.14, 1.0e-10
+    end
+  end
 end

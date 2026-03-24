@@ -13654,6 +13654,16 @@ defmodule Nx do
 
       iex> Nx.slice(Nx.tensor([[1, 2, 3], [4, 5, 6]]), [Nx.tensor(1.0), Nx.tensor(0)], [1, 1])
       ** (ArgumentError) index must be integer type, got {:f, 32} for axis 0
+
+  ## Scalars
+
+  Slicing a scalar tensor returns the scalar itself:
+
+      iex> Nx.slice(Nx.tensor(42), [], [])
+      #Nx.Tensor<
+        s32
+        42
+      >
   """
   @doc type: :indexed
   def slice(tensor, start_indices, lengths, opts \\ [])
@@ -13661,6 +13671,15 @@ defmodule Nx do
     opts = keyword!(opts, strides: 1)
     %T{vectorized_axes: vectorized_axes, shape: shape} = tensor = to_tensor(tensor)
 
+    # Slicing a scalar tensor is a no-op — return unchanged
+    if shape == {} and start_indices == [] and lengths == [] do
+      tensor
+    else
+      slice_non_scalar(tensor, start_indices, lengths, opts, vectorized_axes, shape)
+    end
+  end
+
+  defp slice_non_scalar(tensor, start_indices, lengths, opts, vectorized_axes, shape) do
     if Enum.any?(start_indices, &(is_struct(&1, T) and &1.vectorized_axes != [])) do
       # if any of the indices is vectorized, we instead treat this slice as a gather
       [%{vectorized_axes: [{first_axis, _} | _] = vectorized_axes} | _] =
