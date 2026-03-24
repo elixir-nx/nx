@@ -16833,7 +16833,7 @@ defmodule Nx do
 
     if n == 1 do
       # Special case: single point returns start value
-      start |> new_axis(-1, opts[:name]) |> as_type(opts[:type])
+      new_axis(start, -1, opts[:name])
     else
       linspace_n(start, stop, n, opts, vectorized_axes)
     end
