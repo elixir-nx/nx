@@ -5,7 +5,7 @@ defmodule EXLA.Defn.RecompilationWarningTest do
 
   setup do
     # Clear any recompilation counters from previous tests
-    :ets.match_delete(EXLA.Defn.LockedCache, {{:recompilation, :_, :_}, :_})
+    :ets.match_delete(EXLA.Defn.LockedCache, {{:counter, {:_, :_, :_}}, :_})
     :ok
   end
 
@@ -19,7 +19,7 @@ defmodule EXLA.Defn.RecompilationWarningTest do
         end
       end)
 
-    assert log =~ "EXLA has compiled the same function"
+    assert log =~ "EXLA has compiled"
     assert log =~ "same input shapes"
     assert log =~ "Pass changing tensors as explicit function arguments"
   end
@@ -33,7 +33,7 @@ defmodule EXLA.Defn.RecompilationWarningTest do
         end
       end)
 
-    refute log =~ "EXLA has compiled the same function"
+    refute log =~ "EXLA has compiled"
   end
 
   test "does not warn for different input shapes" do
@@ -45,6 +45,6 @@ defmodule EXLA.Defn.RecompilationWarningTest do
         end
       end)
 
-    refute log =~ "EXLA has compiled the same function"
+    refute log =~ "EXLA has compiled"
   end
 end

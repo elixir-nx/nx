@@ -486,7 +486,7 @@ defmodule EXLA.Defn do
         :telemetry.execute([:exla, :compilation], measurements, %{key: key})
       end
 
-      if evaled, do: check_recompilation(key, args_key)
+      if evaled && cache, do: check_recompilation(key, args_key)
 
       outfeed = Outfeed.with_user_hooks(outfeed, hooks)
       {executable, {used_inputs, outputs, outfeed, inputs_and_typespecs}}
@@ -498,19 +498,11 @@ defmodule EXLA.Defn do
   defp check_recompilation(key, args_key) do
     {:module, mod} = :erlang.fun_info(key, :module)
     {:new_index, idx} = :erlang.fun_info(key, :new_index)
-    counter_key = {:recompilation, {mod, idx}, args_key}
-
-    count =
-      :ets.update_counter(
-        EXLA.Defn.LockedCache,
-        counter_key,
-        {2, 1},
-        {counter_key, 0}
-      )
+    count = EXLA.Defn.LockedCache.count({mod, idx, args_key})
 
     if count == @recompilation_threshold do
       Logger.warning(
-        "EXLA has compiled the same function #{count} times with the same input " <>
+        "EXLA has compiled #{inspect(key)} #{count} times with the same input " <>
           "shapes. This typically means tensor values are being captured inside a " <>
           "closure passed to defn, jit, or value_and_grad. Each distinct captured " <>
           "value forces a full recompilation. Pass changing tensors as explicit " <>

@@ -22,6 +22,13 @@ defmodule EXLA.Defn.LockedCache do
   end
 
   @doc """
+  Atomically increments and returns a counter for the given key.
+  """
+  def count(key) do
+    :ets.update_counter(@name, {:counter, key}, {2, 1}, {{:counter, key}, 0})
+  end
+
+  @doc """
   Reads cache key or executes the given function if not
   cached yet.
   """
