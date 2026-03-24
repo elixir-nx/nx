@@ -1059,6 +1059,24 @@ defmodule NxTest do
                ])
     end
 
+    test "computes window scatter max with f64" do
+      t = Nx.iota({6}, type: :f64)
+      s = Nx.iota({3}, type: :f64)
+      init = Nx.tensor(0.0, type: :f64)
+      result = Nx.window_scatter_max(t, s, init, {2}, strides: [2], padding: :valid)
+      assert Nx.type(result) == {:f, 64}
+      assert Nx.shape(result) == {6}
+    end
+
+    test "computes window scatter min with f64" do
+      t = Nx.iota({6}, type: :f64)
+      s = Nx.iota({3}, type: :f64)
+      init = Nx.tensor(0.0, type: :f64)
+      result = Nx.window_scatter_min(t, s, init, {2}, strides: [2], padding: :valid)
+      assert Nx.type(result) == {:f, 64}
+      assert Nx.shape(result) == {6}
+    end
+
     test "computes window reduce (sum of squares) with same padding" do
       t = Nx.iota({4, 4}, type: {:f, 32})
 

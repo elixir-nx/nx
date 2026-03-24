@@ -1631,11 +1631,7 @@ defmodule Nx.BinaryBackend do
 
         # Compute absolute index in padded space, then adjust back to
         # original (unpadded) coordinates by subtracting low-padding
-        padded_absolute_index =
-          anchor
-          |> Enum.zip(offset_from_anchor)
-          |> Enum.map(fn {x, y} -> x + y end)
-
+        padded_absolute_index = Enum.zip_with(anchor, offset_from_anchor, &+/2)
         absolute_index = Enum.zip_with(padded_absolute_index, low_pads, &-/2)
 
         source_consumed = i * source_size
@@ -1664,7 +1660,8 @@ defmodule Nx.BinaryBackend do
       |> Enum.group_by(&elem(&1, 1), &elem(&1, 0))
       |> Enum.map(fn {index, value} ->
         offset = weighted_offset(output_weighted_shape, index)
-        {offset, Enum.reduce(value, init_value, scatter_fn)}
+        tensor = Enum.reduce(value, init_value, scatter_fn)
+        {offset, scalar_to_number(tensor)}
       end)
       |> Enum.sort_by(&elem(&1, 0))
 
@@ -1675,7 +1672,12 @@ defmodule Nx.BinaryBackend do
         {acc_offset, acc_binary} ->
           num_vals_before = div(offset - acc_offset, output_size)
           vals_before = List.duplicate(init_binary, num_vals_before)
-          source_val = to_binary(value)
+
+          source_val =
+            match_types [output_type] do
+              <<write!(value, 0)>>
+            end
+
           new_binary = :erlang.list_to_bitstring([vals_before, source_val])
 
           {offset + output_size, <<acc_binary::bitstring, new_binary::bitstring>>}
