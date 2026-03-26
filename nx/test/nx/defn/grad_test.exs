@@ -4844,6 +4844,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "vectorization" do
+    # Mixed-vectorization: non-vectorized target in vectorized context.
     test "supports combination of vectorized and non-vectorized tensors" do
       x = Nx.tensor([[1, 2, 3], [4, 5, 6]]) |> Nx.vectorize(:x)
       y = 1
@@ -4864,20 +4865,16 @@ defmodule Nx.Defn.GradTest do
       assert grad == Nx.cos(x)
     end
 
-    # Skipping this as it's not supported yet.
-    @tag :skip
-    test "edge case where the same name changes meaning" do
+    test "edge case where the same name changes meaning raises clear error" do
       x = Nx.tensor([[1], [2], [3]]) |> Nx.vectorize(x: 3)
 
-      grad =
+      assert_raise ArgumentError, ~r/vectorized axis name was reused with a different size/, fn ->
         Nx.Defn.grad(x, fn t ->
           devec = Nx.devectorize(t, keep_names: true)
           new_axis = Nx.reshape(devec, {1, 3, 1}, names: [:x, nil, nil])
-
           Nx.vectorize(new_axis, x: 1)
         end)
-
-      assert grad == Nx.tensor([[1], [1], [1]]) |> Nx.vectorize(x: 3)
+      end
     end
 
     test "supports heterogenous vectorization combinations" do
@@ -4947,6 +4944,326 @@ defmodule Nx.Defn.GradTest do
                |> Nx.vectorize(x_vec.vectorized_axes)
 
       assert grad_y_vec == Nx.tensor([6.0, 15.0]) |> Nx.vectorize(y_vec.vectorized_axes)
+    end
+
+    # --- Edge cases: vectorize/devectorize boundary ---
+
+    test "vectorize/devectorize inside grad function" do
+      x = Nx.iota({6}, type: :f32)
+
+      grad =
+        Nx.Defn.grad(x, fn x ->
+          v = Nx.vectorize(Nx.reshape(x, {2, 3}), :batch)
+          d = Nx.devectorize(v, keep_names: false)
+          Nx.sum(d)
+        end)
+
+      assert grad == Nx.broadcast(1.0, {6})
+    end
+
+    test "reshape then vectorize inside grad" do
+      x = Nx.iota({6}, type: :f32)
+
+      grad =
+        Nx.Defn.grad(x, fn x ->
+          v = Nx.vectorize(Nx.reshape(x, {2, 3}), :batch)
+          Nx.sum(v)
+        end)
+
+      assert grad == Nx.broadcast(1.0, {6})
+    end
+
+    test "non-vectorized input, vectorized output" do
+      x = Nx.tensor([1.0, 2.0, 3.0])
+
+      grad =
+        Nx.Defn.grad(x, fn x ->
+          Nx.vectorize(x, :v)
+        end)
+
+      assert grad.vectorized_axes == []
+      assert grad == Nx.broadcast(1.0, {3})
+    end
+
+    test "rename vectorized axes inside grad" do
+      x = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]) |> Nx.vectorize(:a)
+
+      grad =
+        Nx.Defn.grad(x, fn x ->
+          d = Nx.devectorize(x, keep_names: false)
+          v = Nx.vectorize(d, :new_name)
+          Nx.sum(v)
+        end)
+
+      # Gradient values correct; axis name may reflect the renamed axis
+      devec = Nx.devectorize(grad, keep_names: false)
+      assert Nx.shape(devec) == {2, 3}
+      assert Nx.to_flat_list(devec) |> Enum.all?(&(&1 == 1.0))
+    end
+
+    test "devectorize then compute then return scalar" do
+      x = Nx.tensor([[1.0, 2.0], [3.0, 4.0]]) |> Nx.vectorize(:batch)
+
+      grad =
+        Nx.Defn.grad(x, fn x ->
+          d = Nx.devectorize(x, keep_names: false)
+          Nx.sum(Nx.multiply(d, d))
+        end)
+
+      assert grad.vectorized_axes == [batch: 2]
+    end
+
+    test "chained devectorize/vectorize with computation" do
+      x = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]) |> Nx.vectorize(:batch)
+
+      grad =
+        Nx.Defn.grad(x, fn x ->
+          d = Nx.devectorize(x, keep_names: false)
+          squared = Nx.multiply(d, d)
+          v = Nx.vectorize(squared, :batch)
+          Nx.sum(v)
+        end)
+
+      assert grad.vectorized_axes == [batch: 2]
+    end
+
+    test "multiple vectorized axes input" do
+      x = Nx.iota({2, 3, 4}, type: :f32) |> Nx.vectorize(a: 2, b: 3)
+      grad = Nx.Defn.grad(x, fn x -> Nx.sum(x) end)
+      assert grad.vectorized_axes == [a: 2, b: 3]
+      assert Nx.shape(grad) == {4}
+    end
+
+    # --- Second-order grad ---
+
+    test "second-order grad" do
+      x = Nx.tensor([[1.0, 2.0], [3.0, 4.0]]) |> Nx.vectorize(:batch)
+
+      grad =
+        Nx.Defn.grad(x, fn x ->
+          Nx.sum(Nx.Defn.grad(x, fn x -> Nx.sum(Nx.pow(x, 3)) end))
+        end)
+
+      assert grad.vectorized_axes == [batch: 2]
+      # d²/dx² x³ = 6x
+      expected = Nx.tensor([[6.0, 12.0], [18.0, 24.0]]) |> Nx.vectorize(:batch)
+      assert grad == expected
+    end
+
+    # --- Constant-grad ops (all/any/argmax/argmin) ---
+
+    test "constant-grad ops with vectorized inputs" do
+      x = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]) |> Nx.vectorize(:batch)
+
+      # all/any return booleans — gradient is zero, but shouldn't crash
+      grad = Nx.Defn.grad(x, fn x -> Nx.sum(Nx.multiply(x, Nx.all(x))) end)
+      assert grad.vectorized_axes == [batch: 2]
+
+      grad = Nx.Defn.grad(x, fn x -> Nx.sum(Nx.multiply(x, Nx.any(x))) end)
+      assert grad.vectorized_axes == [batch: 2]
+
+      # argmax/argmin return indices — gradient is zero
+      grad = Nx.Defn.grad(x, fn x -> Nx.sum(Nx.multiply(x, Nx.argmax(x, axis: 0))) end)
+      assert grad.vectorized_axes == [batch: 2]
+
+      grad = Nx.Defn.grad(x, fn x -> Nx.sum(Nx.multiply(x, Nx.argmin(x, axis: 0))) end)
+      assert grad.vectorized_axes == [batch: 2]
+    end
+
+    # --- Window scatter (uses source tensor, can't use check_vectorized_grad) ---
+
+    test "window_scatter_max with vectorized inputs" do
+      # Window {1,3} with strides [1,3] on inner {2,6} → source must be {2,2}
+      t =
+        Nx.tensor([
+          [[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12]],
+          [[13, 14, 15, 16, 17, 18], [19, 20, 21, 22, 23, 24]]
+        ])
+        |> Nx.as_type(:f32)
+        |> Nx.vectorize(:batch)
+
+      source =
+        Nx.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]]) |> Nx.vectorize(:batch)
+
+      init = Nx.tensor(0.0)
+
+      grad =
+        Nx.Defn.grad(t, fn t ->
+          Nx.sum(Nx.window_scatter_max(t, source, init, {1, 3}, strides: [1, 3], padding: :valid))
+        end)
+
+      devec = Nx.devectorize(grad)
+      assert Nx.shape(devec) == {2, 2, 6}
+    end
+
+    test "window_scatter_min with vectorized inputs" do
+      t =
+        Nx.tensor([
+          [[1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12]],
+          [[13, 14, 15, 16, 17, 18], [19, 20, 21, 22, 23, 24]]
+        ])
+        |> Nx.as_type(:f32)
+        |> Nx.vectorize(:batch)
+
+      source =
+        Nx.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]]) |> Nx.vectorize(:batch)
+
+      init = Nx.tensor(0.0)
+
+      grad =
+        Nx.Defn.grad(t, fn t ->
+          Nx.sum(Nx.window_scatter_min(t, source, init, {1, 3}, strides: [1, 3], padding: :valid))
+        end)
+
+      devec = Nx.devectorize(grad)
+      assert Nx.shape(devec) == {2, 2, 6}
+    end
+
+    # --- Mixed vectorized axes (different axis names on different inputs) ---
+
+    test "mixed vectorized axes with add" do
+      x = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]) |> Nx.vectorize(:a)
+
+      y =
+        Nx.tensor([[10.0, 20.0, 30.0], [40.0, 50.0, 60.0], [70.0, 80.0, 90.0]])
+        |> Nx.vectorize(:b)
+
+      grad = Nx.Defn.grad(x, fn x -> Nx.sum(Nx.add(x, y)) end)
+
+      assert grad.vectorized_axes == [a: 2, b: 3]
+      assert Nx.shape(grad) == {3}
+    end
+
+    test "mixed vectorized axes with multiply" do
+      x = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]) |> Nx.vectorize(:a)
+
+      y =
+        Nx.tensor([[10.0, 20.0, 30.0], [40.0, 50.0, 60.0], [70.0, 80.0, 90.0]])
+        |> Nx.vectorize(:b)
+
+      grad = Nx.Defn.grad(x, fn x -> Nx.sum(Nx.multiply(x, y)) end)
+
+      assert grad.vectorized_axes == [a: 2, b: 3]
+      assert Nx.shape(grad) == {3}
+    end
+
+    test "dot with mixed vectorized axes" do
+      x = Nx.iota({2, 3, 3}, type: :f32) |> Nx.vectorize(:a)
+      y = Nx.iota({2, 3, 3}, type: :f32) |> Nx.vectorize(:row)
+
+      grad = Nx.Defn.grad(x, fn x -> Nx.sum(Nx.dot(x, [1], y, [0])) end)
+      assert :a in Keyword.keys(grad.vectorized_axes)
+      assert :row in Keyword.keys(grad.vectorized_axes)
+    end
+
+    test "three different vectorized axes" do
+      x = Nx.tensor([[1.0, 2.0], [3.0, 4.0]]) |> Nx.vectorize(:a)
+      y = Nx.tensor([[10.0, 20.0], [30.0, 40.0], [50.0, 60.0]]) |> Nx.vectorize(:b)
+      z = Nx.tensor([[100.0, 200.0]]) |> Nx.vectorize(:c)
+      grad = Nx.Defn.grad(x, fn x -> Nx.sum(Nx.add(Nx.add(x, y), z)) end)
+      assert :a in Keyword.keys(grad.vectorized_axes)
+    end
+
+    test "two vectorized inputs through sin(add)" do
+      x = Nx.tensor([[1.0, 2.0], [3.0, 4.0]]) |> Nx.vectorize(:a)
+      y = Nx.tensor([[10.0, 20.0], [30.0, 40.0], [50.0, 60.0]]) |> Nx.vectorize(:b)
+
+      grad = Nx.Defn.grad(x, fn x -> Nx.sum(Nx.sin(Nx.add(x, y))) end)
+      assert grad.vectorized_axes == [a: 2, b: 3]
+    end
+
+    # --- value_and_grad ---
+
+    test "grad with differently-shaped vectorized and non-vectorized inputs" do
+      x = Nx.tensor([0, 1]) |> Nx.vectorize(:foo)
+      y = Nx.tensor(1.0)
+
+      {value, grad_y} = Nx.Defn.value_and_grad(y, fn y -> Nx.sum(Nx.add(x, y)) end)
+
+      assert value == Nx.tensor([1.0, 2.0]) |> Nx.vectorize(:foo)
+      assert grad_y == Nx.tensor([1.0, 1.0]) |> Nx.vectorize(:foo)
+    end
+
+    test "value_and_grad with vectorized target" do
+      x = Nx.tensor([0, 1, 2]) |> Nx.vectorize(:foo)
+      y = Nx.tensor(1)
+
+      {_value, grad_y} = Nx.Defn.value_and_grad(y, fn y -> Nx.add(x, y) end)
+
+      expected_grad = Nx.tensor([1.0, 1.0, 1.0]) |> Nx.vectorize(:foo)
+      assert grad_y == expected_grad
+    end
+
+    # --- Non-vectorized target (grad w.r.t. y where x is vectorized) ---
+
+    test "grad of non-vectorized target through multiply with vectorized" do
+      x = Nx.tensor([1.0, 2.0, 3.0]) |> Nx.vectorize(:batch)
+      y = Nx.tensor(2.0)
+
+      grad = Nx.Defn.grad(y, fn y -> Nx.sum(Nx.multiply(x, y)) end)
+
+      expected =
+        for val <- [1.0, 2.0, 3.0] do
+          Nx.Defn.grad(Nx.tensor(2.0), fn y -> Nx.sum(Nx.multiply(val, y)) end)
+        end
+        |> Nx.stack()
+        |> Nx.vectorize(:batch)
+
+      assert grad == expected
+    end
+
+    test "grad of non-vectorized target through sin with vectorized" do
+      x = Nx.tensor([0.5, 1.0, 1.5]) |> Nx.vectorize(:batch)
+      y = Nx.tensor(1.0)
+
+      grad = Nx.Defn.grad(y, fn y -> Nx.sum(Nx.sin(Nx.add(x, y))) end)
+
+      expected =
+        for val <- [0.5, 1.0, 1.5] do
+          Nx.Defn.grad(Nx.tensor(1.0), fn y -> Nx.sum(Nx.sin(Nx.add(val, y))) end)
+        end
+        |> Nx.stack()
+        |> Nx.vectorize(:batch)
+
+      assert grad == expected
+    end
+
+    test "grad of non-vectorized target where vectorized output is fully reduced" do
+      x = Nx.tensor([1.0, 2.0]) |> Nx.vectorize(:batch)
+      y = Nx.tensor(1.0)
+
+      grad = Nx.Defn.grad(y, fn y -> Nx.sum(Nx.multiply(x, y)) end)
+
+      expected = Nx.tensor([1.0, 2.0]) |> Nx.vectorize(:batch)
+      assert grad == expected
+    end
+
+    # --- Tuple grad ---
+
+    test "grad w.r.t. tuple of vectorized and non-vectorized" do
+      x = Nx.tensor([[1.0, 2.0], [3.0, 4.0]]) |> Nx.vectorize(:batch)
+      y = Nx.tensor(1.0)
+
+      {grad_x, grad_y} = Nx.Defn.grad({x, y}, fn {x, y} -> Nx.sum(Nx.add(x, y)) end)
+
+      expected_x =
+        for row <- [Nx.tensor([1.0, 2.0]), Nx.tensor([3.0, 4.0])] do
+          Nx.Defn.grad(row, fn r -> Nx.sum(Nx.add(r, 1.0)) end)
+        end
+        |> Nx.stack()
+        |> Nx.vectorize(:batch)
+
+      assert grad_x == expected_x
+      assert grad_y == Nx.tensor([2.0, 2.0]) |> Nx.vectorize(:batch)
+    end
+
+    # --- Large batch smoke test ---
+
+    test "large vectorized batch" do
+      x = Nx.iota({100, 4}, type: :f32) |> Nx.vectorize(:batch)
+      grad = Nx.Defn.grad(x, fn x -> Nx.sum(Nx.exp(x)) end)
+      assert grad.vectorized_axes == [batch: 100]
+      assert Nx.shape(grad) == {4}
     end
   end
 end

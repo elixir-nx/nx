@@ -403,8 +403,11 @@ defmodule Nx.Defn.Grad do
     new_names = Enum.reject(vectorized_names, &(&1 in existing))
 
     cond do
-      new_names == [] -> node
-      node.shape == {} -> node
+      new_names == [] ->
+        node
+
+      node.shape == {} ->
+        node
 
       true ->
         Nx.vectorize(node, new_names)

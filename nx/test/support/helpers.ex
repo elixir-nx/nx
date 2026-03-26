@@ -23,8 +23,15 @@ defmodule Nx.Helpers do
     atol = opts[:atol] || 1.0e-4
     rtol = opts[:rtol] || 1.0e-4
 
-    unless Nx.all_close(lhs, rhs, atol: atol, rtol: rtol, equal_nan: opts[:equal_nan]) ==
-             Nx.tensor(1, type: {:u, 8}) do
+    close =
+      lhs
+      |> Nx.all_close(rhs, atol: atol, rtol: rtol, equal_nan: opts[:equal_nan])
+      |> Nx.devectorize(keep_names: false)
+      |> Nx.backend_transfer(Nx.BinaryBackend)
+      |> Nx.to_flat_list()
+      |> Enum.all?(&(&1 == 1))
+
+    unless close do
       flunk("""
       expected
 
@@ -38,7 +45,15 @@ defmodule Nx.Helpers do
   end
 
   defp assert_all_close(lhs, rhs, x, atol, rtol) do
-    unless Nx.all_close(lhs, rhs, atol: atol, rtol: rtol) == Nx.tensor(1, type: {:u, 8}) do
+    close =
+      lhs
+      |> Nx.all_close(rhs, atol: atol, rtol: rtol)
+      |> Nx.devectorize(keep_names: false)
+      |> Nx.backend_transfer(Nx.BinaryBackend)
+      |> Nx.to_flat_list()
+      |> Enum.all?(&(&1 == 1))
+
+    unless close do
       flunk("""
       expected
 
