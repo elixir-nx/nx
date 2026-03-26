@@ -27,17 +27,24 @@ defmodule Nx.Defn.Grad do
     {parents, nodes} = parents_tree(transformed_expr, ids)
 
     to_grad_ids = {to_grad, ids}
-    grads = %{transformed_expr.data.id => [constant(1.0, transformed_expr)]}
+    output_vectorized_axes = transformed_expr.vectorized_axes
+
+    # Seed the backward pass in devectorized space.
+    # Store global batch count so unbroadcast can preserve batch dims.
+    devec_expr = Nx.devectorize(transformed_expr, keep_names: false)
+    grads = %{transformed_expr.data.id => [constant(1.0, devec_expr)]}
+    Process.put(:nx_grad_batch_count, length(output_vectorized_axes))
 
     {graded, _} =
       Composite.traverse(
         to_grad,
         {nodes, grads},
         fn node, acc ->
-          to_grad(node, to_grad_ids, parents, acc)
+          to_grad(node, to_grad_ids, parents, acc, output_vectorized_axes)
         end
       )
 
+    Process.delete(:nx_grad_batch_count)
     {expr, graded}
   end
 
@@ -207,14 +214,28 @@ defmodule Nx.Defn.Grad do
 
   ## Recursion
 
-  defp to_grad(arg, to_grad_ids, parents, acc) do
+  defp to_grad(arg, to_grad_ids, parents, acc, output_vectorized_axes) do
     id = arg.data.id
     acc = traverse_parents(__MODULE__, to_grad_ids, parents, acc)
     acc = traverse_parents(id, to_grad_ids, parents, acc)
     {nodes, grads} = acc
 
     res = sum_grad(Map.get(grads, id, []))
-    {Nx.broadcast(res, arg), {nodes, grads}}
+
+    res =
+      cond do
+        arg.vectorized_axes != [] and res.vectorized_axes == [] ->
+          Nx.vectorize(res, arg.vectorized_axes)
+
+        arg.vectorized_axes == [] and output_vectorized_axes != [] and
+            tuple_size(res.shape) > tuple_size(arg.shape) ->
+          Nx.vectorize(res, output_vectorized_axes)
+
+        true ->
+          Nx.broadcast(res, arg)
+      end
+
+    {res, {nodes, grads}}
   end
 
   defp sum_grad([]), do: Expr.tensor(0.0)
@@ -234,22 +255,15 @@ defmodule Nx.Defn.Grad do
         %T{data: %Expr{op: op, args: args}} = ans
         {gs, grads} = Map.pop(grads, id)
 
-        {args, ans} =
-          if vectorized_names != [] do
-            args =
-              Enum.map(args, fn
-                %T{} = arg ->
-                  revectorize_node(arg, vectorized_names)
+        # Devectorize args to match ans (already devec'd by parents_tree)
+        args =
+          Enum.map(args, fn
+            %T{vectorized_axes: va} = arg when va != [] ->
+              Nx.devectorize(arg, keep_names: false)
 
-                opt ->
-                  opt
-              end)
-
-            ans = Nx.vectorize(ans, vectorized_names)
-            {args, ans}
-          else
-            {args, ans}
-          end
+            other ->
+              other
+          end)
 
         case gs do
           nil ->
@@ -329,7 +343,7 @@ defmodule Nx.Defn.Grad do
     {grad_body, _} =
       [arg]
       |> Composite.flatten_list()
-      |> Enum.map_reduce({nodes, while_grads}, &to_grad(&1, {arg, %{}}, parents, &2))
+      |> Enum.map_reduce({nodes, while_grads}, &to_grad(&1, {arg, %{}}, parents, &2, []))
 
     # And finally build a new while.
     {_, while_gs} =
@@ -364,7 +378,7 @@ defmodule Nx.Defn.Grad do
           end)
 
         {graded, _} =
-          Enum.map_reduce(to_grad, {nodes, grads}, &to_grad(&1, to_grad_ids, parents, &2))
+          Enum.map_reduce(to_grad, {nodes, grads}, &to_grad(&1, to_grad_ids, parents, &2, []))
 
         {head, graded}
       end)
@@ -490,7 +504,21 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:reshape, [x], _ans, g) do
-    [{x, Nx.reshape(g, x)}]
+    batch_count = Process.get(:nx_grad_batch_count, 0)
+
+    g =
+      cond do
+        batch_count > 0 and tuple_size(g.shape) > tuple_size(x.shape) and
+            (tuple_size(x.shape) < batch_count or
+               Enum.all?(0..(batch_count - 1)//1, &(elem(x.shape, &1) == 1))) ->
+          batch_dims = g.shape |> Tuple.to_list() |> Enum.take(batch_count)
+          Nx.reshape(g, List.to_tuple(batch_dims ++ Tuple.to_list(x.shape)))
+
+        true ->
+          Nx.reshape(g, x)
+      end
+
+    [{x, g}]
   end
 
   defp grad(:transpose, [x, axes], _ans, g) do
@@ -1400,12 +1428,31 @@ defmodule Nx.Defn.Grad do
 
   defp unbroadcast(%{shape: shape} = x, res, %{shape: shape}), do: {x, res}
 
-  defp unbroadcast(%{shape: shape} = x, res, %{shape: new_shape}) do
-    axes = Nx.Shape.broadcast_axes(shape, new_shape)
-    {x, grad_broadcast(x, new_shape, axes, res)}
+  defp unbroadcast(x, res, %{shape: new_shape}) do
+    batch_count = Process.get(:nx_grad_batch_count, 0)
+
+    # Preserve batch dims when x doesn't already have them:
+    # x has fewer dims than batch_count, or its leading dims are all 1.
+    batch_offset =
+      cond do
+        batch_count == 0 ->
+          0
+
+        tuple_size(x.shape) < batch_count ->
+          batch_count
+
+        Enum.all?(0..(batch_count - 1)//1, &(elem(x.shape, &1) == 1)) ->
+          batch_count
+
+        true ->
+          0
+      end
+
+    axes = Nx.Shape.broadcast_axes(x.shape, new_shape)
+    {x, grad_broadcast(x, new_shape, axes, res, batch_offset)}
   end
 
-  defp grad_broadcast(x, shape, axes, g) do
+  defp grad_broadcast(x, shape, axes, g, batch_offset \\ 0) do
     implicit_axes =
       for {a, i} <- Enum.with_index(axes),
           elem(shape, a) != 1 and elem(x.shape, i) == 1,
@@ -1414,6 +1461,10 @@ defmodule Nx.Defn.Grad do
     {implicit_axes, broadcast_axes} = Enum.unzip(implicit_axes)
     explicit_axes = Nx.axes(shape) -- axes
 
+    # Skip batch dims — they should be preserved, not summed
+    implicit_axes = Enum.filter(implicit_axes, &(&1 >= batch_offset))
+    explicit_axes = Enum.filter(explicit_axes, &(&1 >= batch_offset))
+
     g =
       case explicit_axes ++ implicit_axes do
         [] -> g
@@ -1421,8 +1472,19 @@ defmodule Nx.Defn.Grad do
       end
 
     case broadcast_axes do
-      [] -> g
-      _ -> Nx.broadcast(g, x.shape, axes: Nx.axes(x.shape) -- broadcast_axes)
+      [] ->
+        g
+
+      _ when batch_offset > 0 ->
+        # g has batch dims that x.shape doesn't — broadcast inner dims only
+        batch_dims = g.shape |> Tuple.to_list() |> Enum.take(batch_offset)
+        inner_target = List.to_tuple(batch_dims ++ Tuple.to_list(x.shape))
+        inner_axes = Enum.map(Nx.axes(x.shape), &(&1 + batch_offset))
+        keep_axes = inner_axes -- Enum.map(broadcast_axes, &(&1 + batch_offset))
+        Nx.broadcast(g, inner_target, axes: Enum.to_list(0..(batch_offset - 1)) ++ keep_axes)
+
+      _ ->
+        Nx.broadcast(g, x.shape, axes: Nx.axes(x.shape) -- broadcast_axes)
     end
   end
 
