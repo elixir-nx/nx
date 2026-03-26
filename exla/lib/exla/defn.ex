@@ -601,11 +601,12 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-         op,
+         :block,
          %T{
            data: %Expr{
              args: [
-               %{data: %{op: :qr, args: [tensor, _opts]}},
+               %Nx.Block.QR{},
+               [tensor],
                {%{type: {type_kind, _}} = q_expr, r_expr},
                _callback
              ]
@@ -614,7 +615,7 @@ defmodule EXLA.Defn do
          %{client: %EXLA.Client{platform: :host}, builder: %Function{}} = state,
          cache
        )
-       when op == :block and type_kind != :c do
+       when type_kind != :c do
     # We match only on platform: :host for MLIR, as we want to support
     # QR-on-cpu as a custom call only in this case
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
@@ -635,7 +636,8 @@ defmodule EXLA.Defn do
          %T{
            data: %Expr{
              args: [
-               %{data: %{op: :eigh, args: [tensor, _opts]}},
+               %Nx.Block.Eigh{},
+               in_args,
                {%{type: {evec_type_kind, _}} = eigenvals_expr,
                 %{type: {eval_type_kind, _}} = eigenvecs_expr},
                _callback
@@ -646,6 +648,7 @@ defmodule EXLA.Defn do
          cache
        )
        when op == :block and evec_type_kind != :c and eval_type_kind != :c do
+    tensor = hd(in_args)
     # We match only on platform: :host for MLIR, as we want to support
     # eigh-on-cpu as a custom call only in this case
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
@@ -675,14 +678,14 @@ defmodule EXLA.Defn do
          op,
          %T{
            data: %Expr{
-             args: [%{data: %{op: :take, args: [tensor, indices, opts]}}, expr, _callback]
+             args: [%Nx.Block.Take{axis: axis}, in_args, expr, _callback]
            }
          },
          state,
          cache
        )
        when op == :block do
-    axis = opts[:axis]
+    [tensor, indices] = in_args
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
     {indices, cache} = recur_operator(indices, state, cache) |> unwrap_single_tensor!()
 
@@ -716,50 +719,66 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          op,
-         %T{data: %Expr{args: [%{data: %{op: :top_k, args: [tensor, opts]}}, expr, _callback]}},
+         %T{data: %Expr{args: [%Nx.Block.TopK{k: k}, in_args, expr, _callback]}},
          state,
          cache
        )
        when op == :block do
+    tensor = hd(in_args)
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
     {values, idx} = expr
     typespecs = [expr_to_typespec(values), expr_to_typespec(idx)]
-    results = Value.top_k(tensor, opts[:k], typespecs)
+    results = Value.top_k(tensor, k, typespecs)
     {results, cache}
   end
 
   defp cached_recur_operator(
          op,
-         %T{data: %Expr{args: [%{data: %{op: :fft2, args: [tensor, opts]}}, expr, _callback]}},
+         %T{data: %Expr{args: [%Nx.Block.FFT2{} = fft2_struct, in_args, expr, _callback]}},
          state,
          cache
        )
        when op == :block do
+    tensor = hd(in_args)
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
+
+    opts =
+      [lengths: fft2_struct.lengths, axes: fft2_struct.axes]
+      |> then(fn kw ->
+        if fft2_struct.eps != nil, do: Keyword.put(kw, :eps, fft2_struct.eps), else: kw
+      end)
 
     {fft2(&Value.fft(&1, :fft, &2, &3), [tensor, opts], expr, state), cache}
   end
 
   defp cached_recur_operator(
          op,
-         %T{data: %Expr{args: [%{data: %{op: :ifft2, args: [tensor, opts]}}, expr, _callback]}},
+         %T{data: %Expr{args: [%Nx.Block.IFFT2{} = ifft2_struct, in_args, expr, _callback]}},
          state,
          cache
        )
        when op == :block do
+    tensor = hd(in_args)
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
+
+    opts =
+      [lengths: ifft2_struct.lengths, axes: ifft2_struct.axes]
+      |> then(fn kw ->
+        if ifft2_struct.eps != nil, do: Keyword.put(kw, :eps, ifft2_struct.eps), else: kw
+      end)
 
     {fft2(&Value.fft(&1, :ifft, &2, &3), [tensor, opts], expr, state), cache}
   end
 
   defp cached_recur_operator(:block, %T{data: %Expr{args: args}}, state, cache) do
-    [call, expr, _callback] = args
-    %{data: %{args: in_args, op: op}} = call
+    [struct, in_args, expr, _callback] = args
+    op = Nx.Block.name(struct)
 
-    {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
+    dispatch_args = Nx.Block.backend_args(struct, in_args)
+    extras = Enum.drop(dispatch_args, length(in_args))
 
-    {call_args, cache} = Enum.map_reduce(args, cache, &recur_operator(&1, state, &2))
-    key = computation_key(op, call_args ++ opts)
+    {call_args, cache} = Enum.map_reduce(in_args, cache, &recur_operator(&1, state, &2))
+    key = computation_key(op, call_args ++ extras)
 
     {call_body, cache} =
       case cache do

@@ -6900,23 +6900,19 @@ defmodule Nx do
 
     backend = Nx.Shared.list_impl!(args)
     name = Nx.Block.name(struct)
+    backend_args = Nx.Block.backend_args(struct, args)
 
     cond do
       function_exported?(backend, :block, 3) ->
         backend.block(struct, args, fun)
 
-      function_exported?(backend, name, length(args) + 1) ->
-        apply(backend, name, [output | args])
+      function_exported?(backend, name, length(backend_args) + 1) ->
+        apply(backend, name, [output | backend_args])
 
       true ->
         apply(fun, [struct | args])
     end
   end
-
-  defp cumulative_op_block(:cumulative_sum), do: %Nx.Block.CumulativeSum{}
-  defp cumulative_op_block(:cumulative_product), do: %Nx.Block.CumulativeProduct{}
-  defp cumulative_op_block(:cumulative_min), do: %Nx.Block.CumulativeMin{}
-  defp cumulative_op_block(:cumulative_max), do: %Nx.Block.CumulativeMax{}
 
   @doc """
   Element-wise not-equal comparison of two tensors.
@@ -8931,8 +8927,12 @@ defmodule Nx do
     else
       out = %{a | names: [], shape: {}, type: {:u, 8}}
 
-      Nx.block(%Nx.Block.AllClose{}, [a, b, opts], out, fn %Nx.Block.AllClose{}, a, b, opts ->
-        vectorized_all_close(a, b, opts)
+      block(struct(Nx.Block.AllClose, opts), [a, b], out, fn %Nx.Block.AllClose{} = o, a, b ->
+        vectorized_all_close(a, b,
+          equal_nan: o.equal_nan,
+          rtol: o.rtol,
+          atol: o.atol
+        )
       end)
     end
   end
@@ -11545,16 +11545,21 @@ defmodule Nx do
   def cumulative_max(tensor, opts \\ []),
     do: cumulative_op(tensor, opts, :cumulative_max, &Nx.max/2)
 
+  defp cumulative_op_block(:cumulative_sum), do: %Nx.Block.CumulativeSum{}
+  defp cumulative_op_block(:cumulative_product), do: %Nx.Block.CumulativeProduct{}
+  defp cumulative_op_block(:cumulative_min), do: %Nx.Block.CumulativeMin{}
+  defp cumulative_op_block(:cumulative_max), do: %Nx.Block.CumulativeMax{}
+
   defp cumulative_op(tensor, opts, op, reduce_fun) do
     apply_vectorized(tensor, fn tensor, offset ->
       opts = keyword!(opts, axis: 0, reverse: false)
       reverse = opts[:reverse]
       axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names, offset)
 
-      block = cumulative_op_block(op)
+      block = struct(cumulative_op_block(op), axis: axis, reverse: reverse)
 
-      Nx.block(block, [tensor, [axis: axis, reverse: reverse]], tensor, fn ^block, tensor, opts ->
-        associative_scan(tensor, reduce_fun, opts)
+      block(block, [tensor], tensor, fn ^block, tensor ->
+        associative_scan(tensor, reduce_fun, axis: axis, reverse: reverse)
       end)
     end)
   end
@@ -14307,10 +14312,9 @@ defmodule Nx do
       indices = devectorize(indices, keep_names: false)
       out = %{tensor | shape: inner_shape, names: inner_names}
 
-      Nx.block(%Nx.Block.Take{}, [tensor, indices, [axis: axis]], out, fn %Nx.Block.Take{},
-                                                                           tensor,
-                                                                           indices,
-                                                                           _opts ->
+      block(struct(Nx.Block.Take, axis: axis), [tensor, indices], out, fn %Nx.Block.Take{},
+                                                                            tensor,
+                                                                            indices ->
         gather_indices = new_axis(indices, rank(indices))
         {indices_axes, tensor_axes} = Enum.split(axes(inner_shape), rank(indices))
         {leading, trailing} = Enum.split(tensor_axes, axis)
@@ -14489,11 +14493,11 @@ defmodule Nx do
     out = %{tensor | shape: shape}
 
     result =
-      Nx.block(
-        %Nx.Block.TakeAlongAxis{},
-        [tensor, indices, [axis: axis]],
+      block(
+        struct(Nx.Block.TakeAlongAxis, axis: axis),
+        [tensor, indices],
         out,
-        fn %Nx.Block.TakeAlongAxis{}, tensor, indices, _opts ->
+        fn %Nx.Block.TakeAlongAxis{}, tensor, indices ->
           axes_range = axes(indices)
           new_axis_shape = tuple_append(shape(indices), 1)
 
@@ -15307,12 +15311,12 @@ defmodule Nx do
       out_values = %{tensor | shape: output_shape, names: output_names}
       out_indices = %{tensor | shape: output_shape, names: output_names, type: {:s, 32}}
 
-      Nx.block(
-        %Nx.Block.TopK{},
-        [tensor, opts],
+      block(
+        struct(Nx.Block.TopK, k: opts[:k]),
+        [tensor],
         {out_values, out_indices},
-        fn %Nx.Block.TopK{}, tensor, opts ->
-          k = Keyword.fetch!(opts, :k)
+        fn %Nx.Block.TopK{} = top_k, tensor ->
+          k = top_k.k
           rank = rank(tensor)
 
           indices = argsort(tensor, axis: rank - 1, direction: :desc)
@@ -16753,14 +16757,17 @@ defmodule Nx do
 
       out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
 
-      opts = Keyword.take(opts, [:eps]) |> Keyword.merge(lengths: [l1, l2], axes: [ax1, ax2])
+      block_struct =
+        if kind == :fft2 do
+          struct(Nx.Block.FFT2, eps: opts[:eps], lengths: [l1, l2], axes: [ax1, ax2])
+        else
+          struct(Nx.Block.IFFT2, eps: opts[:eps], lengths: [l1, l2], axes: [ax1, ax2])
+        end
 
-      block = if kind == :fft2, do: %Nx.Block.FFT2{}, else: %Nx.Block.IFFT2{}
-
-      Nx.block(block, [tensor, opts], out, fn ^block, tensor, opts ->
-        [ax1, ax2] = opts[:axes]
-        [l1, l2] = opts[:lengths]
-        eps = opts[:eps]
+      block(block_struct, [tensor], out, fn s, tensor ->
+        [ax1, ax2] = s.axes
+        [l1, l2] = s.lengths
+        eps = s.eps
 
         if kind == :fft2 do
           tensor

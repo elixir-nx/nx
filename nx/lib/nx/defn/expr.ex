@@ -43,6 +43,11 @@ defmodule Nx.Defn.Expr do
 
     * `runtime_call(out, tensor_or_container, opts, fun)`
 
+    * `block(struct, block_args, default_expr, fun)` - `struct` is an `Nx.Block.*`
+      value, `block_args` are the tensors and keyword options passed to `Nx.block/4`,
+      `default_expr` is the traced default implementation, and `fun` is the block
+      callback
+
   `defn` compilers must handle said nodes accordingly.
   """
 
@@ -372,18 +377,17 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def block(struct, in_args, fun) do
-    name = Nx.Block.name(struct)
     {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
     params = Enum.with_index(args, &parameter/2)
 
     case apply(fun, [struct | params ++ opts]) do
       %{data: %{context: context}} = res ->
-        expr(res, context, :block, [expr(res, context, name, in_args), res, fun])
+        expr(res, context, :block, [struct, in_args, res, fun])
 
       t when is_tuple(t) ->
         context = elem(t, 0).data.context
-        out = expr(tuple_out(tuple_size(t)), context, name, in_args)
-        tuple(expr(out, context, :block, [out, t, fun]), Tuple.to_list(t))
+        out = tuple_out(tuple_size(t))
+        tuple(expr(out, context, :block, [struct, in_args, t, fun]), Tuple.to_list(t))
     end
   end
 
@@ -1629,8 +1633,8 @@ defmodule Nx.Defn.Expr do
     recur_inspect(tensor, state)
   end
 
-  defp recur_inspect(%T{data: %Expr{op: :block, args: [expr, _default, _callback]}}, state) do
-    recur_inspect(expr, state)
+  defp recur_inspect(%T{data: %Expr{op: :block, args: [_struct, _in_args, body, _callback]}}, state) do
+    recur_inspect(body, state)
   end
 
   defp recur_inspect(%T{data: %Expr{id: id, op: op, args: args}} = tensor, state) do

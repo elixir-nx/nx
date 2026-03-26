@@ -21,7 +21,13 @@ defmodule Nx.LinAlg.SVD do
   import Nx.Defn
   @eps 1.1920929e-07
 
-  defn svd(input_tensor, opts \\ []) do
+  defn svd(%Nx.Block.SVD{} = o, input_tensor) do
+    opts =
+      keyword!([max_iter: o.max_iter, full_matrices?: o.full_matrices?],
+        max_iter: 100,
+        full_matrices?: true
+      )
+
     validate_opts(opts)
 
     {target_shape, u_shape, s_shape, vt_shape} = calculate_shapes(input_tensor)

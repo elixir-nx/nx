@@ -49,22 +49,20 @@ defmodule Torchx.Backend do
   ## Block callback for MPS compatibility
 
   @impl true
-  def block(struct, args, fun) do
-    function_name = Nx.Block.name(struct)
-
+  def block(%block_name{} = struct, args, fun) do
     default_impl = fn args ->
       apply(fun, [struct | args])
     end
 
-    # For MPS device, some linear algebra operations are not supported
+    # For MPS device, some linear algebra operations are not supported.
     # Delegate to default implementation which will fall back to elementary Nx operations.
     mps_unsupported = [
-      :lu,
-      :eigh,
-      :solve,
-      :determinant,
-      :cholesky,
-      :matrix_power
+      Nx.Block.LU,
+      Nx.Block.Eigh,
+      Nx.Block.Solve,
+      Nx.Block.Determinant,
+      Nx.Block.Cholesky,
+      #matrix_power
     ]
 
     device =
@@ -73,19 +71,19 @@ defmodule Torchx.Backend do
         _ -> :cpu
       end
 
-    if device == :mps and function_name in mps_unsupported do
-      # Use default implementation for unsupported MPS operations
+    if device == :mps and block_name in mps_unsupported do
       default_impl.(args)
     else
-      # Use custom Torchx implementation for CPU and supported operations
-      case function_name do
-        :qr -> apply(&qr_impl/2, args)
-        :lu -> apply(&lu_impl/2, args)
-        :eigh -> apply(&eigh_impl/2, args)
-        :solve -> apply(&solve_impl/2, args)
-        :cholesky -> apply(&cholesky_impl/1, args)
-        :svd -> apply(&svd_impl/2, args)
-        :determinant -> apply(&determinant_impl/1, args)
+      dispatched = Nx.Block.backend_args(struct, args)
+
+      case block_name do
+        Nx.Block.QR -> apply(&qr_impl/2, dispatched)
+        Nx.Block.LU -> apply(&lu_impl/2, dispatched)
+        Nx.Block.Eigh -> apply(&eigh_impl/2, dispatched)
+        Nx.Block.Solve -> apply(&solve_impl/2, dispatched)
+        Nx.Block.Cholesky -> apply(&cholesky_impl/1, dispatched)
+        Nx.Block.SVD -> apply(&svd_impl/2, dispatched)
+        Nx.Block.Determinant -> apply(&determinant_impl/1, dispatched)
         _ -> default_impl.(args)
       end
     end

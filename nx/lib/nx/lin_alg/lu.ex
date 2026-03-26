@@ -2,7 +2,7 @@ defmodule Nx.LinAlg.LU do
   @moduledoc false
   import Nx.Defn
 
-  defn lu(a, _opts \\ []) do
+  defn lu(%Nx.Block.LU{} = _opts, a) do
     vectorized_axes = a.vectorized_axes
 
     result =

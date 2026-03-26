@@ -1155,8 +1155,8 @@ defmodule Nx.LinAlg do
            names: List.duplicate(nil, tuple_size(r_shape))
        }}
 
-    Nx.block(%Nx.Block.QR{}, [tensor, opts], output, fn %Nx.Block.QR{}, t, opts ->
-      Nx.LinAlg.QR.qr(t, opts)
+    Nx.block(struct(Nx.Block.QR, opts), [tensor], output, fn %Nx.Block.QR{} = opts, t ->
+      Nx.LinAlg.QR.qr(opts, t)
     end)
     |> Nx.vectorize(vectorized_axes)
   end
@@ -1399,8 +1399,8 @@ defmodule Nx.LinAlg do
       {%{tensor | names: eigenvals_name, type: output_type, shape: eigenvals_shape},
        %{tensor | names: eigenvecs_name, type: output_type, shape: eigenvecs_shape}}
 
-    Nx.block(%Nx.Block.Eigh{}, [tensor, opts], output, fn %Nx.Block.Eigh{}, t, opts ->
-      Nx.LinAlg.BlockEigh.eigh(t, opts)
+    Nx.block(struct(Nx.Block.Eigh, opts), [tensor], output, fn %Nx.Block.Eigh{} = opts, t ->
+      Nx.LinAlg.BlockEigh.eigh(opts, t)
     end)
     |> Nx.vectorize(vectorized_axes)
   end
@@ -1518,8 +1518,8 @@ defmodule Nx.LinAlg do
        %{tensor | names: List.duplicate(nil, rank - 1), type: output_type, shape: s_shape},
        %{tensor | names: List.duplicate(nil, rank), type: output_type, shape: v_shape}}
 
-    Nx.block(%Nx.Block.SVD{}, [tensor, opts], output, fn %Nx.Block.SVD{}, t, opts ->
-      Nx.LinAlg.SVD.svd(t, opts)
+    Nx.block(struct(Nx.Block.SVD, opts), [tensor], output, fn %Nx.Block.SVD{} = opts, t ->
+      Nx.LinAlg.SVD.svd(opts, t)
     end)
     |> Nx.vectorize(vectorized_axes)
   end
@@ -1748,8 +1748,8 @@ defmodule Nx.LinAlg do
        %{tensor | type: output_type, shape: l_shape, names: names},
        %{tensor | type: output_type, shape: u_shape, names: names}}
 
-    Nx.block(%Nx.Block.LU{}, [tensor, opts], output, fn %Nx.Block.LU{}, t, opts ->
-      Nx.LinAlg.LU.lu(t, opts)
+    Nx.block(struct(Nx.Block.LU, opts), [tensor], output, fn %Nx.Block.LU{} = opts, t ->
+      Nx.LinAlg.LU.lu(opts, t)
     end)
     |> Nx.vectorize(vectorized_axes)
   end
