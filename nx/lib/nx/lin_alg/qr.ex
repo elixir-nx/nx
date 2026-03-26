@@ -151,13 +151,26 @@ defmodule Nx.LinAlg.QR do
     # Equation (3)
     r_inv = Nx.LinAlg.invert(r)
 
-    m = Nx.dot(r, Nx.LinAlg.adjoint(dr)) |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(dq), q))
+    m =
+      matmul(r, Nx.LinAlg.adjoint(dr))
+      |> Nx.subtract(matmul(Nx.LinAlg.adjoint(dq), q))
 
     # copyltu
     m_ltu = Nx.tril(m) |> Nx.add(m |> Nx.tril(k: -1) |> Nx.LinAlg.adjoint())
 
-    da = dq |> Nx.add(Nx.dot(q, m_ltu)) |> Nx.dot(Nx.LinAlg.adjoint(r_inv))
+    da = matmul(Nx.add(dq, matmul(q, m_ltu)), Nx.LinAlg.adjoint(r_inv))
 
     [da]
+  end
+
+  deftransformp matmul(a, b) do
+    rank = tuple_size(a.shape)
+
+    if rank <= 2 do
+      Nx.dot(a, b)
+    else
+      batch_axes = Enum.to_list(0..(rank - 3))
+      Nx.dot(a, [-1], batch_axes, b, [-2], batch_axes)
+    end
   end
 end

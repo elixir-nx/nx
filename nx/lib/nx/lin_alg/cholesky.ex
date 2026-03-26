@@ -76,8 +76,8 @@ defmodule Nx.LinAlg.Cholesky do
   end
 
   defn cholesky_grad(l, _input, g) do
-    num = g |> Nx.tril() |> Nx.dot([0], l, [0]) |> Nx.transpose()
-    den = l |> Nx.shape() |> Nx.eye() |> Nx.add(1)
+    num = g |> Nx.tril() |> matmul_contract_rows(l) |> batch_transpose()
+    den = eye_like(l) |> Nx.add(1)
     phi_tril = num |> Nx.divide(den) |> Nx.tril()
 
     bm = Nx.LinAlg.triangular_solve(l, phi_tril, transform_a: :transpose)
@@ -87,14 +87,41 @@ defmodule Nx.LinAlg.Cholesky do
       |> conjugate_if_complex()
       |> Nx.LinAlg.triangular_solve(bm, left_side: false)
 
-    # If we end up supporting the "make_symmetric" option for Nx.LinAlg.cholesky
-    # we need to apply: dl := (adjoint(dl) + dl)/2 when the option is true.
-    # If the option is applied as Nx.add(tensor, adjoint(tensor)) |> Nx.divide(2)
-    # on the expression, no modifications are needed here, because
-    # the grad for the transformation is actually the same transformation
-    # applied on the grad
-
     [dl]
+  end
+
+  deftransformp matmul_contract_rows(a, b) do
+    rank = tuple_size(a.shape)
+
+    if rank <= 2 do
+      Nx.dot(a, [0], b, [0])
+    else
+      batch_axes = Enum.to_list(0..(rank - 3))
+      Nx.dot(a, [-2], batch_axes, b, [-2], batch_axes)
+    end
+  end
+
+  deftransformp batch_transpose(t) do
+    rank = tuple_size(t.shape)
+
+    if rank <= 2 do
+      Nx.transpose(t)
+    else
+      axes = Enum.to_list(0..(rank - 3)) ++ [rank - 1, rank - 2]
+      Nx.transpose(t, axes: axes)
+    end
+  end
+
+  deftransformp eye_like(l) do
+    rank = tuple_size(l.shape)
+    n = elem(l.shape, rank - 1)
+
+    if rank <= 2 do
+      Nx.eye(n)
+    else
+      batch_dims = l.shape |> Tuple.to_list() |> Enum.take(rank - 2)
+      Nx.eye(n) |> Nx.broadcast(List.to_tuple(batch_dims ++ [n, n]))
+    end
   end
 
   defnp conjugate_if_complex(x) do
