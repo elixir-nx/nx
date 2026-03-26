@@ -151,12 +151,15 @@ defmodule Nx.LinAlg.QR do
     # Equation (3)
     r_inv = Nx.LinAlg.invert(r)
 
-    m = Nx.dot(r, Nx.LinAlg.adjoint(dr)) |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(dq), q))
+    m =
+      Nx.dot(r, [-1], Nx.LinAlg.adjoint(dr), [-2])
+      |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(dq), [-1], q, [-2]))
 
     # copyltu
     m_ltu = Nx.tril(m) |> Nx.add(m |> Nx.tril(k: -1) |> Nx.LinAlg.adjoint())
 
-    da = dq |> Nx.add(Nx.dot(q, m_ltu)) |> Nx.dot(Nx.LinAlg.adjoint(r_inv))
+    q_m = Nx.dot(q, [-1], m_ltu, [-2])
+    da = Nx.dot(Nx.add(dq, q_m), [-1], Nx.LinAlg.adjoint(r_inv), [-2])
 
     [da]
   end
