@@ -68,6 +68,13 @@ defmodule Nx.Defn.Expr do
     parameter(tensor, context, pos)
   end
 
+  def parameter(%T{} = tensor, pos) do
+    # Concrete (non-Expr) tensor — convert to constant expression.
+    # This happens when captured tensors end up in optional args
+    # during grad callback re-evaluation.
+    to_expr(tensor) |> then(&parameter(&1, pos))
+  end
+
   @doc """
   Creates a tensor expression parameter at `pos` based on the given `tensor` and `context`.
   """

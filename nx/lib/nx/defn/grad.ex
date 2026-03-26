@@ -135,10 +135,20 @@ defmodule Nx.Defn.Grad do
        ) do
     expr = apply(callback, call.data.args)
 
+    # When the optional wraps an apply_vectorized pattern (inner call has
+    # no vectorized axes but parent does), don't propagate vectorized names
+    # into the inner tree. The inner computation is in devectorized space.
+    inner_names =
+      if call.vectorized_axes == [] and parent_vectorized_names != [] do
+        []
+      else
+        parent_vectorized_names
+      end
+
     # Now traverse over the optional expression where args are the new parameters.
     # Once we access the parameter itself, we point the parameter to the arg.
     {{parents, nodes}, _} =
-      Composite.reduce(expr, {acc, parent_vectorized_names}, fn
+      Composite.reduce(expr, {acc, inner_names}, fn
         expr, {{parents, nodes}, expr_vectorized_names} ->
           arg_vectorized_names = compute_arg_vectorized_names(expr, expr_vectorized_names)
           parents = Map.update(parents, expr.data.id, [id], &[id | &1])
@@ -167,13 +177,19 @@ defmodule Nx.Defn.Grad do
 
   defp parents_args(op, t, parent_id, acc, parent_vectorized_names) do
     reduce_args(op, t, acc, fn arg, {parents, nodes} ->
-      if arg.data.op in @constants do
-        {parents, nodes}
-      else
-        arg_vectorized_names = compute_arg_vectorized_names(t, parent_vectorized_names)
-        parents = Map.update(parents, arg.data.id, [parent_id], &[parent_id | &1])
+      case arg.data do
+        %Nx.Defn.Expr{op: op} when op in @constants ->
+          {parents, nodes}
 
-        recur_parents_tree(arg, {parents, nodes}, arg_vectorized_names)
+        %Nx.Defn.Expr{id: arg_id} ->
+          arg_vectorized_names = compute_arg_vectorized_names(t, parent_vectorized_names)
+          parents = Map.update(parents, arg_id, [parent_id], &[parent_id | &1])
+
+          recur_parents_tree(arg, {parents, nodes}, arg_vectorized_names)
+
+        _concrete ->
+          # Concrete (non-Expr) tensor captured in closure — skip tree traversal
+          {parents, nodes}
       end
     end)
   end
@@ -209,16 +225,85 @@ defmodule Nx.Defn.Grad do
 
   defp to_grad(arg, to_grad_ids, parents, acc) do
     id = arg.data.id
-    acc = traverse_parents(__MODULE__, to_grad_ids, parents, acc)
-    acc = traverse_parents(id, to_grad_ids, parents, acc)
+
+    acc =
+      try do
+        acc = traverse_parents(__MODULE__, to_grad_ids, parents, acc)
+        traverse_parents(id, to_grad_ids, parents, acc)
+      rescue
+        e in ArgumentError ->
+          if arg.vectorized_axes != [] and
+               String.contains?(Exception.message(e), "cannot reshape") do
+            reraise ArgumentError,
+                    "cannot compute gradient: a vectorized axis name was reused with a " <>
+                      "different size inside the grad function. Redefining the meaning of " <>
+                      "a vectorized axis (e.g., devectorize then reshape then re-vectorize " <>
+                      "with the same name at a different size) is not supported. " <>
+                      "Original error: #{Exception.message(e)}",
+                    __STACKTRACE__
+          else
+            reraise e, __STACKTRACE__
+          end
+      end
+
     {nodes, grads} = acc
 
     res = sum_grad(Map.get(grads, id, []))
-    {Nx.broadcast(res, arg), {nodes, grads}}
+
+    res =
+      cond do
+        # Extra inner dims from devectorize baking batch into shape —
+        # extract each batch element's own gradient (the diagonal).
+        res.vectorized_axes == arg.vectorized_axes and
+            tuple_size(res.shape) > tuple_size(arg.shape) ->
+          batch_size = elem(res.shape, 0)
+
+          idx =
+            Nx.iota({batch_size}, type: :s32)
+            |> Nx.vectorize(arg.vectorized_axes)
+
+          result = Nx.take(res, idx, axis: 0)
+          Nx.broadcast(result, arg)
+
+        # Function added vectorization. Self-vectorization (same size) →
+        # reshape; external vectorization (different size) → broadcast.
+        res.vectorized_axes != [] and arg.vectorized_axes == [] ->
+          res_devec = Nx.devectorize(res, keep_names: false)
+
+          if Nx.size(res_devec) == Nx.size(arg) do
+            Nx.reshape(res_devec, arg)
+          else
+            Nx.broadcast(res, arg)
+          end
+
+        res.vectorized_axes == [] and arg.vectorized_axes != [] ->
+          Nx.broadcast(res, Nx.devectorize(arg, keep_names: false))
+          |> Nx.vectorize(arg.vectorized_axes)
+
+        true ->
+          Nx.broadcast(res, arg)
+      end
+
+    {res, {nodes, grads}}
   end
 
   defp sum_grad([]), do: Expr.tensor(0.0)
-  defp sum_grad(gs), do: Enum.reduce(gs, &Nx.add/2)
+
+  defp sum_grad(gs) do
+    # Mixed vectorized/non-vectorized terms from apply_vectorized —
+    # devectorize all before summing to avoid broadcast_vectors collision
+    has_vec = Enum.any?(gs, &(&1.vectorized_axes != []))
+    has_no_vec = Enum.any?(gs, &(&1.vectorized_axes == []))
+
+    gs =
+      if has_vec and has_no_vec do
+        Enum.map(gs, &Nx.devectorize(&1, keep_names: false))
+      else
+        gs
+      end
+
+    Enum.reduce(gs, &Nx.add/2)
+  end
 
   defp traverse_parents(id, to_grad_ids, parents, acc) do
     parents
@@ -236,6 +321,8 @@ defmodule Nx.Defn.Grad do
 
         {args, ans} =
           if vectorized_names != [] do
+            vec_offset = length(vectorized_names)
+
             args =
               Enum.map(args, fn
                 %T{} = arg ->
@@ -245,7 +332,19 @@ defmodule Nx.Defn.Grad do
                   opt
               end)
 
-            ans = Nx.vectorize(ans, vectorized_names)
+            args = adjust_vectorized_args(op, args, vec_offset)
+
+            # Avoid double-vectorization
+            existing_ans = Keyword.keys(ans.vectorized_axes)
+            new_ans_names = Enum.reject(vectorized_names, &(&1 in existing_ans))
+
+            ans =
+              cond do
+                new_ans_names == [] -> ans
+                ans.shape == {} -> ans
+                true -> Nx.vectorize(ans, new_ans_names)
+              end
+
             {args, ans}
           else
             {args, ans}
@@ -257,10 +356,28 @@ defmodule Nx.Defn.Grad do
 
           [_ | _] ->
             g = Enum.reduce(gs, &Nx.add/2)
+
+            # Devectorize g when ans has batch dim baked into shape
+            g =
+              if g.vectorized_axes != [] and ans.vectorized_axes == [] do
+                Nx.devectorize(g, keep_names: false)
+              else
+                g
+              end
+
+            [g, _] = Nx.broadcast_vectors([g, ans])
             {nodes, update_grads(op, args, ans, g, to_grad_ids, grads)}
 
           _ ->
-            g = gs |> Tuple.to_list() |> Enum.map(&sum_grad/1)
+            g =
+              gs
+              |> Tuple.to_list()
+              |> Enum.map(fn gs ->
+                g = sum_grad(gs)
+                [g, _] = Nx.broadcast_vectors([g, ans])
+                g
+              end)
+
             {nodes, update_grads(op, args, ans, g, to_grad_ids, grads)}
         end
 
@@ -282,7 +399,180 @@ defmodule Nx.Defn.Grad do
   defp revectorize_node(node, vectorized_names) do
     vectorized_names = compute_arg_vectorized_names(node, vectorized_names)
 
-    Nx.vectorize(node, vectorized_names)
+    existing = Keyword.keys(node.vectorized_axes)
+    new_names = Enum.reject(vectorized_names, &(&1 in existing))
+
+    cond do
+      new_names == [] -> node
+      node.shape == {} -> node
+
+      true ->
+        Nx.vectorize(node, new_names)
+    end
+  end
+
+  # When recur_to_grad re-vectorizes tensor args, opts (axes, padding, etc.)
+  # still reference devectorized axis indices. Adjust by subtracting vec_offset.
+
+  @axes_in_opts_ops [:sum, :product, :reduce_max, :reduce_min]
+
+  defp adjust_vectorized_args(op, [x | rest], offset) when op in @axes_in_opts_ops do
+    [x | adjust_keyword_axes(rest, offset)]
+  end
+
+  defp adjust_vectorized_args(:gather, args, _offset), do: args
+
+  defp adjust_vectorized_args(:sort, [x | rest], offset) do
+    [x | adjust_keyword_axis(rest, offset)]
+  end
+
+  defp adjust_vectorized_args(:squeeze, [x, axes], offset) do
+    [x, offset_axes(axes, offset)]
+  end
+
+  defp adjust_vectorized_args(:transpose, [x, axes], offset) do
+    [x, offset_axes(axes, offset)]
+  end
+
+  defp adjust_vectorized_args(:broadcast, [x, shape, axes], offset) do
+    adjusted_shape =
+      shape
+      |> Tuple.to_list()
+      |> Enum.drop(offset)
+      |> List.to_tuple()
+
+    [x, adjusted_shape, offset_axes(axes, offset)]
+  end
+
+  defp adjust_vectorized_args(op, [tensors, axis], offset)
+       when op in [:stack, :concatenate] do
+    [tensors, axis - offset]
+  end
+
+  defp adjust_vectorized_args(:dot, [x, axes_x, batch_x, y, axes_y, batch_y], offset) do
+    [
+      x,
+      offset_axes(axes_x, offset),
+      offset_axes(batch_x, offset),
+      y,
+      offset_axes(axes_y, offset),
+      offset_axes(batch_y, offset)
+    ]
+  end
+
+  defp adjust_vectorized_args(:pad, [x, value, padding_config], offset) do
+    [x, value, Enum.drop(padding_config, offset)]
+  end
+
+  @window_ops [:window_sum, :window_product, :window_min, :window_max]
+
+  defp adjust_vectorized_args(op, [x, window_dimensions, opts], offset)
+       when op in @window_ops do
+    adjusted_dims =
+      window_dimensions
+      |> Tuple.to_list()
+      |> Enum.drop(offset)
+      |> List.to_tuple()
+
+    adjusted_opts =
+      opts
+      |> adjust_keyword_drop(:strides, offset)
+      |> adjust_keyword_drop(:window_dilations, offset)
+      |> adjust_keyword_padding(:padding, offset)
+
+    [x, adjusted_dims, adjusted_opts]
+  end
+
+  defp adjust_vectorized_args(op, [tensor, source, init_value, window_dimensions, opts], offset)
+       when op in [:window_scatter_max, :window_scatter_min] do
+    padding = Enum.drop(opts[:padding], offset)
+    strides = Enum.drop(opts[:strides], offset)
+
+    window_dimensions =
+      window_dimensions
+      |> Tuple.to_list()
+      |> Enum.drop(offset)
+      |> List.to_tuple()
+
+    opts = Keyword.merge(opts, padding: padding, strides: strides)
+    [tensor, source, init_value, window_dimensions, opts]
+  end
+
+  defp adjust_vectorized_args(:slice, [x, start_indices, lengths, strides], offset) do
+    [x, Enum.drop(start_indices, offset), Enum.drop(lengths, offset), Enum.drop(strides, offset)]
+  end
+
+  defp adjust_vectorized_args(:put_slice, [x, start_indices, update], offset) do
+    [x, Enum.drop(start_indices, offset), update]
+  end
+
+  defp adjust_vectorized_args(op, args, _offset) when op in [:indexed_add, :indexed_put] do
+    args
+  end
+
+  defp adjust_vectorized_args(:fft, [x | rest], offset) do
+    [x | adjust_keyword_axis(rest, offset)]
+  end
+
+  defp adjust_vectorized_args(:ifft, [x | rest], offset) do
+    [x | adjust_keyword_axis(rest, offset)]
+  end
+
+  defp adjust_vectorized_args(:conv, args, _offset), do: args
+
+  defp adjust_vectorized_args(_op, args, _offset), do: args
+
+  defp offset_axes(axes, offset) when is_list(axes) do
+    axes
+    |> Enum.map(&(&1 - offset))
+    |> Enum.filter(&(&1 >= 0))
+  end
+
+  defp adjust_keyword_axes(opts_list, offset) do
+    Enum.map(opts_list, fn
+      opts when is_list(opts) ->
+        case Keyword.fetch(opts, :axes) do
+          {:ok, axes} when is_list(axes) ->
+            Keyword.put(opts, :axes, offset_axes(axes, offset))
+
+          _ ->
+            opts
+        end
+
+      other ->
+        other
+    end)
+  end
+
+  defp adjust_keyword_axis(opts_list, offset) do
+    Enum.map(opts_list, fn
+      opts when is_list(opts) ->
+        case Keyword.fetch(opts, :axis) do
+          {:ok, axis} when is_integer(axis) ->
+            Keyword.put(opts, :axis, axis - offset)
+
+          _ ->
+            opts
+        end
+
+      other ->
+        other
+    end)
+  end
+
+  defp adjust_keyword_drop(opts, key, offset) do
+    case Keyword.fetch(opts, key) do
+      {:ok, list} when is_list(list) -> Keyword.put(opts, key, Enum.drop(list, offset))
+      _ -> opts
+    end
+  end
+
+  defp adjust_keyword_padding(opts, key, offset) do
+    case Keyword.fetch(opts, key) do
+      {:ok, list} when is_list(list) -> Keyword.put(opts, key, Enum.drop(list, offset))
+      {:ok, atom} when is_atom(atom) -> opts
+      _ -> opts
+    end
   end
 
   defp update_grads(:elem, [%{type: {:tuple, size}} = tuple, pos], _ans, g, _to_grad_ids, grads) do
@@ -292,8 +582,22 @@ defmodule Nx.Defn.Grad do
     end)
   end
 
-  defp update_grads(:optional, [_call, expr, _callback], _ans, gs, _to_grad_ids, grads) do
+  defp update_grads(:optional, [call, expr, _callback], _ans, gs, _to_grad_ids, grads) do
     gs = List.wrap(gs)
+
+    # apply_vectorized boundary: inner computation is devectorized
+    gs =
+      if call.vectorized_axes == [] do
+        Enum.map(gs, fn
+          %Nx.Tensor{vectorized_axes: va} = g when va != [] ->
+            Nx.devectorize(g, keep_names: false)
+
+          g ->
+            g
+        end)
+      else
+        gs
+      end
 
     {grads, []} =
       Composite.reduce(expr, {grads, gs}, fn child, {grads, [g | gs]} ->
@@ -305,6 +609,17 @@ defmodule Nx.Defn.Grad do
 
   defp update_grads(:while, [initial, arg, condition, body], _ans, gs, _to_grad_ids, grads) do
     gs = List.wrap(gs)
+
+    # While body operates in devectorized space
+    gs =
+      Enum.map(gs, fn
+        %Nx.Tensor{vectorized_axes: va} = g when va != [] ->
+          Nx.devectorize(g, keep_names: false)
+
+        g ->
+          g
+      end)
+
     flatten_initial = Composite.flatten_list([initial])
     context = hd(flatten_initial).data.context
     arg_context = condition.data.context
@@ -354,17 +669,22 @@ defmodule Nx.Defn.Grad do
     gs = List.wrap(gs)
     to_grad = Composite.flatten_list([to_grad])
 
+    # Prevent cross-contamination when vectorized cond creates separate
+    # cond_then/cond_else nodes sharing the same to_grad variables
+    clean_grads =
+      Enum.reduce(to_grad, grads, fn tg, g -> Map.delete(g, tg.data.id) end)
+
     clauses =
       Enum.map([{true, last} | clauses], fn {head, body} ->
         {parents, nodes} = parents_tree(body, ids)
 
-        {grads, []} =
-          Composite.reduce(body, {grads, gs}, fn arg, {grads, [g | gs]} ->
+        {body_grads, []} =
+          Composite.reduce(body, {clean_grads, gs}, fn arg, {grads, [g | gs]} ->
             {Map.put(grads, arg.data.id, [g]), gs}
           end)
 
         {graded, _} =
-          Enum.map_reduce(to_grad, {nodes, grads}, &to_grad(&1, to_grad_ids, parents, &2))
+          Enum.map_reduce(to_grad, {nodes, body_grads}, &to_grad(&1, to_grad_ids, parents, &2))
 
         {head, graded}
       end)
@@ -485,12 +805,24 @@ defmodule Nx.Defn.Grad do
     ]
   end
 
-  defp grad(:squeeze, [x, axes], _ans, g) do
-    [{x, Nx.broadcast(g, x.shape, axes: Nx.axes(x.shape) -- axes)}]
+  defp grad(:squeeze, [x, _axes], _ans, g) do
+    [{x, Nx.reshape(g, x)}]
   end
 
   defp grad(:reshape, [x], _ans, g) do
-    [{x, Nx.reshape(g, x)}]
+    if g.vectorized_axes != x.vectorized_axes do
+      # Vectorized axes differ (e.g., g has batch from vectorize in forward,
+      # x has none). Devectorize g so reshape can cross the boundary.
+      g_devec = Nx.devectorize(g, keep_names: false)
+
+      if Nx.size(g_devec) == Nx.size(x) do
+        [{x, Nx.reshape(g_devec, x)}]
+      else
+        [{x, Nx.reshape(g, x)}]
+      end
+    else
+      [{x, Nx.reshape(g, x)}]
+    end
   end
 
   defp grad(:transpose, [x, axes], _ans, g) do
@@ -530,17 +862,29 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:indexed_put, [target, indices, updates, opts], _ans, g) do
+    vec_axes = g.vectorized_axes
+    g = Nx.devectorize(g, keep_names: false)
+
     zeros = Nx.broadcast(Expr.tensor(0.0), updates)
-    target_g = Nx.indexed_put(g, indices, zeros, opts)
-    updates_g = g |> Nx.gather(indices, opts) |> Nx.reshape(updates.shape)
+    target_g = Nx.indexed_put(g, indices, zeros, opts) |> Nx.vectorize(vec_axes)
+
+    updates_g =
+      g |> Nx.gather(indices, opts) |> Nx.reshape(updates.shape) |> Nx.vectorize(vec_axes)
+
     indices_g = Nx.broadcast(Expr.tensor(0.0), indices)
 
     [{target, target_g}, {indices, indices_g}, {updates, updates_g}]
   end
 
   defp grad(:indexed_add, [target, indices, updates, opts], _ans, g) do
-    target_g = g
-    updates_g = g |> Nx.gather(indices, opts) |> Nx.reshape(updates.shape)
+    vec_axes = g.vectorized_axes
+    g = Nx.devectorize(g, keep_names: false)
+
+    target_g = Nx.vectorize(g, vec_axes)
+
+    updates_g =
+      g |> Nx.gather(indices, opts) |> Nx.reshape(updates.shape) |> Nx.vectorize(vec_axes)
+
     indices_g = Nx.broadcast(Expr.tensor(0.0), indices)
 
     [{target, target_g}, {indices, indices_g}, {updates, updates_g}]
@@ -680,7 +1024,7 @@ defmodule Nx.Defn.Grad do
         g,
         window_dimensions,
         strides: base_dilation,
-        padding: List.duplicate({0, 0}, Nx.rank(x)),
+        padding: :valid,
         window_dilations: window_dilation
       )
 
@@ -705,12 +1049,22 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:concatenate, [tensors, axis], ans, g) do
+    # When tensors are devectorized in the expr tree, their shapes include
+    # vectorized dims but `axis` refers to the inner shape. Offset by the
+    # difference between tensor rank and ans (inner) rank.
+    t_offset =
+      case tensors do
+        [t | _] -> tuple_size(t.shape) - tuple_size(ans.shape)
+        _ -> 0
+      end
+
+    adjusted_axis = axis + t_offset
     zero_axes = List.duplicate(0, Nx.rank(ans))
     ans_shape_list = Tuple.to_list(ans.shape)
 
     {pairs, _} =
       Enum.map_reduce(tensors, 0, fn t, limit ->
-        t_len = elem(t.shape, axis)
+        t_len = elem(t.shape, adjusted_axis)
         current_limit = t_len + limit
         start = List.replace_at(zero_axes, axis, limit)
         len = List.replace_at(ans_shape_list, axis, t_len)
@@ -729,23 +1083,26 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:gather, [t, i, opts], _ans, g) do
+    vec_axes = g.vectorized_axes
+    g = Nx.devectorize(g, keep_names: false)
+
     i_axes = opts[:axes]
     i_shape = i.shape
     t_shape = t.shape
 
     num_elements = Tuple.product(i_shape) |> div(elem(i_shape, tuple_size(i_shape) - 1))
-    updates_shape = for i <- Nx.axes(t), i not in i_axes, do: elem(t_shape, i)
+    updates_shape = for idx <- Nx.axes(t), idx not in i_axes, do: elem(t_shape, idx)
 
     indices = Nx.reshape(i, {num_elements, :auto})
     updates = Nx.reshape(g, List.to_tuple([num_elements | updates_shape]))
 
-    g =
+    result =
       0
       |> Nx.as_type(t.type)
       |> Nx.broadcast(t_shape)
       |> Nx.indexed_add(indices, updates, opts)
 
-    [{t, g}]
+    [{t, Nx.vectorize(result, vec_axes)}]
   end
 
   defp grad(:add, [x, y], ans, g) do
@@ -1075,16 +1432,22 @@ defmodule Nx.Defn.Grad do
         # which means that:
         # A_bar = inv(A^H).X_bar.X^H
         # B_bar = inv(A^H).X_bar
-        da = a_inv_hermitian |> Nx.dot(g |> Nx.dot(Nx.LinAlg.adjoint(x))) |> Nx.negate()
-        db = Nx.dot(a_inv_hermitian, g)
+        da = a_inv_hermitian |> batched_dot(batched_dot(g, Nx.LinAlg.adjoint(x))) |> Nx.negate()
+        db = batched_dot(a_inv_hermitian, g)
         {da, db}
       else
         # X.A = B -> X = B.inv(A)
         # taking a similar approach to the branch above, we get
         # A_bar = -X^H.X_bar.inv(A^H)
         # B_bar = X_bar.inv(A^H)
-        da = x |> Nx.LinAlg.adjoint() |> Nx.dot(g) |> Nx.dot(a_inv_hermitian) |> Nx.negate()
-        db = Nx.dot(g, a_inv_hermitian)
+        da =
+          x
+          |> Nx.LinAlg.adjoint()
+          |> batched_dot(g)
+          |> batched_dot(a_inv_hermitian)
+          |> Nx.negate()
+
+        db = batched_dot(g, a_inv_hermitian)
         {da, db}
       end
 
@@ -1209,6 +1572,19 @@ defmodule Nx.Defn.Grad do
   ## Conv
 
   defp grad_conv(x, y, opts, ans, g) do
+    # Vectorized dim is already in batch via batch_group_size — devectorize
+    {x, y, ans, g} =
+      if ans.vectorized_axes != [] do
+        x = Nx.devectorize(x, keep_names: false)
+        y = Nx.devectorize(y, keep_names: false)
+        ans = Nx.devectorize(ans, keep_names: false)
+        g = Nx.devectorize(g, keep_names: false)
+        g = if tuple_size(g.shape) > tuple_size(ans.shape), do: Nx.reshape(g, ans), else: g
+        {x, y, ans, g}
+      else
+        {x, y, ans, g}
+      end
+
     g = Nx.broadcast(g, ans)
 
     input_permutation = opts[:input_permutation]
@@ -1233,14 +1609,28 @@ defmodule Nx.Defn.Grad do
     rhs_sdims = conv_sdims(y.shape, rhs_sdim_axes)
     out_sdims = conv_sdims(g.shape, out_sdim_axes)
 
+    # When conv is used with vectorized inputs, batch_group_size includes
+    # the vectorized_size multiplier. But the kernel may not have been
+    # expanded by that factor (e.g., shared kernel across vectorized batch).
+    # Adjust batch_group_size to match what the kernel actually has.
+    kernel_out_channels = elem(y.shape, rhs0)
+
+    effective_batch_group_size =
+      if batch_group_size > 1 and rem(kernel_out_channels, batch_group_size) != 0 do
+        # Find the largest factor of batch_group_size that divides kernel_out_channels
+        Enum.find(batch_group_size..1//-1, 1, &(rem(kernel_out_channels, &1) == 0))
+      else
+        batch_group_size
+      end
+
     rhs =
       cond do
         feature_group_size > 1 ->
           y = reshape_axis_out_of(rhs0, feature_group_size, y)
           reshape_axis_into(rhs0, rhs1, y)
 
-        batch_group_size > 1 ->
-          y = reshape_axis_out_of(rhs0, batch_group_size, y)
+        effective_batch_group_size > 1 ->
+          y = reshape_axis_out_of(rhs0, effective_batch_group_size, y)
           reshape_axis_into(rhs0, rhs1, y)
 
         true ->
@@ -1270,12 +1660,14 @@ defmodule Nx.Defn.Grad do
       )
 
     lhs_feature_group_size =
-      if batch_group_size > 1, do: batch_group_size, else: feature_group_size
+      if effective_batch_group_size > 1,
+        do: effective_batch_group_size,
+        else: feature_group_size
 
     {rhs_feature_group_size, rhs_batch_group_size} =
       cond do
-        batch_group_size > 1 ->
-          {batch_group_size, 1}
+        effective_batch_group_size > 1 ->
+          {effective_batch_group_size, 1}
 
         feature_group_size > 1 ->
           {1, feature_group_size}
@@ -1300,8 +1692,8 @@ defmodule Nx.Defn.Grad do
       )
 
     gx =
-      if batch_group_size > 1 do
-        gx = reshape_axis_out_of(lhs1, batch_group_size, gx)
+      if effective_batch_group_size > 1 do
+        gx = reshape_axis_out_of(lhs1, effective_batch_group_size, gx)
         reshape_axis_into(lhs1, lhs0, gx)
       else
         gx
@@ -1400,19 +1792,42 @@ defmodule Nx.Defn.Grad do
 
   defp unbroadcast(%{shape: shape} = x, res, %{shape: shape}), do: {x, res}
 
-  defp unbroadcast(%{shape: shape} = x, res, %{shape: new_shape}) do
-    axes = Nx.Shape.broadcast_axes(shape, new_shape)
-    {x, grad_broadcast(x, new_shape, axes, res)}
+  defp unbroadcast(%{shape: shape} = x, res, %{shape: new_shape} = ans) do
+    if tuple_size(shape) > tuple_size(new_shape) and
+         Keyword.keys(x.vectorized_axes) != Keyword.keys(ans.vectorized_axes) do
+      # x and ans have different vectorized axis names, so their inner shapes
+      # are in different coordinate systems. Devectorize both to compare.
+      x_full = List.to_tuple(Keyword.values(x.vectorized_axes) ++ Tuple.to_list(shape))
+      ans_full = List.to_tuple(Keyword.values(ans.vectorized_axes) ++ Tuple.to_list(new_shape))
+      axes = Nx.Shape.broadcast_axes(x_full, ans_full)
+      extra_axes = Nx.axes(ans_full) -- axes
+      g = if extra_axes == [], do: res, else: Nx.sum(res, axes: extra_axes)
+      {x, Nx.reshape(g, x)}
+    else
+      axes = Nx.Shape.broadcast_axes(shape, new_shape)
+      {x, grad_broadcast(x, new_shape, axes, res)}
+    end
   end
 
   defp grad_broadcast(x, shape, axes, g) do
+    # When x has been devectorized, x.shape may have extra leading dims
+    # that aren't reflected in `axes` (which map x's inner dims to shape).
+    # Offset axes indices into x.shape by the difference in rank.
+    x_offset = tuple_size(x.shape) - length(axes)
+
     implicit_axes =
       for {a, i} <- Enum.with_index(axes),
-          elem(shape, a) != 1 and elem(x.shape, i) == 1,
-          do: {a, i}
+          elem(shape, a) != 1 and elem(x.shape, i + x_offset) == 1,
+          do: {a, i + x_offset}
 
     {implicit_axes, broadcast_axes} = Enum.unzip(implicit_axes)
     explicit_axes = Nx.axes(shape) -- axes
+
+    # Offset explicit_axes into g's coordinate system if g has vectorized dims
+    g_offset = Nx.rank(g.shape) - tuple_size(shape)
+
+    explicit_axes =
+      if g_offset > 0, do: Enum.map(explicit_axes, &(&1 + g_offset)), else: explicit_axes
 
     g =
       case explicit_axes ++ implicit_axes do
@@ -1433,8 +1848,12 @@ defmodule Nx.Defn.Grad do
     if keep_axes || !axes do
       Nx.broadcast(g, x)
     else
-      axes = Nx.axes(x.shape) -- axes
-      Nx.broadcast(g, x, axes: axes)
+      # Reinsert size-1 dims at the reduced axis positions, then broadcast.
+      # This is equivalent to using keep_axes: true and avoids the explicit
+      # axes mapping in Nx.broadcast which breaks with vectorized tensors.
+      unsqueezed_shape = Enum.reduce(axes, Nx.shape(x), &put_elem(&2, &1, 1))
+      g = Nx.reshape(g, unsqueezed_shape)
+      Nx.broadcast(g, x)
     end
   end
 
@@ -1513,5 +1932,16 @@ defmodule Nx.Defn.Grad do
   defp grad_scatter_window__generate_window_start_indices([head | tail]) do
     tail_product = grad_scatter_window__generate_window_start_indices(tail)
     for h <- head, t <- tail_product, do: [h | t]
+  end
+
+  defp batched_dot(a, b) do
+    rank = tuple_size(a.shape)
+
+    if rank <= 2 do
+      Nx.dot(a, b)
+    else
+      batch_axes = Enum.to_list(0..(rank - 3))
+      Nx.dot(a, [-1], batch_axes, b, [-2], batch_axes)
+    end
   end
 end
