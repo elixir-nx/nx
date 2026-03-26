@@ -28,6 +28,7 @@ defmodule Nx.Defn.Grad do
 
     output_vectorized_axes = transformed_expr.vectorized_axes
     batch_count = length(output_vectorized_axes)
+    validate_vectorized_grad!(to_grad)
     to_grad_ids = {to_grad, ids, batch_count}
 
     # Seed the backward pass in devectorized space.
@@ -49,6 +50,26 @@ defmodule Nx.Defn.Grad do
   defp constant(float, %T{shape: shape} = t) do
     names = List.duplicate(nil, tuple_size(shape))
     Expr.constant(%{t | names: names, type: {:f, 32}}, float, [])
+  end
+
+  defp validate_vectorized_grad!(to_grad) do
+    vec_axes_sets =
+      [to_grad]
+      |> Composite.flatten_list()
+      |> Enum.map(&Keyword.keys(&1.vectorized_axes))
+      |> Enum.reject(&(&1 == []))
+      |> Enum.uniq()
+
+    case vec_axes_sets do
+      [_, _ | _] ->
+        raise ArgumentError,
+              "grad does not support inputs with different vectorized axis names. " <>
+                "Found: #{inspect(vec_axes_sets)}. " <>
+                "All vectorized inputs must share the same axis names"
+
+      _ ->
+        :ok
+    end
   end
 
   defp validate_expr!(%T{data: %Expr{}} = expr) do
