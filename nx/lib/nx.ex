@@ -14313,8 +14313,8 @@ defmodule Nx do
       out = %{tensor | shape: inner_shape, names: inner_names}
 
       block(struct(Nx.Block.Take, axis: axis), [tensor, indices], out, fn %Nx.Block.Take{},
-                                                                            tensor,
-                                                                            indices ->
+                                                                          tensor,
+                                                                          indices ->
         gather_indices = new_axis(indices, rank(indices))
         {indices_axes, tensor_axes} = Enum.split(axes(inner_shape), rank(indices))
         {leading, trailing} = Enum.split(tensor_axes, axis)

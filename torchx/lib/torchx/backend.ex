@@ -61,8 +61,8 @@ defmodule Torchx.Backend do
       Nx.Block.Eigh,
       Nx.Block.Solve,
       Nx.Block.Determinant,
-      Nx.Block.Cholesky,
-      #matrix_power
+      Nx.Block.Cholesky
+      # matrix_power
     ]
 
     device =

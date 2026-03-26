@@ -1633,7 +1633,10 @@ defmodule Nx.Defn.Expr do
     recur_inspect(tensor, state)
   end
 
-  defp recur_inspect(%T{data: %Expr{op: :block, args: [_struct, _in_args, body, _callback]}}, state) do
+  defp recur_inspect(
+         %T{data: %Expr{op: :block, args: [_struct, _in_args, body, _callback]}},
+         state
+       ) do
     recur_inspect(body, state)
   end
 
