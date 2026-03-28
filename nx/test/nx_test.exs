@@ -2744,7 +2744,7 @@ defmodule NxTest do
       ]
 
       assert {1, :little, _} =
-               serialized |> :erlang.iolist_to_binary() |> :erlang.binary_to_term()
+               serialized |> :erlang.iolist_to_binary() |> :erlang.binary_to_term([:safe])
 
       assert Nx.deserialize(serialized) == %Container{
                a: {Nx.tensor(1, type: :s64), Nx.tensor(2, type: :s64)},

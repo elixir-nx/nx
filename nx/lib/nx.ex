@@ -15563,6 +15563,8 @@ defmodule Nx do
   """
   @doc type: :conversion
   def deserialize(data, opts \\ []) do
+    opts = if :safe in opts, do: opts, else: [:safe | opts]
+
     data
     |> IO.iodata_to_binary()
     |> deserialize_binary(opts)

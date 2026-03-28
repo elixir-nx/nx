@@ -12,7 +12,7 @@ defmodule EXLA.Defn.Disk do
     cached =
       case File.read(cache) do
         {:ok, <<"EXLA", @version, blob::binary>>} ->
-          case :erlang.binary_to_term(blob) do
+          case :erlang.binary_to_term(blob, [:safe]) do
             {^keys, executable, value} ->
               debug? && Logger.debug("EXLA disk cache found at #{inspect(cache)}")
               {EXLA.Executable.load(client, executable), value}
