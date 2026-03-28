@@ -309,7 +309,8 @@ std::variant<std::tuple<fine::Atom, uint64_t, uint64_t>,
              std::tuple<fine::Atom, std::string, uint64_t, uint64_t>,
              std::tuple<fine::Atom, std::string, uint64_t>>
 get_buffer_device_pointer(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
-                          fine::Term buffer_term, fine::Atom pointer_kind) {
+                          fine::Term buffer_term, fine::Atom pointer_kind,
+                          int64_t shm_permissions) {
   auto buffer = decode_exla_buffer(env, buffer_term);
 
   uint64_t device_size = unwrap(buffer->GetOnDeviceSizeInBytes());
@@ -322,7 +323,8 @@ get_buffer_device_pointer(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
   if (pointer_kind == "host_ipc") {
     auto handle_name =
         "exla:ipc:" + std::to_string(device_size) + ":" + std::to_string(ptr);
-    auto fd = get_ipc_handle(handle_name.c_str(), device_size);
+    auto fd = get_ipc_handle(handle_name.c_str(), device_size,
+                             static_cast<mode_t>(shm_permissions));
 
     if (fd == -1) {
       throw std::runtime_error("unable to get IPC handle");

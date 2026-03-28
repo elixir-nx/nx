@@ -55,7 +55,8 @@ defmodule EXLA.NIF do
   def mlir_get_typespec(_tensor), do: err!()
   def mlir_module_to_string(_builder), do: err!()
 
-  def get_buffer_device_pointer(_client, _buffer, _pointer_kind), do: err!()
+  def get_buffer_device_pointer(_client, _buffer, _pointer_kind, _shm_permissions),
+    do: err!()
 
   def create_buffer_from_device_pointer(
         _client,

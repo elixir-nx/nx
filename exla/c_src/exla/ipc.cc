@@ -6,9 +6,11 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-// Function to create or open a shared memory object and set its size
-int get_ipc_handle(const char* memname, size_t memsize) {
-  int fd = shm_open(memname, O_CREAT | O_RDWR, 0666);
+// Create or open a shared memory object and set its size. `mode` is the
+// file mode bits forwarded to shm_open(3). The default is chosen in the
+// Elixir caller (EXLA.Backend.to_pointer/2).
+int get_ipc_handle(const char* memname, size_t memsize, mode_t mode) {
+  int fd = shm_open(memname, O_CREAT | O_RDWR, mode);
   if (fd == -1) {
     return -1;
   }
