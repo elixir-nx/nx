@@ -321,25 +321,27 @@ defmodule Nx.Defn.ExprTest do
       a = Expr.parameter(nil, {:s, 32}, {2, 2}, 0)
       {q, r} = Nx.LinAlg.qr(a)
 
-      q_inspect = inspect(q, safe: false)
-      r_inspect = inspect(r, safe: false)
-
-      # We no longer assert on the full lowered graph structure here,
-      # only that the inspected representation has the expected header
-      # and shape information and that it is an Expr-based tensor.
-      assert q_inspect =~ """
+      assert inspect(q, safe: false) == """
              #Nx.Tensor<
                f32[2][2]
+             \s\s
+               Nx.Defn.Expr
+               parameter a:0                                             s32[2][2]
+               b = block %Nx.Block.QR{eps: 1.0e-10, mode: :reduced}, a   tuple2
+               c = elem b, 0                                             f32[2][2]
+             >\
              """
 
-      assert q_inspect =~ "Nx.Defn.Expr"
-
-      assert r_inspect =~ """
+      assert inspect(r, safe: false) == """
              #Nx.Tensor<
                f32[2][2]
+             \s\s
+               Nx.Defn.Expr
+               parameter a:0                                             s32[2][2]
+               b = block %Nx.Block.QR{eps: 1.0e-10, mode: :reduced}, a   tuple2
+               c = elem b, 1                                             f32[2][2]
+             >\
              """
-
-      assert r_inspect =~ "Nx.Defn.Expr"
     end
 
     test "with tuple and cond" do

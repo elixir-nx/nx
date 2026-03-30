@@ -288,13 +288,28 @@ defmodule Nx.Defn.GraphTest do
       assert stage_1.arguments == [%{source: {nil, 0}}, %{source: {stage_0.id, 0}}]
 
       assert %T{data: %Expr{op: :subtract, args: [c, d]}} = stage_1.expr
-      assert %T{data: %Expr{id: _arg_0_id, op: :parameter, args: [0]}} = d
+      assert %T{data: %Expr{op: :block, args: [%Nx.Block.LogicalNot{}, in_args, subexpr, _fun]}} =
+               c
 
-      # :optional has been deprecated; callback lowering now appears
-      # directly in the expression graph.
-      assert match?(%Nx.Tensor{}, c)
-      assert c.data.op in [:block, :equal]
-      assert inspect(c, safe: false) =~ "equal"
+      assert %T{data: %Expr{id: arg_0_id, op: :parameter, args: [0]}} = d
+
+      assert [arg] = in_args
+      assert %T{data: %Expr{op: :sum, args: [a, [axes: [1], keep_axes: false]]}} = arg
+      assert %T{data: %Expr{id: arg_1_id, op: :parameter, args: [1]}} = a
+
+      assert %T{
+               data: %Expr{
+                 op: :equal,
+                 args: [
+                   %T{data: %Expr{id: subexpr_arg_0_id, op: :parameter, args: [0]}},
+                   %T{data: %Expr{op: :constant, args: [0]}}
+                 ]
+               }
+             } = subexpr
+
+      # ensure subexpr is hermetic
+      assert subexpr_arg_0_id != arg_0_id
+      assert subexpr_arg_0_id != arg_1_id
     end
 
     test "supports in-line anonymous functions" do

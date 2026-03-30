@@ -26,31 +26,31 @@ defmodule Nx.Block do
   end
 
   @doc false
-  def backend_args(%{__struct__: Nx.Block.QR, mode: m, eps: e}, [t]),
+  def backend_args(%Nx.Block.QR{mode: m, eps: e}, [t]),
     do: [t, [mode: m, eps: e]]
 
-  def backend_args(%{__struct__: Nx.Block.Eigh, max_iter: mi, eps: e}, [t]),
+  def backend_args(%Nx.Block.Eigh{max_iter: mi, eps: e}, [t]),
     do: [t, [max_iter: mi, eps: e]]
 
-  def backend_args(%{__struct__: Nx.Block.LU, eps: e}, [t]),
+  def backend_args(%Nx.Block.LU{eps: e}, [t]),
     do: [t, [eps: e]]
 
-  def backend_args(%{__struct__: Nx.Block.SVD, max_iter: mi, full_matrices?: fm}, [t]),
+  def backend_args(%Nx.Block.SVD{max_iter: mi, full_matrices?: fm}, [t]),
     do: [t, [max_iter: mi, full_matrices?: fm]]
 
   def backend_args(
-        %{__struct__: Nx.Block.AllClose, equal_nan: en, rtol: r, atol: a},
+        %Nx.Block.AllClose{equal_nan: en, rtol: r, atol: a},
         [a_t, b_t]
       ),
       do: [a_t, b_t, [equal_nan: en, rtol: r, atol: a]]
 
-  def backend_args(%{__struct__: Nx.Block.Take, axis: ax}, [t, i]),
+  def backend_args(%Nx.Block.Take{axis: ax}, [t, i]),
     do: [t, i, [axis: ax]]
 
-  def backend_args(%{__struct__: Nx.Block.TakeAlongAxis, axis: ax}, [t, i]),
+  def backend_args(%Nx.Block.TakeAlongAxis{axis: ax}, [t, i]),
     do: [t, i, [axis: ax]]
 
-  def backend_args(%{__struct__: Nx.Block.TopK, k: k}, [t]),
+  def backend_args(%Nx.Block.TopK{k: k}, [t]),
     do: [t, [k: k]]
 
   def backend_args(%{__struct__: mod, eps: eps, lengths: lengths, axes: axes}, [t])

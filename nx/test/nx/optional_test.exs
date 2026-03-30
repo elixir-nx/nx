@@ -227,50 +227,31 @@ defmodule Nx.OptionalTest do
                           |> Nx.backend_transfer(Nx.BinaryBackend)
                           |> Nx.sum()
                           |> Nx.to_number()
-               end) =~ "#Nx.Tensor<\n  f32\n"
-
-        assert ExUnit.CaptureIO.capture_io(fn ->
-                 assert 0 ==
-                          {3, 3}
-                          |> Nx.iota(backend: unquote(backend))
-                          |> det_print()
-                          |> Nx.backend_transfer(Nx.BinaryBackend)
-                          |> Nx.sum()
-                          |> Nx.to_number()
-               end) =~ "Nx.Defn.Expr\n"
-
-        assert ExUnit.CaptureIO.capture_io(fn ->
-                 assert 0 ==
-                          {3, 3}
-                          |> Nx.iota(backend: unquote(backend))
-                          |> det_print()
-                          |> Nx.backend_transfer(Nx.BinaryBackend)
-                          |> Nx.sum()
-                          |> Nx.to_number()
-               end) =~ "parameter a:0"
-
-        assert ExUnit.CaptureIO.capture_io(fn ->
-                 assert 0 ==
-                          {3, 3}
-                          |> Nx.iota(backend: unquote(backend))
-                          |> det_print()
-                          |> Nx.backend_transfer(Nx.BinaryBackend)
-                          |> Nx.sum()
-                          |> Nx.to_number()
-               end) =~ "s32[3][3]"
+               end) =~ """
+               #Nx.Tensor<
+                 f32
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0                          s32[3][3]
+                 b = block %Nx.Block.Determinant{}, a   f32
+               >
+               """
       end
     end
 
     test "works with direct call" do
-      captured =
-        ExUnit.CaptureIO.capture_io(fn ->
-          Nx.Defn.jit(&det_print/1).(Nx.iota({3, 3}))
-        end)
-
-      assert captured =~ "#Nx.Tensor<\n  f32\n"
-      assert captured =~ "Nx.Defn.Expr\n"
-      assert captured =~ "parameter a:0"
-      assert captured =~ "s32[3][3]"
+      assert ExUnit.CaptureIO.capture_io(fn ->
+               Nx.Defn.jit(&det_print/1).(Nx.iota({3, 3}))
+             end) =~
+               """
+               #Nx.Tensor<
+                 f32
+               \s\s
+                 Nx.Defn.Expr
+                 parameter a:0                          s32[3][3]
+                 b = block %Nx.Block.Determinant{}, a   f32
+               >
+               """
     end
   end
 end
