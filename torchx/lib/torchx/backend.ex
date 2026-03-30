@@ -50,9 +50,6 @@ defmodule Torchx.Backend do
 
   @impl true
   def block(%block_name{} = struct, args, fun) do
-    default_impl = fn args ->
-      apply(fun, [struct | args])
-    end
 
     # For MPS device, some linear algebra operations are not supported.
     # Delegate to default implementation which will fall back to elementary Nx operations.
@@ -62,7 +59,6 @@ defmodule Torchx.Backend do
       Nx.Block.Solve,
       Nx.Block.Determinant,
       Nx.Block.Cholesky
-      # matrix_power
     ]
 
     device =
@@ -71,10 +67,10 @@ defmodule Torchx.Backend do
         _ -> :cpu
       end
 
+    dispatched = Nx.Block.backend_args(struct, args) |> IO.inspect(label: "dispatched")
     if device == :mps and block_name in mps_unsupported do
-      default_impl.(args)
+      apply(fun, [struct | args])
     else
-      dispatched = Nx.Block.backend_args(struct, args)
 
       case block_name do
         Nx.Block.QR -> apply(&qr_impl/2, dispatched)
@@ -84,7 +80,7 @@ defmodule Torchx.Backend do
         Nx.Block.Cholesky -> apply(&cholesky_impl/1, dispatched)
         Nx.Block.SVD -> apply(&svd_impl/2, dispatched)
         Nx.Block.Determinant -> apply(&determinant_impl/1, dispatched)
-        _ -> default_impl.(args)
+        _ -> apply(fun, [struct | args])
       end
     end
   end

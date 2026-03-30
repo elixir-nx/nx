@@ -6903,11 +6903,11 @@ defmodule Nx do
     backend_args = Nx.Block.backend_args(struct, args)
 
     cond do
-      function_exported?(backend, :block, 3) ->
-        backend.block(struct, args, fun)
-
       function_exported?(backend, name, length(backend_args) + 1) ->
         apply(backend, name, [output | backend_args])
+
+      function_exported?(backend, :block, 3) ->
+        backend.block(struct, args, fun)
 
       true ->
         apply(fun, [struct | args])
