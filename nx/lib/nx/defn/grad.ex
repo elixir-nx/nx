@@ -133,7 +133,7 @@ defmodule Nx.Defn.Grad do
          acc,
          parent_vectorized_names
        ) do
-    expr = apply(callback, in_args)
+    expr = apply(callback, [struct | in_args])
 
     # Now traverse over the optional expression where args are the new parameters.
     # Once we access the parameter itself, we point the parameter to the arg.
