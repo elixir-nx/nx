@@ -16988,7 +16988,7 @@ defmodule Nx do
       which specify the length (0 or greater) of the reflection before and
       after the tensor along a each axis.
 
-  See also: `pad/3`
+  See also: `pad/3`, `cycle/2`, `replicate/2`, `mirror/2`
 
   ## Examples
 
@@ -17013,8 +17013,205 @@ defmodule Nx do
   def reflect(tensor, opts \\ []) do
     opts = keyword!(opts, [:padding_config])
 
+    padding_with_index(tensor,
+      padding_config: opts[:padding_config],
+      left_index_period: &left_reflect_index_period/1,
+      right_index_period: &right_reflect_index_period/1
+    )
+  end
+
+  defp left_reflect_index_period(1), do: Nx.tensor([0])
+
+  defp left_reflect_index_period(n) do
+    # Generates the indices for pre-reflecting on the axis
+    left = Nx.iota({n - 1}) |> Nx.add(1)
+    right = Nx.subtract(n - 2, Nx.iota({n - 1}))
+    Nx.concatenate([left, right])
+  end
+
+  defp right_reflect_index_period(1), do: Nx.tensor([0])
+
+  defp right_reflect_index_period(n) do
+    # Generates the indices for post-reflecting on the axis
+    left = Nx.subtract(n - 2, Nx.iota({n - 1}))
+    right = Nx.iota({n - 1}) |> Nx.add(1)
+    Nx.concatenate([left, right])
+  end
+
+  @doc """
+  Pads a tensor of rank 1 or greater along the given axes through periodic mirroring of its values.
+
+  ## Options
+
+    * `:padding_config` - A list of tuples in the format `{pre, post}`,
+      which specify the length (0 or greater) of the reflection before and
+      after the tensor along a each axis.
+
+  See also: `pad/3`, `cycle/2`, `replicate/2`, `reflect/2`
+
+  ## Examples
+
+      iex> Nx.mirror(Nx.tensor([0, 1, 2]), padding_config: [{3, 3}])
+      #Nx.Tensor<
+        s32[9]
+        [2, 1, 0, 0, 1, 2, 2, 1, 0]
+      >
+
+      iex> Nx.mirror(Nx.tensor([[0, 1, 2], [3, 4, 5]], names: [:x, :y]), padding_config: [{1, 1}, {2, 2}])
+      #Nx.Tensor<
+        s32[x: 4][y: 7]
+        [
+          [1, 0, 0, 1, 2, 2, 1],
+          [1, 0, 0, 1, 2, 2, 1],
+          [4, 3, 3, 4, 5, 5, 4],
+          [4, 3, 3, 4, 5, 5, 4]
+        ]
+      >
+  """
+  @doc type: :shape
+  def mirror(tensor, opts \\ []) do
+    opts = keyword!(opts, [:padding_config])
+
+    padding_with_index(tensor,
+      padding_config: opts[:padding_config],
+      left_index_period: &left_mirror_index_period/1,
+      right_index_period: &right_mirror_index_period/1
+    )
+  end
+
+  defp left_mirror_index_period(1), do: Nx.tensor([0])
+
+  defp left_mirror_index_period(n) do
+    # Generates the indices for pre-mirroring on the axis
+    left = Nx.iota({n})
+    right = Nx.subtract(n - 1, Nx.iota({n}))
+    Nx.concatenate([left, right])
+  end
+
+  defp right_mirror_index_period(1), do: Nx.tensor([0])
+
+  defp right_mirror_index_period(n) do
+    # Generates the indices for post-mirroring on the axis
+    left = Nx.subtract(n - 1, Nx.iota({n}))
+    right = Nx.iota({n})
+    Nx.concatenate([left, right])
+  end
+
+  @doc """
+  Pads a tensor of rank 1 or greater along the given axes through cyclic repetition of its values.
+
+  ## Options
+
+    * `:padding_config` - A list of tuples in the format `{pre, post}`,
+      which specify the length (0 or greater) of the reflection before and
+      after the tensor along a each axis.
+
+  See also: `pad/3`, `reflect/2`, `mirror/2`, `replicate/2`
+
+  ## Examples
+
+      iex> Nx.cycle(Nx.tensor([0, 1, 2]), padding_config: [{3, 1}])
+      #Nx.Tensor<
+        s32[7]
+        [0, 1, 2, 0, 1, 2, 0]
+      >
+
+      iex> Nx.cycle(Nx.tensor([[0, 1, 2], [3, 4, 5]], names: [:x, :y]), padding_config: [{2, 0}, {2, 1}])
+      #Nx.Tensor<
+        s32[x: 4][y: 6]
+        [
+          [1, 2, 0, 1, 2, 0],
+          [4, 5, 3, 4, 5, 3],
+          [1, 2, 0, 1, 2, 0],
+          [4, 5, 3, 4, 5, 3]
+        ]
+      >
+  """
+  @doc type: :shape
+  def cycle(tensor, opts \\ []) do
+    opts = keyword!(opts, [:padding_config])
+
+    padding_with_index(tensor,
+      padding_config: opts[:padding_config],
+      left_index_period: &left_cycle_index_period/1,
+      right_index_period: &right_cycle_index_period/1
+    )
+  end
+
+  defp left_cycle_index_period(1), do: Nx.tensor([0])
+
+  defp left_cycle_index_period(n) do
+    n |> Nx.subtract(Nx.iota({n})) |> Nx.subtract(1) |> Nx.remainder(n)
+  end
+
+  defp right_cycle_index_period(1), do: Nx.tensor([0])
+
+  defp right_cycle_index_period(n) do
+    Nx.iota({n})
+  end
+
+  @doc """
+  Pads a tensor of rank 1 or greater along the given axes through with its outer most values.
+
+  ## Options
+
+    * `:padding_config` - A list of tuples in the format `{pre, post}`,
+      which specify the length (0 or greater) of the reflection before and
+      after the tensor along a each axis.
+
+  See also: `pad/3`, `reflect/2`, `cycle/2`, `mirror/2`
+
+  ## Examples
+
+      iex> Nx.replicate(Nx.tensor([0, 1, 2]), padding_config: [{3, 1}])
+      #Nx.Tensor<
+        s32[7]
+        [0, 0, 0, 0, 1, 2, 2]
+      >
+
+      iex> Nx.replicate(Nx.tensor([[0, 1, 2], [3, 4, 5]], names: [:x, :y]), padding_config: [{2, 2}, {2, 2}])
+      #Nx.Tensor<
+        s32[x: 6][y: 7]
+        [
+          [0, 0, 0, 1, 2, 2, 2],
+          [0, 0, 0, 1, 2, 2, 2],
+          [0, 0, 0, 1, 2, 2, 2],
+          [3, 3, 3, 4, 5, 5, 5],
+          [3, 3, 3, 4, 5, 5, 5],
+          [3, 3, 3, 4, 5, 5, 5]
+        ]
+      >
+  """
+  @doc type: :shape
+  def replicate(tensor, opts \\ []) do
+    opts = keyword!(opts, [:padding_config])
+
+    padding_with_index(tensor,
+      padding_config: opts[:padding_config],
+      left_index_period: &left_replicate_index_period/1,
+      right_index_period: &right_replicate_index_period/1
+    )
+  end
+
+  defp left_replicate_index_period(1), do: Nx.tensor([0])
+
+  defp left_replicate_index_period(n) do
+    0 |> Nx.broadcast({n})
+  end
+
+  defp right_replicate_index_period(1), do: Nx.tensor([0])
+
+  defp right_replicate_index_period(n) do
+    (n - 1) |> Nx.broadcast({n}) |> Nx.remainder(n)
+  end
+
+  defp padding_with_index(tensor, opts) do
+    opts = keyword!(opts, [:padding_config, :left_index_period, :right_index_period])
+
     apply_vectorized(tensor, fn tensor, offset ->
       padding_config = opts[:padding_config]
+      left_index_period = opts[:left_index_period]
+      right_index_period = opts[:right_index_period]
 
       unless padding_config do
         raise ArgumentError, "missing mandatory option :padding_config"
@@ -17045,7 +17242,7 @@ defmodule Nx do
 
             left_padding =
               if(left_padding > 0) do
-                idx_period = left_reflect_index_period(n)
+                idx_period = left_index_period.(n)
                 repetitions = div(left_padding, n) + 1
 
                 idx =
@@ -17058,7 +17255,7 @@ defmodule Nx do
 
             right_padding =
               if(right_padding > 0) do
-                idx_period = right_reflect_index_period(n)
+                idx_period = right_index_period.(n)
                 repetitions = div(right_padding, n) + 1
                 idx = idx_period |> Nx.tile([repetitions]) |> Nx.take(Nx.iota({right_padding}))
                 Nx.take(tensor, idx, axis: axis)
@@ -17084,24 +17281,6 @@ defmodule Nx do
         end
       )
     end)
-  end
-
-  defp left_reflect_index_period(1), do: Nx.tensor([0])
-
-  defp left_reflect_index_period(n) do
-    # Generates the indices for pre-reflecting on the axis
-    left = Nx.iota({n - 1}) |> Nx.add(1)
-    right = Nx.subtract(n - 2, Nx.iota({n - 1}))
-    Nx.concatenate([left, right])
-  end
-
-  defp right_reflect_index_period(1), do: Nx.tensor([0])
-
-  defp right_reflect_index_period(n) do
-    # Generates the indices for post-reflecting on the axis
-    left = Nx.subtract(n - 2, Nx.iota({n - 1}))
-    right = Nx.iota({n - 1}) |> Nx.add(1)
-    Nx.concatenate([left, right])
   end
 
   @doc """
