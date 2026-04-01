@@ -1065,6 +1065,27 @@ defmodule Nx.Defn.GradTest do
       assert_all_close(lhs, rhs)
     end
 
+    test "computes gradient of kernel when image is a constant closure variable" do
+      image =
+        Nx.tensor([[0.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 0.0]])
+        |> Nx.new_axis(0)
+        |> Nx.new_axis(0)
+
+      kernel =
+        Nx.tensor([[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]])
+        |> Nx.new_axis(0)
+        |> Nx.new_axis(0)
+
+      {grad_k} =
+        Nx.Defn.grad({kernel}, fn {k} ->
+          Nx.conv(image, k) |> Nx.sum()
+        end)
+
+      # grad of sum(conv(image, k)) w.r.t. k should equal image
+      # (valid conv with same-sized kernel = inner product, so d/dk = image)
+      assert_all_close(grad_k, image)
+    end
+
     test "works with complex numbers" do
       t = Nx.reshape(~VEC[1+1i 2 3-3i], {1, 1, 3})
       k = Nx.reshape(~VEC[1 2i 3i], {1, 1, 3})
