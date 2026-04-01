@@ -303,9 +303,10 @@ defmodule Nx.Defn.Expr do
     # the while and placed directly in the return tuple, bypassing the usual
     # merge_context! checks that Nx operations perform. Tensors from nested inner
     # whiles (which carry a different {:while, ref} context) are allowed.
-    parent_context = Composite.reduce(initial, nil, fn tensor, acc ->
-      merge_context!(tensor, acc)
-    end)
+    parent_context =
+      Composite.reduce(initial, nil, fn tensor, acc ->
+        merge_context!(tensor, acc)
+      end)
 
     if parent_context != nil do
       Composite.reduce(body, nil, fn %{data: %{context: ctx}}, _acc ->
