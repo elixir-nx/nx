@@ -298,6 +298,51 @@ defmodule Nx.Defn.Expr do
             "condition for while cannot be vectorized, got: #{inspect(condition)}"
     end
 
+    # Extract the parent scope's context from `initial`. The body must not contain
+    # tensors with this context: that would mean a tensor was captured from outside
+    # the while and placed directly in the return tuple, bypassing the usual
+    # merge_context! checks that Nx operations perform. Tensors from nested inner
+    # whiles (which carry a different {:while, ref} context) are allowed.
+    parent_context =
+      Composite.reduce(initial, nil, fn tensor, acc ->
+        merge_context!(tensor, acc)
+      end)
+
+    if parent_context != nil do
+      Composite.reduce(body, nil, fn %{data: %{context: ctx}}, _acc ->
+        if ctx == parent_context do
+          raise """
+          cannot build defn because expressions come from different contexts: \
+          #{inspect(ctx)} and #{inspect(context)}.
+
+          This typically happens on "while" and inside anonymous functions when you \
+          try to access an external variable. All variables you intend to use inside \
+          "while" or anonymous functions in defn must be explicitly given as arguments.
+          For example, this is not valid:
+
+              defn increment_by_y_while_less_than_10(y) do
+                while x = 0, Nx.less(x, 10) do
+                  x + y
+                end
+              end
+
+          In the example above, we want to increment "x" by "y" while it is less than 10. \
+          However, the code won't compile because "y" is used inside "while" but not \
+          explicitly defined as part of "while". You must fix it like so:
+
+              defn increment_by_y_while_less_than_10(y) do
+                while {x = 0, y}, Nx.less(x, 10) do
+                  {x + y, y}
+                end
+              end
+
+          """
+        end
+
+        nil
+      end)
+    end
+
     args = [flatten_initial, flatten_arg, condition, flatten_body]
     flatten_to_composite(initial, context, clauses, &expr(&1, context, :while, args))
   end

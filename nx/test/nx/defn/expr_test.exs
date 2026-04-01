@@ -398,6 +398,25 @@ defmodule Nx.Defn.ExprTest do
              """
     end
 
+    # Regression test for https://github.com/elixir-nx/nx/issues/1716
+    # Captured tensors placed directly in a while return tuple should raise,
+    # not silently return zero.
+    defn while_captured_in_return_tuple(x, y) do
+      {_x, leaked_y, _count} =
+        while {x, _placeholder = Nx.tensor(0.0), count = Nx.tensor(0)},
+              Nx.less(count, 1) do
+          {x, y, count + 1}
+        end
+
+      leaked_y
+    end
+
+    test "raises on captured tensor in while return tuple" do
+      assert_raise RuntimeError,
+                   ~r"cannot build defn because expressions come from different contexts",
+                   fn -> while_captured_in_return_tuple(Nx.tensor(1.0), Nx.tensor(42.0)) end
+    end
+
     defn sub_add_mult(a, b) do
       token = create_token()
       {token, add} = hook_token(token, a + b, :add, &IO.inspect({:add, &1}))
