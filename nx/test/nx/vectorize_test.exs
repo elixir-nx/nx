@@ -415,7 +415,7 @@ defmodule Nx.VectorizeTest do
         4 3 4 5 4 3 4
       ] |> Nx.vectorize(:rows)
 
-      assert result == Nx.reflect(input, padding_config: [{3, 1}])
+      assert result == Nx.pad(input, :reflect, [{3, 1}])
     end
   end
 
