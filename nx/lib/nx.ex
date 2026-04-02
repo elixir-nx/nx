@@ -13357,7 +13357,7 @@ defmodule Nx do
     out = %{tensor | type: type, shape: shape, names: names}
 
     result =
-      impl!(tensor).conv(
+      impl!(tensor, kernel).conv(
         out,
         tensor,
         kernel,
