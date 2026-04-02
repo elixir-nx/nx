@@ -288,6 +288,7 @@ defmodule Nx.Defn.GraphTest do
       assert stage_1.arguments == [%{source: {nil, 0}}, %{source: {stage_0.id, 0}}]
 
       assert %T{data: %Expr{op: :subtract, args: [c, d]}} = stage_1.expr
+
       assert %T{data: %Expr{op: :block, args: [%Nx.Block.LogicalNot{}, in_args, subexpr, _fun]}} =
                c
 

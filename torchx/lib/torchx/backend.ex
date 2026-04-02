@@ -71,13 +71,13 @@ defmodule Torchx.Backend do
     else
       case block_name do
         Nx.Block.QR ->
-          qr_impl(hd(args), [mode: struct.mode, eps: struct.eps])
+          qr_impl(hd(args), mode: struct.mode, eps: struct.eps)
 
         Nx.Block.LU ->
-          lu_impl(hd(args), [eps: struct.eps])
+          lu_impl(hd(args), eps: struct.eps)
 
         Nx.Block.Eigh ->
-          eigh_impl(hd(args), [max_iter: struct.max_iter, eps: struct.eps])
+          eigh_impl(hd(args), max_iter: struct.max_iter, eps: struct.eps)
 
         Nx.Block.Solve ->
           [a, b] = args
@@ -87,7 +87,7 @@ defmodule Torchx.Backend do
           cholesky_impl(hd(args))
 
         Nx.Block.SVD ->
-          svd_impl(hd(args), [max_iter: struct.max_iter, full_matrices?: struct.full_matrices?])
+          svd_impl(hd(args), max_iter: struct.max_iter, full_matrices?: struct.full_matrices?)
 
         Nx.Block.Determinant ->
           determinant_impl(hd(args))

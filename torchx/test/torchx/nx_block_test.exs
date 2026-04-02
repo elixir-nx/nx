@@ -14,7 +14,8 @@ defmodule Torchx.NxBlockTest do
     :ok
   end
 
-  defp same_as_binary(fun_torchx, fun_binary) when is_function(fun_torchx, 0) and is_function(fun_binary, 0) do
+  defp same_as_binary(fun_torchx, fun_binary)
+       when is_function(fun_torchx, 0) and is_function(fun_binary, 0) do
     t_torchx = fun_torchx.()
     t_binary = fun_binary.()
     ref = t_binary |> Nx.backend_transfer(Torchx.Backend)
