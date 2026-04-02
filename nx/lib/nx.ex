@@ -4257,7 +4257,7 @@ defmodule Nx do
   defp left_mirror_index_period(n) do
     # Generates the indices for pre-mirroring on the axis
     left = Nx.iota({n})
-    right = Nx.subtract(n - 1, Nx.iota({n}))
+    right = Nx.subtract(n - 1, left)
     Nx.concatenate([left, right])
   end
 
@@ -4266,8 +4266,9 @@ defmodule Nx do
 
   defp right_mirror_index_period(n) do
     # Generates the indices for post-mirroring on the axis
-    left = Nx.subtract(n - 1, Nx.iota({n}))
-    right = Nx.iota({n})
+    base = Nx.iota({n})
+    left = Nx.subtract(n - 1, base)
+    right = base
     Nx.concatenate([left, right])
   end
 
@@ -4276,8 +4277,9 @@ defmodule Nx do
 
   defp left_reflect_index_period(n) do
     # Generates the indices for pre-reflecting on the axis
-    left = Nx.iota({n - 1}) |> Nx.add(1)
-    right = Nx.subtract(n - 2, Nx.iota({n - 1}))
+    base = Nx.iota({n - 1})
+    left = base |> Nx.add(1)
+    right = Nx.subtract(n - 2, base)
     Nx.concatenate([left, right])
   end
 
@@ -4286,8 +4288,9 @@ defmodule Nx do
 
   defp right_reflect_index_period(n) do
     # Generates the indices for post-reflecting on the axis
-    left = Nx.subtract(n - 2, Nx.iota({n - 1}))
-    right = Nx.iota({n - 1}) |> Nx.add(1)
+    base = Nx.iota({n - 1})
+    left = Nx.subtract(n - 2, base)
+    right = base |> Nx.add(1)
     Nx.concatenate([left, right])
   end
 
@@ -4295,14 +4298,14 @@ defmodule Nx do
   defp left_replicate_index_period(1), do: Nx.tensor([0])
 
   defp left_replicate_index_period(n) do
-    0 |> Nx.broadcast({n})
+    Nx.broadcast(0, {n})
   end
 
   # n == 0 is handled at the call side
   defp right_replicate_index_period(1), do: Nx.tensor([0])
 
   defp right_replicate_index_period(n) do
-    (n - 1) |> Nx.broadcast({n})
+    Nx.broadcast(n - 1, {n})
   end
 
   defp padding_with_index(tensor, opts) do
