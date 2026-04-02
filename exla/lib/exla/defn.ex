@@ -774,11 +774,10 @@ defmodule EXLA.Defn do
     [struct, in_args, expr, _callback] = args
     op = Nx.Block.name(struct)
 
-    dispatch_args = Nx.Block.backend_args(struct, in_args)
-    extras = Enum.drop(dispatch_args, length(in_args))
+    {_call_prefix, rest} = Enum.split_while(in_args, &(not is_list(&1)))
 
     {call_args, cache} = Enum.map_reduce(in_args, cache, &recur_operator(&1, state, &2))
-    key = computation_key(op, call_args ++ extras)
+    key = computation_key(op, [struct | call_args ++ rest])
 
     {call_body, cache} =
       case cache do

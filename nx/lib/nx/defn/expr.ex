@@ -420,8 +420,12 @@ defmodule Nx.Defn.Expr do
     out
   end
 
-  @impl true
+  @doc false
   def block(struct, in_args, fun) do
+    expr_block(struct, in_args, fun)
+  end
+
+  defp expr_block(struct, in_args, fun) do
     {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
     params = Enum.with_index(args, &parameter/2)
 
@@ -807,6 +811,11 @@ defmodule Nx.Defn.Expr do
   ## Nx.Backend Callbacks
 
   @behaviour Nx.Backend
+
+  @impl true
+  def block(struct, _output, in_args, fun) do
+    expr_block(struct, in_args, fun)
+  end
 
   @impl true
   def init(opts) do

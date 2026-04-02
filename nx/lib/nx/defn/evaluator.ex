@@ -366,24 +366,17 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval_apply(:block, [struct, in_args, expr, expr_cache], ans, state, caches) do
     {in_args, caches} = Tree.map_block_args(in_args, caches, &eval(&1, state, &2))
-    backend_args = Nx.Block.backend_args(struct, in_args)
-    backend = Nx.Shared.list_impl!(backend_args)
-    op = Nx.Block.name(struct)
+    {param_prefix, _} = Enum.split_while(in_args, &(not is_list(&1)))
+    backend = Nx.Shared.list_impl!(param_prefix)
 
-    if function_exported?(backend, op, length(backend_args) + 1) do
-      out =
-        case ans do
-          %{type: {:tuple, _}} -> expr
-          _ -> ans
-        end
+    out =
+      case ans do
+        %{type: {:tuple, _}} -> expr
+        _ -> ans
+      end
 
-      {apply(backend, op, [out | backend_args]), caches}
-    else
-      {param_prefix, _} = Enum.split_while(in_args, &(not is_list(&1)))
-      params = Enum.map(param_prefix, &fn -> &1 end)
-      {res, _} = composite_eval(expr, %{state | params: params}, [expr_cache])
-      {res, caches}
-    end
+    fun = block_default_fun(expr, state, expr_cache, length(param_prefix))
+    {backend.block(struct, out, param_prefix, fun), caches}
   end
 
   defp eval_apply(:runtime_call, [expr, fun, out_template, opts], _ans, state, caches) do
@@ -425,6 +418,53 @@ defmodule Nx.Defn.Evaluator do
       end
 
     {apply(mod, op, args), caches}
+  end
+
+  defp block_apply_default(expr, state, expr_cache, _struct, args) when is_list(args) do
+    params = Enum.map(args, &fn -> &1 end)
+    elem(composite_eval(expr, %{state | params: params}, [expr_cache]), 0)
+  end
+
+  defp block_default_fun(expr, state, expr_cache, 0),
+    do: fn struct -> block_apply_default(expr, state, expr_cache, struct, []) end
+
+  defp block_default_fun(expr, state, expr_cache, 1),
+    do: fn struct, a -> block_apply_default(expr, state, expr_cache, struct, [a]) end
+
+  defp block_default_fun(expr, state, expr_cache, 2),
+    do: fn struct, a, b -> block_apply_default(expr, state, expr_cache, struct, [a, b]) end
+
+  defp block_default_fun(expr, state, expr_cache, 3),
+    do: fn struct, a, b, c -> block_apply_default(expr, state, expr_cache, struct, [a, b, c]) end
+
+  defp block_default_fun(expr, state, expr_cache, 4),
+    do: fn struct, a, b, c, d ->
+      block_apply_default(expr, state, expr_cache, struct, [a, b, c, d])
+    end
+
+  defp block_default_fun(expr, state, expr_cache, 5),
+    do: fn struct, a, b, c, d, e ->
+      block_apply_default(expr, state, expr_cache, struct, [a, b, c, d, e])
+    end
+
+  defp block_default_fun(expr, state, expr_cache, 6),
+    do: fn struct, a, b, c, d, e, f ->
+      block_apply_default(expr, state, expr_cache, struct, [a, b, c, d, e, f])
+    end
+
+  defp block_default_fun(expr, state, expr_cache, 7),
+    do: fn struct, a, b, c, d, e, f, g ->
+      block_apply_default(expr, state, expr_cache, struct, [a, b, c, d, e, f, g])
+    end
+
+  defp block_default_fun(expr, state, expr_cache, 8),
+    do: fn struct, a, b, c, d, e, f, g, h ->
+      block_apply_default(expr, state, expr_cache, struct, [a, b, c, d, e, f, g, h])
+    end
+
+  defp block_default_fun(_expr, _state, _expr_cache, n) do
+    raise ArgumentError,
+          "Nx.Defn.Evaluator does not support block functions with #{n} tensor arguments yet"
   end
 
   ## Control flow helpers

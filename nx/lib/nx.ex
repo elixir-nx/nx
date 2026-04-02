@@ -6884,10 +6884,15 @@ defmodule Nx do
 
   @doc """
   Executes an extensible computation block.
-  `struct` identifies the block and carries static configuration.
-  `args` is a list of runtime inputs and `output` is the output template.
-  The default implementation `fun` receives the struct first and then
-  each argument in order (`apply(fun, [struct | args])`).
+
+  `struct` identifies the block and carries static configuration. `args` is a
+  list of runtime inputs and `output` is the output template. The default
+  implementation `fun` receives the struct first and then each argument in
+  order (`apply(fun, [struct | args])`).
+
+  The backend’s `c:block/4` receives `struct`, `output`, `args`, and `fun`, and
+  should either run a native implementation or invoke the default as
+  `apply(fun, [struct | args])`.
   """
   @doc type: :element
   def block(struct, args, output, fun) when is_list(args) do
@@ -6899,19 +6904,7 @@ defmodule Nx do
     end
 
     backend = Nx.Shared.list_impl!(args)
-    name = Nx.Block.name(struct)
-    backend_args = Nx.Block.backend_args(struct, args)
-
-    cond do
-      function_exported?(backend, name, length(backend_args) + 1) ->
-        apply(backend, name, [output | backend_args])
-
-      function_exported?(backend, :block, 3) ->
-        backend.block(struct, args, fun)
-
-      true ->
-        apply(fun, [struct | args])
-    end
+    backend.block(struct, output, args, fun)
   end
 
   @doc """
@@ -8819,6 +8812,10 @@ defmodule Nx do
 
   is true for all elements of a and b.
 
+  For **integer** tensors, `absolute(b)` in the tolerance bound is evaluated in
+  `f64` so that the most negative signed value (e.g. `s8` `-128`) does not
+  overflow `abs` in the original narrow type.
+
   ## Options
 
    * `:rtol` - relative tolerance between numbers, as described above. Defaults to 1.0e-5
@@ -8890,6 +8887,17 @@ defmodule Nx do
         0
       >
 
+  Integer tensors where `b` contains the minimum signed value (e.g. `s8` `-128`) still compare equal to themselves:
+
+      iex> a = Nx.tensor([[5, 6], [7, 8]], type: :s8)
+      iex> b = Nx.tensor([[1, 2], [3, 4]], type: :s8)
+      iex> x = Nx.left_shift(a, b)
+      iex> Nx.all_close(x, x)
+      #Nx.Tensor<
+        u8
+        1
+      >
+
   ## Vectorized tensors
 
   Vectorized inputs have their vectorized axes broadcast together
@@ -8941,7 +8949,14 @@ defmodule Nx do
     atol = opts[:atol]
     rtol = opts[:rtol]
 
-    finite_entries = less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
+    finite_entries =
+      if Nx.Type.integer?(a.type) and Nx.Type.integer?(b.type) do
+        # abs(min_signed) overflows in the same width (e.g. s8 -128); widen before abs for rtol*abs(b)
+        abs_b = Nx.abs(Nx.as_type(b, {:f, 64}))
+        less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, abs_b)))
+      else
+        less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
+      end
 
     if Nx.Type.integer?(a.type) and Nx.Type.integer?(b.type) do
       all(finite_entries)

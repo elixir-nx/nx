@@ -46,11 +46,10 @@ defmodule Torchx.Backend do
     Keyword.validate!(opts, [:device])
   end
 
-  ## Block callback for MPS compatibility
+  ## Block (native paths + MPS fallbacks)
 
   @impl true
-  def block(%block_name{} = struct, args, fun) do
-
+  def block(%block_name{} = struct, output, args, fun) do
     # For MPS device, some linear algebra operations are not supported.
     # Delegate to default implementation which will fall back to elementary Nx operations.
     mps_unsupported = [
@@ -67,20 +66,47 @@ defmodule Torchx.Backend do
         _ -> :cpu
       end
 
-    dispatched = Nx.Block.backend_args(struct, args) |> IO.inspect(label: "dispatched")
     if device == :mps and block_name in mps_unsupported do
       apply(fun, [struct | args])
     else
-
       case block_name do
-        Nx.Block.QR -> apply(&qr_impl/2, dispatched)
-        Nx.Block.LU -> apply(&lu_impl/2, dispatched)
-        Nx.Block.Eigh -> apply(&eigh_impl/2, dispatched)
-        Nx.Block.Solve -> apply(&solve_impl/2, dispatched)
-        Nx.Block.Cholesky -> apply(&cholesky_impl/1, dispatched)
-        Nx.Block.SVD -> apply(&svd_impl/2, dispatched)
-        Nx.Block.Determinant -> apply(&determinant_impl/1, dispatched)
-        _ -> apply(fun, [struct | args])
+        Nx.Block.QR ->
+          qr_impl(hd(args), [mode: struct.mode, eps: struct.eps])
+
+        Nx.Block.LU ->
+          lu_impl(hd(args), [eps: struct.eps])
+
+        Nx.Block.Eigh ->
+          eigh_impl(hd(args), [max_iter: struct.max_iter, eps: struct.eps])
+
+        Nx.Block.Solve ->
+          [a, b] = args
+          solve_impl(a, b)
+
+        Nx.Block.Cholesky ->
+          cholesky_impl(hd(args))
+
+        Nx.Block.SVD ->
+          svd_impl(hd(args), [max_iter: struct.max_iter, full_matrices?: struct.full_matrices?])
+
+        Nx.Block.Determinant ->
+          determinant_impl(hd(args))
+
+        Nx.Block.TakeAlongAxis ->
+          [tensor, indices] = args
+          take_along_axis_gather(output, tensor, indices, axis: struct.axis)
+
+        Nx.Block.FFT2 ->
+          fft2_torchx(output, hd(args), struct.lengths, struct.axes)
+
+        Nx.Block.IFFT2 ->
+          ifft2_torchx(output, hd(args), struct.lengths, struct.axes)
+
+        Nx.Block.LogicalNot ->
+          logical_not(output, hd(args))
+
+        _ ->
+          apply(fun, [struct | args])
       end
     end
   end
@@ -517,8 +543,7 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  @impl true
-  def take_along_axis(out, tensor, idx, opts) do
+  defp take_along_axis_gather(out, tensor, idx, opts) do
     idx_tx = idx |> from_nx() |> Torchx.to_type(:long)
 
     tensor
@@ -542,7 +567,6 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  @impl true
   def top_k({out_values, out_indices}, tensor, opts) do
     {values, indices} =
       tensor
@@ -629,7 +653,6 @@ defmodule Torchx.Backend do
     to_nx(result, out)
   end
 
-  @impl true
   def all_close(%T{} = out, %T{} = a, %T{} = b, opts) do
     equal_nan = opts[:equal_nan]
     rtol = opts[:rtol]
@@ -741,22 +764,18 @@ defmodule Torchx.Backend do
     end
   end
 
-  @impl true
   def cumulative_sum(%T{} = out, %T{} = t, opts) do
     cumulative_op(out, t, opts, &Torchx.cumulative_sum/2)
   end
 
-  @impl true
   def cumulative_product(%T{} = out, %T{} = t, opts) do
     cumulative_op(out, t, opts, &Torchx.cumulative_product/2)
   end
 
-  @impl true
   def cumulative_min(%T{} = out, %T{} = t, opts) do
     cumulative_op(out, t, opts, &Torchx.cumulative_min/2)
   end
 
-  @impl true
   def cumulative_max(%T{} = out, %T{} = t, opts) do
     cumulative_op(out, t, opts, &Torchx.cumulative_max/2)
   end
@@ -979,13 +998,17 @@ defmodule Torchx.Backend do
     [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tan, :cosh, :sinh] ++
       [:tanh, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sqrt, :rsqrt] ++
       [:erf, :erfc, :erf_inv, :abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign] ++
-      [:logical_not, :cbrt, :is_nan, :is_infinity]
+      [:cbrt, :is_nan, :is_infinity]
 
   for op <- unary_ops do
     @impl true
     def unquote(op)(out, tensor) do
       Torchx.unquote(op)(from_nx(tensor)) |> to_nx(out)
     end
+  end
+
+  def logical_not(out, tensor) do
+    Torchx.logical_not(from_nx(tensor)) |> to_nx(out)
   end
 
   @impl true
@@ -1060,22 +1083,14 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  @impl true
-  def fft2(out, tensor, opts) do
-    lengths = opts[:lengths]
-    axes = opts[:axes]
-
+  defp fft2_torchx(out, tensor, lengths, axes) do
     tensor
     |> from_nx()
     |> Torchx.fft2(lengths, axes)
     |> to_nx(out)
   end
 
-  @impl true
-  def ifft2(out, tensor, opts) do
-    lengths = opts[:lengths]
-    axes = opts[:axes]
-
+  defp ifft2_torchx(out, tensor, lengths, axes) do
     tensor
     |> from_nx()
     |> Torchx.ifft2(lengths, axes)
