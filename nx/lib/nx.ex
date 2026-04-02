@@ -4241,15 +4241,13 @@ defmodule Nx do
   defp left_cycle_index_period(1), do: Nx.tensor([0])
 
   defp left_cycle_index_period(n) do
-    n |> Nx.subtract(Nx.iota({n})) |> Nx.subtract(1) |> Nx.remainder(n)
+    Nx.subtract(n - 1, Nx.iota({n})) |> Nx.remainder(n)
   end
 
   # n == 0 is handled at the call side
   defp right_cycle_index_period(1), do: Nx.tensor([0])
 
-  defp right_cycle_index_period(n) do
-    Nx.iota({n})
-  end
+  defp right_cycle_index_period(n), do: Nx.iota({n})
 
   # n == 0 is handled at the call side
   defp left_mirror_index_period(1), do: Nx.tensor([0])
@@ -4278,7 +4276,7 @@ defmodule Nx do
   defp left_reflect_index_period(n) do
     # Generates the indices for pre-reflecting on the axis
     base = Nx.iota({n - 1})
-    left = base |> Nx.add(1)
+    left = Nx.add(base, 1)
     right = Nx.subtract(n - 2, base)
     Nx.concatenate([left, right])
   end
@@ -4290,23 +4288,19 @@ defmodule Nx do
     # Generates the indices for post-reflecting on the axis
     base = Nx.iota({n - 1})
     left = Nx.subtract(n - 2, base)
-    right = base |> Nx.add(1)
+    right = Nx.add(base, 1)
     Nx.concatenate([left, right])
   end
 
   # n == 0 is handled at the call side
   defp left_replicate_index_period(1), do: Nx.tensor([0])
 
-  defp left_replicate_index_period(n) do
-    Nx.broadcast(0, {n})
-  end
+  defp left_replicate_index_period(n), do: Nx.broadcast(0, {n})
 
   # n == 0 is handled at the call side
   defp right_replicate_index_period(1), do: Nx.tensor([0])
 
-  defp right_replicate_index_period(n) do
-    Nx.broadcast(n - 1, {n})
-  end
+  defp right_replicate_index_period(n), do: Nx.broadcast(n - 1, {n})
 
   defp padding_with_index(tensor, opts) do
     opts = keyword!(opts, [:padding_config, :left_index_period, :right_index_period])
