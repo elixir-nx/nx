@@ -632,12 +632,12 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-         op,
+         :block,
          %T{
            data: %Expr{
              args: [
                %Nx.Block.Eigh{},
-               in_args,
+               [tensor],
                {%{type: {evec_type_kind, _}} = eigenvals_expr,
                 %{type: {eval_type_kind, _}} = eigenvecs_expr},
                _callback
@@ -647,8 +647,7 @@ defmodule EXLA.Defn do
          %{client: %EXLA.Client{platform: :host}, builder: %Function{}} = state,
          cache
        )
-       when op == :block and evec_type_kind != :c and eval_type_kind != :c do
-    tensor = hd(in_args)
+       when evec_type_kind != :c and eval_type_kind != :c do
     # We match only on platform: :host for MLIR, as we want to support
     # eigh-on-cpu as a custom call only in this case
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
@@ -675,17 +674,15 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-         op,
+         :block,
          %T{
            data: %Expr{
-             args: [%Nx.Block.Take{axis: axis}, in_args, expr, _callback]
+             args: [%Nx.Block.Take{axis: axis}, [tensor, indices], expr, _callback]
            }
          },
          state,
          cache
-       )
-       when op == :block do
-    [tensor, indices] = in_args
+       ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
     {indices, cache} = recur_operator(indices, state, cache) |> unwrap_single_tensor!()
 
@@ -718,13 +715,11 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-         op,
-         %T{data: %Expr{args: [%Nx.Block.TopK{k: k}, in_args, expr, _callback]}},
+         :block,
+         %T{data: %Expr{args: [%Nx.Block.TopK{k: k}, [tensor], expr, _callback]}},
          state,
          cache
-       )
-       when op == :block do
-    tensor = hd(in_args)
+       ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
     {values, idx} = expr
     typespecs = [expr_to_typespec(values), expr_to_typespec(idx)]
@@ -733,13 +728,11 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-         op,
-         %T{data: %Expr{args: [%Nx.Block.FFT2{} = fft2_struct, in_args, expr, _callback]}},
+         :block,
+         %T{data: %Expr{args: [%Nx.Block.FFT2{} = fft2_struct, [tensor], expr, _callback]}},
          state,
          cache
-       )
-       when op == :block do
-    tensor = hd(in_args)
+       ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     opts =
@@ -752,13 +745,11 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-         op,
-         %T{data: %Expr{args: [%Nx.Block.IFFT2{} = ifft2_struct, in_args, expr, _callback]}},
+         :block,
+         %T{data: %Expr{args: [%Nx.Block.IFFT2{} = ifft2_struct, [tensor], expr, _callback]}},
          state,
          cache
-       )
-       when op == :block do
-    tensor = hd(in_args)
+       ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     opts =
@@ -774,10 +765,10 @@ defmodule EXLA.Defn do
     [struct, in_args, expr, _callback] = args
     op = Nx.Block.name(struct)
 
-    {_call_prefix, rest} = Enum.split_while(in_args, &(not is_list(&1)))
+    {call_prefix, _opts_suffix} = Enum.split_while(in_args, &(not is_list(&1)))
 
-    {call_args, cache} = Enum.map_reduce(in_args, cache, &recur_operator(&1, state, &2))
-    key = computation_key(op, [struct | call_args ++ rest])
+    {call_args, cache} = Enum.map_reduce(call_prefix, cache, &recur_operator(&1, state, &2))
+    key = computation_key(op, [struct | call_args])
 
     {call_body, cache} =
       case cache do
