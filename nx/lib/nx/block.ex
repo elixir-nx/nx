@@ -87,31 +87,3 @@ defmodule Nx.Block.IFFT2 do
   @derive {Nx.Container, containers: [], keep: [:eps, :lengths, :axes]}
   defstruct eps: nil, lengths: nil, axes: nil
 end
-
-defmodule Nx.Block do
-  @moduledoc false
-
-  def name(%{__struct__: module}) do
-    case module do
-      Nx.Block.LogicalNot -> :logical_not
-      Nx.Block.Phase -> :phase
-      Nx.Block.AllClose -> :all_close
-      Nx.Block.CumulativeSum -> :cumulative_sum
-      Nx.Block.CumulativeProduct -> :cumulative_product
-      Nx.Block.CumulativeMin -> :cumulative_min
-      Nx.Block.CumulativeMax -> :cumulative_max
-      Nx.Block.Cholesky -> :cholesky
-      Nx.Block.Solve -> :solve
-      Nx.Block.QR -> :qr
-      Nx.Block.Eigh -> :eigh
-      Nx.Block.SVD -> :svd
-      Nx.Block.LU -> :lu
-      Nx.Block.Determinant -> :determinant
-      Nx.Block.Take -> :take
-      Nx.Block.TakeAlongAxis -> :take_along_axis
-      Nx.Block.TopK -> :top_k
-      Nx.Block.FFT2 -> :fft2
-      Nx.Block.IFFT2 -> :ifft2
-    end
-  end
-end

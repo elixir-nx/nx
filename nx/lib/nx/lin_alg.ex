@@ -1527,10 +1527,6 @@ defmodule Nx.LinAlg do
   @doc """
   Calculates the A = PLU decomposition of batched square 2-D matrices A.
 
-  ## Options
-
-    * `:eps` - Rounding error threshold that can be applied during the factorization
-
   ## Examples
 
       iex> {p, l, u} = Nx.LinAlg.lu(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]))
@@ -1734,8 +1730,7 @@ defmodule Nx.LinAlg do
       iex> Nx.LinAlg.lu(Nx.tensor([[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]]))
       ** (ArgumentError) tensor must be a square matrix or a batch of square matrices, got shape: {3, 4}
   """
-  def lu(tensor, opts \\ []) do
-    opts = keyword!(opts, eps: 1.0e-10)
+  def lu(tensor) do
     %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
     %T{type: type, shape: shape} = tensor = Nx.devectorize(tensor)
 
@@ -1748,8 +1743,8 @@ defmodule Nx.LinAlg do
        %{tensor | type: output_type, shape: l_shape, names: names},
        %{tensor | type: output_type, shape: u_shape, names: names}}
 
-    Nx.block(struct(Nx.Block.LU, opts), [tensor], output, fn %Nx.Block.LU{} = opts, t ->
-      Nx.LinAlg.LU.lu(opts, t)
+    Nx.block(%Nx.Block.LU{}, [tensor], output, fn %Nx.Block.LU{}, t ->
+      Nx.LinAlg.LU.lu(t)
     end)
     |> Nx.vectorize(vectorized_axes)
   end

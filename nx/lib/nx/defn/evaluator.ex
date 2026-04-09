@@ -139,7 +139,7 @@ defmodule Nx.Defn.Evaluator do
     {call_prefix, call_suffix} = Enum.split_while(in_args, &(not is_list(&1)))
     {call_prefix, cache} = Enum.map_reduce(call_prefix, cache, &compute_cache(&1, state, &2))
     in_args = call_prefix ++ call_suffix
-    key = computation_key(Nx.Block.name(struct), call_prefix)
+    key = computation_key(struct.__struct__, call_prefix)
 
     {{expr, expr_cache}, cache} =
       case cache do
@@ -375,8 +375,16 @@ defmodule Nx.Defn.Evaluator do
         _ -> ans
       end
 
-    fun = block_default_fun(expr, state, expr_cache, length(param_prefix))
-    {backend.block(struct, out, param_prefix, fun), caches}
+    fun =
+      Nx.Defn.Compiler.fun(
+        length(in_args) + 1,
+        fn args ->
+          [struct | tensors] = args
+          block_apply_default(expr, state, expr_cache, struct, tensors)
+        end
+      )
+
+    {backend.block(struct, out, in_args, fun), caches}
   end
 
   defp eval_apply(:runtime_call, [expr, fun, out_template, opts], _ans, state, caches) do
@@ -423,23 +431,6 @@ defmodule Nx.Defn.Evaluator do
   defp block_apply_default(expr, state, expr_cache, _struct, args) when is_list(args) do
     params = Enum.map(args, &fn -> &1 end)
     elem(composite_eval(expr, %{state | params: params}, [expr_cache]), 0)
-  end
-
-  for i <- 0..128 do
-    defp block_default_fun(expr, state, expr_cache, unquote(i)) do
-      Nx.Defn.Compiler.fun(
-        unquote(i + 1),
-        fn args ->
-          [struct | tensors] = args
-          block_apply_default(expr, state, expr_cache, struct, tensors)
-        end
-      )
-    end
-  end
-
-  defp block_default_fun(_expr, _state, _expr_cache, n) do
-    raise ArgumentError,
-          "Nx.Defn.Evaluator does not support block functions with #{n} tensor arguments yet"
   end
 
   ## Control flow helpers

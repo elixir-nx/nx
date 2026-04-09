@@ -69,41 +69,39 @@ defmodule Torchx.Backend do
     if device == :mps and block_name in mps_unsupported do
       apply(fun, [struct | args])
     else
-      case block_name do
-        Nx.Block.QR ->
-          qr_impl(hd(args), mode: struct.mode, eps: struct.eps)
+      case {block_name, args} do
+        {Nx.Block.QR, [t]} ->
+          qr_impl(t, mode: struct.mode, eps: struct.eps)
 
-        Nx.Block.LU ->
-          lu_impl(hd(args), eps: struct.eps)
+        {Nx.Block.LU, [t]} ->
+          lu_impl(t)
 
-        Nx.Block.Eigh ->
-          eigh_impl(hd(args), max_iter: struct.max_iter, eps: struct.eps)
+        {Nx.Block.Eigh, [t]} ->
+          eigh_impl(t, max_iter: struct.max_iter, eps: struct.eps)
 
-        Nx.Block.Solve ->
-          [a, b] = args
+        {Nx.Block.Solve, [a, b]} ->
           solve_impl(a, b)
 
-        Nx.Block.Cholesky ->
-          cholesky_impl(hd(args))
+        {Nx.Block.Cholesky, [t]} ->
+          cholesky_impl(t)
 
-        Nx.Block.SVD ->
-          svd_impl(hd(args), max_iter: struct.max_iter, full_matrices?: struct.full_matrices?)
+        {Nx.Block.SVD, [t]} ->
+          svd_impl(t, max_iter: struct.max_iter, full_matrices?: struct.full_matrices?)
 
-        Nx.Block.Determinant ->
-          determinant_impl(hd(args))
+        {Nx.Block.Determinant, [t]} ->
+          determinant_impl(t)
 
-        Nx.Block.TakeAlongAxis ->
-          [tensor, indices] = args
+        {Nx.Block.TakeAlongAxis, [tensor, indices]} ->
           take_along_axis_gather(output, tensor, indices, axis: struct.axis)
 
-        Nx.Block.FFT2 ->
-          fft2_torchx(output, hd(args), struct.lengths, struct.axes)
+        {Nx.Block.FFT2, [t]} ->
+          fft2_torchx(output, t, struct.lengths, struct.axes)
 
-        Nx.Block.IFFT2 ->
-          ifft2_torchx(output, hd(args), struct.lengths, struct.axes)
+        {Nx.Block.IFFT2, [t]} ->
+          ifft2_torchx(output, t, struct.lengths, struct.axes)
 
-        Nx.Block.LogicalNot ->
-          logical_not(output, hd(args))
+        {Nx.Block.LogicalNot, [t]} ->
+          logical_not(output, t)
 
         _ ->
           apply(fun, [struct | args])
@@ -1224,7 +1222,7 @@ defmodule Torchx.Backend do
     end
   end
 
-  defp lu_impl(tensor, _opts) do
+  defp lu_impl(tensor) do
     tensor =
       if Nx.Type.integer?(tensor.type) do
         Nx.as_type(tensor, {:f, 32})

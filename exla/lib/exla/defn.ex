@@ -763,12 +763,9 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(:block, %T{data: %Expr{args: args}}, state, cache) do
     [struct, in_args, expr, _callback] = args
-    op = Nx.Block.name(struct)
 
-    {call_prefix, _opts_suffix} = Enum.split_while(in_args, &(not is_list(&1)))
-
-    {call_args, cache} = Enum.map_reduce(call_prefix, cache, &recur_operator(&1, state, &2))
-    key = computation_key(op, [struct | call_args])
+    {call_args, cache} = Enum.map_reduce(in_args, cache, &recur_operator(&1, state, &2))
+    key = computation_key(struct.__struct__, [struct | call_args])
 
     {call_body, cache} =
       case cache do
@@ -776,7 +773,15 @@ defmodule EXLA.Defn do
           {computation, cache}
 
         %{} ->
-          {computation, cache} = block_computation("block", call_args, expr, state, cache)
+          {computation, cache} =
+            block_computation(
+              block_subfunction_description(struct),
+              call_args,
+              expr,
+              state,
+              cache
+            )
+
           {computation, Map.put(cache, key, computation)}
       end
 
@@ -1831,8 +1836,15 @@ defmodule EXLA.Defn do
     {region, merge_outfeed(cache, comp_cache)}
   end
 
-  defp block_computation(name, args, expr, %{builder: %Function{}} = state, cache) do
-    %Function{module: module, name: name} = subbuilder(state.builder, name)
+  defp block_subfunction_description(%_{} = struct) do
+    struct.__struct__
+    |> Module.split()
+    |> List.last()
+    |> Macro.underscore()
+  end
+
+  defp block_computation(description, args, expr, %{builder: %Function{}} = state, cache) do
+    %Function{module: module, name: name} = subbuilder(state.builder, description)
 
     arg_typespecs = Enum.map(args, &Value.get_typespec/1)
     out_typespecs = container_to_typespecs(expr)
