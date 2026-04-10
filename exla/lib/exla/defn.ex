@@ -735,11 +735,14 @@ defmodule EXLA.Defn do
        ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
+    opts = [lengths: fft2_struct.lengths, axes: fft2_struct.axes]
+
     opts =
-      Keyword.merge(
-        [lengths: fft2_struct.lengths, axes: fft2_struct.axes],
-        if(fft2_struct.eps != nil, do: [eps: fft2_struct.eps], else: [])
-      )
+      if eps = fft2_struct.eps do
+        Keyword.put(opts, :eps, eps)
+      else
+        opts
+      end
 
     {fft2(&Value.fft(&1, :fft, &2, &3), [tensor, opts], expr, state), cache}
   end
@@ -752,11 +755,14 @@ defmodule EXLA.Defn do
        ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
+    opts = [lengths: fft2_struct.lengths, axes: fft2_struct.axes]
+
     opts =
-      Keyword.merge(
-        [lengths: ifft2_struct.lengths, axes: ifft2_struct.axes],
-        if(ifft2_struct.eps != nil, do: [eps: ifft2_struct.eps], else: [])
-      )
+      if eps = fft2_struct.eps do
+        Keyword.put(opts, :eps, eps)
+      else
+        opts
+      end
 
     {fft2(&Value.fft(&1, :ifft, &2, &3), [tensor, opts], expr, state), cache}
   end
