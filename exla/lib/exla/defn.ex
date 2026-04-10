@@ -755,10 +755,10 @@ defmodule EXLA.Defn do
        ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
-    opts = [lengths: fft2_struct.lengths, axes: fft2_struct.axes]
+    opts = [lengths: ifft2_struct.lengths, axes: ifft2_struct.axes]
 
     opts =
-      if eps = fft2_struct.eps do
+      if eps = ifft2_struct.eps do
         Keyword.put(opts, :eps, eps)
       else
         opts
