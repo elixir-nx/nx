@@ -101,7 +101,25 @@ defmodule Torchx.Backend do
           ifft2_torchx(output, t, struct.lengths, struct.axes)
 
         {Nx.Block.LogicalNot, [t]} ->
-          logical_not(output, t)
+          logical_not_impl(output, t)
+
+        {Nx.Block.TopK, [t]} ->
+          top_k_impl(output, t, struct.k)
+
+        {Nx.Block.AllClose, [a, b]} ->
+          all_close_impl(output, a, b, struct)
+
+        {Nx.Block.CumulativeSum, [t]} ->
+          cumulative_block_impl(output, t, struct, &Torchx.cumulative_sum/2)
+
+        {Nx.Block.CumulativeProduct, [t]} ->
+          cumulative_block_impl(output, t, struct, &Torchx.cumulative_product/2)
+
+        {Nx.Block.CumulativeMin, [t]} ->
+          cumulative_block_impl(output, t, struct, &Torchx.cumulative_min/2)
+
+        {Nx.Block.CumulativeMax, [t]} ->
+          cumulative_block_impl(output, t, struct, &Torchx.cumulative_max/2)
 
         _ ->
           apply(fun, [struct | args])
@@ -551,7 +569,9 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def argsort(out, tensor, opts) do
+  def argsort(out, tensor, opts), do: argsort_impl(out, tensor, opts)
+
+  defp argsort_impl(out, tensor, opts) do
     axis = opts[:axis]
     is_descending = opts[:direction] == :desc
     stable = opts[:stable] == true
@@ -565,11 +585,11 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  def top_k({out_values, out_indices}, tensor, opts) do
+  defp top_k_impl({out_values, out_indices}, tensor, k) do
     {values, indices} =
       tensor
       |> from_nx()
-      |> Torchx.top_k(Keyword.fetch!(opts, :k))
+      |> Torchx.top_k(k)
 
     {device, _} = indices
 
@@ -579,7 +599,9 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def reverse(out, tensor, axes) do
+  def reverse(out, tensor, axes), do: reverse_impl(out, tensor, axes)
+
+  defp reverse_impl(out, tensor, axes) do
     tensor
     |> from_nx()
     |> Torchx.flip(axes)
@@ -651,10 +673,10 @@ defmodule Torchx.Backend do
     to_nx(result, out)
   end
 
-  def all_close(%T{} = out, %T{} = a, %T{} = b, opts) do
-    equal_nan = opts[:equal_nan]
-    rtol = opts[:rtol]
-    atol = opts[:atol]
+  defp all_close_impl(%T{} = out, %T{} = a, %T{} = b, %Nx.Block.AllClose{} = struct) do
+    equal_nan = struct.equal_nan
+    rtol = struct.rtol
+    atol = struct.atol
 
     # Torch raises a cryptic error if the types are different,
     # so we need to upcast the tensors to the merged type
@@ -762,20 +784,9 @@ defmodule Torchx.Backend do
     end
   end
 
-  def cumulative_sum(%T{} = out, %T{} = t, opts) do
-    cumulative_op(out, t, opts, &Torchx.cumulative_sum/2)
-  end
-
-  def cumulative_product(%T{} = out, %T{} = t, opts) do
-    cumulative_op(out, t, opts, &Torchx.cumulative_product/2)
-  end
-
-  def cumulative_min(%T{} = out, %T{} = t, opts) do
-    cumulative_op(out, t, opts, &Torchx.cumulative_min/2)
-  end
-
-  def cumulative_max(%T{} = out, %T{} = t, opts) do
-    cumulative_op(out, t, opts, &Torchx.cumulative_max/2)
+  defp cumulative_block_impl(%T{} = out, %T{} = t, struct, torch_fun)
+       when is_function(torch_fun, 2) do
+    cumulative_op(out, t, [axis: struct.axis, reverse: struct.reverse], torch_fun)
   end
 
   defp cumulative_op(out, t, opts, fun) when is_function(fun, 2) do
@@ -1005,7 +1016,7 @@ defmodule Torchx.Backend do
     end
   end
 
-  def logical_not(out, tensor) do
+  defp logical_not_impl(out, tensor) do
     Torchx.logical_not(from_nx(tensor)) |> to_nx(out)
   end
 

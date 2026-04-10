@@ -135,11 +135,12 @@ defmodule Nx.Defn.Evaluator do
 
   defp compute_cache(:block, %{data: %Expr{args: args}}, state, cache) do
     [struct, in_args, expr, _callback] = args
+    %module{} = struct
 
     {call_prefix, call_suffix} = Enum.split_while(in_args, &(not is_list(&1)))
     {call_prefix, cache} = Enum.map_reduce(call_prefix, cache, &compute_cache(&1, state, &2))
     in_args = call_prefix ++ call_suffix
-    key = computation_key(struct.__struct__, call_prefix)
+    key = computation_key(module, call_prefix)
 
     {{expr, expr_cache}, cache} =
       case cache do

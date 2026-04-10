@@ -736,10 +736,10 @@ defmodule EXLA.Defn do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     opts =
-      [lengths: fft2_struct.lengths, axes: fft2_struct.axes]
-      |> then(fn kw ->
-        if fft2_struct.eps != nil, do: Keyword.put(kw, :eps, fft2_struct.eps), else: kw
-      end)
+      Keyword.merge(
+        [lengths: fft2_struct.lengths, axes: fft2_struct.axes],
+        if(fft2_struct.eps != nil, do: [eps: fft2_struct.eps], else: [])
+      )
 
     {fft2(&Value.fft(&1, :fft, &2, &3), [tensor, opts], expr, state), cache}
   end
@@ -753,19 +753,20 @@ defmodule EXLA.Defn do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     opts =
-      [lengths: ifft2_struct.lengths, axes: ifft2_struct.axes]
-      |> then(fn kw ->
-        if ifft2_struct.eps != nil, do: Keyword.put(kw, :eps, ifft2_struct.eps), else: kw
-      end)
+      Keyword.merge(
+        [lengths: ifft2_struct.lengths, axes: ifft2_struct.axes],
+        if(ifft2_struct.eps != nil, do: [eps: ifft2_struct.eps], else: [])
+      )
 
     {fft2(&Value.fft(&1, :ifft, &2, &3), [tensor, opts], expr, state), cache}
   end
 
   defp cached_recur_operator(:block, %T{data: %Expr{args: args}}, state, cache) do
     [struct, in_args, expr, _callback] = args
+    %module{} = struct
 
     {call_args, cache} = Enum.map_reduce(in_args, cache, &recur_operator(&1, state, &2))
-    key = computation_key(struct.__struct__, [struct | call_args])
+    key = computation_key(module, [struct | call_args])
 
     {call_body, cache} =
       case cache do
@@ -1836,11 +1837,10 @@ defmodule EXLA.Defn do
     {region, merge_outfeed(cache, comp_cache)}
   end
 
-  defp block_subfunction_description(%_{} = struct) do
-    struct.__struct__
+  defp block_subfunction_description(%module{} = _) do
+    module
     |> Module.split()
-    |> List.last()
-    |> Macro.underscore()
+    |> Enum.map_join("_", &Macro.underscore(to_string(&1)))
   end
 
   defp block_computation(description, args, expr, %{builder: %Function{}} = state, cache) do
