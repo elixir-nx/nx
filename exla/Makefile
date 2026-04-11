@@ -71,6 +71,8 @@ else
 endif
 
 ifeq ($(UNAME_S), Darwin)
+	# Xcode 26.4+ errors on XLA headers specializing std::is_signed.
+	CFLAGS += -Wno-invalid-specialization
 	LDFLAGS += -flat_namespace -undefined dynamic_lookup -rpath @loader_path/xla_extension/lib
 else
 	# Use a relative RPATH, so at runtime libexla.so looks for libxla_extension.so
