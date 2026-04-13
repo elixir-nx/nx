@@ -323,7 +323,7 @@ defmodule EXLA.Backend do
     {tensors, rest} = Enum.split_while(args, &is_struct(&1, Nx.Tensor))
 
     wrapper_fun = fn tensors ->
-      Nx.Defn.Expr.block(struct, Tuple.to_list(tensors) ++ rest, fun)
+      Nx.Defn.Expr.block(struct, nil, Tuple.to_list(tensors) ++ rest, fun)
     end
 
     jit([], wrapper_fun, tensors, [List.to_tuple(tensors)])
