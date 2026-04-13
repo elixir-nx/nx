@@ -261,9 +261,6 @@ defmodule Nx.Defn.Tree do
       %T{} = arg, acc ->
         fun.(arg, acc)
 
-      arg, acc when is_list(arg) ->
-        map_block_args(arg, acc, fun)
-
       arg, acc ->
         {arg, acc}
     end)

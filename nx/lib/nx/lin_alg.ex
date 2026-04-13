@@ -1155,7 +1155,7 @@ defmodule Nx.LinAlg do
            names: List.duplicate(nil, tuple_size(r_shape))
        }}
 
-    Nx.block(struct(Nx.Block.QR, opts), [tensor], output, fn %Nx.Block.QR{} = opts, t ->
+    Nx.block(struct!(Nx.Block.QR, opts), [tensor], output, fn %Nx.Block.QR{} = opts, t ->
       Nx.LinAlg.QR.qr(opts, t)
     end)
     |> Nx.vectorize(vectorized_axes)
@@ -1384,6 +1384,8 @@ defmodule Nx.LinAlg do
   """
   def eigh(tensor, opts \\ []) do
     opts = keyword!(opts, max_iter: 1_000, eps: 1.0e-4)
+    _ = opts[:max_iter] || raise ArgumentError, "missing option :max_iter"
+
     %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
     %T{type: type, shape: shape} = tensor = Nx.devectorize(tensor)
 
@@ -1399,8 +1401,8 @@ defmodule Nx.LinAlg do
       {%{tensor | names: eigenvals_name, type: output_type, shape: eigenvals_shape},
        %{tensor | names: eigenvecs_name, type: output_type, shape: eigenvecs_shape}}
 
-    Nx.block(struct(Nx.Block.Eigh, opts), [tensor], output, fn %Nx.Block.Eigh{} = opts, t ->
-      Nx.LinAlg.BlockEigh.eigh(opts, t)
+    Nx.block(struct!(Nx.Block.Eigh, opts), [tensor], output, fn %Nx.Block.Eigh{}, t ->
+      Nx.LinAlg.BlockEigh.eigh(t, opts)
     end)
     |> Nx.vectorize(vectorized_axes)
   end
@@ -1504,6 +1506,8 @@ defmodule Nx.LinAlg do
   """
   def svd(tensor, opts \\ []) do
     opts = keyword!(opts, max_iter: 100, full_matrices?: true)
+    _ = opts[:max_iter] || raise ArgumentError, "missing option :max_iter"
+
     %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
 
     %T{type: type, shape: shape} = tensor = Nx.devectorize(tensor)
@@ -1518,8 +1522,8 @@ defmodule Nx.LinAlg do
        %{tensor | names: List.duplicate(nil, rank - 1), type: output_type, shape: s_shape},
        %{tensor | names: List.duplicate(nil, rank), type: output_type, shape: v_shape}}
 
-    Nx.block(struct(Nx.Block.SVD, opts), [tensor], output, fn %Nx.Block.SVD{} = opts, t ->
-      Nx.LinAlg.SVD.svd(opts, t)
+    Nx.block(struct!(Nx.Block.SVD, opts), [tensor], output, fn %Nx.Block.SVD{}, t ->
+      Nx.LinAlg.SVD.svd(t, opts)
     end)
     |> Nx.vectorize(vectorized_axes)
   end

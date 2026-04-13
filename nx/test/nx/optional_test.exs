@@ -254,8 +254,8 @@ defmodule Nx.OptionalTest do
                  f32
                \s\s
                  Nx.Defn.Expr
-                 parameter a:0                          s32[3][3]
-                 b = block %Nx.Block.Determinant{}, a   f32
+                 parameter a:0   s32[3][3]
+                 b = block a     f32
                >
                """
       end
@@ -270,8 +270,8 @@ defmodule Nx.OptionalTest do
                  f32
                \s\s
                  Nx.Defn.Expr
-                 parameter a:0                          s32[3][3]
-                 b = block %Nx.Block.Determinant{}, a   f32
+                 parameter a:0   s32[3][3]
+                 b = block a     f32
                >
                """
     end

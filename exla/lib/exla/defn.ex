@@ -1845,8 +1845,8 @@ defmodule EXLA.Defn do
 
   defp block_subfunction_description(%module{} = _) do
     module
-    |> Module.split()
-    |> Enum.map_join("_", &Macro.underscore(to_string(&1)))
+    |> Atom.to_string()
+    |> String.replace(".", "_")
   end
 
   defp block_computation(description, args, expr, %{builder: %Function{}} = state, cache) do

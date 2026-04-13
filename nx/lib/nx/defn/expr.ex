@@ -420,11 +420,6 @@ defmodule Nx.Defn.Expr do
     out
   end
 
-  @doc false
-  def block(struct, in_args, fun) do
-    expr_block(struct, in_args, fun)
-  end
-
   defp expr_block(struct, in_args, fun) do
     {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
     params = Enum.with_index(args, &parameter/2)
@@ -1775,9 +1770,8 @@ defmodule Nx.Defn.Expr do
   defp traverse_args(:while, [initial, _arg, _condition, _body], state),
     do: traverse_args([initial], state)
 
-  defp traverse_args(:block, [struct, in_args, _body, _callback], state) do
-    {in_args_io, state} = Enum.map_reduce(in_args, state, &recur_inspect/2)
-    {[inspect(struct) | in_args_io], state}
+  defp traverse_args(:block, [_struct, in_args, _body, _callback], state) do
+    Enum.map_reduce(in_args, state, &recur_inspect/2)
   end
 
   defp traverse_args(:metadata, [tensor, %{inspect: inspect}], state),
