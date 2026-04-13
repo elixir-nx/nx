@@ -28,6 +28,25 @@ defmodule EXLA.BackendTest do
   doctest Nx,
     except: [:moduledoc] ++ @excluded_doctests
 
+  test "rsqrt is IEEE-correctly rounded for f64" do
+    # Regression for the recurring f64 rsqrt doctest failure.
+    #
+    # `stablehlo.rsqrt` is in StableHLO's implementation-defined-precision
+    # bucket, so backends are free to lower it to a fused approximation
+    # (e.g. AVX `vrsqrtps` + Newton iteration) that may be 1 ULP off from the
+    # IEEE-correctly-rounded value of `1/sqrt(x)`. Both `stablehlo.sqrt` and
+    # `stablehlo.divide` *are* in the correctly-rounded bucket, so EXLA lowers
+    # f64 `rsqrt` as an explicit `1/sqrt(x)` and the result must match
+    # Erlang's `:math.sqrt` bit-for-bit.
+    #
+    # Concretely: the round-to-nearest-even f64 of `1/sqrt(3)` is
+    # `0.5773502691896258`. The fused approximation returned
+    # `0.5773502691896257` — exactly 1 ULP low.
+    result = Nx.rsqrt(Nx.tensor([1.0, 2.0, 3.0], type: :f64))
+    expected = [1.0, 1.0 / :math.sqrt(2.0), 1.0 / :math.sqrt(3.0)]
+    assert Nx.to_flat_list(result) == expected
+  end
+
   test "Nx.to_binary/1" do
     t = Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)
     assert Nx.to_binary(t) == <<1::32-native, 2::32-native, 3::32-native, 4::32-native>>

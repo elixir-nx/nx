@@ -123,7 +123,6 @@ defmodule EXLA.MLIR.Value do
     erf: "chlo.erf",
     erfc: "chlo.erfc",
     erf_inv: "chlo.erf_inv",
-    rsqrt: "stablehlo.rsqrt",
     negate: "stablehlo.negate",
     count_leading_zeros: "stablehlo.count_leading_zeros",
     population_count: "stablehlo.popcnt",
@@ -136,6 +135,42 @@ defmodule EXLA.MLIR.Value do
     def unquote(op)(%Value{function: func} = operand, typespec) do
       result_types = typespecs_to_mlir_types([typespec])
       op(func, unquote(op_name), [operand], result_types, []) |> one!()
+    end
+  end
+
+  # `stablehlo.rsqrt` is in StableHLO's implementation-defined-precision bucket,
+  # so XLA's CPU/GPU backends are free to lower it to a fused approximation
+  # (e.g. `vrsqrtps` + a Newton iteration) that is up to 1 ULP off from the
+  # IEEE-correctly-rounded value of `1/sqrt(x)`. Both `stablehlo.sqrt` and
+  # `stablehlo.divide` *are* in the correctly-rounded bucket, so for f64 we
+  # lower `rsqrt` as an explicit `1/sqrt(x)`.
+  #
+  # The catch: XLA's algebraic simplifier rewrites `divide(constant(1), sqrt(x))`
+  # back into `rsqrt(x)` after compilation, undoing the decomposition. We
+  # insert a `stablehlo.optimization_barrier` between `sqrt` and `divide` to
+  # block that pattern match.
+  #
+  # f32 keeps the fast `stablehlo.rsqrt` path because ML workloads (LayerNorm,
+  # attention) rely on the fused approximate instruction for throughput.
+  def rsqrt(%Value{function: func} = operand, typespec) do
+    case typespec.type do
+      {:f, 64} ->
+        result_types = typespecs_to_mlir_types([typespec])
+        scalar_typespec = Typespec.to_shape(typespec, {})
+        one_scalar = constant(func, [1.0], scalar_typespec)
+        one = broadcast_in_dim(one_scalar, [], typespec)
+        sqrt_x = sqrt(operand, typespec)
+
+        # Block XLA's algebraic simplifier from folding `1/sqrt(x)` back into
+        # `stablehlo.rsqrt(x)`, which would defeat the precision fix.
+        sqrt_x_barrier =
+          op(func, "stablehlo.optimization_barrier", [sqrt_x], result_types, []) |> one!()
+
+        divide(one, sqrt_x_barrier, typespec)
+
+      _ ->
+        result_types = typespecs_to_mlir_types([typespec])
+        op(func, "stablehlo.rsqrt", [operand], result_types, []) |> one!()
     end
   end
 
