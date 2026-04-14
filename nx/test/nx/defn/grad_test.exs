@@ -4877,38 +4877,66 @@ defmodule Nx.Defn.GradTest do
   describe "vectorization" do
     @vec_atol 1.0e-4
 
-    # Compares vectorized grad against per-element stacked grads.
-    defp check_vectorized_grad(x_data, fun, opts \\ []) do
+    # Compares vectorized grad against per-element grads.
+    #
+    # Accepts either a plain tensor (vectorized internally with `:batch`)
+    # or a pre-vectorized tensor with any number of vec axes. Per-element
+    # grads are computed on devectorized slices and compared to the
+    # corresponding slice of the vectorized grad's devectorized form.
+    defp check_vectorized_grad(x_or_vec, fun, opts \\ []) do
       atol = opts[:atol] || @vec_atol
-      batch_size = elem(Nx.shape(x_data), 0)
-      inner_shape = x_data.shape |> Tuple.to_list() |> tl() |> List.to_tuple()
 
-      x_vec = Nx.vectorize(x_data, :batch)
+      x_vec =
+        if x_or_vec.vectorized_axes == [] do
+          Nx.vectorize(x_or_vec, :batch)
+        else
+          x_or_vec
+        end
+
+      vec_axes = x_vec.vectorized_axes
+      n_vec = length(vec_axes)
+      vec_dims = Enum.map(vec_axes, fn {_name, size} -> size end)
+
+      x_devec = Nx.devectorize(x_vec, keep_names: false)
       vec_grad = Nx.Defn.grad(x_vec, fun)
       vec_grad_devec = Nx.devectorize(vec_grad, keep_names: false)
 
-      per_element_grads =
-        for i <- 0..(batch_size - 1) do
-          x_i = Nx.reshape(x_data[i], inner_shape)
-          Nx.Defn.grad(x_i, fun)
-        end
+      inner_shape =
+        x_devec.shape
+        |> Tuple.to_list()
+        |> Enum.drop(n_vec)
+        |> List.to_tuple()
 
-      stacked = Nx.stack(per_element_grads)
+      ranges = Enum.map(vec_dims, &Enum.to_list(0..(&1 - 1)))
+      indices = cartesian_product(ranges)
 
-      for i <- 0..(batch_size - 1) do
-        vec_slice = vec_grad_devec[i] |> Nx.reshape(inner_shape)
-        elem_slice = stacked[i] |> Nx.reshape(inner_shape)
+      for idx <- indices do
+        x_elem =
+          Enum.reduce(idx, x_devec, fn i, acc -> acc[i] end)
+          |> Nx.reshape(inner_shape)
 
-        for {v, e} <- Enum.zip(Nx.to_flat_list(vec_slice), Nx.to_flat_list(elem_slice)) do
+        vec_elem =
+          Enum.reduce(idx, vec_grad_devec, fn i, acc -> acc[i] end)
+          |> Nx.reshape(inner_shape)
+
+        elem_grad = Nx.Defn.grad(x_elem, fun)
+
+        for {v, e} <- Enum.zip(Nx.to_flat_list(vec_elem), Nx.to_flat_list(elem_grad)) do
           if v == :nan and e == :nan do
             :ok
           else
-            assert_in_delta v, e, atol, "Mismatch at batch #{i}: vec=#{v}, elem=#{e}"
+            assert_in_delta v, e, atol, "Mismatch at idx #{inspect(idx)}: vec=#{v}, elem=#{e}"
           end
         end
       end
 
       :ok
+    end
+
+    defp cartesian_product([]), do: [[]]
+
+    defp cartesian_product([list | rest]) do
+      for x <- list, suffix <- cartesian_product(rest), do: [x | suffix]
     end
 
     # ── Pre-existing edge case tests ─────────────────────────────────
@@ -5221,9 +5249,9 @@ defmodule Nx.Defn.GradTest do
           |> Nx.sum()
         end)
 
+      devec = Nx.devectorize(grad, keep_names: false)
       assert grad.vectorized_axes == [batch: 4]
-      assert Nx.shape(Nx.devectorize(grad, keep_names: false)) == {4, 2, 3}
-      assert Nx.to_flat_list(grad) == List.duplicate(1.0, 24)
+      assert devec == Nx.broadcast(1.0, devec)
     end
 
     test "hidden vec axes inside grad: same outer name with hidden intermediate axes" do
@@ -5240,9 +5268,9 @@ defmodule Nx.Defn.GradTest do
           |> Nx.sum()
         end)
 
+      devec = Nx.devectorize(grad, keep_names: false)
       assert grad.vectorized_axes == [batch: 4]
-      assert Nx.shape(Nx.devectorize(grad, keep_names: false)) == {4, 2, 3}
-      assert Nx.to_flat_list(grad) == List.duplicate(1.0, 24)
+      assert devec == Nx.broadcast(1.0, devec)
     end
 
     test "hidden vec axes inside grad: same length, different name" do
@@ -5268,23 +5296,10 @@ defmodule Nx.Defn.GradTest do
         ])
         |> Nx.vectorize(:batch)
 
-      grad =
-        Nx.Defn.grad(x, fn t ->
-          {q, r} = Nx.LinAlg.qr(t)
-          Nx.add(Nx.sum(q), Nx.sum(r))
-        end)
-
-      assert grad.vectorized_axes == [batch: 2]
-      assert grad.shape == {3, 2}
-
-      # Compare against per-element grads computed in unvectorized space.
-      check_vectorized_grad(
-        Nx.devectorize(x, keep_names: false),
-        fn t ->
-          {q, r} = Nx.LinAlg.qr(t)
-          Nx.add(Nx.sum(q), Nx.sum(r))
-        end
-      )
+      check_vectorized_grad(x, fn t ->
+        {q, r} = Nx.LinAlg.qr(t)
+        Nx.add(Nx.sum(q), Nx.sum(r))
+      end)
     end
 
     test "vectorized grad through Nx.LinAlg.eigh (autograd via defn)" do
@@ -5295,14 +5310,10 @@ defmodule Nx.Defn.GradTest do
         ])
         |> Nx.vectorize(:batch)
 
-      grad =
-        Nx.Defn.grad(x, fn t ->
-          {evals, evecs} = Nx.LinAlg.eigh(t)
-          Nx.add(Nx.sum(evals), Nx.sum(evecs))
-        end)
-
-      assert grad.vectorized_axes == [batch: 2]
-      assert grad.shape == {2, 2}
+      check_vectorized_grad(x, fn t ->
+        {evals, evecs} = Nx.LinAlg.eigh(t)
+        Nx.add(Nx.sum(evals), Nx.sum(evecs))
+      end)
     end
 
     test "three different vectorized axes" do
@@ -5435,20 +5446,9 @@ defmodule Nx.Defn.GradTest do
 
     test "two vectorized axes (exercises unbroadcast for multiple axes)" do
       x = Nx.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]], type: :f32)
-
       x_vec = x |> Nx.vectorize(:a) |> Nx.vectorize(:b)
-      vec_grad = Nx.Defn.grad(x_vec, fn x -> Nx.sum(Nx.multiply(x, x)) end)
-      vec_devec = Nx.devectorize(vec_grad, keep_names: false)
 
-      for i <- 0..1, j <- 0..1 do
-        x_ij = x[i][j] |> Nx.reshape({2})
-        elem_grad = Nx.Defn.grad(x_ij, fn x -> Nx.sum(Nx.multiply(x, x)) end)
-
-        for {v, e} <-
-              Enum.zip(Nx.to_flat_list(vec_devec[i][j]), Nx.to_flat_list(elem_grad)) do
-          assert_in_delta v, e, @vec_atol
-        end
-      end
+      check_vectorized_grad(x_vec, fn x -> Nx.sum(Nx.multiply(x, x)) end)
     end
 
     test "composed: sigmoid(x @ w + b) (exercises composed chain with captures)" do
