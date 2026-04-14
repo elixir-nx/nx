@@ -1155,8 +1155,9 @@ defmodule Nx.LinAlg do
            names: List.duplicate(nil, tuple_size(r_shape))
        }}
 
-    Nx.block(struct!(Nx.Block.QR, opts), [tensor], output, fn %Nx.Block.QR{} = opts, t ->
-      Nx.LinAlg.QR.qr(opts, t)
+    Nx.block(struct!(Nx.Block.QR, opts), [tensor], output, fn %Nx.Block.QR{} = s, t ->
+      opts = s |> Map.from_struct() |> Map.to_list()
+      Nx.LinAlg.QR.qr(t, opts)
     end)
     |> Nx.vectorize(vectorized_axes)
   end

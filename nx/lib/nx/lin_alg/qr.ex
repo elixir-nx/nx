@@ -2,8 +2,8 @@ defmodule Nx.LinAlg.QR do
   @moduledoc false
   import Nx.Defn
 
-  defn qr(%Nx.Block.QR{} = o, a) do
-    opts = keyword!([mode: o.mode, eps: o.eps], mode: :reduced, eps: 1.0e-10)
+  defn qr(a, opts) do
+    opts = keyword!(opts, mode: :reduced, eps: 1.0e-10)
     vectorized_axes = a.vectorized_axes
 
     result =
