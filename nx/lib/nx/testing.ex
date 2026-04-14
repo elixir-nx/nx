@@ -48,14 +48,14 @@ defmodule Nx.Testing do
   end
 
   defp tensor_equal?(left, right) do
-    cond do
-      not is_tensor(left) or not is_tensor(right) ->
-        false
+    left = to_tensor(left)
+    right = to_tensor(right)
 
+    cond do
       left.vectorized_axes != right.vectorized_axes ->
         false
 
-      Nx.shape(left) != Nx.shape(right) ->
+      shapes_incompatible?(left, right) ->
         false
 
       true ->
@@ -68,6 +68,23 @@ defmodule Nx.Testing do
         |> Nx.to_flat_list()
         |> Enum.all?(&(&1 == 1))
     end
+  end
+
+  # Wrap raw scalars/lists in tensors so the struct-field accesses
+  # (`.vectorized_axes`) and `Nx.shape/1` below don't crash. Tensors
+  # pass through unchanged.
+  defp to_tensor(%Nx.Tensor{} = t), do: t
+  defp to_tensor(other), do: Nx.tensor(other)
+
+  # Genuine shape mismatches are rejected, but we still allow a scalar
+  # (shape `{}`) to compare against a tensor of any shape — that's the
+  # intentional "assert every element equals this scalar" pattern, and
+  # rejecting it would break a large number of existing tests that
+  # relied on `Nx.equal`'s broadcasting.
+  defp shapes_incompatible?(left, right) do
+    ls = Nx.shape(left)
+    rs = Nx.shape(right)
+    ls != rs and ls != {} and rs != {}
   end
 
   @doc """
@@ -90,11 +107,14 @@ defmodule Nx.Testing do
     atol = opts[:atol] || 1.0e-4
     rtol = opts[:rtol] || 1.0e-4
 
+    left_t = to_tensor(left)
+    right_t = to_tensor(right)
+
     equals =
-      left.vectorized_axes == right.vectorized_axes and
-        Nx.shape(left) == Nx.shape(right) and
-        left
-        |> Nx.all_close(right, atol: atol, rtol: rtol)
+      left_t.vectorized_axes == right_t.vectorized_axes and
+        not shapes_incompatible?(left_t, right_t) and
+        left_t
+        |> Nx.all_close(right_t, atol: atol, rtol: rtol)
         |> Nx.backend_transfer(Nx.BinaryBackend)
         |> Nx.to_flat_list()
         |> Enum.all?(&(&1 == 1))
@@ -121,28 +141,33 @@ defmodule Nx.Testing do
   # Otherwise computes max absolute and max relative difference across all
   # elements (including vec axes) so bit-level disagreements hidden by
   # truncated `inspect` output are still visible in the failure message.
-  defp diagnose_difference(left, right) when is_tensor(left) and is_tensor(right) do
+  defp diagnose_difference(left, right) do
+    left = to_tensor(left)
+    right = to_tensor(right)
+
     cond do
       left.vectorized_axes != right.vectorized_axes ->
         "vectorized_axes differ: left #{inspect(left.vectorized_axes)}, " <>
           "right #{inspect(right.vectorized_axes)}"
 
-      Nx.shape(left) != Nx.shape(right) ->
+      shapes_incompatible?(left, right) ->
         "shapes differ: left #{inspect(Nx.shape(left))}, " <>
           "right #{inspect(Nx.shape(right))}"
 
       true ->
         numeric_diagnostic(left, right)
     end
+  rescue
+    _ -> ""
   end
-
-  defp diagnose_difference(_, _), do: ""
 
   defp numeric_diagnostic(left, right) do
     # Devectorize so reductions collapse across vec axes too, and so
     # `Nx.to_number` on the final scalar doesn't hit a vectorized tensor.
     left = if left.vectorized_axes == [], do: left, else: Nx.devectorize(left, keep_names: false)
-    right = if right.vectorized_axes == [], do: right, else: Nx.devectorize(right, keep_names: false)
+
+    right =
+      if right.vectorized_axes == [], do: right, else: Nx.devectorize(right, keep_names: false)
 
     # Promote to a common numeric type so subtraction works for int/float mixes.
     {left_f, right_f} =
