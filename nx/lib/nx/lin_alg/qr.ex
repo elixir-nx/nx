@@ -150,14 +150,23 @@ defmodule Nx.LinAlg.QR do
     # Definition taken from https://arxiv.org/pdf/2009.10071.pdf
     # Equation (3)
     r_inv = Nx.LinAlg.invert(r)
+    ba = batch_axes(r)
 
-    m = Nx.dot(r, Nx.LinAlg.adjoint(dr)) |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(dq), q))
+    m =
+      Nx.dot(r, [-1], ba, Nx.LinAlg.adjoint(dr), [-2], ba)
+      |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(dq), [-1], ba, q, [-2], ba))
 
     # copyltu
     m_ltu = Nx.tril(m) |> Nx.add(m |> Nx.tril(k: -1) |> Nx.LinAlg.adjoint())
 
-    da = dq |> Nx.add(Nx.dot(q, m_ltu)) |> Nx.dot(Nx.LinAlg.adjoint(r_inv))
+    q_m = Nx.dot(q, [-1], ba, m_ltu, [-2], ba)
+    da = Nx.dot(Nx.add(dq, q_m), [-1], ba, Nx.LinAlg.adjoint(r_inv), [-2], ba)
 
     [da]
+  end
+
+  deftransformp batch_axes(t) do
+    rank = tuple_size(t.shape)
+    Enum.to_list(0..(rank - 3)//1)
   end
 end
