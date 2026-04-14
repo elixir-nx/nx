@@ -5210,6 +5210,101 @@ defmodule Nx.Defn.GradTest do
                Nx.tensor([[4.0, 4.0], [25.0, 25.0]]) |> Nx.vectorize(foo: 2, bar: 2)
     end
 
+    test "hidden vec axes inside grad: rename to different names and lengths" do
+      x = Nx.iota({4, 2, 3}, type: :f32) |> Nx.vectorize(:batch)
+
+      grad =
+        Nx.Defn.grad(x, fn t ->
+          t
+          |> Nx.devectorize(keep_names: false)
+          |> Nx.vectorize(a: 4, b: 2)
+          |> Nx.sum()
+        end)
+
+      assert grad.vectorized_axes == [batch: 4]
+      assert Nx.shape(Nx.devectorize(grad, keep_names: false)) == {4, 2, 3}
+      assert Nx.to_flat_list(grad) == List.duplicate(1.0, 24)
+    end
+
+    test "hidden vec axes inside grad: same outer name with hidden intermediate axes" do
+      x = Nx.iota({4, 2, 3}, type: :f32) |> Nx.vectorize(:batch)
+
+      grad =
+        Nx.Defn.grad(x, fn t ->
+          t
+          |> Nx.devectorize(keep_names: false)
+          |> Nx.vectorize(a: 4, b: 2)
+          |> Nx.sum()
+          |> Nx.devectorize(keep_names: false)
+          |> Nx.vectorize(batch: 4)
+          |> Nx.sum()
+        end)
+
+      assert grad.vectorized_axes == [batch: 4]
+      assert Nx.shape(Nx.devectorize(grad, keep_names: false)) == {4, 2, 3}
+      assert Nx.to_flat_list(grad) == List.duplicate(1.0, 24)
+    end
+
+    test "hidden vec axes inside grad: same length, different name" do
+      x = Nx.iota({4, 2, 3}, type: :f32) |> Nx.vectorize(:batch)
+
+      grad =
+        Nx.Defn.grad(x, fn t ->
+          t
+          |> Nx.devectorize(keep_names: false)
+          |> Nx.vectorize(other: 4)
+          |> Nx.sum()
+        end)
+
+      assert grad ==
+               Nx.broadcast(1.0, {4, 2, 3}) |> Nx.vectorize(batch: 4)
+    end
+
+    test "vectorized grad through Nx.LinAlg.qr (custom grad)" do
+      x =
+        Nx.tensor([
+          [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]],
+          [[7.0, 8.0], [9.0, 10.0], [11.0, 12.0]]
+        ])
+        |> Nx.vectorize(:batch)
+
+      grad =
+        Nx.Defn.grad(x, fn t ->
+          {q, r} = Nx.LinAlg.qr(t)
+          Nx.add(Nx.sum(q), Nx.sum(r))
+        end)
+
+      assert grad.vectorized_axes == [batch: 2]
+      assert grad.shape == {3, 2}
+
+      # Compare against per-element grads computed in unvectorized space.
+      check_vectorized_grad(
+        Nx.devectorize(x, keep_names: false),
+        fn t ->
+          {q, r} = Nx.LinAlg.qr(t)
+          Nx.add(Nx.sum(q), Nx.sum(r))
+        end
+      )
+    end
+
+    test "vectorized grad through Nx.LinAlg.eigh (autograd via defn)" do
+      x =
+        Nx.tensor([
+          [[2.0, 1.0], [1.0, 3.0]],
+          [[4.0, 0.5], [0.5, 5.0]]
+        ])
+        |> Nx.vectorize(:batch)
+
+      grad =
+        Nx.Defn.grad(x, fn t ->
+          {evals, evecs} = Nx.LinAlg.eigh(t)
+          Nx.add(Nx.sum(evals), Nx.sum(evecs))
+        end)
+
+      assert grad.vectorized_axes == [batch: 2]
+      assert grad.shape == {2, 2}
+    end
+
     test "three different vectorized axes" do
       x_vec = Nx.tensor([[1.0, 2.0], [3.0, 4.0]]) |> Nx.vectorize(:x)
       y_vec = Nx.tensor([10.0, 20.0]) |> Nx.vectorize(:y)

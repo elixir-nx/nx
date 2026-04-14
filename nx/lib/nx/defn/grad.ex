@@ -57,15 +57,14 @@ defmodule Nx.Defn.Grad do
   # the implicit alignment the forward pass already performs, so the grad
   # recursion sees a homogeneous case.
   defp apply_boundary_broadcast(to_grad) do
-    flat = Composite.flatten_list([to_grad])
+    case Composite.flatten_list([to_grad]) do
+      [_ | _] = flat ->
+        broadcast = Nx.broadcast_vectors(flat)
+        {result, []} = Composite.traverse(to_grad, broadcast, fn _, [h | t] -> {h, t} end)
+        result
 
-    case flat do
-      [_ | _] ->
-      broadcast = Nx.broadcast_vectors(flat)
-      {result, []} = Composite.traverse(to_grad, broadcast, fn _, [h | t] -> {h, t} end)
-      result
-    _ ->
-      to_grad
+      _ ->
+        to_grad
     end
   end
 
