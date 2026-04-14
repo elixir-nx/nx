@@ -59,11 +59,12 @@ defmodule Nx.Defn.Grad do
   defp apply_boundary_broadcast(to_grad) do
     flat = Composite.flatten_list([to_grad])
 
-    if length(flat) > 1 do
+    case flat do
+      [_ | _] ->
       broadcast = Nx.broadcast_vectors(flat)
       {result, []} = Composite.traverse(to_grad, broadcast, fn _, [h | t] -> {h, t} end)
       result
-    else
+    _ ->
       to_grad
     end
   end
