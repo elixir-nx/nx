@@ -76,8 +76,8 @@ defmodule Nx.LinAlg.Cholesky do
   end
 
   defn cholesky_grad(l, _input, g) do
-    num = g |> Nx.tril() |> Nx.dot([0], l, [0]) |> Nx.transpose()
-    den = l |> Nx.shape() |> Nx.eye() |> Nx.add(1)
+    num = g |> Nx.tril() |> Nx.dot([-2], l, [-2]) |> batch_transpose()
+    den = Nx.eye(l) |> Nx.add(1)
     phi_tril = num |> Nx.divide(den) |> Nx.tril()
 
     bm = Nx.LinAlg.triangular_solve(l, phi_tril, transform_a: :transpose)
@@ -95,6 +95,17 @@ defmodule Nx.LinAlg.Cholesky do
     # applied on the grad
 
     [dl]
+  end
+
+  deftransformp batch_transpose(t) do
+    rank = tuple_size(t.shape)
+
+    if rank <= 2 do
+      Nx.transpose(t)
+    else
+      axes = Enum.to_list(0..(rank - 3)) ++ [rank - 1, rank - 2]
+      Nx.transpose(t, axes: axes)
+    end
   end
 
   defnp conjugate_if_complex(x) do
