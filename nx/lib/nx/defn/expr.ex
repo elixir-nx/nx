@@ -1770,8 +1770,9 @@ defmodule Nx.Defn.Expr do
   defp traverse_args(:while, [initial, _arg, _condition, _body], state),
     do: traverse_args([initial], state)
 
-  defp traverse_args(:block, [_struct, in_args, _body, _callback], state) do
-    Enum.map_reduce(in_args, state, &recur_inspect/2)
+  defp traverse_args(:block, [struct, in_args, _body, _callback], state) do
+    {in_args_io, state} = Enum.map_reduce(in_args, state, &recur_inspect/2)
+    {[inspect(struct) | in_args_io], state}
   end
 
   defp traverse_args(:metadata, [tensor, %{inspect: inspect}], state),
