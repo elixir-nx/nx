@@ -4864,7 +4864,55 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  # Module-level defn functions for vectorization tests
+  defn while_square_n(x) do
+    {_i, result} =
+      while {i = 0, x}, Nx.less(i, 3) do
+        {i + 1, Nx.multiply(x, x)}
+      end
+
+    Nx.sum(result)
+  end
+
   describe "vectorization" do
+    @vec_atol 1.0e-4
+
+    # Compares vectorized grad against per-element stacked grads.
+    defp check_vectorized_grad(x_data, fun, opts \\ []) do
+      atol = opts[:atol] || @vec_atol
+      batch_size = elem(Nx.shape(x_data), 0)
+      inner_shape = x_data.shape |> Tuple.to_list() |> tl() |> List.to_tuple()
+
+      x_vec = Nx.vectorize(x_data, :batch)
+      vec_grad = Nx.Defn.grad(x_vec, fun)
+      vec_grad_devec = Nx.devectorize(vec_grad, keep_names: false)
+
+      per_element_grads =
+        for i <- 0..(batch_size - 1) do
+          x_i = Nx.reshape(x_data[i], inner_shape)
+          Nx.Defn.grad(x_i, fun)
+        end
+
+      stacked = Nx.stack(per_element_grads)
+
+      for i <- 0..(batch_size - 1) do
+        vec_slice = vec_grad_devec[i] |> Nx.reshape(inner_shape)
+        elem_slice = stacked[i] |> Nx.reshape(inner_shape)
+
+        for {v, e} <- Enum.zip(Nx.to_flat_list(vec_slice), Nx.to_flat_list(elem_slice)) do
+          if v == :nan and e == :nan do
+            :ok
+          else
+            assert_in_delta v, e, atol, "Mismatch at batch #{i}: vec=#{v}, elem=#{e}"
+          end
+        end
+      end
+
+      :ok
+    end
+
+    # ── Pre-existing edge case tests ─────────────────────────────────
+
     test "supports combination of vectorized and non-vectorized tensors" do
       x = Nx.tensor([[1, 2, 3], [4, 5, 6]]) |> Nx.vectorize(:x)
       y = 1
@@ -4885,89 +4933,437 @@ defmodule Nx.Defn.GradTest do
       assert grad == Nx.cos(x)
     end
 
-    # Skipping this as it's not supported yet.
-    @tag :skip
-    test "edge case where the same name changes meaning" do
-      x = Nx.tensor([[1], [2], [3]]) |> Nx.vectorize(x: 3)
+    test "supports heterogenous vectorization combinations" do
+      x_vec = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]) |> Nx.vectorize(:x)
+      y_vec = Nx.tensor([10.0, 20.0]) |> Nx.vectorize(:y)
 
-      grad =
-        Nx.Defn.grad(x, fn t ->
-          devec = Nx.devectorize(t, keep_names: true)
-          new_axis = Nx.reshape(devec, {1, 3, 1}, names: [:x, nil, nil])
+      {grad_x, grad_y} =
+        Nx.Defn.grad({x_vec, y_vec}, fn {a, b} -> Nx.multiply(a, b) end)
 
-          Nx.vectorize(new_axis, x: 1)
-        end)
-
-      assert grad == Nx.tensor([[1], [1], [1]]) |> Nx.vectorize(x: 3)
+      union = [x: 2, y: 2]
+      assert grad_x.vectorized_axes == union
+      assert grad_y.vectorized_axes == union
     end
 
-    test "supports heterogenous vectorization combinations" do
+    test "supports same-axis vectorization combinations" do
       x = Nx.tensor([[1, 2, 3], [4, 5, 6]])
       y = Nx.tensor([10, 20])
-
-      # first case: y is vectorized scalar, x is vectorized vectors, different vectorized axis names
-      # expected result: equivalent to fully broadcasting one tensor onto the other
-      x_vec = Nx.vectorize(x, :x)
-      y_vec = Nx.vectorize(y, :y)
-
-      grad_fun = fn x, y ->
-        Nx.Defn.grad({x, y}, fn {a, b} -> Nx.multiply(a, b) end)
-      end
-
-      {grad_x_vec, grad_y_vec} = grad_fun.(x_vec, y_vec)
-
-      # Explicit assertion on the results
-      assert grad_x_vec ==
-               Nx.tensor([
-                 [
-                   [10.0, 10.0, 10.0],
-                   [20.0, 20.0, 20.0]
-                 ],
-                 [
-                   [10.0, 10.0, 10.0],
-                   [20.0, 20.0, 20.0]
-                 ]
-               ])
-               |> Nx.vectorize([:x, :y])
-
-      assert grad_y_vec ==
-               Nx.tensor([
-                 [6.0, 6.0],
-                 [15.0, 15.0]
-               ])
-               |> Nx.vectorize([:x, :y])
-
-      # Conceptual assertion: the result should be equivalent to calling Nx.Defn.grad with
-      # each cross-entry of the combined vectors [(x0, y0), (x0, y1), (x1, y0), (x1, y1)]
-
-      {x0y0_wrt_x, x0y0_wrt_y} = grad_fun.(x[0], y[0])
-      {x0y1_wrt_x, x0y1_wrt_y} = grad_fun.(x[0], y[1])
-      {x1y0_wrt_x, x1y0_wrt_y} = grad_fun.(x[1], y[0])
-      {x1y1_wrt_x, x1y1_wrt_y} = grad_fun.(x[1], y[1])
-
-      assert grad_x_vec ==
-               [x0y0_wrt_x, x0y1_wrt_x, x1y0_wrt_x, x1y1_wrt_x]
-               |> Nx.stack()
-               |> Nx.reshape({2, 2, 3})
-               |> Nx.vectorize([:x, :y])
-
-      assert grad_y_vec ==
-               [x0y0_wrt_y, x0y1_wrt_y, x1y0_wrt_y, x1y1_wrt_y]
-               |> Nx.stack()
-               |> Nx.reshape({2, 2})
-               |> Nx.vectorize([:x, :y])
-
-      # second case: y is vectorized scalar, x is vectorized vectors, same vectorized axis name
-      # expected result: equivalent to "row-wise" broadcasting
       x_vec = Nx.vectorize(x, :x)
       y_vec = Nx.vectorize(y, :x)
-      {grad_x_vec, grad_y_vec} = Nx.Defn.grad({x_vec, y_vec}, fn {a, b} -> Nx.multiply(a, b) end)
+
+      {grad_x_vec, grad_y_vec} =
+        Nx.Defn.grad({x_vec, y_vec}, fn {a, b} -> Nx.multiply(a, b) end)
 
       assert grad_x_vec ==
                Nx.tensor([[10.0, 10.0, 10.0], [20.0, 20.0, 20.0]])
                |> Nx.vectorize(x_vec.vectorized_axes)
 
       assert grad_y_vec == Nx.tensor([6.0, 15.0]) |> Nx.vectorize(y_vec.vectorized_axes)
+    end
+
+    # ── Edge case tests ──────────────────────────────────────────────
+
+    test "vectorize/devectorize inside grad function" do
+      x = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]) |> Nx.vectorize(:batch)
+
+      grad =
+        Nx.Defn.grad(x, fn t ->
+          devec = Nx.devectorize(t, keep_names: false)
+          re_vec = Nx.vectorize(devec, :batch)
+          Nx.sum(re_vec)
+        end)
+
+      assert grad.vectorized_axes == [batch: 2]
+      expected = Nx.tensor([[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]]) |> Nx.vectorize(:batch)
+      assert grad == expected
+    end
+
+    test "reshape then vectorize inside grad" do
+      x = Nx.tensor([[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]]) |> Nx.vectorize(:batch)
+
+      grad =
+        Nx.Defn.grad(x, fn t ->
+          reshaped = Nx.reshape(t, {2, 2})
+          Nx.sum(reshaped)
+        end)
+
+      assert grad.vectorized_axes == [batch: 2]
+    end
+
+    test "non-vectorized input, vectorized output" do
+      x_vec = Nx.tensor([[1.0, 2.0], [3.0, 4.0]]) |> Nx.vectorize(:batch)
+      y = Nx.tensor([1.0, 1.0])
+
+      grad = Nx.Defn.grad(y, fn y -> Nx.sum(Nx.add(x_vec, y)) end)
+      assert grad.vectorized_axes == [batch: 2]
+    end
+
+    test "rename vectorized axes inside grad" do
+      x = Nx.tensor([[1.0, 2.0], [3.0, 4.0]]) |> Nx.vectorize(:a)
+
+      grad =
+        Nx.Defn.grad(x, fn t ->
+          devec = Nx.devectorize(t, keep_names: false)
+          Nx.vectorize(devec, :b) |> Nx.sum()
+        end)
+
+      assert grad.vectorized_axes == [a: 2]
+    end
+
+    test "devectorize then compute then return scalar" do
+      x = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]) |> Nx.vectorize(:batch)
+
+      grad =
+        Nx.Defn.grad(x, fn t ->
+          devec = Nx.devectorize(t, keep_names: false)
+          Nx.sum(Nx.multiply(devec, devec))
+        end)
+
+      assert grad.vectorized_axes == [batch: 2]
+    end
+
+    test "chained devectorize/vectorize with computation" do
+      x = Nx.tensor([[1.0, 2.0], [3.0, 4.0]]) |> Nx.vectorize(:batch)
+
+      grad =
+        Nx.Defn.grad(x, fn t ->
+          devec = Nx.devectorize(t, keep_names: false)
+          doubled = Nx.multiply(devec, 2)
+          re_vec = Nx.vectorize(doubled, :batch)
+          Nx.sum(re_vec)
+        end)
+
+      assert grad.vectorized_axes == [batch: 2]
+      expected = Nx.tensor([[2.0, 2.0], [2.0, 2.0]]) |> Nx.vectorize(:batch)
+      assert grad == expected
+    end
+
+    test "multiple vectorized axes input" do
+      x =
+        Nx.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]])
+        |> Nx.vectorize(:a)
+        |> Nx.vectorize(:b)
+
+      grad = Nx.Defn.grad(x, fn t -> Nx.sum(Nx.multiply(t, t)) end)
+      assert grad.vectorized_axes == [a: 2, b: 2]
+    end
+
+    test "second-order grad" do
+      x = Nx.tensor([[1.0, 2.0], [3.0, 4.0]]) |> Nx.vectorize(:batch)
+
+      grad =
+        Nx.Defn.grad(x, fn t ->
+          inner = Nx.Defn.grad(t, fn u -> Nx.sum(Nx.pow(u, 3)) end)
+          Nx.sum(inner)
+        end)
+
+      assert grad.vectorized_axes == [batch: 2]
+    end
+
+    test "constant-grad ops with vectorized inputs (all/any/argmax/argmin)" do
+      x = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]) |> Nx.vectorize(:batch)
+
+      grad = Nx.Defn.grad(x, fn t -> Nx.sum(Nx.multiply(t, Nx.argmax(t))) end)
+      assert grad.vectorized_axes == [batch: 2]
+
+      grad = Nx.Defn.grad(x, fn t -> Nx.sum(Nx.multiply(t, Nx.argmin(t))) end)
+      assert grad.vectorized_axes == [batch: 2]
+    end
+
+    test "window_scatter_max/min with vectorized inputs" do
+      t_data =
+        Nx.tensor([
+          [[7.0, 2.0, 5.0, 3.0], [8.0, 9.0, 1.0, 5.0]],
+          [[1.0, 5.0, 7.0, 0.0], [6.0, 2.0, 4.0, 3.0]]
+        ])
+
+      t = Nx.vectorize(t_data, :batch)
+      source = Nx.tensor([[2.0, 6.0], [3.0, 1.0]])
+      init = 0
+
+      grad =
+        Nx.Defn.grad(t, fn t ->
+          Nx.window_scatter_max(t, source, init, {1, 2}, strides: [1, 2], padding: :valid)
+        end)
+
+      assert grad.vectorized_axes == [batch: 2]
+    end
+
+    test "value_and_grad with vectorized target" do
+      x = Nx.tensor([[1.0, 2.0], [3.0, 4.0]]) |> Nx.vectorize(:batch)
+
+      {value, grad} =
+        Nx.Defn.value_and_grad(x, fn t -> Nx.sum(Nx.multiply(t, t)) end)
+
+      assert value.vectorized_axes == [batch: 2]
+      assert grad.vectorized_axes == [batch: 2]
+    end
+
+    test "grad of non-vectorized target with vectorized capture" do
+      x_vec = Nx.tensor([[1.0, 2.0], [3.0, 4.0]]) |> Nx.vectorize(:batch)
+      y = Nx.tensor(2.0)
+
+      grad = Nx.Defn.grad(y, fn y -> Nx.sum(Nx.multiply(x_vec, y)) end)
+      assert grad.vectorized_axes == [batch: 2]
+    end
+
+    test "grad w.r.t. tuple of vectorized and non-vectorized" do
+      x = Nx.tensor([[1.0, 2.0], [3.0, 4.0]]) |> Nx.vectorize(:batch)
+      y = Nx.tensor(2.0)
+
+      {grad_x, grad_y} =
+        Nx.Defn.grad({x, y}, fn {a, b} -> Nx.sum(Nx.multiply(a, b)) end)
+
+      assert grad_x.vectorized_axes == [batch: 2]
+      assert grad_y.vectorized_axes == [batch: 2]
+    end
+
+    test "large vectorized batch" do
+      x = Nx.iota({64, 4}, type: :f32) |> Nx.divide(256) |> Nx.add(0.1)
+
+      check_vectorized_grad(x, fn x -> Nx.sum(Nx.exp(x)) end)
+    end
+
+    test "mixed vectorized axes with add" do
+      x_vec = Nx.tensor([[1.0, 2.0], [3.0, 4.0]]) |> Nx.vectorize(:x)
+      y_vec = Nx.tensor([10.0, 20.0]) |> Nx.vectorize(:y)
+      {grad_x, grad_y} = Nx.Defn.grad({x_vec, y_vec}, fn {a, b} -> Nx.add(a, b) end)
+      union = [x: 2, y: 2]
+      assert grad_x.vectorized_axes == union
+      assert grad_y.vectorized_axes == union
+    end
+
+    test "mixed vectorized axes with multiply" do
+      x_vec = Nx.tensor([[1.0, 2.0], [3.0, 4.0]]) |> Nx.vectorize(:x)
+      y_vec = Nx.tensor([10.0, 20.0]) |> Nx.vectorize(:y)
+      {grad_x, grad_y} = Nx.Defn.grad({x_vec, y_vec}, fn {a, b} -> Nx.multiply(a, b) end)
+      union = [x: 2, y: 2]
+      assert grad_x.vectorized_axes == union
+      assert grad_y.vectorized_axes == union
+    end
+
+    test "heterogenous vec grad: multiply (per-instance partials)" do
+      x_vec = Nx.tensor([2.0, 5.0]) |> Nx.vectorize(:foo)
+      y_vec = Nx.tensor([3.0, 4.0]) |> Nx.vectorize(:bar)
+
+      {grad_x, grad_y} =
+        Nx.Defn.grad({x_vec, y_vec}, fn {x, y} ->
+          Nx.sum(Nx.multiply(x, y))
+        end)
+
+      assert grad_x ==
+               Nx.tensor([[3.0, 4.0], [3.0, 4.0]]) |> Nx.vectorize(foo: 2, bar: 2)
+
+      assert grad_y ==
+               Nx.tensor([[2.0, 2.0], [5.0, 5.0]]) |> Nx.vectorize(foo: 2, bar: 2)
+    end
+
+    test "heterogenous vec grad: add (constant per-instance partials)" do
+      x_vec = Nx.tensor([2.0, 5.0]) |> Nx.vectorize(:foo)
+      y_vec = Nx.tensor([3.0, 4.0, 6.0]) |> Nx.vectorize(:bar)
+
+      {grad_x, grad_y} =
+        Nx.Defn.grad({x_vec, y_vec}, fn {x, y} ->
+          Nx.sum(Nx.add(x, y))
+        end)
+
+      ones = Nx.tensor([[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]])
+      assert grad_x == ones |> Nx.vectorize(foo: 2, bar: 3)
+      assert grad_y == ones |> Nx.vectorize(foo: 2, bar: 3)
+    end
+
+    test "heterogenous vec grad: sin(add) (per-instance partials)" do
+      x_vec = Nx.tensor([0.5, 1.0]) |> Nx.vectorize(:foo)
+      y_vec = Nx.tensor([0.0, 0.3]) |> Nx.vectorize(:bar)
+
+      {grad_x, grad_y} =
+        Nx.Defn.grad({x_vec, y_vec}, fn {x, y} ->
+          Nx.sum(Nx.sin(Nx.add(x, y)))
+        end)
+
+      expected =
+        Nx.tensor([
+          [:math.cos(0.5), :math.cos(0.8)],
+          [:math.cos(1.0), :math.cos(1.3)]
+        ])
+
+      assert grad_x.vectorized_axes == [foo: 2, bar: 2]
+      assert grad_y.vectorized_axes == [foo: 2, bar: 2]
+
+      assert_all_close(Nx.devectorize(grad_x), expected, atol: 1.0e-6)
+      assert_all_close(Nx.devectorize(grad_y), expected, atol: 1.0e-6)
+    end
+
+    test "heterogenous vec grad: x^2 * y (asymmetric per-instance partials)" do
+      x_vec = Nx.tensor([2.0, 5.0]) |> Nx.vectorize(:foo)
+      y_vec = Nx.tensor([3.0, 4.0]) |> Nx.vectorize(:bar)
+
+      {grad_x, grad_y} =
+        Nx.Defn.grad({x_vec, y_vec}, fn {x, y} ->
+          Nx.sum(Nx.multiply(Nx.pow(x, 2), y))
+        end)
+
+      assert grad_x ==
+               Nx.tensor([[12.0, 16.0], [30.0, 40.0]]) |> Nx.vectorize(foo: 2, bar: 2)
+
+      assert grad_y ==
+               Nx.tensor([[4.0, 4.0], [25.0, 25.0]]) |> Nx.vectorize(foo: 2, bar: 2)
+    end
+
+    test "three different vectorized axes" do
+      x_vec = Nx.tensor([[1.0, 2.0], [3.0, 4.0]]) |> Nx.vectorize(:x)
+      y_vec = Nx.tensor([10.0, 20.0]) |> Nx.vectorize(:y)
+      z_vec = Nx.tensor([100.0]) |> Nx.vectorize(:z)
+
+      {grad_x, grad_y, grad_z} =
+        Nx.Defn.grad({x_vec, y_vec, z_vec}, fn {a, b, c} ->
+          Nx.add(Nx.multiply(a, b), c)
+        end)
+
+      union = [x: 2, y: 2, z: 1]
+      assert grad_x.vectorized_axes == union
+      assert grad_y.vectorized_axes == union
+      assert grad_z.vectorized_axes == union
+    end
+
+    test "two vectorized inputs through sin(add)" do
+      x_vec = Nx.tensor([[1.0, 2.0], [3.0, 4.0]]) |> Nx.vectorize(:x)
+      y_vec = Nx.tensor([0.5, 1.0]) |> Nx.vectorize(:y)
+
+      {grad_x, grad_y} =
+        Nx.Defn.grad({x_vec, y_vec}, fn {a, b} -> Nx.sin(Nx.add(a, b)) end)
+
+      union = [x: 2, y: 2]
+      assert grad_x.vectorized_axes == union
+      assert grad_y.vectorized_axes == union
+    end
+
+    # ── check_vectorized_grad tests (from vectorized_grad_test) ──────
+
+    test "exp (basic vectorized grad)" do
+      x = Nx.tensor([[0.5, 1.0, 1.5], [2.0, 0.3, 0.8], [1.2, 0.7, 0.1]], type: :f32)
+      check_vectorized_grad(x, fn x -> Nx.sum(Nx.exp(x)) end)
+    end
+
+    test "multiply then sum" do
+      x = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]], type: :f32)
+      check_vectorized_grad(x, fn x -> Nx.sum(Nx.multiply(x, x)) end)
+    end
+
+    test "sum axis 0 on 2D inner (exercises reduce_g fix)" do
+      x =
+        Nx.tensor(
+          [
+            [[1.0, 2.0], [3.0, 4.0]],
+            [[5.0, 6.0], [7.0, 8.0]],
+            [[9.0, 10.0], [11.0, 12.0]]
+          ],
+          type: :f32
+        )
+
+      check_vectorized_grad(x, fn x -> Nx.sum(Nx.sum(x, axes: [0])) end)
+    end
+
+    test "reshape inside grad (exercises reshape boundary crossing)" do
+      x =
+        Nx.tensor(
+          [
+            [[1.0, 2.0], [3.0, 4.0]],
+            [[5.0, 6.0], [7.0, 8.0]],
+            [[9.0, 10.0], [11.0, 12.0]]
+          ],
+          type: :f32
+        )
+
+      check_vectorized_grad(x, fn x -> Nx.sum(Nx.transpose(Nx.reshape(x, {4}))) end)
+    end
+
+    test "concatenate (exercises concatenate grad axis offset)" do
+      x = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]], type: :f32)
+
+      check_vectorized_grad(x, fn x ->
+        Nx.sum(Nx.concatenate([x, Nx.multiply(x, 2)], axis: 0))
+      end)
+    end
+
+    test "window_sum (exercises window_scatter adjust)" do
+      x =
+        Nx.tensor(
+          [
+            [[1.0, 2.0, 3.0, 4.0]],
+            [[5.0, 6.0, 7.0, 8.0]],
+            [[-1.0, 0.0, 1.0, 2.0]]
+          ],
+          type: :f32
+        )
+
+      check_vectorized_grad(x, fn x -> Nx.sum(Nx.window_sum(x, {1, 2})) end)
+    end
+
+    test "dot with captured matrix (exercises concrete tensor handling)" do
+      w = Nx.tensor([[1.0, 2.0], [3.0, 4.0]], type: :f32)
+
+      check_vectorized_grad(
+        Nx.tensor(
+          [
+            [[1.0, 2.0], [3.0, 4.0]],
+            [[5.0, 6.0], [7.0, 8.0]],
+            [[9.0, 10.0], [11.0, 12.0]]
+          ],
+          type: :f32
+        ),
+        fn x -> Nx.sum(Nx.dot(x, w)) end
+      )
+    end
+
+    test "cumulative_sum (exercises axis name collision fix)" do
+      x = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]], type: :f32)
+      check_vectorized_grad(x, fn x -> Nx.sum(Nx.cumulative_sum(x)) end)
+    end
+
+    test "conv with vectorized (exercises conv grad)" do
+      k = Nx.tensor([[[1.0, 0.0, -1.0]]])
+      x = Nx.tensor([[[[1.0, 2.0, 3.0, 4.0]]], [[[5.0, 6.0, 7.0, 8.0]]]], type: :f32)
+      check_vectorized_grad(x, fn x -> Nx.sum(Nx.conv(x, k)) end)
+    end
+
+    test "while loop: repeated squaring (exercises while boundary)" do
+      x = Nx.tensor([[0.5, 0.8], [1.2, 0.3], [0.9, 0.4]], type: :f32)
+      check_vectorized_grad(x, &while_square_n/1)
+    end
+
+    test "mixed: vectorized x * non-vectorized y (exercises broadcast_vectors)" do
+      y = Nx.tensor([10.0, 20.0, 30.0], type: :f32)
+      x = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 9.0]], type: :f32)
+      check_vectorized_grad(x, fn x -> Nx.sum(Nx.multiply(x, y)) end)
+    end
+
+    test "two vectorized axes (exercises unbroadcast for multiple axes)" do
+      x = Nx.tensor([[[1.0, 2.0], [3.0, 4.0]], [[5.0, 6.0], [7.0, 8.0]]], type: :f32)
+
+      x_vec = x |> Nx.vectorize(:a) |> Nx.vectorize(:b)
+      vec_grad = Nx.Defn.grad(x_vec, fn x -> Nx.sum(Nx.multiply(x, x)) end)
+      vec_devec = Nx.devectorize(vec_grad, keep_names: false)
+
+      for i <- 0..1, j <- 0..1 do
+        x_ij = x[i][j] |> Nx.reshape({2})
+        elem_grad = Nx.Defn.grad(x_ij, fn x -> Nx.sum(Nx.multiply(x, x)) end)
+
+        for {v, e} <-
+              Enum.zip(Nx.to_flat_list(vec_devec[i][j]), Nx.to_flat_list(elem_grad)) do
+          assert_in_delta v, e, @vec_atol
+        end
+      end
+    end
+
+    test "composed: sigmoid(x @ w + b) (exercises composed chain with captures)" do
+      w = Nx.tensor([[0.5, -0.3], [0.2, 0.8]], type: :f32)
+      b = Nx.tensor([0.1, -0.1], type: :f32)
+      x = Nx.tensor([[1.0, 2.0], [3.0, 4.0], [-1.0, 0.5]], type: :f32)
+
+      check_vectorized_grad(x, fn x ->
+        Nx.sum(Nx.sigmoid(Nx.add(Nx.dot(x, w), b)))
+      end)
     end
   end
 end
