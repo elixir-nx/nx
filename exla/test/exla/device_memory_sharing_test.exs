@@ -46,6 +46,33 @@ defmodule EXLA.DeviceMemorySharingTest do
   end
 
   @tag :distributed
+  test "0o400 shm is importable via the O_RDONLY fallback in open_existing_ipc_handle" do
+    # Pins the EACCES fallback path in `open_existing_ipc_handle`: with the
+    # default 0o400 mode, `shm_open(name, O_RDWR)` fails with EACCES even for
+    # the owning user, so the importer has to retry with `O_RDONLY`. If that
+    # retry is removed, `Nx.from_pointer/4` raises "unable to get fd for IPC
+    # handle" here before any assertion runs.
+
+    [peer | _] = EXLAHelpers.test_peer_nodes()
+
+    {pointer, type, shape, expected_binary} =
+      :erpc.call(peer, EXLAHelpers, :export_host_ipc_pointer, [[1, 2, 3, 4]])
+
+    if File.dir?("/dev/shm") do
+      shm_path = Path.join("/dev/shm", pointer.handle)
+      on_exit(fn -> File.rm(shm_path) end)
+
+      # Sanity-check the mode bits on disk before we exercise the fallback.
+      {:ok, stat} = File.stat(shm_path)
+      assert Bitwise.band(stat.mode, 0o777) == 0o400
+    end
+
+    tensor = Nx.from_pointer({EXLA.Backend, client: :host}, pointer, type, shape)
+    assert Nx.to_binary(tensor) == expected_binary
+    assert Nx.to_flat_list(tensor) == [1, 2, 3, 4]
+  end
+
+  @tag :distributed
   test "writable permissions (0o600) allow zero-copy mutation visible on both nodes", %{} do
     [peer | _] = EXLAHelpers.test_peer_nodes()
 
