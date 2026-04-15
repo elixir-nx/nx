@@ -30,12 +30,15 @@ defmodule EXLA.DeviceMemorySharingTest do
   test "host IPC sharing works across peer node processes" do
     [peer | _] = EXLAHelpers.test_peer_nodes()
 
-    {pointer, type, shape, expected_binary} =
+    {pointer, type, shape, expected_binary, pid} =
       :erpc.call(peer, EXLAHelpers, :export_host_ipc_pointer, [[1, 2, 3, 4]])
 
     if File.dir?("/dev/shm") do
       shm_path = Path.join("/dev/shm", pointer.handle)
-      on_exit(fn -> File.rm(shm_path) end)
+      on_exit(fn ->
+        :erpc.call(peer, Process, :exit, [pid, :kill])
+        File.rm(shm_path)
+      end)
     end
 
     tensor = Nx.from_pointer({EXLA.Backend, client: :host}, pointer, type, shape)
@@ -51,11 +54,15 @@ defmodule EXLA.DeviceMemorySharingTest do
 
     # Secondary creates tensor and exports a writable IPC segment (MFA — test
     # module is not loaded on peer nodes, so lambdas cannot be used).
-    {pointer, type, shape} =
+    {pointer, type, shape, pid} =
       :erpc.call(peer, EXLAHelpers, :export_writable_ipc_pointer, [[1, 2, 3]])
 
     if File.dir?("/dev/shm") do
-      on_exit(fn -> File.rm(Path.join("/dev/shm", pointer.handle)) end)
+
+      on_exit(fn ->
+        :erpc.call(peer, Process, :exit, [pid, :kill])
+        File.rm(Path.join("/dev/shm", pointer.handle))
+      end)
     end
 
     # Secondary also imports from the same shm and holds the tensor alive in

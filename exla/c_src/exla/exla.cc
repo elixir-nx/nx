@@ -337,6 +337,22 @@ get_buffer_device_pointer(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
 
     memcpy(ipc_ptr, reinterpret_cast<void *>(ptr), device_size);
 
+    // Repoint the original buffer at the shm mapping so both the exporter
+    // and any importers share the same physical pages.  This also frees
+    // the old XLA-managed memory, avoiding double memory usage.
+    auto shape = unwrap(buffer->buffer()->logical_on_device_shape());
+    auto device = unwrap(client->client()->LookupDevice(
+        xla::PjRtGlobalDeviceId(buffer->device_id())));
+    auto memory_space = unwrap(device->default_memory_space());
+
+    auto on_delete = [fd, ipc_ptr, device_size, handle_name]() {
+      close_ipc_handle(fd, ipc_ptr, handle_name.c_str(), device_size);
+    };
+
+    auto new_pjrt_buf = unwrap(client->client()->CreateViewOfDeviceBuffer(
+        ipc_ptr, shape, memory_space, on_delete));
+    buffer->ReplaceBuffer(std::move(new_pjrt_buf));
+
     return std::make_tuple(pointer_kind, handle_name, device_size);
   }
 
@@ -693,7 +709,6 @@ fine::Ok<> write_to_pointer(ErlNifEnv *env, uint64_t address,
   std::memcpy(ptr + offset, data.data, data.size);
   return fine::Ok();
 }
-
 FINE_NIF(write_to_pointer, 0);
 
 #endif // EXLA_PROD

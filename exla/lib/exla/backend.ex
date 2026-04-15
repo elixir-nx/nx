@@ -115,7 +115,7 @@ defmodule EXLA.Backend do
 
         {mode, _} ->
           raise ArgumentError,
-                "expected one of :local, :cuda_ipc, :host_ipc, got: #{inspect(mode)}"
+                "expected one of :local, :ipc, got: #{inspect(mode)}"
       end
 
     client = EXLA.Client.fetch!(buffer.client_name)

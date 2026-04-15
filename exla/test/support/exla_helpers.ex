@@ -14,8 +14,9 @@ defmodule EXLAHelpers do
   """
   def export_host_ipc_pointer(list) do
     tensor = Nx.tensor(list, backend: {EXLA.Backend, client: :host})
+    {:ok, pid} = Agent.start(fn -> tensor end)
     pointer = Nx.to_pointer(tensor, mode: :ipc)
-    {pointer, tensor.type, tensor.shape, Nx.to_binary(tensor)}
+    {pointer, tensor.type, tensor.shape, Nx.to_binary(tensor), pid}
   end
 
   @doc """
@@ -24,8 +25,9 @@ defmodule EXLAHelpers do
   """
   def export_writable_ipc_pointer(list) do
     tensor = Nx.tensor(list, backend: {EXLA.Backend, client: :host})
+    {:ok, pid} = Agent.start(fn -> tensor end)
     pointer = Nx.to_pointer(tensor, mode: :ipc, shm_permissions: 0o600)
-    {pointer, tensor.type, tensor.shape}
+    {pointer, tensor.type, tensor.shape, pid}
   end
 
   @doc """
@@ -35,8 +37,7 @@ defmodule EXLAHelpers do
   """
   def hold_ipc_pointer(pointer, type, shape) do
     tensor = Nx.from_pointer({EXLA.Backend, client: :host}, pointer, type, shape)
-    {:ok, _} = Agent.start(fn -> tensor end, name: :ipc_mutation_test)
-    :ok
+    Agent.start(fn -> tensor end, name: :ipc_mutation_test)
   end
 
   @doc """
