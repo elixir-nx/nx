@@ -84,13 +84,13 @@ defmodule EXLA.Backend do
 
   @impl true
   def to_pointer(%T{data: %B{buffer: buffer}}, opts \\ []) do
-    opts = Keyword.validate!(opts, mode: :local, shm_permissions: 0o400)
-    shm_permissions = opts[:shm_permissions]
+    opts = Keyword.validate!(opts, mode: :local, permissions: 0o400)
+    permissions = opts[:permissions]
 
-    unless is_integer(shm_permissions) and shm_permissions >= 0 and shm_permissions <= 0o7777 do
+    unless is_integer(permissions) and permissions >= 0 and permissions <= 0o7777 do
       raise ArgumentError,
-            ":shm_permissions must be an integer in the range 0..0o7777 " <>
-              "(typically an octal literal like 0o400), got: #{inspect(shm_permissions)}"
+            ":permissions must be an integer in the range 0..0o7777 " <>
+              "(typically an octal literal like 0o400), got: #{inspect(permissions)}"
     end
 
     mode =
@@ -120,7 +120,7 @@ defmodule EXLA.Backend do
 
     client = EXLA.Client.fetch!(buffer.client_name)
 
-    case EXLA.NIF.get_buffer_device_pointer(client.ref, buffer.ref, mode, shm_permissions) do
+    case EXLA.NIF.get_buffer_device_pointer(client.ref, buffer.ref, mode, permissions) do
       {:local, ptr, size} ->
         # Pointer is an integer here
         %Nx.Pointer{kind: :local, address: ptr, data_size: size}

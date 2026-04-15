@@ -102,7 +102,7 @@ defmodule EXLA.DeviceMemorySharingTest do
     end
   end
 
-  describe ":shm_permissions option" do
+  describe ":permissions option" do
     setup do
       t = Nx.tensor([1, 2, 3], backend: {EXLA.Backend, client: :host})
       {:ok, tensor: t}
@@ -124,7 +124,7 @@ defmodule EXLA.DeviceMemorySharingTest do
 
     test "accepts an explicit permission value", %{tensor: t} do
       if File.dir?("/dev/shm") do
-        %Nx.Pointer{handle: handle} = Nx.to_pointer(t, mode: :ipc, shm_permissions: 0o600)
+        %Nx.Pointer{handle: handle} = Nx.to_pointer(t, mode: :ipc, permissions: 0o600)
         shm_path = Path.join("/dev/shm", handle)
         on_exit(fn -> File.rm(shm_path) end)
 
@@ -134,21 +134,21 @@ defmodule EXLA.DeviceMemorySharingTest do
       end
     end
 
-    test "rejects non-integer shm_permissions", %{tensor: t} do
-      assert_raise ArgumentError, ~r/:shm_permissions must be an integer/, fn ->
-        Nx.to_pointer(t, mode: :ipc, shm_permissions: :not_an_int)
+    test "rejects non-integer permissions", %{tensor: t} do
+      assert_raise ArgumentError, ~r/:permissions must be an integer/, fn ->
+        Nx.to_pointer(t, mode: :ipc, permissions: :not_an_int)
       end
     end
 
-    test "rejects negative shm_permissions", %{tensor: t} do
-      assert_raise ArgumentError, ~r/:shm_permissions must be an integer/, fn ->
-        Nx.to_pointer(t, mode: :ipc, shm_permissions: -1)
+    test "rejects negative permissions", %{tensor: t} do
+      assert_raise ArgumentError, ~r/:permissions must be an integer/, fn ->
+        Nx.to_pointer(t, mode: :ipc, permissions: -1)
       end
     end
 
-    test "rejects shm_permissions above 0o7777", %{tensor: t} do
-      assert_raise ArgumentError, ~r/:shm_permissions must be an integer/, fn ->
-        Nx.to_pointer(t, mode: :ipc, shm_permissions: 0o10000)
+    test "rejects permissions above 0o7777", %{tensor: t} do
+      assert_raise ArgumentError, ~r/:permissions must be an integer/, fn ->
+        Nx.to_pointer(t, mode: :ipc, permissions: 0o10000)
       end
     end
   end

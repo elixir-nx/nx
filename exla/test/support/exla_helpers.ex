@@ -26,7 +26,7 @@ defmodule EXLAHelpers do
   def export_writable_ipc_pointer(list) do
     tensor = Nx.tensor(list, backend: {EXLA.Backend, client: :host})
     {:ok, pid} = Agent.start(fn -> tensor end)
-    pointer = Nx.to_pointer(tensor, mode: :ipc, shm_permissions: 0o600)
+    pointer = Nx.to_pointer(tensor, mode: :ipc, permissions: 0o600)
     {pointer, tensor.type, tensor.shape, pid}
   end
 

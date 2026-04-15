@@ -16962,10 +16962,9 @@ defmodule Nx do
       processes. Defaults to `:local`.
 
   Other options are relayed to the backend. For example, the EXLA backend
-  accepts `:shm_permissions` (defaults to `0o400`, owner-read-only) to
+  accepts `:permissions` (defaults to `0o400`, owner-read-only) to
   control the file mode bits of the `shm_open` shared memory segment used
-  for `:ipc` mode on host clients — pass e.g. `0o600` to make it writable
-  by the owner, or `0o440` to also grant read access to the owner's group.
+  for `:ipc` mode on host clients.
 
   ## Examples
 
