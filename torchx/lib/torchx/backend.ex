@@ -46,19 +46,18 @@ defmodule Torchx.Backend do
     Keyword.validate!(opts, [:device])
   end
 
-  ## Optional callback for MPS compatibility
+  ## Block (native paths + MPS fallbacks)
 
   @impl true
-  def optional(function_name, args, default_impl) do
-    # For MPS device, some linear algebra operations are not supported
+  def block(%block_name{} = struct, output, args, fun) do
+    # For MPS device, some linear algebra operations are not supported.
     # Delegate to default implementation which will fall back to elementary Nx operations.
     mps_unsupported = [
-      :lu,
-      :eigh,
-      :solve,
-      :determinant,
-      :cholesky,
-      :matrix_power
+      Nx.Block.LU,
+      Nx.Block.Eigh,
+      Nx.Block.Solve,
+      Nx.Block.Determinant,
+      Nx.Block.Cholesky
     ]
 
     device =
@@ -67,20 +66,63 @@ defmodule Torchx.Backend do
         _ -> :cpu
       end
 
-    if device == :mps and function_name in mps_unsupported do
-      # Use default implementation for unsupported MPS operations
-      apply(default_impl, args)
+    if device == :mps and block_name in mps_unsupported do
+      apply(fun, [struct | args])
     else
-      # Use custom Torchx implementation for CPU and supported operations
-      case function_name do
-        :qr -> apply(&qr_impl/2, args)
-        :lu -> apply(&lu_impl/2, args)
-        :eigh -> apply(&eigh_impl/2, args)
-        :solve -> apply(&solve_impl/2, args)
-        :cholesky -> apply(&cholesky_impl/1, args)
-        :svd -> apply(&svd_impl/2, args)
-        :determinant -> apply(&determinant_impl/1, args)
-        _ -> apply(default_impl, args)
+      case {block_name, args} do
+        {Nx.Block.QR, [t]} ->
+          qr_impl(t, mode: struct.mode, eps: struct.eps)
+
+        {Nx.Block.LU, [t]} ->
+          lu_impl(t)
+
+        {Nx.Block.Eigh, [t]} ->
+          eigh_impl(t, max_iter: struct.max_iter, eps: struct.eps)
+
+        {Nx.Block.Solve, [a, b]} ->
+          solve_impl(a, b)
+
+        {Nx.Block.Cholesky, [t]} ->
+          cholesky_impl(t)
+
+        {Nx.Block.SVD, [t]} ->
+          svd_impl(t, max_iter: struct.max_iter, full_matrices?: struct.full_matrices?)
+
+        {Nx.Block.Determinant, [t]} ->
+          determinant_impl(t)
+
+        {Nx.Block.TakeAlongAxis, [tensor, indices]} ->
+          take_along_axis_gather(output, tensor, indices, axis: struct.axis)
+
+        {Nx.Block.FFT2, [t]} ->
+          fft2_torchx(output, t, struct.lengths, struct.axes)
+
+        {Nx.Block.IFFT2, [t]} ->
+          ifft2_torchx(output, t, struct.lengths, struct.axes)
+
+        {Nx.Block.LogicalNot, [t]} ->
+          logical_not_impl(output, t)
+
+        {Nx.Block.TopK, [t]} ->
+          top_k_impl(output, t, struct.k)
+
+        {Nx.Block.AllClose, [a, b]} ->
+          all_close_impl(output, a, b, struct)
+
+        {Nx.Block.CumulativeSum, [t]} ->
+          cumulative_block_impl(output, t, struct, &Torchx.cumulative_sum/2)
+
+        {Nx.Block.CumulativeProduct, [t]} ->
+          cumulative_block_impl(output, t, struct, &Torchx.cumulative_product/2)
+
+        {Nx.Block.CumulativeMin, [t]} ->
+          cumulative_block_impl(output, t, struct, &Torchx.cumulative_min/2)
+
+        {Nx.Block.CumulativeMax, [t]} ->
+          cumulative_block_impl(output, t, struct, &Torchx.cumulative_max/2)
+
+        _ ->
+          apply(fun, [struct | args])
       end
     end
   end
@@ -517,8 +559,7 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  @impl true
-  def take_along_axis(out, tensor, idx, opts) do
+  defp take_along_axis_gather(out, tensor, idx, opts) do
     idx_tx = idx |> from_nx() |> Torchx.to_type(:long)
 
     tensor
@@ -528,7 +569,9 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def argsort(out, tensor, opts) do
+  def argsort(out, tensor, opts), do: argsort_impl(out, tensor, opts)
+
+  defp argsort_impl(out, tensor, opts) do
     axis = opts[:axis]
     is_descending = opts[:direction] == :desc
     stable = opts[:stable] == true
@@ -542,12 +585,11 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  @impl true
-  def top_k({out_values, out_indices}, tensor, opts) do
+  defp top_k_impl({out_values, out_indices}, tensor, k) do
     {values, indices} =
       tensor
       |> from_nx()
-      |> Torchx.top_k(Keyword.fetch!(opts, :k))
+      |> Torchx.top_k(k)
 
     {device, _} = indices
 
@@ -557,7 +599,9 @@ defmodule Torchx.Backend do
   end
 
   @impl true
-  def reverse(out, tensor, axes) do
+  def reverse(out, tensor, axes), do: reverse_impl(out, tensor, axes)
+
+  defp reverse_impl(out, tensor, axes) do
     tensor
     |> from_nx()
     |> Torchx.flip(axes)
@@ -629,11 +673,10 @@ defmodule Torchx.Backend do
     to_nx(result, out)
   end
 
-  @impl true
-  def all_close(%T{} = out, %T{} = a, %T{} = b, opts) do
-    equal_nan = opts[:equal_nan]
-    rtol = opts[:rtol]
-    atol = opts[:atol]
+  defp all_close_impl(%T{} = out, %T{} = a, %T{} = b, %Nx.Block.AllClose{} = struct) do
+    equal_nan = struct.equal_nan
+    rtol = struct.rtol
+    atol = struct.atol
 
     # Torch raises a cryptic error if the types are different,
     # so we need to upcast the tensors to the merged type
@@ -741,24 +784,9 @@ defmodule Torchx.Backend do
     end
   end
 
-  @impl true
-  def cumulative_sum(%T{} = out, %T{} = t, opts) do
-    cumulative_op(out, t, opts, &Torchx.cumulative_sum/2)
-  end
-
-  @impl true
-  def cumulative_product(%T{} = out, %T{} = t, opts) do
-    cumulative_op(out, t, opts, &Torchx.cumulative_product/2)
-  end
-
-  @impl true
-  def cumulative_min(%T{} = out, %T{} = t, opts) do
-    cumulative_op(out, t, opts, &Torchx.cumulative_min/2)
-  end
-
-  @impl true
-  def cumulative_max(%T{} = out, %T{} = t, opts) do
-    cumulative_op(out, t, opts, &Torchx.cumulative_max/2)
+  defp cumulative_block_impl(%T{} = out, %T{} = t, struct, torch_fun)
+       when is_function(torch_fun, 2) do
+    cumulative_op(out, t, [axis: struct.axis, reverse: struct.reverse], torch_fun)
   end
 
   defp cumulative_op(out, t, opts, fun) when is_function(fun, 2) do
@@ -979,13 +1007,17 @@ defmodule Torchx.Backend do
     [:exp, :expm1, :log, :log1p, :sigmoid, :cos, :sin, :tan, :cosh, :sinh] ++
       [:tanh, :acos, :asin, :atan, :acosh, :asinh, :atanh, :sqrt, :rsqrt] ++
       [:erf, :erfc, :erf_inv, :abs, :bitwise_not, :ceil, :floor, :negate, :round, :sign] ++
-      [:logical_not, :cbrt, :is_nan, :is_infinity]
+      [:cbrt, :is_nan, :is_infinity]
 
   for op <- unary_ops do
     @impl true
     def unquote(op)(out, tensor) do
       Torchx.unquote(op)(from_nx(tensor)) |> to_nx(out)
     end
+  end
+
+  defp logical_not_impl(out, tensor) do
+    Torchx.logical_not(from_nx(tensor)) |> to_nx(out)
   end
 
   @impl true
@@ -1060,22 +1092,14 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
-  @impl true
-  def fft2(out, tensor, opts) do
-    lengths = opts[:lengths]
-    axes = opts[:axes]
-
+  defp fft2_torchx(out, tensor, lengths, axes) do
     tensor
     |> from_nx()
     |> Torchx.fft2(lengths, axes)
     |> to_nx(out)
   end
 
-  @impl true
-  def ifft2(out, tensor, opts) do
-    lengths = opts[:lengths]
-    axes = opts[:axes]
-
+  defp ifft2_torchx(out, tensor, lengths, axes) do
     tensor
     |> from_nx()
     |> Torchx.ifft2(lengths, axes)
@@ -1209,7 +1233,7 @@ defmodule Torchx.Backend do
     end
   end
 
-  defp lu_impl(tensor, _opts) do
+  defp lu_impl(tensor) do
     tensor =
       if Nx.Type.integer?(tensor.type) do
         Nx.as_type(tensor, {:f, 32})

@@ -43,6 +43,11 @@ defmodule Nx.Defn.Expr do
 
     * `runtime_call(out, tensor_or_container, opts, fun)`
 
+    * `block(struct, block_args, default_expr, fun)` - `struct` is an `Nx.Block.*`
+      value, `block_args` are the tensors and keyword options passed to `Nx.block/4`,
+      `default_expr` is the traced default implementation, and `fun` is the block
+      callback
+
   `defn` compilers must handle said nodes accordingly.
   """
 
@@ -415,19 +420,18 @@ defmodule Nx.Defn.Expr do
     out
   end
 
-  @impl true
-  def optional(name, in_args, fun) do
+  defp expr_block(struct, in_args, fun) do
     {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
     params = Enum.with_index(args, &parameter/2)
 
-    case apply(fun, params ++ opts) do
+    case apply(fun, [struct | params ++ opts]) do
       %{data: %{context: context}} = res ->
-        expr(res, context, :optional, [expr(res, context, name, in_args), res, fun])
+        expr(res, context, :block, [struct, in_args, res, fun])
 
       t when is_tuple(t) ->
         context = elem(t, 0).data.context
-        out = expr(tuple_out(tuple_size(t)), context, name, in_args)
-        tuple(expr(out, context, :optional, [out, t, fun]), Tuple.to_list(t))
+        out = tuple_out(tuple_size(t))
+        tuple(expr(out, context, :block, [struct, in_args, t, fun]), Tuple.to_list(t))
     end
   end
 
@@ -802,6 +806,11 @@ defmodule Nx.Defn.Expr do
   ## Nx.Backend Callbacks
 
   @behaviour Nx.Backend
+
+  @impl true
+  def block(struct, _output, in_args, fun) do
+    expr_block(struct, in_args, fun)
+  end
 
   @impl true
   def init(opts) do
@@ -1673,10 +1682,6 @@ defmodule Nx.Defn.Expr do
     recur_inspect(tensor, state)
   end
 
-  defp recur_inspect(%T{data: %Expr{op: :optional, args: [expr, _default, _callback]}}, state) do
-    recur_inspect(expr, state)
-  end
-
   defp recur_inspect(%T{data: %Expr{id: id, op: op, args: args}} = tensor, state) do
     %{limit: limit, cache: cache} = state
 
@@ -1764,6 +1769,11 @@ defmodule Nx.Defn.Expr do
 
   defp traverse_args(:while, [initial, _arg, _condition, _body], state),
     do: traverse_args([initial], state)
+
+  defp traverse_args(:block, [struct, in_args, _body, _callback], state) do
+    {in_args_io, state} = Enum.map_reduce(in_args, state, &recur_inspect/2)
+    {[inspect(struct) | in_args_io], state}
+  end
 
   defp traverse_args(:metadata, [tensor, %{inspect: inspect}], state),
     do: traverse_args([tensor, inspect], state)

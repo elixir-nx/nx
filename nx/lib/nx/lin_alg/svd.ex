@@ -21,9 +21,7 @@ defmodule Nx.LinAlg.SVD do
   import Nx.Defn
   @eps 1.1920929e-07
 
-  defn svd(input_tensor, opts \\ []) do
-    validate_opts(opts)
-
+  defn svd(input_tensor, opts) do
     {target_shape, u_shape, s_shape, vt_shape} = calculate_shapes(input_tensor)
 
     tensor = Nx.revectorize(input_tensor, [vector: :auto], target_shape: target_shape)
@@ -45,10 +43,6 @@ defmodule Nx.LinAlg.SVD do
     custom_grad(result, [input_tensor], fn g ->
       svd_grad(result, input_tensor, g)
     end)
-  end
-
-  deftransformp validate_opts(opts \\ []) do
-    opts[:max_iter] || raise ArgumentError, "missing option :max_iter"
   end
 
   deftransformp calculate_shapes(t) do
@@ -88,7 +82,7 @@ defmodule Nx.LinAlg.SVD do
     {u, s, v}
   end
 
-  defn svd_full(tensor, opts \\ []) do
+  defnp svd_full(tensor, opts) do
     {reduce_to_square, q, u_null, a} =
       case Nx.shape(tensor) do
         {m, n} when m > n ->
@@ -115,7 +109,7 @@ defmodule Nx.LinAlg.SVD do
     {u, s, v}
   end
 
-  defn svd_non_full(tensor, opts \\ []) do
+  defnp svd_non_full(tensor, opts) do
     {m, n} = Nx.shape(tensor)
 
     # The constant `1.15` comes from Yuji Nakatsukasa's implementation
@@ -140,7 +134,7 @@ defmodule Nx.LinAlg.SVD do
     {u, s, v}
   end
 
-  defn svd_non_zero(input_tensor, opts \\ []) do
+  defnp svd_non_zero(input_tensor, opts) do
     {is_flipped, a} =
       case Nx.shape(input_tensor) do
         {m, n} when m < n ->
@@ -164,7 +158,7 @@ defmodule Nx.LinAlg.SVD do
     end
   end
 
-  defnp svd_tall_and_square(a, opts \\ []) do
+  defnp svd_tall_and_square(a, opts) do
     {_m, n} = Nx.shape(a)
     {u, h} = qdwh(a, opts)
     # ensure H is hermitian
@@ -188,7 +182,7 @@ defmodule Nx.LinAlg.SVD do
     {u_out, s_out, v_out}
   end
 
-  defn qdwh(x, opts \\ []) do
+  defnp qdwh(x, opts) do
     # reference implementation taken from Jax
     alpha = Nx.sqrt(Nx.LinAlg.norm(x, ord: 1)) * Nx.sqrt(Nx.LinAlg.norm(x, ord: :inf))
     l = @eps
@@ -246,7 +240,7 @@ defmodule Nx.LinAlg.SVD do
   deftransformp(min_precision_type({:f, 64}), do: {:f, 64})
   deftransformp(min_precision_type(_), do: {:f, 32})
 
-  defn qdwh_use_qr(u, x, a, b, c) do
+  defnp qdwh_use_qr(u, x, a, b, c) do
     {m, _n} = Nx.shape(x)
     {_u_m, u_n} = Nx.shape(u)
 
@@ -259,7 +253,7 @@ defmodule Nx.LinAlg.SVD do
     e * u + (a - e) / Nx.sqrt(c) * Nx.dot(q1, q2)
   end
 
-  defn qdwh_use_cholesky(u, _x, a, b, c) do
+  defnp qdwh_use_cholesky(u, _x, a, b, c) do
     {_, u_n} = Nx.shape(u)
     uh = Nx.LinAlg.adjoint(u)
     x = c * Nx.dot(uh, u) + Nx.eye(u_n)

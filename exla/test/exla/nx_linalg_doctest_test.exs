@@ -25,7 +25,7 @@ defmodule EXLA.NxLinAlgDoctestTest do
     least_squares: 3,
     determinant: 1,
     matrix_power: 2,
-    lu: 2,
+    lu: 1,
     qr: 2
   ]
 

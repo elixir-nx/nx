@@ -601,11 +601,12 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-         :optional,
+         :block,
          %T{
            data: %Expr{
              args: [
-               %{data: %{op: :qr, args: [tensor, _opts]}},
+               %Nx.Block.QR{},
+               [tensor],
                {%{type: {type_kind, _}} = q_expr, r_expr},
                _callback
              ]
@@ -631,11 +632,12 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-         :optional,
+         :block,
          %T{
            data: %Expr{
              args: [
-               %{data: %{op: :eigh, args: [tensor, _opts]}},
+               %Nx.Block.Eigh{},
+               [tensor],
                {%{type: {evec_type_kind, _}} = eigenvals_expr,
                 %{type: {eval_type_kind, _}} = eigenvecs_expr},
                _callback
@@ -672,16 +674,15 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-         :optional,
+         :block,
          %T{
            data: %Expr{
-             args: [%{data: %{op: :take, args: [tensor, indices, opts]}}, expr, _callback]
+             args: [%Nx.Block.Take{axis: axis}, [tensor, indices], expr, _callback]
            }
          },
          state,
          cache
        ) do
-    axis = opts[:axis]
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
     {indices, cache} = recur_operator(indices, state, cache) |> unwrap_single_tensor!()
 
@@ -714,48 +715,64 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-         :optional,
-         %T{data: %Expr{args: [%{data: %{op: :top_k, args: [tensor, opts]}}, expr, _callback]}},
+         :block,
+         %T{data: %Expr{args: [%Nx.Block.TopK{k: k}, [tensor], expr, _callback]}},
          state,
          cache
        ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
     {values, idx} = expr
     typespecs = [expr_to_typespec(values), expr_to_typespec(idx)]
-    results = Value.top_k(tensor, opts[:k], typespecs)
+    results = Value.top_k(tensor, k, typespecs)
     {results, cache}
   end
 
   defp cached_recur_operator(
-         :optional,
-         %T{data: %Expr{args: [%{data: %{op: :fft2, args: [tensor, opts]}}, expr, _callback]}},
+         :block,
+         %T{data: %Expr{args: [%Nx.Block.FFT2{} = fft2_struct, [tensor], expr, _callback]}},
          state,
          cache
        ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
+
+    opts = [lengths: fft2_struct.lengths, axes: fft2_struct.axes]
+
+    opts =
+      if eps = fft2_struct.eps do
+        Keyword.put(opts, :eps, eps)
+      else
+        opts
+      end
 
     {fft2(&Value.fft(&1, :fft, &2, &3), [tensor, opts], expr, state), cache}
   end
 
   defp cached_recur_operator(
-         :optional,
-         %T{data: %Expr{args: [%{data: %{op: :ifft2, args: [tensor, opts]}}, expr, _callback]}},
+         :block,
+         %T{data: %Expr{args: [%Nx.Block.IFFT2{} = ifft2_struct, [tensor], expr, _callback]}},
          state,
          cache
        ) do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
+    opts = [lengths: ifft2_struct.lengths, axes: ifft2_struct.axes]
+
+    opts =
+      if eps = ifft2_struct.eps do
+        Keyword.put(opts, :eps, eps)
+      else
+        opts
+      end
+
     {fft2(&Value.fft(&1, :ifft, &2, &3), [tensor, opts], expr, state), cache}
   end
 
-  defp cached_recur_operator(:optional, %T{data: %Expr{args: args}}, state, cache) do
-    [call, expr, _callback] = args
-    %{data: %{args: in_args, op: op}} = call
+  defp cached_recur_operator(:block, %T{data: %Expr{args: args}}, state, cache) do
+    [struct, in_args, expr, _callback] = args
+    %module{} = struct
 
-    {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
-
-    {call_args, cache} = Enum.map_reduce(args, cache, &recur_operator(&1, state, &2))
-    key = computation_key(op, call_args ++ opts)
+    {call_args, cache} = Enum.map_reduce(in_args, cache, &recur_operator(&1, state, &2))
+    key = computation_key(module, [struct | call_args])
 
     {call_body, cache} =
       case cache do
@@ -763,7 +780,15 @@ defmodule EXLA.Defn do
           {computation, cache}
 
         %{} ->
-          {computation, cache} = optional_computation("optional", call_args, expr, state, cache)
+          {computation, cache} =
+            block_computation(
+              block_subfunction_description(struct),
+              call_args,
+              expr,
+              state,
+              cache
+            )
+
           {computation, Map.put(cache, key, computation)}
       end
 
@@ -1818,8 +1843,14 @@ defmodule EXLA.Defn do
     {region, merge_outfeed(cache, comp_cache)}
   end
 
-  defp optional_computation(name, args, expr, %{builder: %Function{}} = state, cache) do
-    %Function{module: module, name: name} = subbuilder(state.builder, name)
+  defp block_subfunction_description(%module{} = _) do
+    module
+    |> Atom.to_string()
+    |> String.replace(".", "_")
+  end
+
+  defp block_computation(description, args, expr, %{builder: %Function{}} = state, cache) do
+    %Function{module: module, name: name} = subbuilder(state.builder, description)
 
     arg_typespecs = Enum.map(args, &Value.get_typespec/1)
     out_typespecs = container_to_typespecs(expr)

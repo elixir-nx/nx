@@ -133,14 +133,14 @@ defmodule Nx.Defn.Evaluator do
     {[initial, pred, block, while_cache], cache}
   end
 
-  defp compute_cache(:optional, %{data: %Expr{args: args}}, state, cache) do
-    [call, expr, _callback] = args
-    %{data: %{args: call_args, op: call_name}} = call
+  defp compute_cache(:block, %{data: %Expr{args: args}}, state, cache) do
+    [struct, in_args, expr, _callback] = args
+    %module{} = struct
 
-    {call_prefix, call_suffix} = Enum.split_while(call_args, &(not is_list(&1)))
+    {call_prefix, call_suffix} = Enum.split_while(in_args, &(not is_list(&1)))
     {call_prefix, cache} = Enum.map_reduce(call_prefix, cache, &compute_cache(&1, state, &2))
-    call_args = call_prefix ++ call_suffix
-    key = computation_key(call_name, call_args)
+    in_args = call_prefix ++ call_suffix
+    key = computation_key(module, call_prefix)
 
     {{expr, expr_cache}, cache} =
       case cache do
@@ -152,8 +152,7 @@ defmodule Nx.Defn.Evaluator do
           {optional_expr_cache, Map.put(cache, key, optional_expr_cache)}
       end
 
-    call = put_in(call.data.args, call_args)
-    {[call, expr, expr_cache], cache}
+    {[struct, in_args, expr, expr_cache], cache}
   end
 
   defp compute_cache(:cond, %{data: %Expr{args: [clauses, last]}}, state, cache) do
@@ -366,23 +365,27 @@ defmodule Nx.Defn.Evaluator do
     {{}, caches}
   end
 
-  defp eval_apply(:optional, [call, expr, expr_cache], _ans, state, caches) do
-    {args, caches} = Tree.apply_args(call, caches, &eval(&1, state, &2))
-    backend = Nx.Shared.list_impl!(args)
+  defp eval_apply(:block, [struct, in_args, expr, expr_cache], ans, state, caches) do
+    {in_args, caches} = Tree.map_block_args(in_args, caches, &eval(&1, state, &2))
+    {param_prefix, _} = Enum.split_while(in_args, &(not is_list(&1)))
+    backend = Nx.Shared.list_impl!(param_prefix)
 
-    if function_exported?(backend, call.data.op, length(args) + 1) do
-      out =
-        case call do
-          %{type: {:tuple, _}} -> expr
-          _ -> call
+    out =
+      case ans do
+        %{type: {:tuple, _}} -> expr
+        _ -> ans
+      end
+
+    fun =
+      Nx.Defn.Compiler.fun(
+        length(in_args) + 1,
+        fn args ->
+          [struct | tensors] = args
+          block_apply_default(expr, state, expr_cache, struct, tensors)
         end
+      )
 
-      {apply(backend, call.data.op, [out | args]), caches}
-    else
-      params = Enum.map(args, &fn -> &1 end)
-      {res, _} = composite_eval(expr, %{state | params: params}, [expr_cache])
-      {res, caches}
-    end
+    {backend.block(struct, out, in_args, fun), caches}
   end
 
   defp eval_apply(:runtime_call, [expr, fun, out_template, opts], _ans, state, caches) do
@@ -424,6 +427,11 @@ defmodule Nx.Defn.Evaluator do
       end
 
     {apply(mod, op, args), caches}
+  end
+
+  defp block_apply_default(expr, state, expr_cache, _struct, args) when is_list(args) do
+    params = Enum.map(args, &fn -> &1 end)
+    elem(composite_eval(expr, %{state | params: params}, [expr_cache]), 0)
   end
 
   ## Control flow helpers

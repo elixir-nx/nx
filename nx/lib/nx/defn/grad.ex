@@ -127,13 +127,13 @@ defmodule Nx.Defn.Grad do
   end
 
   defp parents_args(
-         :optional,
-         %{data: %{args: [call, _expr, callback]}} = t,
+         :block,
+         %{data: %{args: [struct, in_args, _expr, callback]}} = t,
          id,
          acc,
          parent_vectorized_names
        ) do
-    expr = apply(callback, call.data.args)
+    expr = apply(callback, [struct | in_args])
 
     # Now traverse over the optional expression where args are the new parameters.
     # Once we access the parameter itself, we point the parameter to the arg.
@@ -154,7 +154,7 @@ defmodule Nx.Defn.Grad do
       end)
 
     updated_node =
-      {put_in(t.data.args, [call, expr, callback]), parent_vectorized_names}
+      {put_in(t.data.args, [struct, in_args, expr, callback]), parent_vectorized_names}
 
     {parents, Map.put(nodes, id, updated_node)}
   end
@@ -292,7 +292,7 @@ defmodule Nx.Defn.Grad do
     end)
   end
 
-  defp update_grads(:optional, [_call, expr, _callback], _ans, gs, _to_grad_ids, grads) do
+  defp update_grads(:block, [_struct, _in_args, expr, _callback], _ans, gs, _to_grad_ids, grads) do
     gs = List.wrap(gs)
 
     {grads, []} =

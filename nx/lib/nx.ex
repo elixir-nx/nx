@@ -6876,10 +6876,35 @@ defmodule Nx do
     apply_vectorized(tensor, fn tensor ->
       output = Nx.template(tensor.shape, {:u, 8}, names: tensor.names)
 
-      Nx.Shared.optional(:logical_not, [tensor], output, fn tensor ->
-        element_wise_pred_op(tensor, 0, :equal)
+      block(%Nx.Block.LogicalNot{}, [tensor], output, fn %Nx.Block.LogicalNot{}, t ->
+        element_wise_pred_op(t, 0, :equal)
       end)
     end)
+  end
+
+  @doc """
+  Executes an extensible computation block.
+
+  `struct` identifies the block and carries static configuration. `args` is a
+  list of runtime inputs and `output` is the output template. The default
+  implementation `fun` receives the struct first and then each argument in
+  order (`apply(fun, [struct | args])`).
+
+  The backend’s `c:block/4` receives `struct`, `output`, `args`, and `fun`, and
+  should either run a native implementation or invoke the default as
+  `apply(fun, [struct | args])`.
+  """
+  @doc type: :element
+  def block(struct, args, output, fun) when is_list(args) do
+    arity = length(args) + 1
+
+    unless is_function(fun, arity) do
+      raise ArgumentError,
+            "Nx.block/4 expected a default fun/#{arity} for #{length(args)} argument(s), got: #{inspect(fun)}"
+    end
+
+    backend = Nx.Shared.list_impl!(args)
+    backend.block(struct, output, args, fun)
   end
 
   @doc """
@@ -8318,10 +8343,10 @@ defmodule Nx do
     apply_vectorized(tensor, fn tensor ->
       output = %{tensor | type: Nx.Type.to_real(tensor.type)}
 
-      Nx.Shared.optional(:phase, [tensor], output, fn tensor ->
-        tensor
+      block(%Nx.Block.Phase{}, [tensor], output, fn %Nx.Block.Phase{}, t ->
+        t
         |> imag
-        |> atan2(real(tensor))
+        |> atan2(real(t))
       end)
     end)
   end
@@ -8787,6 +8812,10 @@ defmodule Nx do
 
   is true for all elements of a and b.
 
+  For **integer** tensors, `absolute(b)` in the tolerance bound is evaluated in
+  `f64` so that the most negative signed value (e.g. `s8` `-128`) does not
+  overflow `abs` in the original narrow type.
+
   ## Options
 
    * `:rtol` - relative tolerance between numbers, as described above. Defaults to 1.0e-5
@@ -8858,6 +8887,17 @@ defmodule Nx do
         0
       >
 
+  Integer tensors where `b` contains the minimum signed value (e.g. `s8` `-128`) still compare equal to themselves:
+
+      iex> a = Nx.tensor([[5, 6], [7, 8]], type: :s8)
+      iex> b = Nx.tensor([[1, 2], [3, 4]], type: :s8)
+      iex> x = Nx.left_shift(a, b)
+      iex> Nx.all_close(x, x)
+      #Nx.Tensor<
+        u8
+        1
+      >
+
   ## Vectorized tensors
 
   Vectorized inputs have their vectorized axes broadcast together
@@ -8893,12 +8933,15 @@ defmodule Nx do
     if vectorized_axes != [] do
       vectorized_all_close(a, b, opts)
     else
-      Nx.Shared.optional(
-        :all_close,
-        [a, b, opts],
-        %{a | names: [], shape: {}, type: {:u, 8}},
-        &vectorized_all_close/3
-      )
+      out = %{a | names: [], shape: {}, type: {:u, 8}}
+
+      block(struct(Nx.Block.AllClose, opts), [a, b], out, fn %Nx.Block.AllClose{} = o, a, b ->
+        vectorized_all_close(a, b,
+          equal_nan: o.equal_nan,
+          rtol: o.rtol,
+          atol: o.atol
+        )
+      end)
     end
   end
 
@@ -8906,7 +8949,14 @@ defmodule Nx do
     atol = opts[:atol]
     rtol = opts[:rtol]
 
-    finite_entries = less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
+    finite_entries =
+      if Nx.Type.integer?(a.type) and Nx.Type.integer?(b.type) do
+        # abs(min_signed) overflows in the same width (e.g. s8 -128); widen before abs for rtol*abs(b)
+        abs_b = Nx.abs(Nx.as_type(b, {:f, 64}))
+        less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, abs_b)))
+      else
+        less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
+      end
 
     if Nx.Type.integer?(a.type) and Nx.Type.integer?(b.type) do
       all(finite_entries)
@@ -11510,14 +11560,21 @@ defmodule Nx do
   def cumulative_max(tensor, opts \\ []),
     do: cumulative_op(tensor, opts, :cumulative_max, &Nx.max/2)
 
+  defp cumulative_op_block(:cumulative_sum), do: %Nx.Block.CumulativeSum{}
+  defp cumulative_op_block(:cumulative_product), do: %Nx.Block.CumulativeProduct{}
+  defp cumulative_op_block(:cumulative_min), do: %Nx.Block.CumulativeMin{}
+  defp cumulative_op_block(:cumulative_max), do: %Nx.Block.CumulativeMax{}
+
   defp cumulative_op(tensor, opts, op, reduce_fun) do
     apply_vectorized(tensor, fn tensor, offset ->
       opts = keyword!(opts, axis: 0, reverse: false)
       reverse = opts[:reverse]
       axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names, offset)
 
-      Nx.Shared.optional(op, [tensor, [axis: axis, reverse: reverse]], tensor, fn tensor, opts ->
-        associative_scan(tensor, reduce_fun, opts)
+      block = struct(cumulative_op_block(op), axis: axis, reverse: reverse)
+
+      block(block, [tensor], tensor, fn ^block, tensor ->
+        associative_scan(tensor, reduce_fun, axis: axis, reverse: reverse)
       end)
     end)
   end
@@ -14270,7 +14327,9 @@ defmodule Nx do
       indices = devectorize(indices, keep_names: false)
       out = %{tensor | shape: inner_shape, names: inner_names}
 
-      Nx.Shared.optional(:take, [tensor, indices, [axis: axis]], out, fn tensor, indices, _opts ->
+      block(struct(Nx.Block.Take, axis: axis), [tensor, indices], out, fn %Nx.Block.Take{},
+                                                                          tensor,
+                                                                          indices ->
         gather_indices = new_axis(indices, rank(indices))
         {indices_axes, tensor_axes} = Enum.split(axes(inner_shape), rank(indices))
         {leading, trailing} = Enum.split(tensor_axes, axis)
@@ -14449,8 +14508,11 @@ defmodule Nx do
     out = %{tensor | shape: shape}
 
     result =
-      Nx.Shared.optional(:take_along_axis, [tensor, indices, [axis: axis]], out, fn
-        tensor, indices, _opts ->
+      block(
+        struct(Nx.Block.TakeAlongAxis, axis: axis),
+        [tensor, indices],
+        out,
+        fn %Nx.Block.TakeAlongAxis{}, tensor, indices ->
           axes_range = axes(indices)
           new_axis_shape = tuple_append(shape(indices), 1)
 
@@ -14465,7 +14527,8 @@ defmodule Nx do
           tensor
           |> gather(full_indices)
           |> rename(tensor.names)
-      end)
+        end
+      )
 
     vectorize(result, vectorized_axes)
   end
@@ -15263,16 +15326,21 @@ defmodule Nx do
       out_values = %{tensor | shape: output_shape, names: output_names}
       out_indices = %{tensor | shape: output_shape, names: output_names, type: {:s, 32}}
 
-      Nx.Shared.optional(:top_k, [tensor, opts], {out_values, out_indices}, fn tensor, opts ->
-        k = Keyword.fetch!(opts, :k)
-        rank = rank(tensor)
+      block(
+        struct(Nx.Block.TopK, k: opts[:k]),
+        [tensor],
+        {out_values, out_indices},
+        fn %Nx.Block.TopK{} = top_k, tensor ->
+          k = top_k.k
+          rank = rank(tensor)
 
-        indices = argsort(tensor, axis: rank - 1, direction: :desc)
-        values = Nx.take_along_axis(tensor, indices, axis: rank - 1)
+          indices = argsort(tensor, axis: rank - 1, direction: :desc)
+          values = Nx.take_along_axis(tensor, indices, axis: rank - 1)
 
-        {slice_along_axis(values, 0, k, axis: rank - 1),
-         slice_along_axis(indices, 0, k, axis: rank - 1)}
-      end)
+          {slice_along_axis(values, 0, k, axis: rank - 1),
+           slice_along_axis(indices, 0, k, axis: rank - 1)}
+        end
+      )
     end)
   end
 
@@ -16704,12 +16772,17 @@ defmodule Nx do
 
       out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
 
-      opts = Keyword.take(opts, [:eps]) |> Keyword.merge(lengths: [l1, l2], axes: [ax1, ax2])
+      block_struct =
+        if kind == :fft2 do
+          struct(Nx.Block.FFT2, eps: opts[:eps], lengths: [l1, l2], axes: [ax1, ax2])
+        else
+          struct(Nx.Block.IFFT2, eps: opts[:eps], lengths: [l1, l2], axes: [ax1, ax2])
+        end
 
-      Nx.Shared.optional(kind, [tensor, opts], out, fn tensor, opts ->
-        [ax1, ax2] = opts[:axes]
-        [l1, l2] = opts[:lengths]
-        eps = opts[:eps]
+      block(block_struct, [tensor], out, fn s, tensor ->
+        [ax1, ax2] = s.axes
+        [l1, l2] = s.lengths
+        eps = s.eps
 
         if kind == :fft2 do
           tensor

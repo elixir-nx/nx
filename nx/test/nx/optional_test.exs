@@ -27,6 +27,13 @@ defmodule Nx.OptionalTest do
       |> Nx.backend_transfer(__MODULE__)
     end
 
+    def block(%Nx.Block.Solve{}, out, [a, b], _fun), do: solve(out, a, b)
+    def block(%Nx.Block.Determinant{}, out, [t], _fun), do: determinant(out, t)
+
+    def block(struct, _output, args, fun) do
+      apply(fun, [struct | args])
+    end
+
     def solve(_out, a, b) do
       send(self(), :called_custom_impl)
 
@@ -71,6 +78,21 @@ defmodule Nx.OptionalTest do
       t
       |> Nx.BinaryBackend.iota(axis, opts)
       |> Nx.backend_transfer(__MODULE__)
+    end
+
+    def block(struct, _output, args, fun) do
+      args = Enum.map(args, &block_arg_to_binary/1)
+      res = apply(fun, [struct | args])
+      tensor_from_binary(res)
+    end
+
+    defp block_arg_to_binary(list) when is_list(list), do: list
+    defp block_arg_to_binary(%Nx.Tensor{} = t), do: Nx.backend_transfer(t, BinaryBackend)
+
+    defp tensor_from_binary(%Nx.Tensor{} = t), do: Nx.backend_transfer(t, __MODULE__)
+
+    defp tensor_from_binary(tuple) when is_tuple(tuple) do
+      tuple |> Tuple.to_list() |> Enum.map(&tensor_from_binary/1) |> List.to_tuple()
     end
 
     def as_type(out, t) do
@@ -183,9 +205,9 @@ defmodule Nx.OptionalTest do
       a = Nx.tensor([[1, 0, 0], [0, 1, 0], [0, 0, 1]], backend: NonCustomImplTestBackend)
       b = Nx.tensor([1, 2, 3], backend: NonCustomImplTestBackend)
 
-      Nx.LinAlg.solve(a, b)
+      x = Nx.LinAlg.solve(a, b)
 
-      assert_receive {:called_default_impl, :dot}
+      assert Nx.all_close(x, Nx.backend_transfer(b, Nx.BinaryBackend))
     end
 
     test "calls the custom impl if it is present" do
@@ -210,9 +232,9 @@ defmodule Nx.OptionalTest do
     test "calls the default impl if custom does not exist" do
       a = Nx.tensor([[1, 1], [2, 1]], backend: NonCustomImplTestBackend)
 
-      Nx.LinAlg.determinant(a)
+      d = Nx.LinAlg.determinant(a)
 
-      assert_receive {:called_default_impl, :reshape}
+      assert Nx.all_close(d, Nx.tensor(-1.0))
     end
   end
 
@@ -232,8 +254,8 @@ defmodule Nx.OptionalTest do
                  f32
                \s\s
                  Nx.Defn.Expr
-                 parameter a:0       s32[3][3]
-                 b = determinant a   f32
+                 parameter a:0                          s32[3][3]
+                 b = block %Nx.Block.Determinant{}, a   f32
                >
                """
       end
@@ -248,8 +270,8 @@ defmodule Nx.OptionalTest do
                  f32
                \s\s
                  Nx.Defn.Expr
-                 parameter a:0       s32[3][3]
-                 b = determinant a   f32
+                 parameter a:0                          s32[3][3]
+                 b = block %Nx.Block.Determinant{}, a   f32
                >
                """
     end
