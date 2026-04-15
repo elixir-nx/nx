@@ -41,6 +41,10 @@ else
 	CFLAGS += -O3
 endif
 
+ifeq ($(MIX_ENV),prod)
+	CFLAGS += -DEXLA_PROD
+endif
+
 NVCC = $(CXX)
 NVCCFLAGS = $(CFLAGS)
 LDFLAGS += -L$(XLA_EXTENSION_LIB) -lxla_extension -shared -fvisibility=hidden

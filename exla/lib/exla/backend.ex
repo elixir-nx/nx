@@ -125,8 +125,8 @@ defmodule EXLA.Backend do
         # Pointer is an integer here
         %Nx.Pointer{kind: :local, address: ptr, data_size: size}
 
-      {:host_ipc, handle_name, fd, size} ->
-        %Nx.Pointer{kind: :ipc, handle: handle_name, address: fd, data_size: size}
+      {:host_ipc, handle_name, size} ->
+        %Nx.Pointer{kind: :ipc, handle: handle_name, data_size: size}
 
       {:cuda_ipc, handle, size} ->
         %Nx.Pointer{kind: :ipc, handle: handle, address: buffer.device_id, data_size: size}
@@ -160,8 +160,8 @@ defmodule EXLA.Backend do
         {%Nx.Pointer{kind: :local, address: address}, _} ->
           {:local, address}
 
-        {%Nx.Pointer{kind: :ipc, address: fd, handle: handle}, :host} ->
-          {:host_ipc, {fd, handle}}
+        {%Nx.Pointer{kind: :ipc, handle: handle}, :host} ->
+          {:host_ipc, handle}
 
         {%Nx.Pointer{kind: :ipc, handle: handle}, :cuda} ->
           {:cuda_ipc, handle}
