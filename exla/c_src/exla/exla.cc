@@ -322,7 +322,7 @@ get_buffer_device_pointer(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
 
   if (pointer_kind == "host_ipc") {
     auto handle_name =
-        "exla:ipc:" + std::to_string(device_size) + ":" + std::to_string(ptr);
+        "exla:ipc:" + std::to_string(getpid()) + ":" + std::to_string(ptr);
     auto fd = get_ipc_handle(handle_name.c_str(), device_size,
                              static_cast<mode_t>(shm_permissions));
 
@@ -330,7 +330,7 @@ get_buffer_device_pointer(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
       throw std::runtime_error("unable to get IPC handle");
     }
 
-    auto ipc_ptr = open_ipc_handle(fd, device_size, 1);
+    auto ipc_ptr = open_ipc_handle(fd, device_size, /*writable=*/1);
     if (ipc_ptr == nullptr) {
       throw std::runtime_error("unable to open IPC handle");
     }
