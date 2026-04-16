@@ -103,12 +103,8 @@ defmodule EXLA.DeviceMemorySharingTest do
   end
 
   describe ":permissions option" do
-    setup do
+    test "defaults to 0o400 (owner-read-only, functional-by-default)" do
       t = Nx.tensor([1, 2, 3], backend: {EXLA.Backend, client: :host})
-      {:ok, tensor: t}
-    end
-
-    test "defaults to 0o400 (owner-read-only, functional-by-default)", %{tensor: t} do
       if File.dir?("/dev/shm") do
         %Nx.Pointer{handle: handle} = Nx.to_pointer(t, mode: :ipc)
         shm_path = Path.join("/dev/shm", handle)
@@ -122,7 +118,8 @@ defmodule EXLA.DeviceMemorySharingTest do
       end
     end
 
-    test "accepts an explicit permission value", %{tensor: t} do
+    test "accepts an explicit permission value" do
+      t = Nx.tensor([1, 2, 3], backend: {EXLA.Backend, client: :host})
       if File.dir?("/dev/shm") do
         %Nx.Pointer{handle: handle} = Nx.to_pointer(t, mode: :ipc, permissions: 0o600)
         shm_path = Path.join("/dev/shm", handle)
@@ -134,20 +131,23 @@ defmodule EXLA.DeviceMemorySharingTest do
       end
     end
 
-    test "rejects non-integer permissions", %{tensor: t} do
+    test "rejects non-integer permissions" do
       assert_raise ArgumentError, ~r/:permissions must be an integer/, fn ->
+        t = Nx.tensor([1, 2, 3], backend: {EXLA.Backend, client: :host})
         Nx.to_pointer(t, mode: :ipc, permissions: :not_an_int)
       end
     end
 
-    test "rejects negative permissions", %{tensor: t} do
+    test "rejects negative permissions" do
       assert_raise ArgumentError, ~r/:permissions must be an integer/, fn ->
+        t = Nx.tensor([1, 2, 3], backend: {EXLA.Backend, client: :host})
         Nx.to_pointer(t, mode: :ipc, permissions: -1)
       end
     end
 
-    test "rejects permissions above 0o7777", %{tensor: t} do
+    test "rejects permissions above 0o7777" do
       assert_raise ArgumentError, ~r/:permissions must be an integer/, fn ->
+        t = Nx.tensor([1, 2, 3], backend: {EXLA.Backend, client: :host})
         Nx.to_pointer(t, mode: :ipc, permissions: 0o10000)
       end
     end
