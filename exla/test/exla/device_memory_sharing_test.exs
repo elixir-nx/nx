@@ -35,6 +35,7 @@ defmodule EXLA.DeviceMemorySharingTest do
 
     if File.dir?("/dev/shm") do
       shm_path = Path.join("/dev/shm", pointer.handle)
+
       on_exit(fn ->
         :erpc.call(peer, Process, :exit, [pid, :kill])
         File.rm(shm_path)
@@ -58,7 +59,6 @@ defmodule EXLA.DeviceMemorySharingTest do
       :erpc.call(peer, EXLAHelpers, :export_writable_ipc_pointer, [[1, 2, 3]])
 
     if File.dir?("/dev/shm") do
-
       on_exit(fn ->
         :erpc.call(peer, Process, :exit, [pid, :kill])
         File.rm(Path.join("/dev/shm", pointer.handle))
@@ -105,6 +105,7 @@ defmodule EXLA.DeviceMemorySharingTest do
   describe ":permissions option" do
     test "defaults to 0o400 (owner-read-only, functional-by-default)" do
       t = Nx.tensor([1, 2, 3], backend: {EXLA.Backend, client: :host})
+
       if File.dir?("/dev/shm") do
         %Nx.Pointer{handle: handle} = Nx.to_pointer(t, mode: :ipc)
         shm_path = Path.join("/dev/shm", handle)
@@ -123,6 +124,7 @@ defmodule EXLA.DeviceMemorySharingTest do
 
     test "accepts an explicit permission value" do
       t = Nx.tensor([1, 2, 3], backend: {EXLA.Backend, client: :host})
+
       if File.dir?("/dev/shm") do
         %Nx.Pointer{handle: handle} = Nx.to_pointer(t, mode: :ipc, permissions: 0o600)
         shm_path = Path.join("/dev/shm", handle)
