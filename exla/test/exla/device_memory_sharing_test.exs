@@ -115,6 +115,9 @@ defmodule EXLA.DeviceMemorySharingTest do
         # Mask off the file-type bits (S_IFREG etc.); we care about the
         # lower 12 permission bits.
         assert Bitwise.band(mode, 0o7777) == 0o400
+        # Keep t alive through the assertions above: the shm is unlinked when
+        # the buffer backing t is GC'd, so t must remain reachable.
+        assert Nx.to_flat_list(t) == [1, 2, 3]
       end
     end
 
@@ -128,6 +131,8 @@ defmodule EXLA.DeviceMemorySharingTest do
         assert File.exists?(shm_path)
         %File.Stat{mode: mode} = File.stat!(shm_path)
         assert Bitwise.band(mode, 0o7777) == 0o600
+        # Keep t alive through the assertions above.
+        assert Nx.to_flat_list(t) == [1, 2, 3]
       end
     end
 
