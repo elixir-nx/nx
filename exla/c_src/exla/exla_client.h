@@ -45,6 +45,10 @@ public:
 
   void SetClient(ExlaClient *client) { client_ = client; }
 
+  // Replace the underlying PjRt buffer with a new one (e.g. an shm-backed
+  // view).  The old buffer is deallocated first so XLA can free its memory.
+  void ReplaceBuffer(std::unique_ptr<xla::PjRtBuffer> new_buffer);
+
   ~ExlaBuffer();
 
 private:

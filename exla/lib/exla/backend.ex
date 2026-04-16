@@ -84,7 +84,14 @@ defmodule EXLA.Backend do
 
   @impl true
   def to_pointer(%T{data: %B{buffer: buffer}}, opts \\ []) do
-    opts = Keyword.validate!(opts, mode: :local)
+    opts = Keyword.validate!(opts, mode: :local, permissions: 0o400)
+    permissions = opts[:permissions]
+
+    unless is_integer(permissions) and permissions >= 0 and permissions <= 0o7777 do
+      raise ArgumentError,
+            ":permissions must be an integer in the range 0..0o7777 " <>
+              "(typically an octal literal like 0o400), got: #{inspect(permissions)}"
+    end
 
     mode =
       case {opts[:mode], buffer} do
@@ -108,18 +115,18 @@ defmodule EXLA.Backend do
 
         {mode, _} ->
           raise ArgumentError,
-                "expected one of :local, :cuda_ipc, :host_ipc, got: #{inspect(mode)}"
+                "expected one of :local, :ipc, got: #{inspect(mode)}"
       end
 
     client = EXLA.Client.fetch!(buffer.client_name)
 
-    case EXLA.NIF.get_buffer_device_pointer(client.ref, buffer.ref, mode) do
+    case EXLA.NIF.get_buffer_device_pointer(client.ref, buffer.ref, mode, permissions) do
       {:local, ptr, size} ->
         # Pointer is an integer here
         %Nx.Pointer{kind: :local, address: ptr, data_size: size}
 
-      {:host_ipc, handle_name, fd, size} ->
-        %Nx.Pointer{kind: :ipc, handle: handle_name, address: fd, data_size: size}
+      {:host_ipc, handle_name, size} ->
+        %Nx.Pointer{kind: :ipc, handle: handle_name, data_size: size}
 
       {:cuda_ipc, handle, size} ->
         %Nx.Pointer{kind: :ipc, handle: handle, address: buffer.device_id, data_size: size}
@@ -153,8 +160,8 @@ defmodule EXLA.Backend do
         {%Nx.Pointer{kind: :local, address: address}, _} ->
           {:local, address}
 
-        {%Nx.Pointer{kind: :ipc, address: fd, handle: handle}, :host} ->
-          {:host_ipc, {fd, handle}}
+        {%Nx.Pointer{kind: :ipc, handle: handle}, :host} ->
+          {:host_ipc, handle}
 
         {%Nx.Pointer{kind: :ipc, handle: handle}, :cuda} ->
           {:cuda_ipc, handle}

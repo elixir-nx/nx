@@ -17034,7 +17034,10 @@ defmodule Nx do
       the returned value represents an IPC handle that can be shared between
       processes. Defaults to `:local`.
 
-  Other options are relayed to the backend.
+  Other options are relayed to the backend. For example, the EXLA backend
+  accepts `:permissions` (defaults to `0o400`, owner-read-only) to
+  control the file mode bits of the `shm_open` shared memory segment used
+  for `:ipc` mode on host clients.
 
   ## Examples
 
