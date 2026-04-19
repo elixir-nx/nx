@@ -73,3 +73,11 @@ end
 defmodule Nx.Block.IFFT2 do
   defstruct eps: nil, lengths: nil, axes: nil
 end
+
+defmodule Nx.Block.RFFT do
+  defstruct eps: nil, length: nil, axis: nil
+end
+
+defmodule Nx.Block.IRFFT do
+  defstruct eps: nil, length: nil, axis: nil
+end
