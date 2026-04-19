@@ -786,7 +786,9 @@ defmodule EXLA.Defn do
 
     # expr.type is complex; input tensor is real
     input_type = Nx.Type.to_real(expr.type)
-    {fft(&Value.fft(&1, :rfft, &2, &3), input_type, expr.type, [tensor, opts], expr, state), cache}
+
+    {fft(&Value.fft(&1, :rfft, &2, &3), input_type, expr.type, [tensor, opts], expr, state),
+     cache}
   end
 
   defp cached_recur_operator(
@@ -810,7 +812,16 @@ defmodule EXLA.Defn do
     # pad_n = div(n,2)+1 (the expected input size), while fft_n = n (the output length).
     n = irfft_struct.length
     input_type = Nx.Type.to_complex(expr.type)
-    {fft(&Value.fft(&1, :irfft, &2, &3), input_type, expr.type, div(n, 2) + 1, [tensor, opts], expr, state), cache}
+
+    {fft(
+       &Value.fft(&1, :irfft, &2, &3),
+       input_type,
+       expr.type,
+       div(n, 2) + 1,
+       [tensor, opts],
+       expr,
+       state
+     ), cache}
   end
 
   defp cached_recur_operator(:block, %T{data: %Expr{args: args}}, state, cache) do
@@ -1629,7 +1640,14 @@ defmodule EXLA.Defn do
         end)
 
       padded_shape = op_shape(tensor)
-      {transposed_input_shape, _} = Nx.Shape.transpose(padded_shape, permutation, List.duplicate(nil, tuple_size(padded_shape)))
+
+      {transposed_input_shape, _} =
+        Nx.Shape.transpose(
+          padded_shape,
+          permutation,
+          List.duplicate(nil, tuple_size(padded_shape))
+        )
+
       transposed_input_typespec = Typespec.tensor(input_type, transposed_input_shape)
 
       {transposed_output_shape, _} = Nx.Shape.transpose(ans.shape, permutation, ans.names)
