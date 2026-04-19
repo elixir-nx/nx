@@ -6890,7 +6890,7 @@ defmodule Nx do
   implementation `fun` receives the struct first and then each argument in
   order (`apply(fun, [struct | args])`).
 
-  The backend’s `c:block/4` receives `struct`, `output`, `args`, and `fun`, and
+  The backend’s `c:Nx.Backend.block/4` receives `struct`, `output`, `args`, and `fun`, and
   should either run a native implementation or invoke the default as
   `apply(fun, [struct | args])`.
   """
