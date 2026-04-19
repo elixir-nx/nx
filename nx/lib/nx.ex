@@ -16798,6 +16798,276 @@ defmodule Nx do
   end
 
   @doc """
+  Calculates the real-input DFT of the given tensor.
+
+  Exploits the conjugate-symmetry property of the DFT for real inputs by
+  computing the full FFT and returning only the non-redundant first
+  `floor(length / 2) + 1` frequency components along the transform axis.
+
+  ## Options
+
+    * `:eps` - Threshold which backends can use for cleaning-up results. Defaults to `1.0e-10`.
+    * `:length` - Either a positive integer or `:power_of_two`. Will pad or slice the tensor
+      along the transform axis accordingly. `:power_of_two` will automatically pad to the
+      next power of two. Defaults to the axis size.
+    * `:axis` - the axis upon which the real DFT will be calculated. Defaults to the last axis.
+
+  ## Examples
+
+      iex> Nx.rfft(Nx.tensor([1.0, 1.0, 0.0, 0.0]))
+      #Nx.Tensor<
+        c64[3]
+        [2.0+0.0i, 1.0-1.0i, 0.0+0.0i]
+      >
+
+      iex> Nx.rfft(Nx.tensor([1.0, 1.0, 1.0, 0.0, 1.0, 1.0]))
+      #Nx.Tensor<
+        c64[4]
+        [5.0+0.0i, 1.0+0.0i, -1.0+0.0i, 1.0+0.0i]
+      >
+
+  The calculation can happen on a specific axis:
+
+      iex> tensor = Nx.tensor([[1.0, 1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]])
+      iex> Nx.rfft(tensor, axis: -1)
+      #Nx.Tensor<
+        c64[2][3]
+        [
+          [2.0+0.0i, 1.0-1.0i, 0.0+0.0i],
+          [1.0+0.0i, 1.0+0.0i, 1.0+0.0i]
+        ]
+      >
+      iex> Nx.rfft(tensor, axis: -2)
+      #Nx.Tensor<
+        c64[2][4]
+        [
+          [2.0+0.0i, 1.0+0.0i, 0.0+0.0i, 0.0+0.0i],
+          [0.0+0.0i, 1.0+0.0i, 0.0+0.0i, 0.0+0.0i]
+        ]
+      >
+
+  Padding and slicing can be introduced through `:length`:
+
+      iex> Nx.rfft(Nx.tensor([1.0, 1.0]), length: 4)
+      #Nx.Tensor<
+        c64[3]
+        [2.0+0.0i, 1.0-1.0i, 0.0+0.0i]
+      >
+
+      iex> Nx.rfft(Nx.tensor([1.0, 1.0, 0.0]), length: :power_of_two)
+      #Nx.Tensor<
+        c64[3]
+        [2.0+0.0i, 1.0-1.0i, 0.0+0.0i]
+      >
+
+  ## Vectorized tensors
+
+  Vectorized tensors work the same as N-dimensional tensors
+
+      iex> tensor = Nx.tensor([[1.0, 1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]]) |> Nx.vectorize(:x)
+      iex> Nx.rfft(tensor)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        c64[3]
+        [
+          [2.0+0.0i, 1.0-1.0i, 0.0+0.0i],
+          [1.0+0.0i, 1.0+0.0i, 1.0+0.0i]
+        ]
+      >
+
+  ## Error Cases
+
+      iex> Nx.rfft(Nx.tensor([Complex.new(1, 0), Complex.new(0, 1)]))
+      ** (ArgumentError) Nx.rfft/2 expects a real tensor, got type: {:c, 64}
+
+      iex> Nx.rfft(Nx.tensor([1.0, 1.0]), length: :invalid)
+      ** (ArgumentError) expected an integer or :power_of_two as length, got: :invalid
+  """
+  @doc type: :ndim
+  def rfft(tensor, opts \\ []) do
+    tensor = to_tensor(tensor)
+
+    if Nx.Type.complex?(tensor.type) do
+      raise ArgumentError, "Nx.rfft/2 expects a real tensor, got type: #{inspect(tensor.type)}"
+    end
+
+    apply_vectorized(tensor, fn tensor, offset ->
+      shape = Nx.Shape.fft(tensor.shape)
+      opts = Keyword.validate!(opts, [:length, axis: -1, eps: 1.0e-10])
+
+      axis = Nx.Shape.normalize_axis(shape, opts[:axis], tensor.names, offset)
+      n = elem(shape, axis)
+
+      length =
+        case opts[:length] do
+          :power_of_two ->
+            2 ** Kernel.ceil(:math.log2(n))
+
+          nil ->
+            n
+
+          n when is_integer(n) and n > 0 ->
+            n
+
+          length ->
+            raise ArgumentError,
+                  "expected an integer or :power_of_two as length, got: #{inspect(length)}"
+        end
+
+      rfft_length = div(length, 2) + 1
+
+      output_shape =
+        shape
+        |> Tuple.insert_at(axis, rfft_length)
+        |> Tuple.delete_at(axis + 1)
+
+      out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
+      block_struct = struct!(Nx.Block.RFFT, eps: opts[:eps], length: length, axis: axis)
+
+      block(block_struct, [tensor], out, fn s, tensor ->
+        tensor
+        |> fft(length: s.length, axis: s.axis, eps: s.eps)
+        |> slice_along_axis(0, div(s.length, 2) + 1, axis: s.axis)
+      end)
+    end)
+  end
+
+  @doc """
+  Calculates the Inverse real-input DFT of the given tensor.
+
+  Reconstructs a real-valued signal from a one-sided complex spectrum produced
+  by `rfft/2`. The input is assumed to contain the non-redundant Hermitian half
+  of a spectrum of length `n` (i.e. `floor(n / 2) + 1` elements along the
+  transform axis). The missing conjugate-symmetric components are derived
+  automatically before calling `ifft/2`.
+
+  ## Options
+
+    * `:eps` - Threshold which backends can use for cleaning-up results. Defaults to `1.0e-10`.
+    * `:length` - A positive integer specifying the output signal length `n`. Defaults to
+      `2 * (m - 1)` where `m` is the axis size of the input, which assumes the original
+      signal had even length. Pass an explicit `:length` to recover odd-length signals.
+    * `:axis` - the axis upon which the Inverse real DFT will be calculated. Defaults to the
+      last axis.
+
+  ## Examples
+
+      iex> Nx.irfft(Nx.tensor([2.0, Complex.new(1.0, -1.0), 0.0]))
+      #Nx.Tensor<
+        f32[4]
+        [1.0, 1.0, 0.0, 0.0]
+      >
+
+      iex> Nx.irfft(Nx.tensor([5.0, 1.0, -1.0, 1.0]))
+      #Nx.Tensor<
+        f32[6]
+        [1.0, 1.0, 1.0, 0.0, 1.0, 1.0]
+      >
+
+  The calculation can happen on a specific axis:
+
+      iex> tensor = Nx.tensor([[2.0, Complex.new(1.0, -1.0), 0.0], [4.0, 0.0, 0.0]])
+      iex> Nx.irfft(tensor, axis: -1)
+      #Nx.Tensor<
+        f32[2][4]
+        [
+          [1.0, 1.0, 0.0, 0.0],
+          [1.0, 1.0, 1.0, 1.0]
+        ]
+      >
+
+  An explicit `:length` recovers odd-length signals and controls input truncation:
+
+      iex> Nx.irfft(Nx.tensor([2.0, Complex.new(1.0, -1.0), 0.0]), length: 4)
+      #Nx.Tensor<
+        f32[4]
+        [1.0, 1.0, 0.0, 0.0]
+      >
+
+  ## Vectorized tensors
+
+  Vectorized tensors work the same as N-dimensional tensors
+
+      iex> tensor = Nx.tensor([[2.0, Complex.new(1.0, -1.0), 0.0], [4.0, 0.0, 0.0]]) |> Nx.vectorize(:x)
+      iex> Nx.irfft(tensor)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[4]
+        [
+          [1.0, 1.0, 0.0, 0.0],
+          [1.0, 1.0, 1.0, 1.0]
+        ]
+      >
+
+  ## Error Cases
+
+      iex> Nx.irfft(Nx.tensor([1.0, 1.0]), length: :invalid)
+      ** (ArgumentError) expected a positive integer as length, got: :invalid
+  """
+  @doc type: :ndim
+  def irfft(tensor, opts \\ []) do
+    apply_vectorized(tensor, fn tensor, offset ->
+      shape = Nx.Shape.fft(tensor.shape)
+      opts = Keyword.validate!(opts, [:length, axis: -1, eps: 1.0e-10])
+
+      axis = Nx.Shape.normalize_axis(shape, opts[:axis], tensor.names, offset)
+      actual_m = elem(shape, axis)
+
+      n =
+        case opts[:length] do
+          nil ->
+            2 * (actual_m - 1)
+
+          n when is_integer(n) and n > 0 ->
+            n
+
+          length ->
+            raise ArgumentError,
+                  "expected a positive integer as length, got: #{inspect(length)}"
+        end
+
+      output_shape =
+        shape
+        |> Tuple.insert_at(axis, n)
+        |> Tuple.delete_at(axis + 1)
+
+      out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_real(tensor.type)})
+      block_struct = struct(Nx.Block.IRFFT, eps: opts[:eps], length: n, axis: axis)
+
+      block(block_struct, [tensor], out, fn s, tensor ->
+        axis = s.axis
+        n = s.length
+        m = div(n, 2) + 1
+
+        actual_m = elem(Nx.shape(tensor), axis)
+
+        tensor =
+          cond do
+            actual_m > m -> slice_along_axis(tensor, 0, m, axis: axis)
+            actual_m < m -> pad(tensor, 0, List.replace_at(List.duplicate({0, 0, 0}, tuple_size(Nx.shape(tensor))), axis, {0, m - actual_m, 0}))
+            true -> tensor
+          end
+
+        # mirror_count = n - m handles both even and odd n:
+        # even n=8: m=5, mirror indices 1..3 (3 elements), total=8
+        # odd n=7:  m=4, mirror indices 1..3 (3 elements), total=7
+        mirror_count = n - m
+
+        mirror =
+          tensor
+          |> slice_along_axis(1, mirror_count, axis: axis)
+          |> conjugate()
+          |> reverse(axes: [axis])
+
+        [tensor, mirror]
+        |> concatenate(axis: axis)
+        |> ifft(axis: axis, eps: s.eps)
+        |> real()
+      end)
+    end)
+  end
+
+  @doc """
   Creates a tensor of shape `{n}` with linearly spaced samples between `start` and `stop`.
 
   ## Options

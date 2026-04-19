@@ -94,6 +94,12 @@ defmodule Torchx.Backend do
         {Nx.Block.TakeAlongAxis, [tensor, indices]} ->
           take_along_axis_gather(output, tensor, indices, axis: struct.axis)
 
+        {Nx.Block.RFFT, [t]} ->
+          rfft_torchx(output, t, struct.length, struct.axis)
+
+        {Nx.Block.IRFFT, [t]} ->
+          irfft_torchx(output, t, struct.length, struct.axis)
+
         {Nx.Block.FFT2, [t]} ->
           fft2_torchx(output, t, struct.lengths, struct.axes)
 
@@ -1089,6 +1095,20 @@ defmodule Torchx.Backend do
     tensor
     |> from_nx()
     |> Torchx.ifft(length, axis)
+    |> to_nx(out)
+  end
+
+  defp rfft_torchx(out, tensor, length, axis) do
+    tensor
+    |> from_nx()
+    |> Torchx.rfft(length, axis)
+    |> to_nx(out)
+  end
+
+  defp irfft_torchx(out, tensor, length, axis) do
+    tensor
+    |> from_nx()
+    |> Torchx.irfft(length, axis)
     |> to_nx(out)
   end
 

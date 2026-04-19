@@ -372,7 +372,7 @@ defmodule EXLA.MLIR.Value do
   end
 
   def fft(%Value{function: func} = value, fft_kind, fft_length, typespec)
-      when fft_kind in [:fft, :ifft]
+      when fft_kind in [:fft, :ifft, :rfft, :irfft]
       when is_list(fft_length) or is_integer(fft_length) do
     result_types = typespecs_to_mlir_types([typespec])
 
@@ -1070,7 +1070,7 @@ defmodule EXLA.MLIR.Value do
   defp attr_transpose(value) when value in [:adjoint, :transpose, :no_transpose],
     do: attr_enum("stablehlo", "transpose", value)
 
-  defp attr_fft_type(value) when value in [:fft, :ifft],
+  defp attr_fft_type(value) when value in [:fft, :ifft, :rfft, :irfft],
     do: attr_enum("stablehlo", "fft_type", value)
 
   defp attr_enum(dialect, enum_name, value) do

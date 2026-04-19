@@ -767,6 +767,63 @@ defmodule EXLA.Defn do
     {fft2(&Value.fft(&1, :ifft, &2, &3), [tensor, opts], expr, state), cache}
   end
 
+  defp cached_recur_operator(
+         :block,
+         %T{data: %Expr{args: [%Nx.Block.RFFT{} = rfft_struct, [tensor], expr, _callback]}},
+         state,
+         cache
+       ) do
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
+
+    opts = [length: rfft_struct.length, axis: rfft_struct.axis]
+
+    opts =
+      if eps = rfft_struct.eps do
+        Keyword.put(opts, :eps, eps)
+      else
+        opts
+      end
+
+    # expr.type is complex; input tensor is real
+    input_type = Nx.Type.to_real(expr.type)
+
+    {fft(&Value.fft(&1, :rfft, &2, &3), input_type, expr.type, [tensor, opts], expr, state),
+     cache}
+  end
+
+  defp cached_recur_operator(
+         :block,
+         %T{data: %Expr{args: [%Nx.Block.IRFFT{} = irfft_struct, [tensor], expr, _callback]}},
+         state,
+         cache
+       ) do
+    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
+
+    opts = [length: irfft_struct.length, axis: irfft_struct.axis]
+
+    opts =
+      if eps = irfft_struct.eps do
+        Keyword.put(opts, :eps, eps)
+      else
+        opts
+      end
+
+    # expr.type is real; input tensor is complex.
+    # pad_n = div(n,2)+1 (the expected input size), while fft_n = n (the output length).
+    n = irfft_struct.length
+    input_type = Nx.Type.to_complex(expr.type)
+
+    {fft(
+       &Value.fft(&1, :irfft, &2, &3),
+       input_type,
+       expr.type,
+       div(n, 2) + 1,
+       [tensor, opts],
+       expr,
+       state
+     ), cache}
+  end
+
   defp cached_recur_operator(:block, %T{data: %Expr{args: args}}, state, cache) do
     [struct, in_args, expr, _callback] = args
     %module{} = struct
@@ -1233,10 +1290,10 @@ defmodule EXLA.Defn do
   end
 
   defp to_operator(:fft, [%Value{} | _] = args, out, state),
-    do: fft(&Value.fft(&1, :fft, &2, &3), args, out, state)
+    do: fft(&Value.fft(&1, :fft, &2, &3), out.type, out.type, args, out, state)
 
   defp to_operator(:ifft, [%Value{} | _] = args, out, state),
-    do: fft(&Value.fft(&1, :ifft, &2, &3), args, out, state)
+    do: fft(&Value.fft(&1, :ifft, &2, &3), out.type, out.type, args, out, state)
 
   defp to_operator(:is_nan, [%Value{} = arg], out, _state),
     do: Value.is_nan(arg, expr_to_typespec(out))
@@ -1561,16 +1618,16 @@ defmodule EXLA.Defn do
     EXLA.Lib.argsort(state.builder, tensor, dimension, stable, comp, ans.type)
   end
 
-  defp fft(exla_op, [%Value{} = tensor, opts], %{type: type} = ans, state) do
-    n = opts[:length]
+  defp fft(exla_op, input_type, output_type, pad_n \\ nil, [%Value{} = tensor, opts], ans, state) do
+    fft_n = opts[:length]
+    pad_n = pad_n || fft_n
     axis = opts[:axis]
-    output_type = Nx.Type.to_complex(type)
-    tensor = to_type(tensor, output_type)
+    tensor = to_type(tensor, input_type)
 
     shape = op_shape(tensor)
     m = elem(shape, axis)
 
-    tensor = fft_pad_or_slice(tensor, m, n, axis, shape, output_type, state)
+    tensor = fft_pad_or_slice(tensor, m, pad_n, axis, shape, input_type, state)
 
     last_axis = tuple_size(shape) - 1
 
@@ -1582,15 +1639,26 @@ defmodule EXLA.Defn do
           ax -> ax
         end)
 
-      {transposed_shape, _} = Nx.Shape.transpose(ans.shape, permutation, ans.names)
-      transposed_typespec = Typespec.tensor(ans.type, transposed_shape)
+      padded_shape = op_shape(tensor)
+
+      {transposed_input_shape, _} =
+        Nx.Shape.transpose(
+          padded_shape,
+          permutation,
+          List.duplicate(nil, tuple_size(padded_shape))
+        )
+
+      transposed_input_typespec = Typespec.tensor(input_type, transposed_input_shape)
+
+      {transposed_output_shape, _} = Nx.Shape.transpose(ans.shape, permutation, ans.names)
+      transposed_output_typespec = Typespec.tensor(output_type, transposed_output_shape)
 
       tensor
-      |> Value.transpose(permutation, transposed_typespec)
-      |> exla_op.([n], transposed_typespec)
+      |> Value.transpose(permutation, transposed_input_typespec)
+      |> exla_op.([fft_n], transposed_output_typespec)
       |> Value.transpose(permutation, expr_to_typespec(ans))
     else
-      exla_op.(tensor, [n], expr_to_typespec(ans))
+      exla_op.(tensor, [fft_n], expr_to_typespec(ans))
     end
   end
 
@@ -1655,8 +1723,10 @@ defmodule EXLA.Defn do
         Value.slice(tensor, starts, limit_indices, strides, typespec)
 
       m < n ->
+        zero_value = if Nx.Type.complex?(output_type), do: Complex.new(0), else: 0
+
         zero =
-          Value.constant(state.builder, [Complex.new(0)], Typespec.tensor(output_type, {}))
+          Value.constant(state.builder, [zero_value], Typespec.tensor(output_type, {}))
 
         padding_config =
           {0, 0, 0}
