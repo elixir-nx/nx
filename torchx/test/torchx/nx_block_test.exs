@@ -2,7 +2,7 @@ defmodule Torchx.NxBlockTest do
   @moduledoc """
   Numerical coverage for `Nx.block/4`-backed APIs on Torchx.
 
-  `Nx.fft2/2` and `Nx.ifft2/2` route through `%Nx.Block.FFT2{}` / `%Nx.Block.IFFT2{}`.
+  `Nx.fft2/2`, `Nx.ifft2/2`, `Nx.rfft/2`, and `Nx.irfft/2` route through block structs.
   `Torchx.NxDoctestTest` excludes their doctests (BinaryBackend `inspect` strings vs
   LibTorch signed zeros). Here we assert agreement with a `Nx.BinaryBackend` reference.
   """
@@ -20,6 +20,87 @@ defmodule Torchx.NxBlockTest do
     t_binary = fun_binary.()
     ref = t_binary |> Nx.backend_transfer(Torchx.Backend)
     assert Nx.all_close(t_torchx, ref)
+  end
+
+  describe "rfft / irfft (block-backed)" do
+    test "rfft basic" do
+      same_as_binary(
+        fn -> Nx.rfft(Nx.tensor([1.0, 1.0, 0.0, 0.0])) end,
+        fn -> Nx.rfft(Nx.tensor([1.0, 1.0, 0.0, 0.0], backend: Nx.BinaryBackend)) end
+      )
+    end
+
+    test "rfft signed-zero case" do
+      same_as_binary(
+        fn -> Nx.rfft(Nx.tensor([1.0, 1.0, 1.0, 0.0, 1.0, 1.0])) end,
+        fn ->
+          Nx.rfft(Nx.tensor([1.0, 1.0, 1.0, 0.0, 1.0, 1.0], backend: Nx.BinaryBackend))
+        end
+      )
+    end
+
+    test "rfft with axis and length options" do
+      same_as_binary(
+        fn ->
+          tensor = Nx.tensor([[1.0, 1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]])
+          Nx.rfft(tensor, axis: -2)
+        end,
+        fn ->
+          tensor =
+            Nx.tensor([[1.0, 1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]], backend: Nx.BinaryBackend)
+
+          Nx.rfft(tensor, axis: -2)
+        end
+      )
+    end
+
+    test "rfft vectorized" do
+      same_as_binary(
+        fn ->
+          Nx.tensor([[1.0, 1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]])
+          |> Nx.vectorize(:x)
+          |> Nx.rfft()
+        end,
+        fn ->
+          Nx.tensor([[1.0, 1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]], backend: Nx.BinaryBackend)
+          |> Nx.vectorize(:x)
+          |> Nx.rfft()
+        end
+      )
+    end
+
+    test "irfft basic" do
+      same_as_binary(
+        fn -> Nx.irfft(Nx.tensor([2.0, Complex.new(1.0, -1.0), 0.0])) end,
+        fn ->
+          Nx.irfft(Nx.tensor([2.0, Complex.new(1.0, -1.0), 0.0], backend: Nx.BinaryBackend))
+        end
+      )
+    end
+
+    test "irfft with length" do
+      same_as_binary(
+        fn -> Nx.irfft(Nx.tensor([5.0, 1.0, -1.0, 1.0])) end,
+        fn -> Nx.irfft(Nx.tensor([5.0, 1.0, -1.0, 1.0], backend: Nx.BinaryBackend)) end
+      )
+    end
+
+    test "irfft vectorized" do
+      same_as_binary(
+        fn ->
+          Nx.tensor([[2.0, Complex.new(1.0, -1.0), 0.0], [4.0, 0.0, 0.0]])
+          |> Nx.vectorize(:x)
+          |> Nx.irfft()
+        end,
+        fn ->
+          Nx.tensor([[2.0, Complex.new(1.0, -1.0), 0.0], [4.0, 0.0, 0.0]],
+            backend: Nx.BinaryBackend
+          )
+          |> Nx.vectorize(:x)
+          |> Nx.irfft()
+        end
+      )
+    end
   end
 
   describe "fft2 / ifft2 (block-backed)" do

@@ -17043,9 +17043,16 @@ defmodule Nx do
 
         tensor =
           cond do
-            actual_m > m -> slice_along_axis(tensor, 0, m, axis: axis)
-            actual_m < m -> pad(tensor, 0, List.replace_at(List.duplicate({0, 0, 0}, tuple_size(Nx.shape(tensor))), axis, {0, m - actual_m, 0}))
-            true -> tensor
+            actual_m > m ->
+              slice_along_axis(tensor, 0, m, axis: axis)
+
+            actual_m < m ->
+              zeros = List.duplicate({0, 0, 0}, tuple_size(Nx.shape(tensor)))
+              padding_config = List.replace_at(zeros, axis, {0, m - actual_m, 0})
+              pad(tensor, 0, padding_config)
+
+            true ->
+              tensor
           end
 
         # mirror_count = n - m handles both even and odd n:

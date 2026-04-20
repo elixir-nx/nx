@@ -4699,12 +4699,20 @@ defmodule Nx.Defn.GradTest do
       b = Nx.tensor([2, 3, 4])
 
       assert_all_close(
-        triangular_solve_grad_wrt_a(a, b, transform_a: :conjugate, left_side: false, lower: false),
+        triangular_solve_grad_wrt_a(a, b,
+          transform_a: :conjugate,
+          left_side: false,
+          lower: false
+        ),
         triangular_solve_grad_wrt_a(a, b, transform_a: :none, left_side: false, lower: false)
       )
 
       assert_all_close(
-        triangular_solve_grad_wrt_b(a, b, transform_a: :conjugate, left_side: false, lower: false),
+        triangular_solve_grad_wrt_b(a, b,
+          transform_a: :conjugate,
+          left_side: false,
+          lower: false
+        ),
         triangular_solve_grad_wrt_b(a, b, transform_a: :none, left_side: false, lower: false)
       )
     end
