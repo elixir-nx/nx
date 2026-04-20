@@ -1155,7 +1155,8 @@ defmodule Nx.LinAlg do
            names: List.duplicate(nil, tuple_size(r_shape))
        }}
 
-    Nx.block(struct!(Nx.Block.LinAlg.QR, opts), [tensor], output, fn %Nx.Block.LinAlg.QR{} = s, t ->
+    Nx.block(struct!(Nx.Block.LinAlg.QR, opts), [tensor], output, fn %Nx.Block.LinAlg.QR{} = s,
+                                                                     t ->
       opts = s |> Map.from_struct() |> Map.to_list()
       Nx.LinAlg.QR.qr(t, opts)
     end)
@@ -1402,7 +1403,8 @@ defmodule Nx.LinAlg do
       {%{tensor | names: eigenvals_name, type: output_type, shape: eigenvals_shape},
        %{tensor | names: eigenvecs_name, type: output_type, shape: eigenvecs_shape}}
 
-    Nx.block(struct!(Nx.Block.LinAlg.Eigh, opts), [tensor], output, fn %Nx.Block.LinAlg.Eigh{}, t ->
+    Nx.block(struct!(Nx.Block.LinAlg.Eigh, opts), [tensor], output, fn %Nx.Block.LinAlg.Eigh{},
+                                                                       t ->
       Nx.LinAlg.BlockEigh.eigh(t, opts)
     end)
     |> Nx.vectorize(vectorized_axes)
@@ -2001,18 +2003,23 @@ defmodule Nx.LinAlg do
                 "determinant/1 expects a square tensor, got tensor with shape: #{inspect(shape)}"
       end
 
-      Nx.block(%Nx.Block.LinAlg.Determinant{}, [tensor], output, fn %Nx.Block.LinAlg.Determinant{}, t ->
-        case matrix_shape do
-          [2, 2] ->
-            determinant_2by2(t)
+      Nx.block(
+        %Nx.Block.LinAlg.Determinant{},
+        [tensor],
+        output,
+        fn %Nx.Block.LinAlg.Determinant{}, t ->
+          case matrix_shape do
+            [2, 2] ->
+              determinant_2by2(t)
 
-          [3, 3] ->
-            determinant_3by3(t)
+            [3, 3] ->
+              determinant_3by3(t)
 
-          [n, n] ->
-            determinant_NbyN(t, batch_shape_n: List.to_tuple(batch_shape ++ [n]))
+            [n, n] ->
+              determinant_NbyN(t, batch_shape_n: List.to_tuple(batch_shape ++ [n]))
+          end
         end
-      end)
+      )
     end)
   end
 
