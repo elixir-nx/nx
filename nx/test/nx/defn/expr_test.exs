@@ -327,7 +327,7 @@ defmodule Nx.Defn.ExprTest do
              \s\s
                Nx.Defn.Expr
                parameter a:0                                             s32[2][2]
-               b = block %Nx.Block.QR{eps: 1.0e-10, mode: :reduced}, a   tuple2
+               b = block %Nx.Block.LinAlg.QR{eps: 1.0e-10, mode: :reduced}, a   tuple2
                c = elem b, 0                                             f32[2][2]
              >\
              """
@@ -338,7 +338,7 @@ defmodule Nx.Defn.ExprTest do
              \s\s
                Nx.Defn.Expr
                parameter a:0                                             s32[2][2]
-               b = block %Nx.Block.QR{eps: 1.0e-10, mode: :reduced}, a   tuple2
+               b = block %Nx.Block.LinAlg.QR{eps: 1.0e-10, mode: :reduced}, a   tuple2
                c = elem b, 1                                             f32[2][2]
              >\
              """

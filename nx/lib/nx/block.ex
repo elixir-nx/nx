@@ -6,31 +6,31 @@ defmodule Nx.Block.Phase do
   defstruct []
 end
 
-defmodule Nx.Block.Cholesky do
+defmodule Nx.Block.LinAlg.Cholesky do
   defstruct []
 end
 
-defmodule Nx.Block.Solve do
+defmodule Nx.Block.LinAlg.Solve do
   defstruct []
 end
 
-defmodule Nx.Block.QR do
+defmodule Nx.Block.LinAlg.QR do
   defstruct eps: 1.0e-10, mode: :reduced
 end
 
-defmodule Nx.Block.Eigh do
+defmodule Nx.Block.LinAlg.Eigh do
   defstruct max_iter: 1000, eps: 1.0e-4
 end
 
-defmodule Nx.Block.SVD do
+defmodule Nx.Block.LinAlg.SVD do
   defstruct max_iter: 100, full_matrices?: true
 end
 
-defmodule Nx.Block.LU do
+defmodule Nx.Block.LinAlg.LU do
   defstruct eps: 1.0e-10
 end
 
-defmodule Nx.Block.Determinant do
+defmodule Nx.Block.LinAlg.Determinant do
   defstruct []
 end
 

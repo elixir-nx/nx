@@ -53,11 +53,11 @@ defmodule Torchx.Backend do
     # For MPS device, some linear algebra operations are not supported.
     # Delegate to default implementation which will fall back to elementary Nx operations.
     mps_unsupported = [
-      Nx.Block.LU,
-      Nx.Block.Eigh,
-      Nx.Block.Solve,
-      Nx.Block.Determinant,
-      Nx.Block.Cholesky
+      Nx.Block.LinAlg.LU,
+      Nx.Block.LinAlg.Eigh,
+      Nx.Block.LinAlg.Solve,
+      Nx.Block.LinAlg.Determinant,
+      Nx.Block.LinAlg.Cholesky
     ]
 
     device =
@@ -70,25 +70,25 @@ defmodule Torchx.Backend do
       apply(fun, [struct | args])
     else
       case {block_name, args} do
-        {Nx.Block.QR, [t]} ->
+        {Nx.Block.LinAlg.QR, [t]} ->
           qr_impl(t, mode: struct.mode, eps: struct.eps)
 
-        {Nx.Block.LU, [t]} ->
+        {Nx.Block.LinAlg.LU, [t]} ->
           lu_impl(t)
 
-        {Nx.Block.Eigh, [t]} ->
+        {Nx.Block.LinAlg.Eigh, [t]} ->
           eigh_impl(t, max_iter: struct.max_iter, eps: struct.eps)
 
-        {Nx.Block.Solve, [a, b]} ->
+        {Nx.Block.LinAlg.Solve, [a, b]} ->
           solve_impl(a, b)
 
-        {Nx.Block.Cholesky, [t]} ->
+        {Nx.Block.LinAlg.Cholesky, [t]} ->
           cholesky_impl(t)
 
-        {Nx.Block.SVD, [t]} ->
+        {Nx.Block.LinAlg.SVD, [t]} ->
           svd_impl(t, max_iter: struct.max_iter, full_matrices?: struct.full_matrices?)
 
-        {Nx.Block.Determinant, [t]} ->
+        {Nx.Block.LinAlg.Determinant, [t]} ->
           determinant_impl(t)
 
         {Nx.Block.TakeAlongAxis, [tensor, indices]} ->

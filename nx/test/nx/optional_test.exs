@@ -27,8 +27,8 @@ defmodule Nx.OptionalTest do
       |> Nx.backend_transfer(__MODULE__)
     end
 
-    def block(%Nx.Block.Solve{}, out, [a, b], _fun), do: solve(out, a, b)
-    def block(%Nx.Block.Determinant{}, out, [t], _fun), do: determinant(out, t)
+    def block(%Nx.Block.LinAlg.Solve{}, out, [a, b], _fun), do: solve(out, a, b)
+    def block(%Nx.Block.LinAlg.Determinant{}, out, [t], _fun), do: determinant(out, t)
 
     def block(struct, _output, args, fun) do
       apply(fun, [struct | args])
@@ -255,7 +255,7 @@ defmodule Nx.OptionalTest do
                \s\s
                  Nx.Defn.Expr
                  parameter a:0                          s32[3][3]
-                 b = block %Nx.Block.Determinant{}, a   f32
+                 b = block %Nx.Block.LinAlg.Determinant{}, a   f32
                >
                """
       end
@@ -271,7 +271,7 @@ defmodule Nx.OptionalTest do
                \s\s
                  Nx.Defn.Expr
                  parameter a:0                          s32[3][3]
-                 b = block %Nx.Block.Determinant{}, a   f32
+                 b = block %Nx.Block.LinAlg.Determinant{}, a   f32
                >
                """
     end

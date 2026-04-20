@@ -605,7 +605,7 @@ defmodule EXLA.Defn do
          %T{
            data: %Expr{
              args: [
-               %Nx.Block.QR{},
+               %Nx.Block.LinAlg.QR{},
                [tensor],
                {%{type: {type_kind, _}} = q_expr, r_expr},
                _callback
@@ -636,7 +636,7 @@ defmodule EXLA.Defn do
          %T{
            data: %Expr{
              args: [
-               %Nx.Block.Eigh{},
+               %Nx.Block.LinAlg.Eigh{},
                [tensor],
                {%{type: {evec_type_kind, _}} = eigenvals_expr,
                 %{type: {eval_type_kind, _}} = eigenvecs_expr},
