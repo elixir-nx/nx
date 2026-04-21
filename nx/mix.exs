@@ -126,7 +126,8 @@ defmodule Nx.MixProject do
           Nx.Defn.Graph,
           Nx.Defn.Token,
           Nx.Defn.Tree
-        ]
+        ],
+        Blocks: ~r/^Nx\.Block\./
       ],
       groups_for_extras: [
         "Getting Started": ~r"^guides/getting_started/",

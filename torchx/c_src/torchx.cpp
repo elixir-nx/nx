@@ -866,6 +866,22 @@ ifft(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor, int64_t length,
 REGISTER_TENSOR_NIF(ifft);
 
 fine::Ok<fine::ResourcePtr<TorchTensor>>
+rfft(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor, int64_t length,
+     int64_t axis) {
+  return tensor_ok(torch::fft::rfft(get_tensor(tensor), length, axis));
+}
+
+REGISTER_TENSOR_NIF(rfft);
+
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+irfft(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor, int64_t length,
+      int64_t axis) {
+  return tensor_ok(torch::fft::irfft(get_tensor(tensor), length, axis));
+}
+
+REGISTER_TENSOR_NIF(irfft);
+
+fine::Ok<fine::ResourcePtr<TorchTensor>>
 fft2(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
      std::vector<int64_t> lengths, std::vector<int64_t> axes) {
   return tensor_ok(torch::fft::fft2(

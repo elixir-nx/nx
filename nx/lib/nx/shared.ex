@@ -483,49 +483,6 @@ defmodule Nx.Shared do
              end)
   end
 
-  @doc """
-  Used to define an Nx callback with an optional implementation.
-
-  The given body is used as the default implementation otherwise.
-  """
-  def optional(function_name, args, output, default_impl)
-      when is_atom(function_name) and is_list(args) and is_function(default_impl) do
-    arity = length(args) + 1
-    backend = list_impl!(args)
-
-    cond do
-      function_exported?(backend, function_name, arity) ->
-        apply(backend, function_name, [output | args])
-
-      function_exported?(backend, :optional, 3) ->
-        backend.optional(function_name, args, default_impl)
-        |> ensure_optional_compatible!(output)
-
-      true ->
-        default_impl
-        |> apply(args)
-        |> ensure_optional_compatible!(output)
-    end
-  end
-
-  defp ensure_optional_compatible!(left, right) when tuple_size(left) == tuple_size(right) do
-    [Tuple.to_list(left), Tuple.to_list(right)]
-    |> Enum.zip_with(fn [l, r] -> ensure_optional_compatible!(l, r) end)
-
-    left
-  end
-
-  defp ensure_optional_compatible!(
-         %{shape: shape, type: type, names: names} = left,
-         %{shape: shape, type: type, names: names}
-       ),
-       do: left
-
-  defp ensure_optional_compatible!(left, right) do
-    raise ArgumentError,
-          "expected default implementation to match template #{inspect(right)}, got: #{inspect(left)}"
-  end
-
   @doc false
   def raise_complex_not_supported(function, arity) do
     raise ArgumentError, "Nx.#{function}/#{arity} does not support complex inputs"

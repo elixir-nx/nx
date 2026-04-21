@@ -6876,10 +6876,35 @@ defmodule Nx do
     apply_vectorized(tensor, fn tensor ->
       output = Nx.template(tensor.shape, {:u, 8}, names: tensor.names)
 
-      Nx.Shared.optional(:logical_not, [tensor], output, fn tensor ->
-        element_wise_pred_op(tensor, 0, :equal)
+      block(%Nx.Block.LogicalNot{}, [tensor], output, fn %Nx.Block.LogicalNot{}, t ->
+        element_wise_pred_op(t, 0, :equal)
       end)
     end)
+  end
+
+  @doc """
+  Executes an extensible computation block.
+
+  `struct` identifies the block and carries static configuration. `args` is a
+  list of runtime inputs and `output` is the output template. The default
+  implementation `fun` receives the struct first and then each argument in
+  order (`apply(fun, [struct | args])`).
+
+  The backend’s `c:Nx.Backend.block/4` receives `struct`, `output`, `args`, and `fun`, and
+  should either run a native implementation or invoke the default as
+  `apply(fun, [struct | args])`.
+  """
+  @doc type: :element
+  def block(struct, args, output, fun) when is_list(args) do
+    arity = length(args) + 1
+
+    unless is_function(fun, arity) do
+      raise ArgumentError,
+            "Nx.block/4 expected a default fun/#{arity} for #{length(args)} argument(s), got: #{inspect(fun)}"
+    end
+
+    backend = Nx.Shared.list_impl!(args)
+    backend.block(struct, output, args, fun)
   end
 
   @doc """
@@ -8318,10 +8343,10 @@ defmodule Nx do
     apply_vectorized(tensor, fn tensor ->
       output = %{tensor | type: Nx.Type.to_real(tensor.type)}
 
-      Nx.Shared.optional(:phase, [tensor], output, fn tensor ->
-        tensor
+      block(%Nx.Block.Phase{}, [tensor], output, fn %Nx.Block.Phase{}, t ->
+        t
         |> imag
-        |> atan2(real(tensor))
+        |> atan2(real(t))
       end)
     end)
   end
@@ -8787,6 +8812,10 @@ defmodule Nx do
 
   is true for all elements of a and b.
 
+  For **integer** tensors, `absolute(b)` in the tolerance bound is evaluated in
+  `f64` so that the most negative signed value (e.g. `s8` `-128`) does not
+  overflow `abs` in the original narrow type.
+
   ## Options
 
    * `:rtol` - relative tolerance between numbers, as described above. Defaults to 1.0e-5
@@ -8858,6 +8887,17 @@ defmodule Nx do
         0
       >
 
+  Integer tensors where `b` contains the minimum signed value (e.g. `s8` `-128`) still compare equal to themselves:
+
+      iex> a = Nx.tensor([[5, 6], [7, 8]], type: :s8)
+      iex> b = Nx.tensor([[1, 2], [3, 4]], type: :s8)
+      iex> x = Nx.left_shift(a, b)
+      iex> Nx.all_close(x, x)
+      #Nx.Tensor<
+        u8
+        1
+      >
+
   ## Vectorized tensors
 
   Vectorized inputs have their vectorized axes broadcast together
@@ -8893,12 +8933,15 @@ defmodule Nx do
     if vectorized_axes != [] do
       vectorized_all_close(a, b, opts)
     else
-      Nx.Shared.optional(
-        :all_close,
-        [a, b, opts],
-        %{a | names: [], shape: {}, type: {:u, 8}},
-        &vectorized_all_close/3
-      )
+      out = %{a | names: [], shape: {}, type: {:u, 8}}
+
+      block(struct!(Nx.Block.AllClose, opts), [a, b], out, fn %Nx.Block.AllClose{} = o, a, b ->
+        vectorized_all_close(a, b,
+          equal_nan: o.equal_nan,
+          rtol: o.rtol,
+          atol: o.atol
+        )
+      end)
     end
   end
 
@@ -8906,7 +8949,14 @@ defmodule Nx do
     atol = opts[:atol]
     rtol = opts[:rtol]
 
-    finite_entries = less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
+    finite_entries =
+      if Nx.Type.integer?(a.type) and Nx.Type.integer?(b.type) do
+        # abs(min_signed) overflows in the same width (e.g. s8 -128); widen before abs for rtol*abs(b)
+        abs_b = Nx.abs(Nx.as_type(b, {:f, 64}))
+        less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, abs_b)))
+      else
+        less_equal(Nx.abs(subtract(a, b)), add(atol, multiply(rtol, Nx.abs(b))))
+      end
 
     if Nx.Type.integer?(a.type) and Nx.Type.integer?(b.type) do
       all(finite_entries)
@@ -11510,14 +11560,21 @@ defmodule Nx do
   def cumulative_max(tensor, opts \\ []),
     do: cumulative_op(tensor, opts, :cumulative_max, &Nx.max/2)
 
+  defp cumulative_op_block(:cumulative_sum), do: %Nx.Block.CumulativeSum{}
+  defp cumulative_op_block(:cumulative_product), do: %Nx.Block.CumulativeProduct{}
+  defp cumulative_op_block(:cumulative_min), do: %Nx.Block.CumulativeMin{}
+  defp cumulative_op_block(:cumulative_max), do: %Nx.Block.CumulativeMax{}
+
   defp cumulative_op(tensor, opts, op, reduce_fun) do
     apply_vectorized(tensor, fn tensor, offset ->
       opts = keyword!(opts, axis: 0, reverse: false)
       reverse = opts[:reverse]
       axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names, offset)
 
-      Nx.Shared.optional(op, [tensor, [axis: axis, reverse: reverse]], tensor, fn tensor, opts ->
-        associative_scan(tensor, reduce_fun, opts)
+      block = struct(cumulative_op_block(op), axis: axis, reverse: reverse)
+
+      block(block, [tensor], tensor, fn ^block, tensor ->
+        associative_scan(tensor, reduce_fun, axis: axis, reverse: reverse)
       end)
     end)
   end
@@ -14270,17 +14327,18 @@ defmodule Nx do
       indices = devectorize(indices, keep_names: false)
       out = %{tensor | shape: inner_shape, names: inner_names}
 
-      Nx.Shared.optional(:take, [tensor, indices, [axis: axis]], out, fn tensor, indices, _opts ->
-        gather_indices = new_axis(indices, rank(indices))
-        {indices_axes, tensor_axes} = Enum.split(axes(inner_shape), rank(indices))
-        {leading, trailing} = Enum.split(tensor_axes, axis)
+      block(struct!(Nx.Block.Take, axis: axis), [tensor, indices], out, fn
+        %Nx.Block.Take{}, tensor, indices ->
+          gather_indices = new_axis(indices, rank(indices))
+          {indices_axes, tensor_axes} = Enum.split(axes(inner_shape), rank(indices))
+          {leading, trailing} = Enum.split(tensor_axes, axis)
 
-        transpose_axes = leading ++ indices_axes ++ trailing
+          transpose_axes = leading ++ indices_axes ++ trailing
 
-        tensor
-        |> gather(gather_indices, axes: [axis])
-        |> transpose(axes: transpose_axes)
-        |> rename(inner_names)
+          tensor
+          |> gather(gather_indices, axes: [axis])
+          |> transpose(axes: transpose_axes)
+          |> rename(inner_names)
       end)
     end
   end
@@ -14449,8 +14507,11 @@ defmodule Nx do
     out = %{tensor | shape: shape}
 
     result =
-      Nx.Shared.optional(:take_along_axis, [tensor, indices, [axis: axis]], out, fn
-        tensor, indices, _opts ->
+      block(
+        struct!(Nx.Block.TakeAlongAxis, axis: axis),
+        [tensor, indices],
+        out,
+        fn %Nx.Block.TakeAlongAxis{}, tensor, indices ->
           axes_range = axes(indices)
           new_axis_shape = tuple_append(shape(indices), 1)
 
@@ -14465,7 +14526,8 @@ defmodule Nx do
           tensor
           |> gather(full_indices)
           |> rename(tensor.names)
-      end)
+        end
+      )
 
     vectorize(result, vectorized_axes)
   end
@@ -15263,16 +15325,21 @@ defmodule Nx do
       out_values = %{tensor | shape: output_shape, names: output_names}
       out_indices = %{tensor | shape: output_shape, names: output_names, type: {:s, 32}}
 
-      Nx.Shared.optional(:top_k, [tensor, opts], {out_values, out_indices}, fn tensor, opts ->
-        k = Keyword.fetch!(opts, :k)
-        rank = rank(tensor)
+      block(
+        struct!(Nx.Block.TopK, k: opts[:k]),
+        [tensor],
+        {out_values, out_indices},
+        fn %Nx.Block.TopK{} = top_k, tensor ->
+          k = top_k.k
+          rank = rank(tensor)
 
-        indices = argsort(tensor, axis: rank - 1, direction: :desc)
-        values = Nx.take_along_axis(tensor, indices, axis: rank - 1)
+          indices = argsort(tensor, axis: rank - 1, direction: :desc)
+          values = Nx.take_along_axis(tensor, indices, axis: rank - 1)
 
-        {slice_along_axis(values, 0, k, axis: rank - 1),
-         slice_along_axis(indices, 0, k, axis: rank - 1)}
-      end)
+          {slice_along_axis(values, 0, k, axis: rank - 1),
+           slice_along_axis(indices, 0, k, axis: rank - 1)}
+        end
+      )
     end)
   end
 
@@ -16704,12 +16771,17 @@ defmodule Nx do
 
       out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
 
-      opts = Keyword.take(opts, [:eps]) |> Keyword.merge(lengths: [l1, l2], axes: [ax1, ax2])
+      block_struct =
+        if kind == :fft2 do
+          struct!(Nx.Block.FFT2, eps: opts[:eps], lengths: [l1, l2], axes: [ax1, ax2])
+        else
+          struct!(Nx.Block.IFFT2, eps: opts[:eps], lengths: [l1, l2], axes: [ax1, ax2])
+        end
 
-      Nx.Shared.optional(kind, [tensor, opts], out, fn tensor, opts ->
-        [ax1, ax2] = opts[:axes]
-        [l1, l2] = opts[:lengths]
-        eps = opts[:eps]
+      block(block_struct, [tensor], out, fn s, tensor ->
+        [ax1, ax2] = s.axes
+        [l1, l2] = s.lengths
+        eps = s.eps
 
         if kind == :fft2 do
           tensor
@@ -16720,6 +16792,283 @@ defmodule Nx do
           |> ifft(axis: ax2, length: l2, eps: eps)
           |> ifft(axis: ax1, length: l1, eps: eps)
         end
+      end)
+    end)
+  end
+
+  @doc """
+  Calculates the real-input DFT of the given tensor.
+
+  Exploits the conjugate-symmetry property of the DFT for real inputs by
+  computing the full FFT and returning only the non-redundant first
+  `floor(length / 2) + 1` frequency components along the transform axis.
+
+  ## Options
+
+    * `:eps` - Threshold which backends can use for cleaning-up results. Defaults to `1.0e-10`.
+    * `:length` - Either a positive integer or `:power_of_two`. Will pad or slice the tensor
+      along the transform axis accordingly. `:power_of_two` will automatically pad to the
+      next power of two. Defaults to the axis size.
+    * `:axis` - the axis upon which the real DFT will be calculated. Defaults to the last axis.
+
+  ## Examples
+
+      iex> Nx.rfft(Nx.tensor([1.0, 1.0, 0.0, 0.0]))
+      #Nx.Tensor<
+        c64[3]
+        [2.0+0.0i, 1.0-1.0i, 0.0+0.0i]
+      >
+
+      iex> Nx.rfft(Nx.tensor([1.0, 1.0, 1.0, 0.0, 1.0, 1.0]))
+      #Nx.Tensor<
+        c64[4]
+        [5.0+0.0i, 1.0+0.0i, -1.0+0.0i, 1.0+0.0i]
+      >
+
+  The calculation can happen on a specific axis:
+
+      iex> tensor = Nx.tensor([[1.0, 1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]])
+      iex> Nx.rfft(tensor, axis: -1)
+      #Nx.Tensor<
+        c64[2][3]
+        [
+          [2.0+0.0i, 1.0-1.0i, 0.0+0.0i],
+          [1.0+0.0i, 1.0+0.0i, 1.0+0.0i]
+        ]
+      >
+      iex> Nx.rfft(tensor, axis: -2)
+      #Nx.Tensor<
+        c64[2][4]
+        [
+          [2.0+0.0i, 1.0+0.0i, 0.0+0.0i, 0.0+0.0i],
+          [0.0+0.0i, 1.0+0.0i, 0.0+0.0i, 0.0+0.0i]
+        ]
+      >
+
+  Padding and slicing can be introduced through `:length`:
+
+      iex> Nx.rfft(Nx.tensor([1.0, 1.0]), length: 4)
+      #Nx.Tensor<
+        c64[3]
+        [2.0+0.0i, 1.0-1.0i, 0.0+0.0i]
+      >
+
+      iex> Nx.rfft(Nx.tensor([1.0, 1.0, 0.0]), length: :power_of_two)
+      #Nx.Tensor<
+        c64[3]
+        [2.0+0.0i, 1.0-1.0i, 0.0+0.0i]
+      >
+
+  ## Vectorized tensors
+
+  Vectorized tensors work the same as N-dimensional tensors
+
+      iex> tensor = Nx.tensor([[1.0, 1.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]]) |> Nx.vectorize(:x)
+      iex> Nx.rfft(tensor)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        c64[3]
+        [
+          [2.0+0.0i, 1.0-1.0i, 0.0+0.0i],
+          [1.0+0.0i, 1.0+0.0i, 1.0+0.0i]
+        ]
+      >
+
+  ## Error Cases
+
+      iex> Nx.rfft(Nx.tensor([Complex.new(1, 0), Complex.new(0, 1)]))
+      ** (ArgumentError) Nx.rfft/2 expects a real tensor, got type: {:c, 64}
+
+      iex> Nx.rfft(Nx.tensor([1.0, 1.0]), length: :invalid)
+      ** (ArgumentError) expected an integer or :power_of_two as length, got: :invalid
+  """
+  @doc type: :ndim
+  def rfft(tensor, opts \\ []) do
+    tensor = to_tensor(tensor)
+
+    if Nx.Type.complex?(tensor.type) do
+      raise ArgumentError, "Nx.rfft/2 expects a real tensor, got type: #{inspect(tensor.type)}"
+    end
+
+    apply_vectorized(tensor, fn tensor, offset ->
+      shape = Nx.Shape.fft(tensor.shape)
+      opts = Keyword.validate!(opts, [:length, axis: -1, eps: 1.0e-10])
+
+      axis = Nx.Shape.normalize_axis(shape, opts[:axis], tensor.names, offset)
+      n = elem(shape, axis)
+
+      length =
+        case opts[:length] do
+          :power_of_two ->
+            2 ** Kernel.ceil(:math.log2(n))
+
+          nil ->
+            n
+
+          n when is_integer(n) and n > 0 ->
+            n
+
+          length ->
+            raise ArgumentError,
+                  "expected an integer or :power_of_two as length, got: #{inspect(length)}"
+        end
+
+      rfft_length = div(length, 2) + 1
+
+      output_shape =
+        shape
+        |> Tuple.insert_at(axis, rfft_length)
+        |> Tuple.delete_at(axis + 1)
+
+      out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
+      block_struct = struct!(Nx.Block.RFFT, eps: opts[:eps], length: length, axis: axis)
+
+      block(block_struct, [tensor], out, fn s, tensor ->
+        tensor
+        |> fft(length: s.length, axis: s.axis, eps: s.eps)
+        |> slice_along_axis(0, div(s.length, 2) + 1, axis: s.axis)
+      end)
+    end)
+  end
+
+  @doc """
+  Calculates the Inverse real-input DFT of the given tensor.
+
+  Reconstructs a real-valued signal from a one-sided complex spectrum produced
+  by `rfft/2`. The input is assumed to contain the non-redundant Hermitian half
+  of a spectrum of length `n` (i.e. `floor(n / 2) + 1` elements along the
+  transform axis). The missing conjugate-symmetric components are derived
+  automatically before calling `ifft/2`.
+
+  ## Options
+
+    * `:eps` - Threshold which backends can use for cleaning-up results. Defaults to `1.0e-10`.
+    * `:length` - A positive integer specifying the output signal length `n`. Defaults to
+      `2 * (m - 1)` where `m` is the axis size of the input, which assumes the original
+      signal had even length. Pass an explicit `:length` to recover odd-length signals.
+    * `:axis` - the axis upon which the Inverse real DFT will be calculated. Defaults to the
+      last axis.
+
+  ## Examples
+
+      iex> Nx.irfft(Nx.tensor([2.0, Complex.new(1.0, -1.0), 0.0]))
+      #Nx.Tensor<
+        f32[4]
+        [1.0, 1.0, 0.0, 0.0]
+      >
+
+      iex> Nx.irfft(Nx.tensor([5.0, 1.0, -1.0, 1.0]))
+      #Nx.Tensor<
+        f32[6]
+        [1.0, 1.0, 1.0, 0.0, 1.0, 1.0]
+      >
+
+  The calculation can happen on a specific axis:
+
+      iex> tensor = Nx.tensor([[2.0, Complex.new(1.0, -1.0), 0.0], [4.0, 0.0, 0.0]])
+      iex> Nx.irfft(tensor, axis: -1)
+      #Nx.Tensor<
+        f32[2][4]
+        [
+          [1.0, 1.0, 0.0, 0.0],
+          [1.0, 1.0, 1.0, 1.0]
+        ]
+      >
+
+  An explicit `:length` recovers odd-length signals and controls input truncation:
+
+      iex> Nx.irfft(Nx.tensor([2.0, Complex.new(1.0, -1.0), 0.0]), length: 4)
+      #Nx.Tensor<
+        f32[4]
+        [1.0, 1.0, 0.0, 0.0]
+      >
+
+  ## Vectorized tensors
+
+  Vectorized tensors work the same as N-dimensional tensors
+
+      iex> tensor = Nx.tensor([[2.0, Complex.new(1.0, -1.0), 0.0], [4.0, 0.0, 0.0]]) |> Nx.vectorize(:x)
+      iex> Nx.irfft(tensor)
+      #Nx.Tensor<
+        vectorized[x: 2]
+        f32[4]
+        [
+          [1.0, 1.0, 0.0, 0.0],
+          [1.0, 1.0, 1.0, 1.0]
+        ]
+      >
+
+  ## Error Cases
+
+      iex> Nx.irfft(Nx.tensor([1.0, 1.0]), length: :invalid)
+      ** (ArgumentError) expected a positive integer as length, got: :invalid
+  """
+  @doc type: :ndim
+  def irfft(tensor, opts \\ []) do
+    apply_vectorized(tensor, fn tensor, offset ->
+      shape = Nx.Shape.fft(tensor.shape)
+      opts = Keyword.validate!(opts, [:length, axis: -1, eps: 1.0e-10])
+
+      axis = Nx.Shape.normalize_axis(shape, opts[:axis], tensor.names, offset)
+      actual_m = elem(shape, axis)
+
+      n =
+        case opts[:length] do
+          nil ->
+            2 * (actual_m - 1)
+
+          n when is_integer(n) and n > 0 ->
+            n
+
+          length ->
+            raise ArgumentError,
+                  "expected a positive integer as length, got: #{inspect(length)}"
+        end
+
+      output_shape =
+        shape
+        |> Tuple.insert_at(axis, n)
+        |> Tuple.delete_at(axis + 1)
+
+      out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_real(tensor.type)})
+      block_struct = struct(Nx.Block.IRFFT, eps: opts[:eps], length: n, axis: axis)
+
+      block(block_struct, [tensor], out, fn s, tensor ->
+        axis = s.axis
+        n = s.length
+        m = div(n, 2) + 1
+
+        actual_m = elem(Nx.shape(tensor), axis)
+
+        tensor =
+          cond do
+            actual_m > m ->
+              slice_along_axis(tensor, 0, m, axis: axis)
+
+            actual_m < m ->
+              zeros = List.duplicate({0, 0, 0}, tuple_size(Nx.shape(tensor)))
+              padding_config = List.replace_at(zeros, axis, {0, m - actual_m, 0})
+              pad(tensor, 0, padding_config)
+
+            true ->
+              tensor
+          end
+
+        # mirror_count = n - m handles both even and odd n:
+        # even n=8: m=5, mirror indices 1..3 (3 elements), total=8
+        # odd n=7:  m=4, mirror indices 1..3 (3 elements), total=7
+        mirror_count = n - m
+
+        mirror =
+          tensor
+          |> slice_along_axis(1, mirror_count, axis: axis)
+          |> conjugate()
+          |> reverse(axes: [axis])
+
+        [tensor, mirror]
+        |> concatenate(axis: axis)
+        |> ifft(axis: axis, eps: s.eps)
+        |> real()
       end)
     end)
   end
@@ -16961,7 +17310,10 @@ defmodule Nx do
       the returned value represents an IPC handle that can be shared between
       processes. Defaults to `:local`.
 
-  Other options are relayed to the backend.
+  Other options are relayed to the backend. For example, the EXLA backend
+  accepts `:permissions` (defaults to `0o400`, owner-read-only) to
+  control the file mode bits of the `shm_open` shared memory segment used
+  for `:ipc` mode on host clients.
 
   ## Examples
 

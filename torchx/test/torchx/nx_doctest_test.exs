@@ -4,6 +4,11 @@ defmodule Torchx.NxDoctestTest do
 
   Many tests are excluded for the reasons below, coverage
   for the excluded tests can be found on Torchx.NxTest.
+
+  `Nx.fft2/2`, `Nx.ifft2/2`, `Nx.rfft/2`, and `Nx.irfft/2` are implemented via `Nx.block/4`.
+  Doctest expectations are written for `Nx.BinaryBackend` string `inspect/1` output;
+  LibTorch can produce signed zeros so complex `inspect` differs.
+  Those doctests are excluded here; see `Torchx.NxBlockTest` for numerical checks.
   """
 
   use ExUnit.Case, async: true
@@ -21,6 +26,10 @@ defmodule Torchx.NxDoctestTest do
     round: 1,
     fft: 2,
     ifft: 2,
+    fft2: 2,
+    ifft2: 2,
+    rfft: 2,
+    irfft: 2,
     expm1: 1,
     standard_deviation: 2
   ]

@@ -502,6 +502,15 @@ defmodule NxTest do
     end
   end
 
+  describe "all_close/3" do
+    test "integer tensors with minimum signed value in tolerance bound (s8 -128)" do
+      a = Nx.tensor([[5, 6], [7, 8]], type: :s8)
+      b = Nx.tensor([[1, 2], [3, 4]], type: :s8)
+      x = Nx.left_shift(a, b)
+      assert Nx.all_close(x, x) |> Nx.to_number() == 1
+    end
+  end
+
   describe "reverse" do
     test "works on all dims" do
       assert Nx.reverse(Nx.iota({10})) == Nx.tensor([9, 8, 7, 6, 5, 4, 3, 2, 1, 0])

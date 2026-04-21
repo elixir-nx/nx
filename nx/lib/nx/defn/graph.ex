@@ -565,7 +565,7 @@ defmodule Nx.Defn.Graph do
   end
 
   defp rewrite_subtree(
-         %T{data: %Expr{op: :optional, id: id, args: [call, subexpr, fun]}} = expr,
+         %T{data: %Expr{op: :block, id: id, args: [struct, in_args, subexpr, fun]}} = expr,
          state,
          acc
        ) do
@@ -574,12 +574,12 @@ defmodule Nx.Defn.Graph do
         {res, put_in(acc.used_args[id], res)}
 
       _ ->
-        {call, acc} = rewrite_subtree(call, state, acc)
+        {in_args, acc} = composite_rewrite_subtree(in_args, state, acc)
         # `subexpr` is hermetic, in the sense that it is a self-contained scope
-        # from which the arguments always come from `call`, so we can
+        # from which the arguments always come from `in_args`, so we can
         # keep it as is.
 
-        {put_in(expr.data.args, [call, subexpr, fun]), acc}
+        {put_in(expr.data.args, [struct, in_args, subexpr, fun]), acc}
     end
   end
 

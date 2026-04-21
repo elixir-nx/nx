@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <string>
 #include <tuple>
+#include <unistd.h>
 #include <unordered_map>
 
 #include "absl/log/globals.h"
@@ -306,10 +307,10 @@ FINE_NIF(mlir_compile, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 // ExlaBuffer Functions
 
 std::variant<std::tuple<fine::Atom, uint64_t, uint64_t>,
-             std::tuple<fine::Atom, std::string, uint64_t, uint64_t>,
              std::tuple<fine::Atom, std::string, uint64_t>>
 get_buffer_device_pointer(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
-                          fine::Term buffer_term, fine::Atom pointer_kind) {
+                          fine::Term buffer_term, fine::Atom pointer_kind,
+                          int64_t shm_permissions) {
   auto buffer = decode_exla_buffer(env, buffer_term);
 
   uint64_t device_size = unwrap(buffer->GetOnDeviceSizeInBytes());
@@ -321,22 +322,38 @@ get_buffer_device_pointer(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
 
   if (pointer_kind == "host_ipc") {
     auto handle_name =
-        "exla:ipc:" + std::to_string(device_size) + ":" + std::to_string(ptr);
-    auto fd = get_ipc_handle(handle_name.c_str(), device_size);
+        "exla:ipc:" + std::to_string(getpid()) + ":" + std::to_string(ptr);
+    auto fd = get_ipc_handle(handle_name.c_str(), device_size,
+                             static_cast<mode_t>(shm_permissions));
 
     if (fd == -1) {
       throw std::runtime_error("unable to get IPC handle");
     }
 
-    auto ipc_ptr = open_ipc_handle(fd, device_size);
+    auto ipc_ptr = open_ipc_handle(fd, device_size, /*writable=*/1);
     if (ipc_ptr == nullptr) {
       throw std::runtime_error("unable to open IPC handle");
     }
 
     memcpy(ipc_ptr, reinterpret_cast<void *>(ptr), device_size);
 
-    return std::make_tuple(pointer_kind, handle_name, static_cast<uint64_t>(fd),
-                           device_size);
+    // Repoint the original buffer at the shm mapping so both the exporter
+    // and any importers share the same physical pages.  This also frees
+    // the old XLA-managed memory, avoiding double memory usage.
+    auto shape = unwrap(buffer->buffer()->logical_on_device_shape());
+    auto device = unwrap(client->client()->LookupDevice(
+        xla::PjRtGlobalDeviceId(buffer->device_id())));
+    auto memory_space = unwrap(device->default_memory_space());
+
+    auto on_delete = [fd, ipc_ptr, device_size, handle_name]() {
+      close_ipc_handle(fd, ipc_ptr, handle_name.c_str(), device_size);
+    };
+
+    auto new_pjrt_buf = unwrap(client->client()->CreateViewOfDeviceBuffer(
+        ipc_ptr, shape, memory_space, on_delete));
+    buffer->ReplaceBuffer(std::move(new_pjrt_buf));
+
+    return std::make_tuple(pointer_kind, handle_name, device_size);
   }
 
   if (pointer_kind == "cuda_ipc") {
@@ -369,17 +386,20 @@ fine::ResourcePtr<ExlaBuffer> create_buffer_from_device_pointer(
     }
     ptr = maybe_pointer.value();
   } else if (pointer_kind == "host_ipc") {
-    auto tuple =
-        fine::decode<std::tuple<uint64_t, std::string>>(env, pointer_data);
-    auto fd = std::get<0>(tuple);
-    auto memname = std::get<1>(tuple);
+    auto memname = fine::decode<std::string>(env, pointer_data);
     auto device_size = xla::ShapeUtil::ByteSizeOf(shape);
-    ptr = open_ipc_handle(fd, device_size);
+    int writable = 0;
+    auto fd = open_existing_ipc_handle(memname.c_str(), &writable);
+    if (fd == -1) {
+      throw std::runtime_error("unable to get fd for IPC handle");
+    }
+    ptr = open_ipc_handle(fd, device_size, writable);
     if (ptr == nullptr) {
+      close(fd);
       throw std::runtime_error("unable to get pointer for IPC handle");
     }
-    on_delete_callback = [fd, memname, ptr, device_size]() {
-      close_ipc_handle(fd, ptr, memname.c_str(), device_size);
+    on_delete_callback = [fd, ptr, device_size]() {
+      close_imported_ipc_handle(fd, ptr, device_size);
     };
   } else if (pointer_kind == "local") {
     auto ptr_int = fine::decode<int64_t>(env, pointer_data);
@@ -676,6 +696,22 @@ fine::Ok<> start_log_sink(ErlNifEnv *env, ErlNifPid logger_pid) {
 }
 
 FINE_NIF(start_log_sink, 0);
+
+// Test-only NIFs — excluded from production builds.
+#ifndef EXLA_PROD
+
+// Writes `data` into the memory at `address + offset`.  Intentionally unsafe:
+// no bounds checking.  The caller is responsible for ensuring the pointer is
+// valid and the region is large enough.
+fine::Ok<> write_to_pointer(ErlNifEnv *env, uint64_t address,
+                            ErlNifBinary data, uint64_t offset) {
+  uint8_t *ptr = reinterpret_cast<uint8_t *>(address);
+  std::memcpy(ptr + offset, data.data, data.size);
+  return fine::Ok();
+}
+FINE_NIF(write_to_pointer, 0);
+
+#endif // EXLA_PROD
 
 } // namespace exla
 

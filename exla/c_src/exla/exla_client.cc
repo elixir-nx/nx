@@ -64,6 +64,20 @@ tsl::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv *env,
   return binary_term;
 }
 
+void ExlaBuffer::ReplaceBuffer(std::unique_ptr<xla::PjRtBuffer> new_buffer) {
+  if (buffer_ && !buffer_->IsDeleted()) {
+    TrackDeallocation();
+    buffer_->Delete();
+  }
+  buffer_ = std::move(new_buffer);
+  if (client_ && buffer_) {
+    auto size_or = GetOnDeviceSizeInBytes();
+    if (size_or.ok()) {
+      client_->TrackBufferAllocated(device_id(), size_or.value());
+    }
+  }
+}
+
 tsl::Status ExlaBuffer::Deallocate() {
   if (buffer_->IsDeleted()) {
     return xla::FailedPrecondition(

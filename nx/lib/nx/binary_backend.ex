@@ -32,6 +32,11 @@ defmodule Nx.BinaryBackend do
     opts
   end
 
+  @impl true
+  def block(struct, _output, args, fun) do
+    apply(fun, [struct | args])
+  end
+
   ## Creation
 
   @impl true

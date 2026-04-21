@@ -9,9 +9,7 @@ defmodule Nx.LinAlg.BlockEigh do
 
   import Nx.Defn
 
-  defn eigh(matrix, opts \\ []) do
-    opts = keyword!(opts, eps: 1.0e-6, max_iter: 100)
-
+  defn eigh(matrix, opts) do
     matrix
     |> Nx.revectorize([collapsed_axes: :auto],
       target_shape: {Nx.axis_size(matrix, -2), Nx.axis_size(matrix, -1)}

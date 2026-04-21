@@ -136,10 +136,10 @@ defmodule Nx.Defn.Grad do
     acc
   end
 
-  defp parents_args(:optional, %{data: %{args: [call, _expr, callback]}} = t, id, acc) do
-    expr = apply(callback, call.data.args)
+  defp parents_args(:block, %{data: %{args: [struct, in_args, _expr, callback]}} = t, id, acc) do
+    expr = apply(callback, [struct | in_args])
 
-    # Now traverse over the optional expression where args are the new parameters.
+    # Now traverse over the block expression where args are the new parameters.
     # Once we access the parameter itself, we point the parameter to the arg.
     {parents, nodes} =
       Composite.reduce(expr, acc, fn expr, {parents, nodes} ->
@@ -147,7 +147,7 @@ defmodule Nx.Defn.Grad do
         recur_parents_tree(expr, {parents, nodes})
       end)
 
-    updated_node = put_in(t.data.args, [call, expr, callback])
+    updated_node = put_in(t.data.args, [struct, in_args, expr, callback])
     {parents, Map.put(nodes, id, updated_node)}
   end
 
@@ -273,7 +273,7 @@ defmodule Nx.Defn.Grad do
     end)
   end
 
-  defp update_grads(:optional, [_call, expr, _callback], _ans, gs, _to_grad_ids, grads) do
+  defp update_grads(:block, [_struct, _in_args, expr, _callback], _ans, gs, _to_grad_ids, grads) do
     gs = List.wrap(gs)
 
     {grads, []} =

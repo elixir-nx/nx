@@ -24,7 +24,7 @@ defmodule Torchx.NxLinAlgDoctestTest do
   # All of these have tests in nx_linalg_test.exs
   @property_doctests [
     eigh: 2,
-    lu: 2,
+    lu: 1,
     svd: 2
   ]
 

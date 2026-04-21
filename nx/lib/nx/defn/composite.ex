@@ -3,7 +3,7 @@ defmodule Nx.Defn.Composite do
   Functions to deal with composite data types.
 
   Composite data-types are traversed according to `Nx.Container`.
-  If a regular tensor is given, it is individually traversed. 
+  If a regular tensor is given, it is individually traversed.
   Numerical values, such as integers, floats, and complex numbers
   are not normalized before hand. Use `Nx.to_tensor/1` to do so.
 
@@ -42,8 +42,10 @@ defmodule Nx.Defn.Composite do
     {left, right} =
       case Nx.LazyContainer.impl_for(left) do
         Nx.LazyContainer.Any ->
-          left = Nx.Container.reduce(left, [], &[&1 | &2])
-          right = Nx.Container.reduce(right, [], &[&1 | &2])
+          # Avoid type system warning because, when compiling Nx itself,
+          # the lazy containers are the same as containers.
+          left = Nx.Container.reduce(Function.identity(left), [], &[&1 | &2])
+          right = Nx.Container.reduce(Function.identity(right), [], &[&1 | &2])
           {left, right}
 
         impl ->

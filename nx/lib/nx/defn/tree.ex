@@ -179,9 +179,9 @@ defmodule Nx.Defn.Tree do
     end
   end
 
-  def apply_args(%T{data: %Expr{op: :optional, args: args}}, type, acc, fun) do
-    [call, expr, callback] = args
-    {call, acc} = fun.(call, acc)
+  def apply_args(%T{data: %Expr{op: :block, args: args}}, type, acc, fun) do
+    [struct, in_args, expr, callback] = args
+    {in_args, acc} = Enum.map_reduce(in_args, acc, fun)
 
     {expr, acc} =
       case type do
@@ -189,7 +189,7 @@ defmodule Nx.Defn.Tree do
         :scope -> {expr, acc}
       end
 
-    {[call, expr, callback], acc}
+    {[struct, in_args, expr, callback], acc}
   end
 
   def apply_args(%T{data: %Expr{op: :runtime_call, args: args}}, _type, acc, fun) do

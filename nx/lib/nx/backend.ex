@@ -102,14 +102,10 @@ defmodule Nx.Backend do
   @callback indexed_put(out :: tensor, tensor, indices :: tensor, updates :: tensor, keyword) ::
               tensor
 
-  @callback lu({p :: tensor, l :: tensor, u :: tensor}, tensor, keyword) :: tensor
   @callback triangular_solve(out :: tensor, a :: tensor, b :: tensor, keyword) :: tensor
-  @callback svd({u :: tensor, s :: tensor, v :: tensor}, tensor, keyword) :: tensor
 
   @callback fft(out :: tensor, tensor, keyword) :: tensor
   @callback ifft(out :: tensor, tensor, keyword) :: tensor
-  @callback fft2(out :: tensor, tensor, keyword) :: tensor
-  @callback ifft2(out :: tensor, tensor, keyword) :: tensor
 
   binary_ops =
     [:add, :subtract, :multiply, :pow, :remainder, :divide, :atan2, :min, :max, :quotient] ++
@@ -130,57 +126,17 @@ defmodule Nx.Backend do
     @callback unquote(unary_op)(out :: tensor, tensor) :: tensor
   end
 
-  ## Optional Callbacks
+  ## Block extension
 
   @doc """
-  Invoked for execution of optional callbacks with a default implementation.
+  Invoked for execution of `Nx.block/4`.
 
-  First we will attempt to call the optional callback itself
-  (one of the many callbacks defined below), then we attempt
-  to call this callback (which is also optional), then we
-  fallback to the default implementation.
+  `output` is the result template (`Nx.Tensor` or tuple of tensors). `args` are
+  the tensor (and optional trailing keyword lists) passed to `Nx.block/4`.
+  Backends should dispatch on `struct` (see `Nx.Block.*`) and either run a
+  native implementation or invoke `fun` as `apply(fun, [struct | args])`.
   """
-  @callback optional(atom, [term], fun) :: tensor
-  @callback qr({q :: tensor, r :: tensor}, tensor, keyword) :: tensor
-  @callback cholesky(out :: tensor, tensor) :: tensor
-  @callback eigh({eigenvals :: tensor, eigenvecs :: tensor}, tensor, keyword) :: tensor
-  @callback solve(out :: tensor, a :: tensor, b :: tensor) :: tensor
-  @callback determinant(out :: tensor, t :: tensor) :: tensor
-  @callback logical_not(out :: tensor, t :: tensor) :: tensor
-  @callback phase(out :: tensor, t :: tensor) :: tensor
-
-  @callback cumulative_sum(out :: tensor, t :: tensor, keyword) :: tensor
-  @callback cumulative_product(out :: tensor, t :: tensor, keyword) :: tensor
-  @callback cumulative_min(out :: tensor, t :: tensor, keyword) :: tensor
-  @callback cumulative_max(out :: tensor, t :: tensor, keyword) :: tensor
-
-  @callback all_close(out :: tensor, tensor, tensor, keyword) :: tensor
-  @callback top_k(out :: tensor, tensor, keyword) :: tensor
-  @callback take(out :: tensor, input :: tensor, indices :: tensor, keyword) :: tensor
-  @callback take_along_axis(out :: tensor, input :: tensor, indices :: tensor, keyword) :: tensor
-
-  @optional_callbacks [
-    optional: 3,
-    solve: 3,
-    determinant: 2,
-    logical_not: 2,
-    phase: 2,
-    cumulative_sum: 3,
-    cumulative_product: 3,
-    cumulative_min: 3,
-    cumulative_max: 3,
-    all_close: 4,
-    svd: 3,
-    top_k: 3,
-    fft2: 3,
-    ifft2: 3,
-    lu: 3,
-    qr: 3,
-    cholesky: 2,
-    eigh: 3,
-    take: 4,
-    take_along_axis: 4
-  ]
+  @callback block(struct, output :: tensor | tuple, args :: [term], fun) :: tensor | tuple
 
   ## Inspect implementation
 
