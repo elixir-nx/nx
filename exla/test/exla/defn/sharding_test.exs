@@ -73,6 +73,7 @@ defmodule EXLA.Defn.ShardingTest do
       # broadcasts to [[10,10],[11,11],[12,12],[13,13]] + [[100,100],[101,101],[102,102],[103,103]]
       # = [[110,110],[112,112],[114,114],[116,116]], device 1 gets col 1
       assert_equal(result1_d1, Nx.tensor([[110], [112], [114], [116]]))
+
       # Second output: same as device 0 (y is replicated across axis 1, so d1 sees the same y_dev shard).
       assert_equal(result2_d1, Nx.tensor([[200], [202], [204], [206]]))
 
@@ -90,6 +91,7 @@ defmodule EXLA.Defn.ShardingTest do
       # broadcasts to [[14,14],[15,15],[16,16],[17,17]] + [[104,104],[105,105],[106,106],[107,107]]
       # = [[118,118],[120,120],[122,122],[124,124]], device 3 gets col 1
       assert_equal(result1_d3, Nx.tensor([[118], [120], [122], [124]]))
+
       # Second output: same as device 2 (y is replicated across axis 1, so d3 sees the same y_dev shard).
       assert_equal(result2_d3, Nx.tensor([[208], [210], [212], [214]]))
     end
