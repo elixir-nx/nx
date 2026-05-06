@@ -736,8 +736,9 @@ FINE_NIF(write_to_pointer, 0);
 
 } // namespace exla
 
-// Host QR custom calls: integer operands with f32 Q/R (see Nx.Type.to_floating/1
-// for integer matrices). Handlers live in libexla alongside the NIFs.
+// CPU custom-call FFI handlers (QR / Eigh) for integer operands and f32
+// results. These stay in EXLA until the same symbols are provided from the
+// shared elixir-nx/xla build; not test-only.
 namespace {
 
 namespace ffi = xla::ffi;

@@ -11,15 +11,12 @@ defprotocol EXLA.CustomCall do
 
   During compilation with `compiler: EXLA`, when the builder is an MLIR
   `EXLA.MLIR.Function`, each `Nx.block(tag, inputs, outputs, fn ... end)` is
-  passed here. `EXLA.Defn` invokes:
+  passed here. `EXLA.Defn` invokes `call/4` once per block.
 
-    * `function_name(tag, outputs_template, input_templates, client)`
-    * `config(tag, outputs_template, input_templates, client)`
+  If `call/4` returns `:skip`, EXLA compiles the block's **default callback**
+  (the anonymous function body) instead of emitting a custom call.
 
-  If `function_name/4` returns `:skip`, EXLA compiles the block's **default
-  callback** (the anonymous function body) instead of emitting a custom call.
-
-  ## `function_name/4` and `config/4` arguments
+  ## `call/4` arguments
 
     * `struct` — the **tag** passed as the first argument to `Nx.block/4`
       (your own `defstruct` or an existing tag such as `%Nx.Block.LinAlg.QR{}`).
@@ -33,17 +30,16 @@ defprotocol EXLA.CustomCall do
     * `client` — the active `EXLA.Client` (use e.g. `client.platform` to gate
       host-only lowerings).
 
-  ## Return values
+  ## `call/4` return value
 
-    * `function_name/4`:
-      * **Success** — return the native custom-call target name.
-      * **`:skip`** — this implementation does not apply (unsupported type,
-        non-host platform, wrong arity, etc.). The default block implementation
-        is used instead.
+    * **`:skip`** — this implementation does not apply (unsupported type,
+      non-host platform, wrong arity, etc.). The default block implementation
+      is used instead.
 
-    * `config/4`:
-      * Return a `map()` to be encoded as `backend_config`.
-      * Return `nil` to omit `backend_config`.
+    * **`{:ok, %EXLA.CustomCall.Spec{}}`** — emit a StableHLO custom call; see
+      `EXLA.CustomCall.Spec` for `call_target_name`, optional `backend_config`,
+      and optional `operand_element_types` (operand converts when they differ
+      from the lowered inputs).
 
   ## Dispatch
 
@@ -67,14 +63,12 @@ defprotocol EXLA.CustomCall do
       end
 
       defimpl EXLA.CustomCall, for: MyApp.CustomQrTag do
-        def function_name(_tag, {%{type: {kind, size}}, _r_expr}, [_input], %{platform: :host})
+        def call(_tag, {%{type: {kind, size}}, _r_expr}, [_input], %{platform: :host})
             when kind != :c and kind in [:f, :bf] and size in [16, 32, 64] do
-          "my_custom_qr_target"
+          {:ok, %EXLA.CustomCall.Spec{call_target_name: "my_custom_qr_target"}}
         end
 
-        def function_name(_, _, _, _), do: :skip
-
-        def config(_, _, _, _), do: nil
+        def call(_, _, _, _), do: :skip
       end
 
   Then use `Nx.block(%MyApp.CustomQrTag{}, ...)` inside a `defn` compiled with
@@ -84,14 +78,9 @@ defprotocol EXLA.CustomCall do
   @fallback_to_any true
 
   @doc """
-  Returns the custom-call target name or `:skip`.
+  Returns `:skip` or `{:ok, %EXLA.CustomCall.Spec{}}`.
   """
-  def function_name(struct, out, args, client)
-
-  @doc """
-  Returns a map encoded into `backend_config`, or `nil`.
-  """
-  def config(struct, out, args, client)
+  def call(struct, out, args, client)
 end
 
 # Default EXLA lowerings for **C-backed custom_call** `Nx.block/4` tags live
@@ -104,54 +93,58 @@ end
 defimpl EXLA.CustomCall, for: Any do
   @moduledoc false
 
-  def function_name(
+  alias EXLA.CustomCall.Spec
+
+  def call(
         %Nx.Block.LinAlg.QR{},
         {%{type: q_type}, _r_expr},
         [%{type: in_type} | _],
         %{platform: :host}
       )
       when elem(q_type, 0) != :c and elem(in_type, 0) != :c do
+    qr_cpu_custom_call(in_type)
+  end
+
+  # Native target names depend only on the input dtype; output templates may use
+  # different element types (e.g. promotion) and must not change the call target.
+  def call(%Nx.Block.LinAlg.Eigh{}, _out, [%{type: in_type} | _], %{platform: :host})
+      when elem(in_type, 0) != :c do
+    eigh_cpu_custom_call(in_type)
+  end
+
+  def call(_, _, _, _), do: :skip
+
+  defp qr_cpu_custom_call(in_type) do
     case in_type do
-      {:f, 32} -> "qr_cpu_custom_call_f32"
-      {:f, 64} -> "qr_cpu_custom_call_f64"
-      {:f, 16} -> "qr_cpu_custom_call_f16"
-      {:bf, 16} -> "qr_cpu_custom_call_bf16"
-      {:s, 8} -> "qr_cpu_custom_call_s8"
-      {:s, 16} -> "qr_cpu_custom_call_s16"
-      {:s, 32} -> "qr_cpu_custom_call_s32"
-      {:s, 64} -> "qr_cpu_custom_call_s64"
-      {:u, 8} -> "qr_cpu_custom_call_u8"
-      {:u, 16} -> "qr_cpu_custom_call_u16"
-      {:u, 32} -> "qr_cpu_custom_call_u32"
-      {:u, 64} -> "qr_cpu_custom_call_u64"
+      {:f, 32} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_f32"}}
+      {:f, 64} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_f64"}}
+      {:f, 16} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_f16"}}
+      {:bf, 16} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_bf16"}}
+      {:s, 8} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_s8"}}
+      {:s, 16} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_s16"}}
+      {:s, 32} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_s32"}}
+      {:s, 64} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_s64"}}
+      {:u, 8} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_u8"}}
+      {:u, 16} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_u16"}}
+      {:u, 32} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_u32"}}
+      {:u, 64} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_u64"}}
       _ -> :skip
     end
   end
 
-  def function_name(
-        %Nx.Block.LinAlg.Eigh{},
-        {%{type: eval_type}, %{type: evec_type}},
-        [%{type: in_type} | _],
-        %{platform: :host}
-      )
-      when elem(eval_type, 0) != :c and elem(evec_type, 0) != :c and
-             elem(in_type, 0) != :c do
+  defp eigh_cpu_custom_call(in_type) do
     case in_type do
-      {:f, 32} -> "eigh_cpu_custom_call_f32"
-      {:f, 64} -> "eigh_cpu_custom_call_f64"
-      {:s, 8} -> "eigh_cpu_custom_call_s8"
-      {:s, 16} -> "eigh_cpu_custom_call_s16"
-      {:s, 32} -> "eigh_cpu_custom_call_s32"
-      {:s, 64} -> "eigh_cpu_custom_call_s64"
-      {:u, 8} -> "eigh_cpu_custom_call_u8"
-      {:u, 16} -> "eigh_cpu_custom_call_u16"
-      {:u, 32} -> "eigh_cpu_custom_call_u32"
-      {:u, 64} -> "eigh_cpu_custom_call_u64"
+      {:f, 32} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_f32"}}
+      {:f, 64} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_f64"}}
+      {:s, 8} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_s8"}}
+      {:s, 16} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_s16"}}
+      {:s, 32} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_s32"}}
+      {:s, 64} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_s64"}}
+      {:u, 8} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_u8"}}
+      {:u, 16} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_u16"}}
+      {:u, 32} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_u32"}}
+      {:u, 64} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_u64"}}
       _ -> :skip
     end
   end
-
-  def function_name(_, _, _, _), do: :skip
-
-  def config(_, _, _, _), do: nil
 end

@@ -9,6 +9,7 @@ defmodule EXLA.Defn do
   alias EXLA.Typespec
   alias EXLA.MLIR.Value
   alias EXLA.MLIR.Function
+  alias EXLA.CustomCall.Spec, as: CustomCallSpec
 
   @doc false
   def __partitions_options__(options) do
@@ -734,15 +735,13 @@ defmodule EXLA.Defn do
        ) do
     {call_args, cache} = Enum.map_reduce(in_args, cache, &recur_operator(&1, state, &2))
 
-    case EXLA.CustomCall.function_name(struct, out, in_args, client) do
+    case EXLA.CustomCall.call(struct, out, in_args, client) do
       :skip ->
         default_block_implementation(struct, call_args, out, state, cache)
 
-      function_name ->
-        config = EXLA.CustomCall.config(struct, out, in_args, client)
-
+      {:ok, %CustomCallSpec{} = spec} ->
         backend_config =
-          case config do
+          case spec.backend_config do
             nil ->
               nil
 
@@ -751,8 +750,10 @@ defmodule EXLA.Defn do
 
             other ->
               raise ArgumentError,
-                    "EXLA.CustomCall.config/4 must return map() | nil, got: #{inspect(other)}"
+                    "EXLA.CustomCall.Spec backend_config must be map() | nil, got: #{inspect(other)}"
           end
+
+        call_args = cast_custom_call_operands(call_args, spec.operand_element_types)
 
         out_typespecs =
           [out]
@@ -760,10 +761,14 @@ defmodule EXLA.Defn do
           |> Enum.map(&expr_to_typespec/1)
 
         lowered =
-          Value.custom_call(call_args, out_typespecs, function_name, backend_config)
+          Value.custom_call(call_args, out_typespecs, spec.call_target_name, backend_config)
           |> wrap_tuple_result(out)
 
         {lowered, cache}
+
+      other ->
+        raise ArgumentError,
+              "EXLA.CustomCall.call/4 must return :skip or {:ok, %EXLA.CustomCall.Spec{}}, got: #{inspect(other)}"
     end
   end
 
@@ -903,6 +908,32 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(op, expr, state, cache) do
     {args, cache} = Tree.apply_args(expr, cache, &recur_operator(&1, state, &2))
     {to_operator(op, args, expr, state), cache}
+  end
+
+  defp cast_custom_call_operands(call_args, :infer), do: call_args
+
+  defp cast_custom_call_operands(call_args, types) when is_list(types) do
+    n = length(call_args)
+
+    if length(types) != n do
+      raise ArgumentError,
+            "EXLA.CustomCall.Spec operand_element_types must be a list of length #{n} (one per block input), got length #{length(types)}"
+    end
+
+    Enum.zip_with(call_args, types, fn arg, desired ->
+      ts = Value.get_typespec(arg)
+
+      if ts.type == desired do
+        arg
+      else
+        Value.convert(arg, Typespec.tensor(desired, ts.shape))
+      end
+    end)
+  end
+
+  defp cast_custom_call_operands(_call_args, other) do
+    raise ArgumentError,
+          "EXLA.CustomCall.Spec operand_element_types must be :infer or a list of Nx types, got: #{inspect(other)}"
   end
 
   defp default_block_implementation(struct, call_args, expr, state, cache) do
@@ -2193,23 +2224,19 @@ defmodule EXLA.Defn do
   defp count_up(0, _n), do: []
   defp count_up(i, n), do: [n | count_up(i - 1, n + 1)]
 
-  @doc false
-  def axes_for_rank(0), do: []
+  defp axes_for_rank(0), do: []
 
-  def axes_for_rank(rank) do
+  defp axes_for_rank(rank) do
     Enum.to_list(0..(rank - 1))
   end
 
   ## Op Helpers
 
-  @doc false
-  def op_type(%Value{} = op), do: Value.get_typespec(op).type
+  defp op_type(%Value{} = op), do: Value.get_typespec(op).type
 
-  @doc false
-  def op_shape(%Value{} = op), do: Value.get_typespec(op).shape
+  defp op_shape(%Value{} = op), do: Value.get_typespec(op).shape
 
-  @doc false
-  def to_type(%Value{} = op, type) do
+  defp to_type(%Value{} = op, type) do
     typespec = Value.get_typespec(op)
 
     if typespec.type == type do
@@ -2303,8 +2330,7 @@ defmodule EXLA.Defn do
     |> Enum.reduce(shape, &Tuple.delete_at(&2, &1))
   end
 
-  @doc false
-  def expr_to_typespec(expr) do
+  defp expr_to_typespec(expr) do
     Typespec.tensor(expr.type, expr.shape)
   end
 

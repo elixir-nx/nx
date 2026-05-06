@@ -7,12 +7,10 @@ defmodule EXLA.Test.QRAliasBlock do
 end
 
 defimpl EXLA.CustomCall, for: EXLA.Test.QRAliasBlock do
-  def function_name(_, {%{type: {q_kind, q_size}}, _r_expr}, [_tensor], client)
+  def call(_, {%{type: {q_kind, q_size}}, _r_expr}, [_tensor], client)
       when q_kind != :c and q_size == 32 and client.platform == :host do
-    "qr_cpu_custom_call_f32_exla_alias"
+    {:ok, %EXLA.CustomCall.Spec{call_target_name: "qr_cpu_custom_call_f32_exla_alias"}}
   end
 
-  def function_name(_, _, _, _), do: :skip
-
-  def config(_, _, _, _), do: nil
+  def call(_, _, _, _), do: :skip
 end
