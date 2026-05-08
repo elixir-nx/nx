@@ -114,36 +114,36 @@ defimpl EXLA.CustomCall, for: Any do
 
   def call(_, _, _, _), do: :skip
 
+  defp qr_cpu_custom_call({kind, _bits}) when kind in [:s, :u] do
+    {:ok,
+     %Spec{
+       call_target_name: "qr_cpu_custom_call_f32",
+       operand_element_types: [{:f, 32}]
+     }}
+  end
+
   defp qr_cpu_custom_call(in_type) do
     case in_type do
       {:f, 32} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_f32"}}
       {:f, 64} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_f64"}}
       {:f, 16} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_f16"}}
       {:bf, 16} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_bf16"}}
-      {:s, 8} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_s8"}}
-      {:s, 16} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_s16"}}
-      {:s, 32} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_s32"}}
-      {:s, 64} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_s64"}}
-      {:u, 8} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_u8"}}
-      {:u, 16} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_u16"}}
-      {:u, 32} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_u32"}}
-      {:u, 64} -> {:ok, %Spec{call_target_name: "qr_cpu_custom_call_u64"}}
       _ -> :skip
     end
+  end
+
+  defp eigh_cpu_custom_call({kind, _bits}) when kind in [:s, :u] do
+    {:ok,
+     %Spec{
+       call_target_name: "eigh_cpu_custom_call_f32",
+       operand_element_types: [{:f, 32}]
+     }}
   end
 
   defp eigh_cpu_custom_call(in_type) do
     case in_type do
       {:f, 32} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_f32"}}
       {:f, 64} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_f64"}}
-      {:s, 8} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_s8"}}
-      {:s, 16} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_s16"}}
-      {:s, 32} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_s32"}}
-      {:s, 64} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_s64"}}
-      {:u, 8} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_u8"}}
-      {:u, 16} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_u16"}}
-      {:u, 32} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_u32"}}
-      {:u, 64} -> {:ok, %Spec{call_target_name: "eigh_cpu_custom_call_u64"}}
       _ -> :skip
     end
   end

@@ -9,6 +9,7 @@ defmodule EXLA.CustomCallAliasTest do
     import Nx.Defn
 
     defn qr(t), do: Nx.LinAlg.qr(t)
+    defn eigh(t), do: Nx.LinAlg.eigh(t)
   end
 
   defmodule Fun do
@@ -75,12 +76,31 @@ defmodule EXLA.CustomCallAliasTest do
     refute mlir =~ "qr_cpu_custom_call_f32_exla_alias"
   end
 
-  test "builtin QR lowering includes qr_cpu_custom_call_s32 in MLIR" do
+  test "builtin integer QR lowering converts operand and uses f32 target in MLIR" do
     arg = Nx.iota({3, 4}, type: {:s, 32})
     assert %{mlir_module: mlir} = mlir_via_jit_apply!(&BuiltinFun.qr/1, [arg])
 
-    assert mlir =~ "@qr_cpu_custom_call_s32("
+    assert mlir =~ "stablehlo.convert"
+    assert mlir =~ "@qr_cpu_custom_call_f32("
+    refute mlir =~ "@qr_cpu_custom_call_s32("
     refute mlir =~ "qr_cpu_custom_call_f32_exla_alias"
+  end
+
+  test "builtin Eigh lowering includes eigh_cpu_custom_call_f32 in MLIR" do
+    arg = Nx.iota({3, 3}, type: {:f, 32})
+    assert %{mlir_module: mlir} = mlir_via_jit_apply!(&BuiltinFun.eigh/1, [arg])
+
+    refute mlir =~ "stablehlo.convert"
+    assert mlir =~ "@eigh_cpu_custom_call_f32("
+  end
+
+  test "builtin integer Eigh lowering converts operand and uses f32 target in MLIR" do
+    arg = Nx.iota({3, 3}, type: {:s, 32})
+    assert %{mlir_module: mlir} = mlir_via_jit_apply!(&BuiltinFun.eigh/1, [arg])
+
+    assert mlir =~ "stablehlo.convert"
+    assert mlir =~ "@eigh_cpu_custom_call_f32("
+    refute mlir =~ "@eigh_cpu_custom_call_s32("
   end
 
   test "QR alias plugin: MLIR uses alias name and not the builtin target string" do
