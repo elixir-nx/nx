@@ -5,13 +5,17 @@ defmodule EXLA.CustomCall.Spec do
 
     * **`call_target_name`** — XLA FFI handler name (`call_target_name` on the op).
 
-    * **`backend_config`** — Optional StableHLO dictionary attribute (`nil` omits it).
-      Same constraints as `EXLA.MLIR.Value.custom_call/4`.
+    * **`attributes`** — Optional `{name, attr}` pairs, default `[]`, merged into
+      the `backend_config` dictionary on `stablehlo.custom_call` (StableHLO’s name
+      for that attribute). Each `name` must be a **binary** MLIR identifier; each
+      `attr` must be a **binary** with valid MLIR attribute syntax for the RHS after
+      `name = ` (for example `{"k", "42 : i64"}`). An empty list omits the dictionary
+      from the op.
 
     * **`operand_element_types`** — How operand SSA values are presented to the handler:
 
-      * **`:infer`** (default) — use each lowered operand’s element type as produced
-        from the block inputs. No extra converts.
+      * **`:default`** — use each lowered operand’s element type as produced from the
+        block inputs. No extra converts.
 
       * **`[Nx.Type.t(), ...]`** — one type per block input, same order and length as
         `Nx.block/4` inputs. Before building the custom call, each operand is
@@ -23,11 +27,11 @@ defmodule EXLA.CustomCall.Spec do
 
   @enforce_keys [:call_target_name]
 
-  defstruct [:call_target_name, backend_config: nil, operand_element_types: :infer]
+  defstruct [:call_target_name, attributes: [], operand_element_types: :default]
 
   @type t :: %__MODULE__{
           call_target_name: String.t(),
-          backend_config: map() | nil,
-          operand_element_types: :infer | [Nx.Type.t()]
+          attributes: [{String.t(), String.t()}],
+          operand_element_types: :default | [Nx.Type.t()]
         }
 end

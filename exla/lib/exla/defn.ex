@@ -735,22 +735,19 @@ defmodule EXLA.Defn do
        ) do
     {call_args, cache} = Enum.map_reduce(in_args, cache, &recur_operator(&1, state, &2))
 
-    case EXLA.CustomCall.call(struct, out, in_args, client) do
+    case EXLA.CustomCall.call(struct, in_args, out, client) do
       :skip ->
         default_block_implementation(struct, call_args, out, state, cache)
 
       {:ok, %CustomCallSpec{} = spec} ->
-        backend_config =
-          case spec.backend_config do
-            nil ->
-              nil
-
-            %{} = map ->
-              map
+        dictionary_entries =
+          case spec.attributes do
+            list when is_list(list) ->
+              list
 
             other ->
               raise ArgumentError,
-                    "EXLA.CustomCall.Spec backend_config must be map() | nil, got: #{inspect(other)}"
+                    "EXLA.CustomCall.Spec attributes must be a list of {binary_key, binary_attr} pairs, got: #{inspect(other)}"
           end
 
         call_args = cast_custom_call_operands(call_args, spec.operand_element_types)
@@ -761,7 +758,7 @@ defmodule EXLA.Defn do
           |> Enum.map(&expr_to_typespec/1)
 
         lowered =
-          Value.custom_call(call_args, out_typespecs, spec.call_target_name, backend_config)
+          Value.custom_call(call_args, out_typespecs, spec.call_target_name, dictionary_entries)
           |> wrap_tuple_result(out)
 
         {lowered, cache}
@@ -910,7 +907,7 @@ defmodule EXLA.Defn do
     {to_operator(op, args, expr, state), cache}
   end
 
-  defp cast_custom_call_operands(call_args, :infer), do: call_args
+  defp cast_custom_call_operands(call_args, :default), do: call_args
 
   defp cast_custom_call_operands(call_args, types) when is_list(types) do
     n = length(call_args)
@@ -933,7 +930,7 @@ defmodule EXLA.Defn do
 
   defp cast_custom_call_operands(_call_args, other) do
     raise ArgumentError,
-          "EXLA.CustomCall.Spec operand_element_types must be :infer or a list of Nx types, got: #{inspect(other)}"
+          "EXLA.CustomCall.Spec operand_element_types must be :default or a list of Nx types, got: #{inspect(other)}"
   end
 
   defp default_block_implementation(struct, call_args, expr, state, cache) do
@@ -1589,8 +1586,7 @@ defmodule EXLA.Defn do
     EXLA.Lib.argsort(state.builder, tensor, dimension, stable, comp, ans.type)
   end
 
-  @doc false
-  def fft(exla_op, input_type, output_type, pad_n \\ nil, [%Value{} = tensor, opts], ans) do
+  defp fft(exla_op, input_type, output_type, pad_n \\ nil, [%Value{} = tensor, opts], ans) do
     fft_n = opts[:length]
     pad_n = pad_n || fft_n
     axis = opts[:axis]
@@ -1634,8 +1630,7 @@ defmodule EXLA.Defn do
     end
   end
 
-  @doc false
-  def fft2(exla_op, [%Value{} = tensor, opts], %{type: type} = ans) do
+  defp fft2(exla_op, [%Value{} = tensor, opts], %{type: type} = ans) do
     [l1, l2] = lengths = opts[:lengths]
     [ax1, ax2] = axes = opts[:axes]
     output_type = Nx.Type.to_complex(type)

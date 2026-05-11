@@ -18,14 +18,17 @@ defprotocol EXLA.CustomCall do
 
   ## `call/4` arguments
 
+  Callback arity is `call(struct, args, out, client)`, matching
+  `Nx.block(tag, inputs, outputs, fn ... end)` (tag, inputs, outputs, then client).
+
     * `struct` — the **tag** passed as the first argument to `Nx.block/4`
       (your own `defstruct` or an existing tag such as `%Nx.Block.LinAlg.QR{}`).
 
-    * `out` — the **output template** tuple passed to `Nx.block/4` (expression
-      metadata for shapes and types, not runtime tensors).
-
     * `args` — list of **input templates**, in the same order as `inputs` in
       `Nx.block/4`.
+
+    * `out` — the **output template** tuple passed to `Nx.block/4` (expression
+      metadata for shapes and types, not runtime tensors).
 
     * `client` — the active `EXLA.Client` (use e.g. `client.platform` to gate
       host-only lowerings).
@@ -37,8 +40,9 @@ defprotocol EXLA.CustomCall do
       is used instead.
 
     * **`{:ok, %EXLA.CustomCall.Spec{}}`** — emit a StableHLO custom call; see
-      `EXLA.CustomCall.Spec` for `call_target_name`, optional `backend_config`,
-      and optional `operand_element_types` (operand converts when they differ
+      `EXLA.CustomCall.Spec` for `call_target_name`, optional `attributes`
+      (`[{name, attr}]` string pairs for the `stablehlo.custom_call` `backend_config` dictionary), and optional
+      `operand_element_types` (operand converts when they differ
       from the lowered inputs).
 
   ## Dispatch
@@ -63,7 +67,7 @@ defprotocol EXLA.CustomCall do
       end
 
       defimpl EXLA.CustomCall, for: MyApp.CustomQrTag do
-        def call(_tag, {%{type: {kind, size}}, _r_expr}, [_input], %{platform: :host})
+        def call(_tag, [_input], {%{type: {kind, size}}, _r_expr}, %{platform: :host})
             when kind != :c and kind in [:f, :bf] and size in [16, 32, 64] do
           {:ok, %EXLA.CustomCall.Spec{call_target_name: "my_custom_qr_target"}}
         end
@@ -79,8 +83,10 @@ defprotocol EXLA.CustomCall do
 
   @doc """
   Returns `:skip` or `{:ok, %EXLA.CustomCall.Spec{}}`.
+
+  Invoked as `call(struct, args, out, client)`.
   """
-  def call(struct, out, args, client)
+  def call(struct, args, out, client)
 end
 
 # Default EXLA lowerings for **C-backed custom_call** `Nx.block/4` tags live
@@ -97,8 +103,8 @@ defimpl EXLA.CustomCall, for: Any do
 
   def call(
         %Nx.Block.LinAlg.QR{},
-        {%{type: q_type}, _r_expr},
         [%{type: in_type} | _],
+        {%{type: q_type}, _r_expr},
         %{platform: :host}
       )
       when elem(q_type, 0) != :c and elem(in_type, 0) != :c do
@@ -107,7 +113,7 @@ defimpl EXLA.CustomCall, for: Any do
 
   # Native target names depend only on the input dtype; output templates may use
   # different element types (e.g. promotion) and must not change the call target.
-  def call(%Nx.Block.LinAlg.Eigh{}, _out, [%{type: in_type} | _], %{platform: :host})
+  def call(%Nx.Block.LinAlg.Eigh{}, [%{type: in_type} | _], _out, %{platform: :host})
       when elem(in_type, 0) != :c do
     eigh_cpu_custom_call(in_type)
   end

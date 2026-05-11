@@ -724,9 +724,9 @@ defmodule EXLA.MLIR.Value do
         [%Value{function: func} | _] = operands,
         typespecs,
         call_target_name,
-        backend_config \\ nil
+        dictionary_entries \\ []
       )
-      when is_binary(call_target_name) and is_list(typespecs) do
+      when is_binary(call_target_name) and is_list(typespecs) and is_list(dictionary_entries) do
     result_types = typespecs_to_mlir_types(typespecs)
 
     attributes = [
@@ -735,8 +735,8 @@ defmodule EXLA.MLIR.Value do
     ]
 
     attributes =
-      if is_map(backend_config) do
-        Keyword.put(attributes, :backend_config, backend_config_to_attr(backend_config))
+      if dictionary_entries != [] do
+        Keyword.put(attributes, :backend_config, backend_config_dict_attr(dictionary_entries))
       else
         attributes
       end
@@ -1047,42 +1047,30 @@ defmodule EXLA.MLIR.Value do
     "{#{content}}"
   end
 
-  defp backend_config_to_attr(map) when is_map(map) do
-    map
-    |> Enum.map(fn {k, v} -> {attr_dict_key(k), backend_config_value_to_attr(v)} end)
+  # `stablehlo.custom_call` backend_config is a DictionaryAttr; callers supply
+  # `{name, attr}` pairs where `name` is a bare MLIR identifier and `attr` is
+  # valid MLIR attribute syntax for the RHS (StableHLO authors already work at
+  # this level).
+  defp backend_config_dict_attr(pairs) when is_list(pairs) do
+    pairs
+    |> Enum.map(fn
+      {key, value} when is_binary(key) and is_binary(value) ->
+        {validate_backend_config_key!(key), value}
+
+      other ->
+        raise ArgumentError,
+              "custom_call backend_config dictionary must be a list of {binary_key, binary_attr} pairs, got entry: #{inspect(other)}"
+    end)
     |> attr_dict()
   end
 
-  defp backend_config_value_to_attr(v) when is_boolean(v), do: attr_boolean(v)
-  defp backend_config_value_to_attr(v) when is_integer(v), do: attr_i64(v)
-  defp backend_config_value_to_attr(v) when is_float(v), do: "#{v} : f64"
-  defp backend_config_value_to_attr(v) when is_binary(v), do: attr_string(v)
-
-  defp backend_config_value_to_attr(v) when is_list(v) do
-    "[" <> Enum.map_join(v, ", ", &backend_config_value_to_attr/1) <> "]"
-  end
-
-  defp backend_config_value_to_attr(v) when is_map(v), do: backend_config_to_attr(v)
-
-  defp backend_config_value_to_attr(v) do
-    raise ArgumentError,
-          "custom_call backend_config value is not encodable to MLIR DictionaryAttr: #{inspect(v)}"
-  end
-
-  defp attr_dict_key(key) when is_atom(key), do: Atom.to_string(key)
-
-  defp attr_dict_key(key) when is_binary(key) do
+  defp validate_backend_config_key!(key) when is_binary(key) do
     if Regex.match?(~r/^[A-Za-z_][A-Za-z0-9_]*$/, key) do
       key
     else
       raise ArgumentError,
             "custom_call backend_config key must match [A-Za-z_][A-Za-z0-9_]*, got: #{inspect(key)}"
     end
-  end
-
-  defp attr_dict_key(key) do
-    raise ArgumentError,
-          "custom_call backend_config key must be an atom or string, got: #{inspect(key)}"
   end
 
   defp join_list(list) do
