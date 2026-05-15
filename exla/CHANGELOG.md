@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.12.0 (2026-05-15)
+
+### Enhancements
+
+  * Update to latest Nx
+  * Support `Nx.runtime_call/3` on GPU devices
+  * Support configurable shared memory (IPC) permissions for device memory sharing via `:shm_permissions` client option
+  * Introduce `EXLA.CustomCall` protocol for extensible block lowering
+  * Warn when closure-captured tensors cause recompilation storms
+
+### Bug fixes
+
+  * Fix `CallbackServer` lifecycle (now started at runtime per invocation instead of at boot)
+  * Fix cross-client outfeed queue corruption via device-level lock
+  * Fix closures in `while` loop return bodies causing incorrect compilation
+
 ## v0.11.0 (2026-02-19)
 
 ### Enhancements

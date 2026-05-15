@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.12.0 (2026-05-15)
+
+### Enhancements
+
+  * [Nx] Add `Nx.rfft/2` and `Nx.irfft/2` for real-valued fast Fourier transforms
+  * [Nx] Add `Nx.block/4` for defining block (chunked) operations over tensors
+  * [Nx.Defn] Warn when closure-captured tensors cause recompilation storms
+
+### Bug fixes
+
+  * [Nx] Fix `Nx.linspace/3` crash when `n: 1` produces NaN
+  * [Nx] Fix `Nx.window_scatter_max/min` crash on f64 tensors
+  * [Nx] Fix `Nx.slice/4` crash on scalar tensors
+  * [Nx] Fix `Nx.gather/3` error message for scalar indices
+  * [Nx] Fix `Nx.conv/3` not inheriting backend from tensor and kernel
+
 ## v0.11.0 (2026-02-19)
 
 ### Enhancements
