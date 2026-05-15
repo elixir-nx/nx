@@ -7,8 +7,8 @@ defmodule EXLA.CustomCall.Spec do
 
     * **`attributes`** — Optional `{name, attr}` pairs, default `[]`, merged into
       the `backend_config` dictionary on `stablehlo.custom_call` (StableHLO’s name
-      for that attribute). Each `name` must be a **binary** MLIR identifier; each
-      `attr` must be a **binary** with valid MLIR attribute syntax for the RHS after
+      for that attribute). Each `name` must be a **BEAM binary** MLIR identifier; each
+      `attr` must be a **BEAM binary** with valid MLIR attribute syntax for the RHS after
       `name = ` (for example `{"k", "42 : i64"}`). An empty list omits the dictionary
       from the op.
 
