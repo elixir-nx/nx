@@ -720,15 +720,26 @@ FINE_NIF(start_log_sink, 0);
 // Writes `data` into the memory at `address + offset`.  Intentionally unsafe:
 // no bounds checking.  The caller is responsible for ensuring the pointer is
 // valid and the region is large enough.
-fine::Ok<> write_to_pointer(ErlNifEnv *env, uint64_t address,
-                            ErlNifBinary data, uint64_t offset) {
+fine::Ok<> write_to_pointer(ErlNifEnv *env, uint64_t address, ErlNifBinary data,
+                            uint64_t offset) {
   uint8_t *ptr = reinterpret_cast<uint8_t *>(address);
   std::memcpy(ptr + offset, data.data, data.size);
   return fine::Ok();
 }
-FINE_NIF(write_to_pointer, 0);
+
+#else
+fine::Error<fine::Atom> write_to_pointer(ErlNifEnv *env, uint64_t address,
+                                         ErlNifBinary data, uint64_t offset) {
+  (void)env;
+  (void)address;
+  (void)data;
+  (void)offset;
+  return fine::Error(atoms::not_implemented);
+}
 
 #endif // EXLA_PROD
+
+FINE_NIF(write_to_pointer, 0);
 
 } // namespace exla
 
