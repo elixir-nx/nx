@@ -29,6 +29,7 @@ static auto type = fine::Atom("type");
 static auto u = fine::Atom("u");
 static auto warning = fine::Atom("warning");
 static auto stop = fine::Atom("stop");
+static auto not_implemented = fine::Atom("not_implemented");
 } // namespace atoms
 } // namespace exla
 

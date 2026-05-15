@@ -98,11 +98,9 @@ defmodule EXLA.NIF do
   def encode_local_pid(_pid), do: err!()
   def decode_local_pid(_pid_bin), do: err!()
 
-  if Mix.env() != :prod do
-    # Writes `data` into the memory at `address + offset`.  Test-only; not
-    # compiled in production builds.
-    def write_to_pointer(_address, _data, _offset), do: err!()
-  end
+  # Writes `data` into the memory at `address + offset`.
+  # In production builds, this only returns an error and doesn't touch memory.
+  def write_to_pointer(_address, _data, _offset), do: err!()
 
   defp err!(), do: :erlang.nif_error(:undef)
 end
