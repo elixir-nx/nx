@@ -1055,22 +1055,13 @@ defmodule EXLA.MLIR.Value do
     pairs
     |> Enum.map(fn
       {key, value} when is_binary(key) and is_binary(value) ->
-        {validate_backend_config_key!(key), value}
+        {key, value}
 
       other ->
         raise ArgumentError,
               "custom_call backend_config dictionary must be a list of {binary_key, binary_attr} pairs, got entry: #{inspect(other)}"
     end)
     |> attr_dict()
-  end
-
-  defp validate_backend_config_key!(key) when is_binary(key) do
-    if Regex.match?(~r/^[A-Za-z_][A-Za-z0-9_]*$/, key) do
-      key
-    else
-      raise ArgumentError,
-            "custom_call backend_config key must match [A-Za-z_][A-Za-z0-9_]*, got: #{inspect(key)}"
-    end
   end
 
   defp join_list(list) do
