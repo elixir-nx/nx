@@ -75,6 +75,13 @@ defmodule EXLA do
       * `:highest` - Slowest but most accurate. Performs computations in float32
         or float64 as applicable
 
+  ## Native custom calls (`EXLA.CustomCall`)
+
+  Some `Nx.block/4` tags can be lowered to XLA **custom calls** (StableHLO plus
+  a registered native handler). Implement the `EXLA.CustomCall` protocol for
+  your block tag struct; see `EXLA.CustomCall` for the `call/4` contract,
+  including returning `:skip` to fall back to the block's default Elixir callback.
+
   ## Clients
 
   The `EXLA` library uses a client for compiling and executing code.

@@ -79,6 +79,7 @@ defmodule EXLA.NIF do
   def get_tpu_client(), do: err!()
   def get_c_api_client(_device_type), do: err!()
   def load_pjrt_plugin(_device_type, _library_path), do: err!()
+  def load_dylib(_path), do: err!()
   def get_device_count(_client), do: err!()
   def get_supported_platforms, do: err!()
   def run_cpu(_executable, _arguments, _device_id, _callback_server_pid), do: err!()
