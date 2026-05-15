@@ -735,7 +735,7 @@ defmodule EXLA.Defn do
        ) do
     {call_args, cache} = Enum.map_reduce(in_args, cache, &recur_operator(&1, state, &2))
 
-    case EXLA.CustomCall.call(struct, in_args, out, client) do
+    case EXLA.CustomCall.call(struct, out, in_args, client) do
       :skip ->
         default_block_implementation(struct, call_args, out, state, cache)
 
