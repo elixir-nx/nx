@@ -120,7 +120,6 @@ defmodule Nx.LinAlg.SVD do
     # full_matrices?: true instead.
     # Inspired by https://github.com/ausimian/emily/pull/85
 
-
     gram =
       case Nx.type(tensor) do
         {:c, _} ->
