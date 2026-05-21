@@ -118,7 +118,8 @@ defmodule Nx.LinAlg.SVD do
     # values lose ~half their float precision. Well-conditioned matrices are fine;
     # ill-conditioned inputs that depend on small singular values should use
     # full_matrices?: true instead.
-    # Inspired by https://github.com/ausimian/emily/pull/85
+    # Inspired by https://github.com/ausimian/emily/pull/85 and
+    # https://elixirforum.com/t/porting-sakana-ais-trinity-qwen-based-model-to-elixir-bumblebee-nx-axon/75171/10
 
     gram =
       case Nx.type(tensor) do
