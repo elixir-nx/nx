@@ -200,6 +200,14 @@ defmodule Nx.Defn.Tree do
     {[tensor_expr, callback, out_template, opts], acc}
   end
 
+  def apply_args(%T{data: %Expr{op: :io_callback, args: args}}, _type, acc, fun) do
+    [tensor_expr, callback, out_template, ref] = args
+
+    {tensor_expr, acc} = Composite.traverse(tensor_expr, acc, fun)
+
+    {[tensor_expr, callback, out_template, ref], acc}
+  end
+
   def apply_args(%T{data: %Expr{op: :token, args: [token]}}, _type, acc, fun) do
     {hooks, acc} =
       Enum.map_reduce(token.hooks, acc, fn %{expr: expr} = token, acc ->

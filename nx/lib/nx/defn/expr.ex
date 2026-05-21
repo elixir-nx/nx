@@ -43,6 +43,10 @@ defmodule Nx.Defn.Expr do
 
     * `runtime_call(out, tensor_or_container, opts, fun)`
 
+    * `io_callback(tensor_or_container, fun, out_template, ref)` - `out_template` mirrors
+      the input shape (passthrough), `ref` is a unique reference that prevents CSE from
+      collapsing two identical calls
+
     * `block(struct, block_args, default_expr, fun)` - `struct` is an `Nx.Block.*`
       value, `block_args` are the tensors and keyword options passed to `Nx.block/4`,
       `default_expr` is the traced default implementation, and `fun` is the block
@@ -1447,6 +1451,71 @@ defmodule Nx.Defn.Expr do
     end
 
     context || acc
+  end
+
+  @doc """
+  Helper for defining an `:io_callback` expression node.
+
+  The callback is a side effect: the node's output is the input passed through
+  unchanged. A unique `ref` is embedded in the args to prevent CSE from
+  collapsing two distinct `io_callback` calls that share the same inputs and
+  callback function.
+
+  The user **must** reassign the result. Nx-level DCE prunes unreachable nodes
+  before any compiler sees `has_side_effect`, so discarding the return value
+  silently drops the callback from the graph.
+  """
+  def io_callback(tensor_or_container, fun) when is_function(fun, 1) do
+    tensor_expr =
+      Composite.traverse(tensor_or_container, fn
+        %T{} = t -> to_expr(t)
+        other -> other
+      end)
+
+    [%T{data: %Expr{context: context}} | _] =
+      Composite.flatten_list([tensor_expr])
+
+    ref = make_ref()
+
+    case tensor_expr do
+      t when is_struct(t, Nx.Tensor) ->
+        out_template = Nx.to_template(t)
+        expr(t, context, :io_callback, [tensor_expr, fun, out_template, ref])
+
+      tuple when is_tuple(tuple) ->
+        out_template = tuple_out(tuple_size(tuple))
+        user_template = Nx.to_template(tuple)
+
+        expr_node =
+          expr(out_template, context, :io_callback, [tensor_expr, fun, user_template, ref])
+
+        tuple(expr_node, Tuple.to_list(tuple))
+
+      container ->
+        user_template = Nx.to_template(container)
+
+        leaf_templates = Composite.flatten_list([user_template])
+        leaf_count = length(leaf_templates)
+
+        root =
+          expr(
+            tuple_out(leaf_count),
+            context,
+            :io_callback,
+            [tensor_expr, fun, user_template, ref]
+          )
+
+        {container_expr, _} =
+          Composite.traverse(user_template, {0, root}, fn
+            %T{} = template, {i, root} ->
+              {expr(template, context, :elem, [root, i]), {i + 1, root}}
+
+            other, acc ->
+              {other, acc}
+          end)
+
+        container_expr
+    end
   end
 
   @doc """

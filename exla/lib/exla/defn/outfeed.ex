@@ -16,7 +16,8 @@ defmodule EXLA.Defn.Outfeed do
             compiled_hooks: %{},
             token: nil,
             infeeds: [],
-            runtime_callbacks: %{}
+            runtime_callbacks: %{},
+            io_callbacks: %{}
 
   ## Functional API
 
@@ -81,6 +82,7 @@ defmodule EXLA.Defn.Outfeed do
 
   defguard will_outfeed(outfeed) when outfeed.compiled_hooks != %{}
   defguard has_runtime_calls(outfeed) when outfeed.runtime_callbacks != %{}
+  defguard has_io_callbacks(outfeed) when outfeed.io_callbacks != %{}
 
   @doc """
   An empty outfeed to be used when not outfeeding is supported.
@@ -131,6 +133,16 @@ defmodule EXLA.Defn.Outfeed do
       ) do
     callback = {fun, out_template, arg_template, opts}
     %{outfeed | runtime_callbacks: Map.put(runtime_callbacks, id, callback)}
+  end
+
+  @doc """
+  Adds an io_callback to outfeed.
+  """
+  def add_io_callback(
+        %Outfeed{io_callbacks: io_callbacks} = outfeed,
+        {id, fun, arg_template}
+      ) do
+    %{outfeed | io_callbacks: Map.put(io_callbacks, id, {fun, arg_template})}
   end
 
   @doc """
@@ -230,18 +242,37 @@ defmodule EXLA.Defn.Outfeed do
       compiled_hooks: compiled_hooks,
       default_hooks: default_hooks,
       user_hooks: user_hooks,
-      runtime_callbacks: runtime_callbacks
+      runtime_callbacks: runtime_callbacks,
+      io_callbacks: io_callbacks
     } =
       outfeed
 
     hooks = Map.merge(default_hooks, user_hooks)
 
     Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
-      init(client, device_id, hooks, compiled_hooks, infeeds, runtime_callbacks, group_leader)
+      init(
+        client,
+        device_id,
+        hooks,
+        compiled_hooks,
+        infeeds,
+        runtime_callbacks,
+        io_callbacks,
+        group_leader
+      )
     end)
   end
 
-  defp init(client, device_id, hooks, compiled_hooks, infeeds, rt_callbacks, group_leader) do
+  defp init(
+         client,
+         device_id,
+         hooks,
+         compiled_hooks,
+         infeeds,
+         rt_callbacks,
+         io_callbacks,
+         group_leader
+       ) do
     Process.flag(:trap_exit, true)
     # Copy the group leader so we report to the proper device
     Process.group_leader(self(), group_leader)
@@ -249,10 +280,10 @@ defmodule EXLA.Defn.Outfeed do
     ref = make_ref()
     typespec = EXLA.Typespec.tensor({:u, 16}, {})
 
-    loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks)
+    loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks, io_callbacks)
   end
 
-  defp loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks) do
+  defp loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks, io_callbacks) do
     if compiled_hooks != %{} do
       # If we're not outfeeding, we only need to handle the runtime callback
       # and executable stop messaging
@@ -262,7 +293,7 @@ defmodule EXLA.Defn.Outfeed do
     receive do
       {^ref, <<0::native-unsigned-16>>} ->
         # Outfeed is done, now we wait for the computation to finish
-        loop(client, device_id, ref, typespec, hooks, %{}, infeeds, rt_callbacks)
+        loop(client, device_id, ref, typespec, hooks, %{}, infeeds, rt_callbacks, io_callbacks)
 
       {^ref, <<flag::native-unsigned-16>>} ->
         case Map.fetch!(compiled_hooks, flag) do
@@ -274,7 +305,18 @@ defmodule EXLA.Defn.Outfeed do
               end
 
             EXLA.Client.to_infeed(client, device_id, [{data, data_typespec}])
-            loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks)
+
+            loop(
+              client,
+              device_id,
+              ref,
+              typespec,
+              hooks,
+              compiled_hooks,
+              infeeds,
+              rt_callbacks,
+              io_callbacks
+            )
 
           {:function, typespecs, name, template} ->
             fun = Map.fetch!(hooks, name)
@@ -294,21 +336,59 @@ defmodule EXLA.Defn.Outfeed do
                   hooks,
                   compiled_hooks,
                   infeeds,
-                  rt_callbacks
+                  rt_callbacks,
+                  io_callbacks
                 )
             end
         end
 
       {:exla_runtime_call, callback_id, args_spec, reply_tag} ->
         send_runtime_callback_reply(rt_callbacks, callback_id, args_spec, reply_tag)
-        loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks)
+
+        loop(
+          client,
+          device_id,
+          ref,
+          typespec,
+          hooks,
+          compiled_hooks,
+          infeeds,
+          rt_callbacks,
+          io_callbacks
+        )
+
+      {:exla_io_callback, callback_id, args_spec, reply_tag} ->
+        send_io_callback_reply(io_callbacks, callback_id, args_spec, reply_tag)
+
+        loop(
+          client,
+          device_id,
+          ref,
+          typespec,
+          hooks,
+          compiled_hooks,
+          infeeds,
+          rt_callbacks,
+          io_callbacks
+        )
 
       :stop ->
         :ok
 
       other ->
         Logger.debug("EXLA.Outfeed ignoring unexpected message: #{inspect(other)}")
-        loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks)
+
+        loop(
+          client,
+          device_id,
+          ref,
+          typespec,
+          hooks,
+          compiled_hooks,
+          infeeds,
+          rt_callbacks,
+          io_callbacks
+        )
     end
   end
 
@@ -369,6 +449,62 @@ defmodule EXLA.Defn.Outfeed do
 
   defp format_runtime_callback_reason(reason) when is_binary(reason), do: reason
   defp format_runtime_callback_reason(reason), do: inspect(reason)
+
+  defp send_io_callback_reply(io_callbacks, callback_id, args_spec, reply_tag) do
+    reply =
+      try do
+        case Map.fetch(io_callbacks, callback_id) do
+          {:ok, {fun, arg_template}} ->
+            case decode_callback_args(args_spec, arg_template) do
+              {:ok, tensor_args} ->
+                try do
+                  fun.(tensor_args)
+                  {:ok, []}
+                rescue
+                  exception ->
+                    {:error, {:exception, Exception.message(exception)}}
+                catch
+                  kind, reason ->
+                    {:error, {kind, format_runtime_callback_reason(reason)}}
+                end
+
+              {:error, _} = error ->
+                error
+            end
+
+          :error ->
+            Logger.error(
+              "EXLA.Outfeed received io_callback id #{inspect(callback_id)} that is not registered"
+            )
+
+            {:error, {:unknown_callback, callback_id}}
+        end
+      rescue
+        exception ->
+          send(self(), :stop)
+          {:error, {:exception, Exception.message(exception)}}
+      catch
+        kind, reason ->
+          send(self(), :stop)
+          {:error, {kind, format_runtime_callback_reason(reason)}}
+      end
+
+    try do
+      case reply do
+        {:ok, []} ->
+          # io_callback never writes output buffers — they are aliased to the inputs.
+          EXLA.NIF.runtime_callback_reply(reply_tag, :ok, [])
+
+        {:error, {tag, reason}} ->
+          EXLA.NIF.runtime_callback_reply(reply_tag, :error, {tag, reason})
+      end
+    rescue
+      _ ->
+        Logger.error(
+          "EXLA.Outfeed failed to send io_callback reply to native for tag #{inspect(reply_tag)}"
+        )
+    end
+  end
 
   defp run_runtime_callback({:error, reason}, _fun, _out_template, _opts), do: {:error, reason}
 

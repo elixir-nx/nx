@@ -823,6 +823,63 @@ defmodule EXLA.MLIR.Value do
     op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
   end
 
+  @doc """
+  Builds a StableHLO `custom_call` that targets the EXLA io_callback bridge.
+
+  The operands list must be `[pid_value | leaf_values]` where `pid_value` is the
+  encoded callback-server PID (operand 0, same convention as `runtime_call/3`)
+  and `leaf_values` are the tensors to pass to the Elixir callback.
+
+  The result types match the leaf input types (passthrough). Each result is aliased
+  back to its corresponding leaf operand via `output_operand_aliases` so that XLA
+  shares the same buffer for input and output — no copy is made.
+
+  The C++ handler must **not** write to the result buffers; they are already the
+  input buffers via the aliasing.
+  """
+  def io_callback(
+        [%Value{function: func} | _] = operands,
+        typespecs,
+        callback_id
+      ) do
+    # operands = [pid_value | leaf_values]
+    # result_types covers only the leaves (no PID output)
+    result_types = typespecs_to_mlir_types(typespecs)
+    leaf_count = length(typespecs)
+
+    {callback_id_words, callback_id_size} = term_to_int64_list(callback_id)
+
+    # Each leaf at operand[i+1] (skipping PID at 0) is aliased to result[i].
+    # The position in the list determines which result index is aliased.
+    aliases =
+      Enum.map(0..(leaf_count - 1)//1, fn i ->
+        attr_output_operand_alias(i + 1)
+      end)
+
+    attributes = [
+      call_target_name: attr_string("exla_io_callback"),
+      api_version: attr_i32(4),
+      has_side_effect: attr_boolean(true),
+      output_operand_aliases: join_list(aliases),
+      backend_config:
+        attr_dict(
+          callback_id: attr_array_i64_elements(callback_id_words),
+          callback_id_size: attr_ui64(callback_id_size)
+        )
+    ]
+
+    op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
+  end
+
+  # Emits a single #stablehlo.output_operand_alias<...> attribute.
+  # `operand_index` is the 0-based index into the custom_call's operand list.
+  # Note: operand 0 is the PID, so the first leaf is at operand_index 1.
+  # The output index is implicit: aliases[i] refers to result i.
+  # Both tuple-indices lists are empty because we operate on flat tensors.
+  defp attr_output_operand_alias(operand_index) do
+    "#stablehlo.output_operand_alias<output_tuple_indices = [], operand_index = #{operand_index}, operand_tuple_indices = []>"
+  end
+
   defp term_to_int64_list(term) do
     bin = :erlang.term_to_binary(term)
     size = byte_size(bin)

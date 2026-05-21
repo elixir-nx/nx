@@ -2221,6 +2221,74 @@ defmodule Nx do
   end
 
   @doc """
+  Invokes a side-effect callback from within `defn`, passing through inputs unchanged.
+
+  Unlike `runtime_call/4`, `io_callback/2` does not return a new value computed by
+  the callback — its purpose is purely to execute side effects (logging, sending
+  messages, writing to external systems, etc.). The output is always the same tensor
+  or container that was passed in.
+
+  Because Nx performs dead-code elimination on expression graphs before handing
+  them to a compiler, **the result must be reassigned** to keep the callback in
+  the graph:
+
+      x = Nx.io_callback(x, &MyMod.log/1)   # correct — x is reassigned
+      Nx.io_callback(x, &MyMod.log/1)        # wrong — callback will be eliminated
+
+  Ordering between sequential `io_callback` calls is guaranteed through data
+  dependencies: since each call returns its input, chaining callbacks produces
+  an explicit dependency edge. No token machinery is required.
+
+  > #### Device locks {: .warning}
+  >
+  > `io_callback/2` will generally operate on tensors allocated on a given
+  > physical device. When calling other Nx computations from within the callback,
+  > those computations cannot use the same device or a deadlock will result.
+
+  > #### Backend transfers {: .warning}
+  >
+  > When executing inside `Nx.Defn.Evaluator`, do not transfer tensors with
+  > `Nx.backend_transfer/2` inside the callback because the values may still be
+  > used in the rest of the computation. Use `Nx.backend_copy/2` instead.
+
+  ## Examples
+
+      iex> defmodule IoCallbackExample do
+      ...>   def log(t) do
+      ...>     IO.inspect(Nx.to_flat_list(t), label: "tensor")
+      ...>   end
+      ...> end
+      iex> x = Nx.tensor([1, 2, 3])
+      iex> x = Nx.io_callback(x, &IoCallbackExample.log/1)
+      tensor: [1, 2, 3]
+      iex> Nx.to_flat_list(x)
+      [1, 2, 3]
+
+  Containers (tuples and maps) are also accepted:
+
+      iex> {x, y} = Nx.io_callback({x, y}, fn {a, b} ->
+      ...>   IO.inspect({Nx.to_flat_list(a), Nx.to_flat_list(b)})
+      ...> end)
+
+  Inside `defn`, this builds an expression node that compilers lower to a
+  `stablehlo.custom_call` with `has_side_effect = true`. Outside `defn` or in
+  backends without special support, the callback is executed directly and the
+  input is returned unchanged.
+  """
+  @doc type: :backend
+  def io_callback(tensor_or_container, fun) when is_function(fun, 1) do
+    tensors = Nx.Defn.Composite.flatten_list([tensor_or_container])
+    backend = Nx.Shared.list_impl!(tensors)
+
+    if backend == Nx.Defn.Expr do
+      backend.io_callback(tensor_or_container, fun)
+    else
+      fun.(tensor_or_container)
+      tensor_or_container
+    end
+  end
+
+  @doc """
   Invokes an Elixir function from within `defn`.
 
   This function allows integrating arbitrary Elixir code into `defn` graphs.

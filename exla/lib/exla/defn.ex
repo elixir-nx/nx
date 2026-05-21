@@ -234,7 +234,8 @@ defmodule EXLA.Defn do
          run_options,
          is_sharded?
        )
-       when Outfeed.will_outfeed(outfeed) or Outfeed.has_runtime_calls(outfeed) do
+       when Outfeed.will_outfeed(outfeed) or Outfeed.has_runtime_calls(outfeed) or
+              Outfeed.has_io_callbacks(outfeed) do
     if is_sharded? do
       raise ArgumentError, "outfeed is not supported for sharded execution yet"
     end
@@ -842,6 +843,51 @@ defmodule EXLA.Defn do
        ) do
     raise """
     Nx.runtime_call/4 is currently only supported for EXLA CPU (platform: :host) and CUDA (platform: :cuda),
+    but the active EXLA client is configured for platform #{inspect(platform)}.
+    Please run on the :host or :cuda client or wait for future segmentation-based support.
+    """
+  end
+
+  defp cached_recur_operator(
+         :io_callback,
+         %T{data: %Expr{id: id, args: [tensor_expr, fun, _out_template, _ref]}} = expr,
+         %{client: %EXLA.Client{platform: platform}, callback_pid_value: callback_pid_value} =
+           state,
+         cache
+       )
+       when platform in [:host, :cuda] do
+    tensor_exprs = Composite.flatten_list([tensor_expr])
+
+    {arg_values, cache} =
+      Enum.map_reduce(tensor_exprs, cache, fn arg, cache ->
+        recur_operator(arg, state, cache) |> unwrap_single_tensor!()
+      end)
+
+    arg_template = Nx.to_template(tensor_expr)
+
+    cache = add_io_callback(cache, {id, fun, arg_template})
+
+    # The typespec for each result is the same as the corresponding input leaf.
+    typespecs = Enum.map(arg_values, &Value.get_typespec/1)
+
+    unless callback_pid_value do
+      raise "internal bug: io_callback callback pid operand is missing"
+    end
+
+    results =
+      Value.io_callback([callback_pid_value | arg_values], typespecs, id)
+
+    {wrap_tuple_result(results, expr), cache}
+  end
+
+  defp cached_recur_operator(
+         :io_callback,
+         _expr,
+         %{client: %EXLA.Client{platform: platform}},
+         _cache
+       ) do
+    raise """
+    Nx.io_callback/2 is currently only supported for EXLA CPU (platform: :host) and CUDA (platform: :cuda),
     but the active EXLA client is configured for platform #{inspect(platform)}.
     Please run on the :host or :cuda client or wait for future segmentation-based support.
     """
@@ -1755,6 +1801,13 @@ defmodule EXLA.Defn do
     cache
     |> get_outfeed()
     |> Outfeed.add_runtime_callback(runtime_callback)
+    |> then(&put_outfeed(cache, &1))
+  end
+
+  defp add_io_callback(cache, io_callback) do
+    cache
+    |> get_outfeed()
+    |> Outfeed.add_io_callback(io_callback)
     |> then(&put_outfeed(cache, &1))
   end
 

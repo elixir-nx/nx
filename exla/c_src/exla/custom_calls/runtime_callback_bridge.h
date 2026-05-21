@@ -75,6 +75,17 @@ Result InvokeRuntimeCallback(
     const Arg &callback_server_pid_arg, const std::vector<Arg> &inputs,
     const std::vector<OutputBuffer> &outputs);
 
+// Like InvokeRuntimeCallback but for io_callback side effects.
+//
+// Sends {:exla_io_callback, callback_id, args_spec, pending} to the Elixir
+// dispatcher. No output buffers are passed or written — output buffers are
+// aliased to the input buffers via output_operand_aliases in the MLIR
+// custom_call, so the C++ handler must never touch them.
+Result InvokeIoCallback(xla::ffi::Span<const int64_t> callback_id_words,
+                        uint64_t callback_id_size,
+                        const Arg &callback_server_pid_arg,
+                        const std::vector<Arg> &inputs);
+
 fine::Ok<> runtime_callback_reply(ErlNifEnv *env,
                                   fine::ResourcePtr<Pending> pending,
                                   fine::Atom status, fine::Term result);

@@ -126,6 +126,10 @@ defmodule Nx.Defn.Grad do
     acc
   end
 
+  defp parents_args(:io_callback, _expr, _id, acc, _parent_vectorized_names) do
+    acc
+  end
+
   defp parents_args(
          :block,
          %{data: %{args: [struct, in_args, _expr, callback]}} = t,
