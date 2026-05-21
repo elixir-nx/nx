@@ -110,26 +110,40 @@ defmodule Nx.LinAlg.SVD do
   end
 
   defnp svd_non_full(tensor, opts) do
-    {m, n} = Nx.shape(tensor)
+    {_m, n} = Nx.shape(tensor)
 
-    # The constant `1.15` comes from Yuji Nakatsukasa's implementation
-    # https://www.mathworks.com/matlabcentral/fileexchange/36830-symmetric-eigenvalue-decomposition-and-the-svd?s_tid=FX_rc3_behav
-    {reduce_to_square, q, a} =
-      if m > 1.15 * n do
-        {q, a} = Nx.LinAlg.qr(tensor, mode: :reduced)
-        {true, q, a}
-      else
-        {false, tensor, tensor}
+    # Gram matrix approach: G = AᵀA lives in n × n space regardless of m, avoiding
+    # large QDWH intermediates (e.g. (m+n) × (m+n) QR steps) when m ≈ n.
+    # Trade-off: forming AᵀA squares the condition number, so the smallest singular
+    # values lose ~half their float precision. Well-conditioned matrices are fine;
+    # ill-conditioned inputs that depend on small singular values should use
+    # full_matrices?: true instead.
+    # Inspired by https://github.com/ausimian/emily/pull/85 and
+    # https://elixirforum.com/t/porting-sakana-ais-trinity-qwen-based-model-to-elixir-bumblebee-nx-axon/75171/10
+
+    gram =
+      case Nx.type(tensor) do
+        {:c, _} ->
+          tensor = Nx.conjugate(tensor)
+          Nx.dot(tensor, [-2], tensor, [-2])
+
+        _ ->
+          Nx.dot(tensor, [-2], tensor, [-2])
       end
 
-    {u, s, v} = svd_tall_and_square(a, opts)
+    {s_sq, v} = Nx.LinAlg.eigh(gram, max_iter: opts[:max_iter])
 
-    u =
-      if reduce_to_square do
-        Nx.dot(q, u)
-      else
-        u
-      end
+    # clamp small floating-point negatives before sqrt
+    s = Nx.sqrt(Nx.max(s_sq, 0))
+
+    # eigh returns ascending order; sort descending
+    sort_idx = Nx.argsort(s, direction: :desc)
+    s = Nx.take(s, sort_idx)
+    v = Nx.take(v, sort_idx, axis: 1)
+
+    # U = AV · S⁻¹; zero out columns corresponding to near-zero singular values
+    s_inv = Nx.select(s > n * @eps * s[0], 1 / s, Nx.broadcast(0, Nx.shape(s)))
+    u = Nx.dot(tensor, v) * Nx.new_axis(s_inv, 0)
 
     {u, s, v}
   end
