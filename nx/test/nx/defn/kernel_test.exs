@@ -143,34 +143,31 @@ defmodule Nx.Defn.KernelTest do
     end
   end
 
-  describe "tokens" do
+  describe "hooks" do
     defp zero_expr(), do: Nx.tensor(0, type: {:u, 8}, backend: Nx.Defn.Expr)
     defp one_expr(), do: Nx.tensor(1, type: {:u, 8}, backend: Nx.Defn.Expr)
 
-    defp token_expr!(%T{
-           data: %Expr{
-             op: :attach_token,
-             args: [%T{data: %Expr{op: :token, args: [token]}}, expr]
-           }
-         }) do
-      {token, expr}
+    defp io_callback_spec!(%T{data: %Expr{op: :io_callback, args: [_tensor, spec, _, _]}}) do
+      spec
     end
 
     test "hook/2,3" do
-      {token, expr} = Nx.Defn.Kernel.hook(zero_expr(), :a) |> token_expr!()
-      assert [%{name: :a, callback: nil, expr: ^expr}] = token.hooks
-      assert expr == zero_expr()
+      zero = zero_expr()
 
-      {token, expr} = Nx.Defn.Kernel.hook(zero_expr(), &Function.identity/1) |> token_expr!()
-      assert [%{name: name, callback: callback, expr: ^expr}] = token.hooks
+      hooked = Nx.Defn.Kernel.hook(zero, :a)
+      assert {:hook, :a, nil} = io_callback_spec!(hooked)
+      assert %Expr{op: :io_callback, args: [^zero, {:hook, :a, nil}, _, _]} = hooked.data
+
+      hooked = Nx.Defn.Kernel.hook(zero, &Function.identity/1)
+      assert {:hook, name, callback} = io_callback_spec!(hooked)
       assert callback == (&Function.identity/1)
-      assert expr == zero_expr()
+      assert %Expr{op: :io_callback, args: [^zero, {:hook, name, callback}, _, _]} = hooked.data
       assert "hook_" <> _ = Atom.to_string(name)
 
-      {token, expr} = Nx.Defn.Kernel.hook(zero_expr(), :a, &Function.identity/1) |> token_expr!()
-      assert [%{name: :a, callback: callback, expr: ^expr}] = token.hooks
+      hooked = Nx.Defn.Kernel.hook(zero, :a, &Function.identity/1)
+      assert {:hook, :a, callback} = io_callback_spec!(hooked)
       assert callback == (&Function.identity/1)
-      assert expr == zero_expr()
+      assert %Expr{op: :io_callback, args: [^zero, {:hook, :a, callback}, _, _]} = hooked.data
     end
 
     test "hook_token/3,4" do

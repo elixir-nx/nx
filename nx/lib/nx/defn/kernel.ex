@@ -194,7 +194,7 @@ defmodule Nx.Defn.Kernel do
 
   The given expression is transformed with `fun` before printing.
 
-  This function is implemented on top of `hook/3` and therefore
+  This function is implemented on top of `Nx.io_callback/2` and therefore
   has the following restrictions:
 
     * It can only inspect tensors and `Nx.Container`
@@ -230,9 +230,7 @@ defmodule Nx.Defn.Kernel do
 
   """
   def print_value(expr, fun, opts) when Kernel.and(is_function(fun, 1), is_list(opts)) do
-    token = create_token()
-    {token, _} = hook_token(token, fun.(expr), &IO.inspect(&1, opts))
-    attach_token(token, expr)
+    Nx.io_callback(expr, fn t -> IO.inspect(fun.(t), opts) end)
   end
 
   @doc """
@@ -1454,11 +1452,10 @@ defmodule Nx.Defn.Kernel do
   in which they were defined. Then, at the end of the function,
   we attach the token (and its associated hooks) to the result `mult`.
 
-  In fact, the `hook/3` function is implemented roughly like this:
+  In fact, the `hook/3` function is implemented via `Nx.io_callback/2`:
 
       def hook(tensor_expr, name, function) do
-        {token, result} = hook_token(create_token(), tensor_expr, name, function)
-        attach_token(token, result)
+        Nx.io_callback(tensor_expr, {:hook, name, function})
       end
 
   Note you must attach the token at the end, otherwise the hooks
@@ -1494,8 +1491,7 @@ defmodule Nx.Defn.Kernel do
     do: unguarded_hook(expr, name, function)
 
   defp unguarded_hook(expr, name, function) do
-    {token, result} = Nx.Defn.Expr.add_hook(create_token(), expr, name, function)
-    attach_token(token, result)
+    Nx.Defn.Expr.io_callback(expr, {:hook, name, function})
   end
 
   @doc """
@@ -1529,7 +1525,7 @@ defmodule Nx.Defn.Kernel do
   Attaches a token to an expression. See `hook/3`.
   """
   def attach_token(%Nx.Defn.Token{} = token, expr) do
-    Nx.Defn.Expr.attach_token(token, expr)
+    Nx.Defn.Expr.attach_token_hooks(token, expr)
   end
 
   @doc """

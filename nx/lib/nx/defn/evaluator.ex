@@ -371,14 +371,24 @@ defmodule Nx.Defn.Evaluator do
     end
   end
 
-  defp eval_apply(:io_callback, [expr, fun, out_template, _ref], _ans, state, caches) do
+  defp eval_apply(:io_callback, [expr, callback_spec, out_template, _ref], _ans, state, caches) do
     {tensor_value, caches} = composite_eval(expr, state, caches)
-    fun.(tensor_value)
+
+    case resolve_io_callback(callback_spec, state.hooks) do
+      nil -> :ok
+      fun -> fun.(tensor_value)
+    end
 
     case out_template do
       %Nx.Tensor{} -> {tensor_value, caches}
       _ -> {[tensor_value] |> Composite.flatten_list() |> List.to_tuple(), caches}
     end
+  end
+
+  defp resolve_io_callback({:fn, fun}, _hooks), do: fun
+
+  defp resolve_io_callback({:hook, name, callback}, hooks) do
+    hooks[name] || callback
   end
 
   defp eval_apply(op, args, ans, state, caches) do

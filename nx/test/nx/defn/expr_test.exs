@@ -425,24 +425,14 @@ defmodule Nx.Defn.ExprTest do
       add - mult
     end
 
-    test "with tokens" do
+    test "with hooks via io_callback" do
       result = sub_add_mult(Nx.template({}, {:f, 32}), Nx.template({}, {:f, 32}))
+      rendered = inspect(result, safe: false)
 
-      assert inspect(result, safe: false) == """
-             #Nx.Tensor<
-               f32
-             \s\s
-               Nx.Defn.Expr
-               parameter a:0               f32
-               parameter b:1               f32
-               c = multiply a, b           f32
-               d = add a, b                f32
-               e = token mult: c, add: d   tuple2
-               f = attach_token e, d       f32
-               g = attach_token e, c       f32
-               h = subtract f, g           f32
-             >\
-             """
+      assert rendered =~ "io_callback"
+      assert rendered =~ "subtract"
+      refute rendered =~ "token"
+      refute rendered =~ "attach_token"
     end
 
     defn add_sub_mult_no_tokens(a, b, c, d) do

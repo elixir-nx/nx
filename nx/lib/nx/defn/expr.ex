@@ -43,9 +43,9 @@ defmodule Nx.Defn.Expr do
 
     * `runtime_call(out, tensor_or_container, opts, fun)`
 
-    * `io_callback(tensor_or_container, fun, out_template, ref)` - `out_template` mirrors
-      the input shape (passthrough), `ref` is a unique reference that prevents CSE from
-      collapsing two identical calls
+    * `io_callback(tensor_or_container, callback_spec, out_template, ref)` - `callback_spec`
+      is `{:fn, fun}`, `{:hook, name, nil}`, or `{:hook, name, fun}`; `out_template` mirrors
+      the input shape (passthrough); `ref` prevents CSE from collapsing identical calls
 
     * `block(struct, block_args, default_expr, fun)` - `struct` is an `Nx.Block.*`
       value, `block_args` are the tensors and keyword options passed to `Nx.block/4`,
@@ -451,22 +451,31 @@ defmodule Nx.Defn.Expr do
     {token, expr}
   end
 
+  def attach_token(%Nx.Defn.Token{} = token, expr) do
+    attach_token_hooks(token, expr)
+  end
+
   @doc false
-  def attach_token(%T{data: %{op: :token}} = token, expr) do
-    Composite.traverse(expr, fn tensor ->
-      expr = to_expr(tensor)
-      expr(expr, expr.data.context, :attach_token, [token, expr])
+  def attach_token_hooks(%Nx.Defn.Token{hooks: hooks}, expr) do
+    expr = to_container_expr(expr)
+
+    Enum.reduce(Enum.reverse(hooks), expr, fn %{expr: hook_expr, name: name, callback: callback},
+                                              acc ->
+      hooked = io_callback(hook_expr, {:hook, name, callback})
+      io_callback_depend(acc, hooked)
     end)
   end
 
-  def attach_token(%Nx.Defn.Token{} = token, expr) do
-    # We first create an expression to store the token
-    # so we have a shared ID to avoid multiple traversals.
-    # The size of the tuple is not used, but the amount of
-    # hooks is a good indicator.
-    size = length(token.hooks)
-    token = expr(%T{shape: {}, type: {:tuple, size}, names: []}, nil, :token, [token])
-    attach_token(token, expr)
+  defp io_callback_depend(acc, hooked) do
+    Composite.traverse(acc, fn leaf -> io_callback_depend_pair(leaf, hooked) end)
+  end
+
+  defp io_callback_depend_pair(%T{data: %Expr{id: id}}, %T{data: %Expr{id: id}} = hooked),
+    do: hooked
+
+  defp io_callback_depend_pair(acc, hooked) do
+    zero = Nx.tensor(0, type: acc.type)
+    Nx.add(acc, Nx.multiply(zero, Nx.sum(hooked)))
   end
 
   @doc false
@@ -1465,7 +1474,9 @@ defmodule Nx.Defn.Expr do
   before any compiler sees `has_side_effect`, so discarding the return value
   silently drops the callback from the graph.
   """
-  def io_callback(tensor_or_container, fun) when is_function(fun, 1) do
+  def io_callback(tensor_or_container, callback) do
+    callback_spec = normalize_io_callback_spec(callback)
+
     tensor_expr =
       Composite.traverse(tensor_or_container, fn
         %T{} = t -> to_expr(t)
@@ -1480,14 +1491,19 @@ defmodule Nx.Defn.Expr do
     case tensor_expr do
       t when is_struct(t, Nx.Tensor) ->
         out_template = Nx.to_template(t)
-        expr(t, context, :io_callback, [tensor_expr, fun, out_template, ref])
+        expr(t, context, :io_callback, [tensor_expr, callback_spec, out_template, ref])
 
       tuple when is_tuple(tuple) ->
         out_template = tuple_out(tuple_size(tuple))
         user_template = Nx.to_template(tuple)
 
         expr_node =
-          expr(out_template, context, :io_callback, [tensor_expr, fun, user_template, ref])
+          expr(out_template, context, :io_callback, [
+            tensor_expr,
+            callback_spec,
+            user_template,
+            ref
+          ])
 
         tuple(expr_node, Tuple.to_list(tuple))
 
@@ -1502,7 +1518,7 @@ defmodule Nx.Defn.Expr do
             tuple_out(leaf_count),
             context,
             :io_callback,
-            [tensor_expr, fun, user_template, ref]
+            [tensor_expr, callback_spec, user_template, ref]
           )
 
         {container_expr, _} =
@@ -1517,6 +1533,14 @@ defmodule Nx.Defn.Expr do
         container_expr
     end
   end
+
+  defp normalize_io_callback_spec(fun) when is_function(fun, 1), do: {:fn, fun}
+
+  defp normalize_io_callback_spec(name) when is_atom(name), do: {:hook, name, nil}
+
+  defp normalize_io_callback_spec({:hook, name, callback})
+       when is_atom(name) and (is_function(callback, 1) or is_nil(callback)),
+       do: {:hook, name, callback}
 
   @doc """
   Helper for defining an :runtime_call expression node.

@@ -72,6 +72,13 @@ defmodule EXLA.Defn.Outfeed do
   defp used_inputs(_, inputs, _depth, _lazy?),
     do: inputs
 
+  defp used_hooks(%Expr{op: :io_callback, args: [_, spec, _, _]}, hooks) do
+    case spec do
+      {:hook, name, callback} -> Map.put(hooks, name, callback)
+      {:fn, _} -> hooks
+    end
+  end
+
   defp used_hooks(%Expr{op: :token, args: [token]}, hooks),
     do: Enum.reduce(token.hooks, hooks, &Map.put(&2, &1.name, &1.callback))
 
@@ -140,9 +147,9 @@ defmodule EXLA.Defn.Outfeed do
   """
   def add_io_callback(
         %Outfeed{io_callbacks: io_callbacks} = outfeed,
-        {id, fun, arg_template}
+        {id, callback_spec, arg_template}
       ) do
-    %{outfeed | io_callbacks: Map.put(io_callbacks, id, {fun, arg_template})}
+    %{outfeed | io_callbacks: Map.put(io_callbacks, id, {callback_spec, arg_template})}
   end
 
   @doc """
@@ -358,7 +365,7 @@ defmodule EXLA.Defn.Outfeed do
         )
 
       {:exla_io_callback, callback_id, args_spec, reply_tag} ->
-        send_io_callback_reply(io_callbacks, callback_id, args_spec, reply_tag)
+        send_io_callback_reply(hooks, io_callbacks, callback_id, args_spec, reply_tag)
 
         loop(
           client,
@@ -450,22 +457,34 @@ defmodule EXLA.Defn.Outfeed do
   defp format_runtime_callback_reason(reason) when is_binary(reason), do: reason
   defp format_runtime_callback_reason(reason), do: inspect(reason)
 
-  defp send_io_callback_reply(io_callbacks, callback_id, args_spec, reply_tag) do
+  defp resolve_io_callback_hook({:fn, fun}, _hooks), do: fun
+
+  defp resolve_io_callback_hook({:hook, name, callback}, hooks) do
+    hooks[name] || callback
+  end
+
+  defp send_io_callback_reply(hooks, io_callbacks, callback_id, args_spec, reply_tag) do
     reply =
       try do
         case Map.fetch(io_callbacks, callback_id) do
-          {:ok, {fun, arg_template}} ->
+          {:ok, {callback_spec, arg_template}} ->
             case decode_callback_args(args_spec, arg_template) do
               {:ok, tensor_args} ->
-                try do
-                  fun.(tensor_args)
-                  {:ok, []}
-                rescue
-                  exception ->
-                    {:error, {:exception, Exception.message(exception)}}
-                catch
-                  kind, reason ->
-                    {:error, {kind, format_runtime_callback_reason(reason)}}
+                case resolve_io_callback_hook(callback_spec, hooks) do
+                  nil ->
+                    {:ok, []}
+
+                  fun ->
+                    try do
+                      fun.(tensor_args)
+                      {:ok, []}
+                    rescue
+                      exception ->
+                        {:error, {:exception, Exception.message(exception)}}
+                    catch
+                      kind, reason ->
+                        {:error, {kind, format_runtime_callback_reason(reason)}}
+                    end
                 end
 
               {:error, _} = error ->

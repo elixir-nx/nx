@@ -2276,16 +2276,24 @@ defmodule Nx do
   input is returned unchanged.
   """
   @doc type: :backend
-  def io_callback(tensor_or_container, fun) when is_function(fun, 1) do
+  def io_callback(tensor_or_container, callback)
+      when is_function(callback, 1) or is_atom(callback) do
     tensors = Nx.Defn.Composite.flatten_list([tensor_or_container])
     backend = Nx.Shared.list_impl!(tensors)
 
     if backend == Nx.Defn.Expr do
-      backend.io_callback(tensor_or_container, fun)
+      backend.io_callback(tensor_or_container, callback)
     else
-      fun.(tensor_or_container)
+      run_io_callback_eager!(callback, tensor_or_container)
       tensor_or_container
     end
+  end
+
+  defp run_io_callback_eager!(fun, container) when is_function(fun, 1), do: fun.(container)
+
+  defp run_io_callback_eager!(_name, _container) do
+    raise ArgumentError,
+          "io_callback/2 with a hook name is only supported inside defn; pass a function callback instead"
   end
 
   @doc """

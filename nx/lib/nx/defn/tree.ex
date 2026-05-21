@@ -17,6 +17,14 @@ defmodule Nx.Defn.Tree do
     :side_effect -> true
   end
 
+  defp detect_hook(%T{data: %Expr{op: :io_callback, args: [_, spec, _, _]}} = t, cache, hooks) do
+    if io_callback_hook_active?(spec, hooks) do
+      throw(:side_effect)
+    else
+      fallback_detect_hook(t, cache, hooks)
+    end
+  end
+
   defp detect_hook(%T{data: %Expr{op: :token, args: [token]}} = t, cache, hooks) do
     if Enum.any?(token.hooks, &(hooks[&1.name] || &1.callback)) do
       throw(:side_effect)
@@ -26,6 +34,12 @@ defmodule Nx.Defn.Tree do
   end
 
   defp detect_hook(t, cache, hooks), do: fallback_detect_hook(t, cache, hooks)
+
+  defp io_callback_hook_active?({:fn, _fun}, _hooks), do: true
+
+  defp io_callback_hook_active?({:hook, name, callback}, hooks) do
+    hooks[name] || callback
+  end
 
   defp fallback_detect_hook(%T{data: %Expr{id: id}} = t, cache, hooks) do
     case cache do
@@ -201,11 +215,11 @@ defmodule Nx.Defn.Tree do
   end
 
   def apply_args(%T{data: %Expr{op: :io_callback, args: args}}, _type, acc, fun) do
-    [tensor_expr, callback, out_template, ref] = args
+    [tensor_expr, callback_spec, out_template, ref] = args
 
     {tensor_expr, acc} = Composite.traverse(tensor_expr, acc, fun)
 
-    {[tensor_expr, callback, out_template, ref], acc}
+    {[tensor_expr, callback_spec, out_template, ref], acc}
   end
 
   def apply_args(%T{data: %Expr{op: :token, args: [token]}}, _type, acc, fun) do

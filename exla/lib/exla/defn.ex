@@ -427,7 +427,7 @@ defmodule EXLA.Defn do
               # Only create the token when we know it will actually be
               # used, that is: streaming, lazy transfers or hooks
               outfeed =
-                if reverse_infeeds != [] or hooks != %{} or defined_hooks != %{} do
+                if reverse_infeeds != [] do
                   outfeed
                   |> Outfeed.with_token(Value.create_token(builder))
                   |> Outfeed.add_infeeds(builder, reverse_infeeds)
@@ -850,7 +850,7 @@ defmodule EXLA.Defn do
 
   defp cached_recur_operator(
          :io_callback,
-         %T{data: %Expr{id: id, args: [tensor_expr, fun, _out_template, _ref]}} = expr,
+         %T{data: %Expr{id: id, args: [tensor_expr, callback_spec, _out_template, _ref]}} = expr,
          %{client: %EXLA.Client{platform: platform}, callback_pid_value: callback_pid_value} =
            state,
          cache
@@ -865,7 +865,7 @@ defmodule EXLA.Defn do
 
     arg_template = Nx.to_template(tensor_expr)
 
-    cache = add_io_callback(cache, {id, fun, arg_template})
+    cache = add_io_callback(cache, {id, callback_spec, arg_template})
 
     # The typespec for each result is the same as the corresponding input leaf.
     typespecs = Enum.map(arg_values, &Value.get_typespec/1)
@@ -924,28 +924,21 @@ defmodule EXLA.Defn do
     {[p, l, u], cache}
   end
 
-  defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
-    {op, cache} = recur_operator(expr, state, cache)
-    {_, cache} = recur_operator(token, state, cache)
-    {op, cache}
+  defp cached_recur_operator(:attach_token, _expr, _state, _cache) do
+    raise """
+    :attach_token expressions are no longer emitted by Nx.Defn.Kernel.
+
+    Hooks are lowered via Nx.io_callback/2. Use hook/3, print_value/2, or reassign \
+    io_callback results instead of attach_token/2.
+    """
   end
 
-  defp cached_recur_operator(:token, %T{data: %Expr{args: [token]}}, state, cache) do
-    builder = state.builder
+  defp cached_recur_operator(:token, _expr, _state, _cache) do
+    raise """
+    :token expressions are no longer emitted for hooks.
 
-    cache =
-      List.foldr(token.hooks, cache, fn %{name: name, expr: expr}, cache ->
-        # First traverse the child because if it has hooks,
-        # we need to handle them first
-        {tuple, cache} = recur_flatten(expr, state, cache)
-
-        cache
-        |> get_outfeed()
-        |> Outfeed.maybe_add_function_hook(builder, tuple, name, expr)
-        |> then(&put_outfeed(cache, &1))
-      end)
-
-    {[], cache}
+    Hooks are lowered via Nx.io_callback/2. Use hook/3 or print_value/2 instead.
+    """
   end
 
   defp cached_recur_operator(op, expr, state, cache) do
