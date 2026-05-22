@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.12.1 (2026-05-15)
+
+### Enhancements
+
+  * [Nx.LinAlg] Better memory footprint for SVD on "tall" inputs
+
 ## v0.12.0 (2026-05-15)
 
 ### Enhancements
