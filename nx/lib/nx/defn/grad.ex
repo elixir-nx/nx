@@ -126,10 +126,6 @@ defmodule Nx.Defn.Grad do
     acc
   end
 
-  defp parents_args(:io_callback, _expr, _id, acc, _parent_vectorized_names) do
-    acc
-  end
-
   defp parents_args(
          :block,
          %{data: %{args: [struct, in_args, _expr, callback]}} = t,
@@ -199,6 +195,9 @@ defmodule Nx.Defn.Grad do
 
   defp reduce_args(:attach_token, %{data: %{args: [_, arg]}}, acc, fun),
     do: fun.(arg, acc)
+
+  defp reduce_args(:io_callback, %{data: %{args: [tensor_expr | _]}}, acc, fun),
+    do: Composite.reduce(tensor_expr, acc, fun)
 
   defp reduce_args(:while, %{data: %{args: [initial | _]}}, acc, fun),
     do: Composite.reduce(initial, acc, fun)
@@ -1007,6 +1006,12 @@ defmodule Nx.Defn.Grad do
 
   defp grad(:attach_token, [_, x], _ans, g) do
     [{x, g}]
+  end
+
+  defp grad(:io_callback, [tensor_expr, _spec, _out_template, _ref], _ans, g) do
+    expr_leaves = Composite.flatten_list([tensor_expr])
+    g_leaves = Composite.flatten_list([g])
+    Enum.zip(expr_leaves, g_leaves)
   end
 
   defp grad(:conjugate, [%{type: {type, _}} = t], _ans, g) do

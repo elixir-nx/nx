@@ -2254,21 +2254,20 @@ defmodule Nx do
   ## Examples
 
       iex> defmodule IoCallbackExample do
-      ...>   def log(t) do
-      ...>     IO.inspect(Nx.to_flat_list(t), label: "tensor")
-      ...>   end
+      ...>   def log(t), do: t
       ...> end
       iex> x = Nx.tensor([1, 2, 3])
       iex> x = Nx.io_callback(x, &IoCallbackExample.log/1)
-      tensor: [1, 2, 3]
       iex> Nx.to_flat_list(x)
       [1, 2, 3]
 
   Containers (tuples and maps) are also accepted:
 
-      iex> {x, y} = Nx.io_callback({x, y}, fn {a, b} ->
-      ...>   IO.inspect({Nx.to_flat_list(a), Nx.to_flat_list(b)})
-      ...> end)
+      iex> x = Nx.tensor([1, 2])
+      iex> y = Nx.tensor([3, 4])
+      iex> {x, y} = Nx.io_callback({x, y}, fn {a, b} -> {a, b} end)
+      iex> {Nx.to_flat_list(x), Nx.to_flat_list(y)}
+      {[1, 2], [3, 4]}
 
   Inside `defn`, this builds an expression node that compilers lower to a
   `stablehlo.custom_call` with `has_side_effect = true`. Outside `defn` or in
