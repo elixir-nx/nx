@@ -385,12 +385,6 @@ defmodule Nx.Defn.Evaluator do
     end
   end
 
-  defp resolve_io_callback({:fn, fun}, _hooks), do: fun
-
-  defp resolve_io_callback({:hook, name, callback}, hooks) do
-    hooks[name] || callback
-  end
-
   defp eval_apply(op, args, ans, state, caches) do
     ans = put_in(ans.data.args, args)
     {args, caches} = Tree.apply_args(ans, caches, &eval(&1, state, &2))
@@ -416,6 +410,12 @@ defmodule Nx.Defn.Evaluator do
       end
 
     {apply(mod, op, args), caches}
+  end
+
+  defp resolve_io_callback({:fn, fun}, _hooks), do: fun
+
+  defp resolve_io_callback({:hook, name, callback}, hooks) do
+    hooks[name] || callback
   end
 
   ## Control flow helpers

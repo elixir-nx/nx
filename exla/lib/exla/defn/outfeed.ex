@@ -287,10 +287,30 @@ defmodule EXLA.Defn.Outfeed do
     ref = make_ref()
     typespec = EXLA.Typespec.tensor({:u, 16}, {})
 
-    loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks, io_callbacks)
+    loop(
+      client,
+      device_id,
+      ref,
+      typespec,
+      hooks,
+      compiled_hooks,
+      infeeds,
+      rt_callbacks,
+      io_callbacks
+    )
   end
 
-  defp loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks, io_callbacks) do
+  defp loop(
+         client,
+         device_id,
+         ref,
+         typespec,
+         hooks,
+         compiled_hooks,
+         infeeds,
+         rt_callbacks,
+         io_callbacks
+       ) do
     if compiled_hooks != %{} do
       # If we're not outfeeding, we only need to handle the runtime callback
       # and executable stop messaging
