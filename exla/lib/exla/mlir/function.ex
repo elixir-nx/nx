@@ -59,4 +59,15 @@ defmodule EXLA.MLIR.Function do
 
     EXLA.NIF.mlir_set_function_argument_attribute(ref, arg_index, "sdy.sharding", mesh_name, dims)
   end
+
+  @doc """
+  Marks the function argument at `arg_index` as aliased with the output at
+  `output_index`. XLA can then donate the input buffer to back the output,
+  reclaiming its memory in place. PjRt consumes the donated buffer at execution
+  time, so any further use of the originating `EXLA.DeviceBuffer` will raise.
+  """
+  def set_arg_aliasing(%Function{ref: ref}, arg_index, output_index)
+      when is_integer(arg_index) and is_integer(output_index) do
+    EXLA.NIF.mlir_set_function_argument_aliasing(ref, arg_index, output_index)
+  end
 end

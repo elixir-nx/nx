@@ -322,6 +322,14 @@ defmodule EXLA.Defn do
     {hooks, options} = Keyword.pop(options, :hooks, %{})
     {debug?, options} = Keyword.pop(options, :debug, false)
     {lazy_transfers, options} = Keyword.pop(options, :lazy_transfers, :opt_in)
+    {donate_argnums, options} = Keyword.pop(options, :donate_argnums, [])
+    donate_argnums = validate_donate_argnums!(donate_argnums, length(vars))
+
+    # Put the normalized list back so it lands in disk_key and comp_key.
+    options =
+      if donate_argnums == [],
+        do: options,
+        else: Keyword.put(options, :donate_argnums, donate_argnums)
 
     {client_name, options} = Keyword.pop_lazy(options, :client, &EXLA.Client.default_name/0)
     client = EXLA.Client.fetch!(client_name)
@@ -332,6 +340,13 @@ defmodule EXLA.Defn do
       raise ArgumentError,
             "input sharding configuration provided but no device mesh was provided"
     end
+
+    if donate_argnums != [] and mesh != nil do
+      raise ArgumentError,
+            "buffer donation via :donate_argnums is not currently supported with sharded execution"
+    end
+
+    donated_leaf_set = build_donated_leaf_set(vars, donate_argnums)
 
     {args_key, reverse_args_identifiers} =
       Enum.map_reduce(vars, [], fn var, acc ->
@@ -407,10 +422,14 @@ defmodule EXLA.Defn do
             expr = Nx.Defn.Composite.traverse(expr, &Nx.devectorize/1)
             callback_pid_typespec = EXLA.Executable.callback_server_pid_typespec()
 
-            comp_typespecs =
-              for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
+            user_args_with_leaf_index =
+              for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: {i, typespec}
 
+            comp_typespecs = Enum.map(user_args_with_leaf_index, fn {_, ts} -> ts end)
             comp_typespecs = [callback_pid_typespec | comp_typespecs]
+
+            alias_pairs =
+              compute_alias_pairs!(donated_leaf_set, user_args_with_leaf_index, out_typespecs)
 
             EXLA.MLIR.Module.new(comp_typespecs, out_typespecs, fn builder ->
               # Add device mesh to module if provided
@@ -421,6 +440,10 @@ defmodule EXLA.Defn do
                 Enum.with_index(input_shardings, fn sharding, arg_index ->
                   Function.set_arg_sharding(builder, arg_index + 1, {mesh, sharding})
                 end)
+              end
+
+              for {arg_index, output_index} <- alias_pairs do
+                Function.set_arg_aliasing(builder, arg_index, output_index)
               end
 
               # Only create the token when we know it will actually be
@@ -513,6 +536,95 @@ defmodule EXLA.Defn do
   end
 
   defp us_to_ms(time), do: Float.round(time / 1000, 1)
+
+  ## Buffer donation
+
+  defp validate_donate_argnums!(argnums, num_vars) do
+    unless is_list(argnums) and Enum.all?(argnums, &(is_integer(&1) and &1 >= 0)) do
+      raise ArgumentError,
+            ":donate_argnums must be a list of non-negative integers, got: #{inspect(argnums)}"
+    end
+
+    argnums = argnums |> Enum.uniq() |> Enum.sort()
+
+    if Enum.any?(argnums, &(&1 >= num_vars)) do
+      raise ArgumentError,
+            ":donate_argnums entries must be in the range [0, #{num_vars}), got: " <>
+              inspect(argnums)
+    end
+
+    argnums
+  end
+
+  defp build_donated_leaf_set(_vars, []), do: MapSet.new()
+
+  defp build_donated_leaf_set(vars, donate_argnums) do
+    donate_set = MapSet.new(donate_argnums)
+
+    {_, _, leaves} =
+      Enum.reduce(vars, {0, 0, MapSet.new()}, fn var, {argnum, idx, acc} ->
+        donating? = MapSet.member?(donate_set, argnum)
+
+        {_, {idx, acc}} =
+          Nx.Defn.Composite.traverse(var, {idx, acc}, fn t, {i, acc} ->
+            acc = if donating?, do: MapSet.put(acc, i), else: acc
+            {t, {i + 1, acc}}
+          end)
+
+        {argnum + 1, idx, acc}
+      end)
+
+    leaves
+  end
+
+  defp compute_alias_pairs!(donated_leaf_set, user_args_with_leaf_index, out_typespecs) do
+    if MapSet.size(donated_leaf_set) == 0 do
+      []
+    else
+      # Map leaf index -> {0-based MLIR position among user args, typespec}.
+      positions =
+        user_args_with_leaf_index
+        |> Enum.with_index(fn {leaf_idx, ts}, k -> {leaf_idx, {k, ts}} end)
+        |> Map.new()
+
+      out_with_index = Enum.with_index(out_typespecs)
+
+      {pairs, _used_outs} =
+        donated_leaf_set
+        |> Enum.sort()
+        |> Enum.reduce({[], MapSet.new()}, fn leaf_idx, {pairs, used_outs} ->
+          case Map.fetch(positions, leaf_idx) do
+            {:ok, {k, in_ts}} ->
+              out_idx =
+                Enum.find_value(out_with_index, fn {out_ts, j} ->
+                  if not MapSet.member?(used_outs, j) and
+                       out_ts.shape == in_ts.shape and out_ts.type == in_ts.type do
+                    j
+                  end
+                end)
+
+              case out_idx do
+                nil ->
+                  raise ArgumentError,
+                        "input marked for donation has no output with matching shape " <>
+                          "#{inspect(in_ts.shape)} and type #{inspect(in_ts.type)}; " <>
+                          "cannot alias this argument"
+
+                j ->
+                  # +1 accounts for the callback_pid arg prepended at MLIR index 0.
+                  {[{k + 1, j} | pairs], MapSet.put(used_outs, j)}
+              end
+
+            :error ->
+              raise ArgumentError,
+                    "argument marked for donation via :donate_argnums is not used by the " <>
+                      "computation; only used inputs can be donated"
+          end
+        end)
+
+      Enum.reverse(pairs)
+    end
+  end
 
   ## Operator handling
 
