@@ -419,20 +419,41 @@ defmodule Nx.Defn.ExprTest do
 
     defn sub_add_mult(a, b) do
       token = create_token()
-      {token, add} = hook_token(token, a + b, :add, &IO.inspect({:add, &1}))
-      {token, mult} = hook_token(token, a * b, :mult, &IO.inspect({:mult, &1}))
+      {token, add} = hook_token(token, a + b, :add)
+      {token, mult} = hook_token(token, a * b, :mult)
       {add, mult} = attach_token(token, {add, mult})
       add - mult
     end
 
     test "with hooks via io_callback" do
       result = sub_add_mult(Nx.template({}, {:f, 32}), Nx.template({}, {:f, 32}))
-      rendered = inspect(result, safe: false)
 
-      assert rendered =~ "io_callback"
-      assert rendered =~ "subtract"
-      refute rendered =~ "token"
-      refute rendered =~ "attach_token"
+      assert inspect(result, safe: false) == """
+             #Nx.Tensor<
+               f32
+             \s\s
+               Nx.Defn.Expr
+               parameter a:0                            f32
+               parameter b:1                            f32
+               c = add a, b                             f32
+               d = io_callback c, {:hook, :add, nil}    f32
+               e = sum d, axes: nil, keep_axes: false   f32
+               f = multiply 0.0, e                      f32
+               g = add c, f                             f32
+               h = multiply a, b                        f32
+               i = io_callback h, {:hook, :mult, nil}   f32
+               j = sum i, axes: nil, keep_axes: false   f32
+               k = multiply 0.0, j                      f32
+               l = add g, k                             f32
+               m = sum d, axes: nil, keep_axes: false   f32
+               n = multiply 0.0, m                      f32
+               o = add h, n                             f32
+               p = sum i, axes: nil, keep_axes: false   f32
+               q = multiply 0.0, p                      f32
+               r = add o, q                             f32
+               s = subtract l, r                        f32
+             >\
+             """
     end
 
     defn add_sub_mult_no_tokens(a, b, c, d) do

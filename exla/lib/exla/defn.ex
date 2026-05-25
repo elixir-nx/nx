@@ -856,19 +856,18 @@ defmodule EXLA.Defn do
          cache
        )
        when platform in [:host, :cuda] do
-    tensor_exprs = Composite.flatten_list([tensor_expr])
-
-    {arg_values, cache} =
-      Enum.map_reduce(tensor_exprs, cache, fn arg, cache ->
-        recur_operator(arg, state, cache) |> unwrap_single_tensor!()
+    {reverse_arg_values, cache} =
+      Composite.reduce(tensor_expr, {[], cache}, fn %T{} = expr, {acc, cache} ->
+        {value, cache} = recur_operator(expr, state, cache) |> unwrap_single_tensor!()
+        {[value | acc], cache}
       end)
+
+    arg_values = Enum.reverse(reverse_arg_values)
+    typespecs = Enum.map(arg_values, &Value.get_typespec/1)
 
     arg_template = Nx.to_template(tensor_expr)
 
     cache = add_io_callback(cache, {id, callback_spec, arg_template})
-
-    # The typespec for each result is the same as the corresponding input leaf.
-    typespecs = Enum.map(arg_values, &Value.get_typespec/1)
 
     unless callback_pid_value do
       raise "internal bug: io_callback callback pid operand is missing"

@@ -483,40 +483,37 @@ defmodule EXLA.Defn.Outfeed do
     hooks[name] || callback
   end
 
+  defp invoke_io_callback_hook(nil, _tensor_args), do: {:ok, []}
+
+  defp invoke_io_callback_hook(fun, tensor_args) when is_function(fun, 1) do
+    try do
+      fun.(tensor_args)
+      {:ok, []}
+    rescue
+      exception ->
+        {:error, {:exception, Exception.message(exception)}}
+    catch
+      kind, reason ->
+        {:error, {kind, format_runtime_callback_reason(reason)}}
+    end
+  end
+
   defp send_io_callback_reply(hooks, io_callbacks, callback_id, args_spec, reply_tag) do
     reply =
       try do
-        case Map.fetch(io_callbacks, callback_id) do
-          {:ok, {callback_spec, arg_template}} ->
-            case decode_callback_args(args_spec, arg_template) do
-              {:ok, tensor_args} ->
-                case resolve_io_callback_hook(callback_spec, hooks) do
-                  nil ->
-                    {:ok, []}
-
-                  fun ->
-                    try do
-                      fun.(tensor_args)
-                      {:ok, []}
-                    rescue
-                      exception ->
-                        {:error, {:exception, Exception.message(exception)}}
-                    catch
-                      kind, reason ->
-                        {:error, {kind, format_runtime_callback_reason(reason)}}
-                    end
-                end
-
-              {:error, _} = error ->
-                error
-            end
-
+        with {:ok, {callback_spec, arg_template}} <- Map.fetch(io_callbacks, callback_id),
+             {:ok, tensor_args} <- materialize_io_callback_args(arg_template, args_spec) do
+          invoke_io_callback_hook(resolve_io_callback_hook(callback_spec, hooks), tensor_args)
+        else
           :error ->
             Logger.error(
               "EXLA.Outfeed received io_callback id #{inspect(callback_id)} that is not registered"
             )
 
             {:error, {:unknown_callback, callback_id}}
+
+          {:error, _} = error ->
+            error
         end
       rescue
         exception ->
@@ -653,6 +650,23 @@ defmodule EXLA.Defn.Outfeed do
   end
 
   defp materialize_callback_args(arg_template, args_spec) do
+    materialize_callback_tensors(arg_template, args_spec, :runtime_call)
+  end
+
+  defp maybe_revectorize(decoded, %Nx.Tensor{vectorized_axes: axes}, :io_callback)
+       when axes != [] do
+    Nx.vectorize(decoded, axes)
+  end
+
+  defp maybe_revectorize(decoded, _template, _mode), do: decoded
+
+  defp materialize_io_callback_args(arg_template, args_spec) do
+    # io_callback operands carry their shapes in args_spec; the compile-time
+    # template may still reflect pre-vectorization types.
+    materialize_callback_tensors(arg_template, args_spec, :io_callback)
+  end
+
+  defp materialize_callback_tensors(arg_template, args_spec, mode) do
     {container, remaining} =
       Composite.traverse(arg_template, args_spec, fn
         %Nx.Tensor{} = template, [{bin, {type, shape_list}} | rest] ->
@@ -660,8 +674,15 @@ defmodule EXLA.Defn.Outfeed do
             bin
             |> Nx.from_binary(type)
             |> Nx.reshape(List.to_tuple(shape_list))
+            |> maybe_revectorize(template, mode)
 
-          if Nx.compatible?(decoded, template) do
+          compatible? =
+            case mode do
+              :io_callback -> true
+              _ -> Nx.compatible?(decoded, template)
+            end
+
+          if compatible? do
             {decoded, rest}
           else
             throw({:error, {:shape_mismatch, decoded, template}})

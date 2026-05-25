@@ -1852,6 +1852,11 @@ defmodule Nx.Defn.Expr do
     end)
   end
 
+  defp traverse_args(:io_callback, [tensor, callback_spec, _out_template, _ref], state) do
+    {tensor, state} = recur_inspect(tensor, state)
+    {[[tensor, ", ", io_callback_spec_inspect(callback_spec)]], state}
+  end
+
   defp traverse_args(:cond, [clauses, other], state) do
     Enum.map_reduce(clauses ++ [{true, other}], state, fn {condition, body}, state ->
       {condition, state} = recur_inspect(condition, state)
@@ -1880,6 +1885,9 @@ defmodule Nx.Defn.Expr do
   defp traverse_args(args, state) do
     Enum.map_reduce(args, state, &recur_inspect/2)
   end
+
+  defp io_callback_spec_inspect({:hook, name, _}), do: inspect({:hook, name, nil})
+  defp io_callback_spec_inspect({:fn, _fun}), do: "&fn"
 
   defp decrement_limit(state, :infinity), do: state
   defp decrement_limit(state, limit), do: %{state | limit: limit - 1}

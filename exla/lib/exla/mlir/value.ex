@@ -826,13 +826,13 @@ defmodule EXLA.MLIR.Value do
   @doc """
   Builds a StableHLO `custom_call` that targets the EXLA io_callback bridge.
 
-  The operands list must be `[pid_value | leaf_values]` where `pid_value` is the
+  The operands must be `[pid_value | tensor_list]` where `pid_value` is the
   encoded callback-server PID (operand 0, same convention as `runtime_call/3`)
-  and `leaf_values` are the tensors to pass to the Elixir callback.
+  and `tensor_list` is the flat list of tensors to pass to the Elixir callback.
 
-  The result types match the leaf input types (passthrough). Each result is aliased
-  back to its corresponding leaf operand via `output_operand_aliases` so that XLA
-  shares the same buffer for input and output — no copy is made.
+  The custom call returns the same tensor list (passthrough). Each result is
+  aliased back to its corresponding operand via `output_operand_aliases` so that
+  XLA shares the same buffer for input and output — no copy is made.
 
   The C++ handler must **not** write to the result buffers; they are already the
   input buffers via the aliasing.
@@ -842,18 +842,19 @@ defmodule EXLA.MLIR.Value do
         typespecs,
         callback_id
       ) do
-    # operands = [pid_value | leaf_values]
-    # result_types covers only the leaves (no PID output)
+    # operands = [pid_value | tensor_list]
+    # result_types is the tensor list (no PID output)
     result_types = typespecs_to_mlir_types(typespecs)
     leaf_count = length(typespecs)
 
     {callback_id_words, callback_id_size} = term_to_int64_list(callback_id)
 
-    # Each leaf at operand[i+1] (skipping PID at 0) is aliased to result[i].
-    # The position in the list determines which result index is aliased.
+    # Each tensor in the list at operand[index + 1] (skipping PID at 0) is aliased
+    # to result[index]. When the tensor list has multiple elements, StableHLO
+    # models the results as a tuple and output_tuple_indices selects each element.
     aliases =
-      Enum.map(0..(leaf_count - 1)//1, fn i ->
-        attr_output_operand_alias(i + 1)
+      Enum.map(Enum.with_index(typespecs), fn {_typespec, index} ->
+        attr_output_operand_alias(index + 1, index, leaf_count)
       end)
 
     attributes = [
@@ -873,11 +874,15 @@ defmodule EXLA.MLIR.Value do
 
   # Emits a single #stablehlo.output_operand_alias<...> attribute.
   # `operand_index` is the 0-based index into the custom_call's operand list.
-  # Note: operand 0 is the PID, so the first leaf is at operand_index 1.
-  # The output index is implicit: aliases[i] refers to result i.
-  # Both tuple-indices lists are empty because we operate on flat tensors.
-  defp attr_output_operand_alias(operand_index) do
+  # Note: operand 0 is the PID, so the first tensor in the list is at operand_index 1.
+  # Tuple index lists are empty because operands and results are tensor lists, not
+  # tuple-typed MLIR values (see StableHLO OutputOperandAliasAttr).
+  defp attr_output_operand_alias(operand_index, _output_index, 1) do
     "#stablehlo.output_operand_alias<output_tuple_indices = [], operand_index = #{operand_index}, operand_tuple_indices = []>"
+  end
+
+  defp attr_output_operand_alias(operand_index, output_index, _leaf_count) do
+    "#stablehlo.output_operand_alias<output_tuple_indices = [#{output_index}], operand_index = #{operand_index}, operand_tuple_indices = []>"
   end
 
   defp term_to_int64_list(term) do
