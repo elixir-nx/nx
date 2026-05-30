@@ -19,7 +19,9 @@ defmodule Nx.Defn.Grad do
     {:env, env} = Function.info(fun, :env)
     ids = stop_grads(env, ids)
 
+    Process.put(__MODULE__, true)
     expr = fun.(to_grad)
+    Process.delete(__MODULE__)
 
     transformed_expr =
       expr |> transform.() |> validate_expr!()
