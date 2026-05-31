@@ -4985,7 +4985,7 @@ defmodule Nx.Defn.GradTest do
         Nx.tensor([1.0, 2.0, 3.0])
         |> Nx.backend_transfer({ProcessBackend, key: :grad_closure_test})
 
-      assert_raise RuntimeError, ~r"A tensor captured as a closure inside the gradient function", fn ->
+      assert_raise ArgumentError, ~r"Nx.Defn.grad/2 failed because a tensor captured as a closure", fn ->
         Nx.Defn.grad(Nx.tensor([1.0, 2.0, 3.0]), fn x ->
           Nx.add(x, closure_tensor)
           |> Nx.sum()

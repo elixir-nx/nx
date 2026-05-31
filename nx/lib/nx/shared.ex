@@ -469,47 +469,7 @@ defmodule Nx.Shared do
   defp pick_struct(struct, struct), do: struct
 
   defp pick_struct(struct1, struct2) do
-    detail =
-      cond do
-        Process.get(Nx.Defn.Grad) ->
-          backend = if struct1 == Nx.Defn.Expr, do: struct2, else: struct1
-
-          """
-          A tensor captured as a closure inside the gradient function is on a \
-          non-default backend (#{inspect(backend)}).
-
-          Tensors used inside the gradient function must either be:
-
-            1. Passed as explicit arguments and included in the differentiated \
-          variables tuple, OR
-            2. The entire grad call must be wrapped in a defn function or \
-          Nx.Defn.jit/2 so closure tensors are properly lifted to defn params.
-
-          For example, instead of:
-
-              Nx.Defn.grad({kernel}, fn {k} -> loss(k, data, labels) end)
-
-          Use:
-
-              Nx.Defn.jit(fn kernel, data, labels ->
-                Nx.Defn.grad({kernel}, fn {k} -> loss(k, data, labels) end)
-              end).(kernel, data, labels)\
-          """
-
-        struct1 == Nx.Defn.Expr or struct2 == Nx.Defn.Expr ->
-          "This may mean you are passing a tensor to defn/jit as an optional argument " <>
-            "or as closure in an anonymous function. For efficiency, it is preferred " <>
-            "to always pass tensors as required arguments instead. Alternatively, you " <>
-            "could call Nx.backend_copy/1 on the tensor, however this will copy its " <>
-            "value and inline it inside the defn expression"
-
-        true ->
-          "You may need to call Nx.backend_transfer/2 (or Nx.backend_copy/2) " <>
-            "on one or both of them to transfer them to a common implementation"
-      end
-
-    raise "cannot invoke Nx function because it relies on two incompatible tensor implementations: " <>
-            "#{inspect(struct1)} and #{inspect(struct2)}. " <> detail
+    raise Nx.Defn.IncompatibleBackendsError, backend1: struct1, backend2: struct2
   end
 
   @doc false

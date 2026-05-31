@@ -19,9 +19,42 @@ defmodule Nx.Defn.Grad do
     {:env, env} = Function.info(fun, :env)
     ids = stop_grads(env, ids)
 
-    Process.put(__MODULE__, true)
-    expr = fun.(to_grad)
-    Process.delete(__MODULE__)
+    expr =
+      try do
+        fun.(to_grad)
+      rescue
+        e in Nx.Defn.IncompatibleBackendsError ->
+          if e.backend1 == Nx.Defn.Expr or e.backend2 == Nx.Defn.Expr do
+            backend = if e.backend1 == Nx.Defn.Expr, do: e.backend2, else: e.backend1
+
+            reraise ArgumentError,
+                    """
+                    Nx.Defn.grad/2 failed because a tensor captured as a closure \
+                    inside the gradient function is on a non-default backend \
+                    (#{inspect(backend)}).
+
+                    Tensors used inside the gradient function must either be:
+
+                      1. Passed as explicit arguments and included in the differentiated \
+                    variables tuple, OR
+                      2. The entire grad call must be wrapped in a defn function or \
+                    Nx.Defn.jit/2 so closure tensors are properly lifted to defn params.
+
+                    For example, instead of:
+
+                        Nx.Defn.grad({kernel}, fn {k} -> loss(k, data, labels) end)
+
+                    Use:
+
+                        Nx.Defn.jit(fn kernel, data, labels ->
+                          Nx.Defn.grad({kernel}, fn {k} -> loss(k, data, labels) end)
+                        end).(kernel, data, labels)\
+                    """,
+                    __STACKTRACE__
+          else
+            reraise e, __STACKTRACE__
+          end
+      end
 
     transformed_expr =
       expr |> transform.() |> validate_expr!()
