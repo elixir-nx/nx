@@ -63,9 +63,9 @@ defmodule EXLA.Defn.ShardingTest do
       # y[[100],[101],[102],[103]] broadcasts to [[100,100],[101,101],[102,102],[103,103]]
       # x+y = [[100,100],[102,102],[104,104],[106,106]], device 0 gets col 0
       assert_equal(result1_d0, Nx.tensor([[100], [102], [104], [106]]))
-      # Second output (y*2): y broadcasts to {4,2}, multiply by 2, result is {4,2}
-      # [[100],[101],[102],[103]] * 2 = [[200],[202],[204],[206]], broadcasts to [[200,200],[202,202],[204,204],[206,206]]
-      assert_equal(result2_d0, Nx.tensor([[200, 200], [202, 202], [204, 204], [206, 206]]))
+      # Second output (y*2): each partition has y={4,1}, so y*2 is {4,1} per partition.
+      # y_dev0=[[100],[101],[102],[103]] * 2 = [[200],[202],[204],[206]]
+      assert_equal(result2_d0, Nx.tensor([[200], [202], [204], [206]]))
 
       # Device 1: x={4,1} rows[0-3]col[1], y={4,1} rows[0-3]
       {result1_d1, result2_d1} = Enum.at(results, 1)
@@ -73,16 +73,17 @@ defmodule EXLA.Defn.ShardingTest do
       # broadcasts to [[10,10],[11,11],[12,12],[13,13]] + [[100,100],[101,101],[102,102],[103,103]]
       # = [[110,110],[112,112],[114,114],[116,116]], device 1 gets col 1
       assert_equal(result1_d1, Nx.tensor([[110], [112], [114], [116]]))
-      # Second output: same as device 0 (y is replicated across axis 1)
-      assert_equal(result2_d1, Nx.tensor([[200, 200], [202, 202], [204, 204], [206, 206]]))
+
+      # Second output: same as device 0 (y is replicated across axis 1, so d1 sees the same y_dev shard).
+      assert_equal(result2_d1, Nx.tensor([[200], [202], [204], [206]]))
 
       # Device 2: x={4,1} rows[4-7]col[0], y={4,1} rows[4-7]
       {result1_d2, result2_d2} = Enum.at(results, 2)
       # First output: x[[4],[5],[6],[7]] + y[[104],[105],[106],[107]]
       # = [[108,108],[110,110],[112,112],[114,114]], device 2 gets col 0
       assert_equal(result1_d2, Nx.tensor([[108], [110], [112], [114]]))
-      # Second output: [[104],[105],[106],[107]] * 2, broadcasts to [[208,208]...]
-      assert_equal(result2_d2, Nx.tensor([[208, 208], [210, 210], [212, 212], [214, 214]]))
+      # Second output: y_dev2=[[104],[105],[106],[107]] * 2 = [[208],[210],[212],[214]]
+      assert_equal(result2_d2, Nx.tensor([[208], [210], [212], [214]]))
 
       # Device 3: x={4,1} rows[4-7]col[1], y={4,1} rows[4-7]
       {result1_d3, result2_d3} = Enum.at(results, 3)
@@ -90,8 +91,9 @@ defmodule EXLA.Defn.ShardingTest do
       # broadcasts to [[14,14],[15,15],[16,16],[17,17]] + [[104,104],[105,105],[106,106],[107,107]]
       # = [[118,118],[120,120],[122,122],[124,124]], device 3 gets col 1
       assert_equal(result1_d3, Nx.tensor([[118], [120], [122], [124]]))
-      # Second output: same as device 2 (y is replicated across axis 1)
-      assert_equal(result2_d3, Nx.tensor([[208, 208], [210, 210], [212, 212], [214, 214]]))
+
+      # Second output: same as device 2 (y is replicated across axis 1, so d3 sees the same y_dev shard).
+      assert_equal(result2_d3, Nx.tensor([[208], [210], [212], [214]]))
     end
 
     @moduletag :multi_device
@@ -176,13 +178,15 @@ defmodule EXLA.Defn.ShardingTest do
       assert [result0, result1, result2, result3] =
                EXLA.shard_jit(fun, mesh, input_shardings: input_shardings).(args)
 
-      assert_equal(result0, Nx.tensor([[100, 100], [102, 102], [104, 104], [106, 106]]))
+      # Each partition's output is {4,1}: x_shard + y_shard = {4,1} + {4,1}
+      # (y input is {8,1}, sharded on axis 0 only → {4,1} per partition).
+      assert_equal(result0, Nx.tensor([[100], [102], [104], [106]]))
       assert result0.data.buffer.device_id == 0
-      assert_equal(result1, Nx.tensor([[110, 110], [112, 112], [114, 114], [116, 116]]))
+      assert_equal(result1, Nx.tensor([[110], [112], [114], [116]]))
       assert result1.data.buffer.device_id == 1
-      assert_equal(result2, Nx.tensor([[108, 108], [110, 110], [112, 112], [114, 114]]))
+      assert_equal(result2, Nx.tensor([[108], [110], [112], [114]]))
       assert result2.data.buffer.device_id == 2
-      assert_equal(result3, Nx.tensor([[118, 118], [120, 120], [122, 122], [124, 124]]))
+      assert_equal(result3, Nx.tensor([[118], [120], [122], [124]]))
       assert result3.data.buffer.device_id == 3
     end
 
