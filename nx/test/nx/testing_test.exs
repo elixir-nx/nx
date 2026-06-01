@@ -53,8 +53,21 @@ defmodule Nx.TestingTest do
           assert_all_close(a, b, atol: 0.0, rtol: 0.0)
         end
 
-      assert error.message =~ "max absolute difference"
-      assert error.message =~ "max relative difference"
+      assert error.message == """
+      Tensors differ by more than the tolerance
+
+      atol: 0.0, rtol: 0.0
+      max absolute difference: 9.989738464355469e-5
+      max relative difference: 4.994619666831568e-5
+
+      left:
+
+      #{inspect(a)}
+
+      right:
+
+      #{inspect(b)}
+      """
     end
 
     test "error message shows a clear diagnostic for mismatched vec axes" do
@@ -66,7 +79,12 @@ defmodule Nx.TestingTest do
           assert_all_close(a, b)
         end
 
-      assert error.message =~ "vectorized_axes"
+      assert error.message == """
+      Vectorized axes mismatch
+
+      left axes:  [foo: 2]
+      right axes: [bar: 2]
+      """
     end
   end
 
@@ -91,8 +109,17 @@ defmodule Nx.TestingTest do
           assert_equal(a, b)
         end
 
-      assert error.message =~ "max absolute difference"
-      assert error.message =~ "0.5"
+      assert error.message == """
+      Tensor assertion failed.
+
+      left:
+
+      #{inspect(a)}
+
+      right:
+
+      #{inspect(b)}
+      """
     end
 
     test "error message shows a clear diagnostic for mismatched vec axes" do
@@ -104,7 +131,12 @@ defmodule Nx.TestingTest do
           assert_equal(a, b)
         end
 
-      assert error.message =~ "vectorized_axes"
+      assert error.message == """
+      Vectorized axes mismatch
+
+      left axes:  [foo: 2]
+      right axes: [bar: 2]
+      """
     end
 
     test "handles NaN equality correctly" do
@@ -144,7 +176,12 @@ defmodule Nx.TestingTest do
           assert_equal(a, b)
         end
 
-      assert error.message =~ "shapes differ"
+      assert error.message == """
+      Shape mismatch
+
+      left shape:  {4, 1}
+      right shape: {4, 2}
+      """
     end
   end
 
@@ -166,7 +203,12 @@ defmodule Nx.TestingTest do
           assert_all_close(a, b)
         end
 
-      assert error.message =~ "shapes differ"
+      assert error.message == """
+      Shape mismatch
+
+      left shape:  {2, 1}
+      right shape: {2, 2}
+      """
     end
   end
 end

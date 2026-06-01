@@ -77,7 +77,7 @@ defmodule Nx.LinAlg.Cholesky do
 
   defn cholesky_grad(l, _input, g) do
     num = g |> Nx.tril() |> Nx.dot([-2], l, [-2]) |> batch_transpose()
-    den = Nx.eye(l) |> Nx.add(1)
+    den = Nx.eye(Nx.shape(l)) |> Nx.add(1)
     phi_tril = num |> Nx.divide(den) |> Nx.tril()
 
     bm = Nx.LinAlg.triangular_solve(l, phi_tril, transform_a: :transpose)

@@ -41,8 +41,6 @@ defmodule Nx.Testing do
       right:
 
       #{inspect(right)}
-
-      #{diagnose_difference(left, right)}
       """)
     end
   end
@@ -51,23 +49,22 @@ defmodule Nx.Testing do
     left = to_tensor(left)
     right = to_tensor(right)
 
-    cond do
-      left.vectorized_axes != right.vectorized_axes ->
-        false
-
-      shapes_incompatible?(left, right) ->
-        false
-
-      true ->
-        both_nan = Nx.is_nan(left) |> Nx.logical_and(Nx.is_nan(right))
-
-        left
-        |> Nx.equal(right)
-        |> Nx.logical_or(both_nan)
-        |> Nx.all()
-        |> Nx.to_flat_list()
-        |> Enum.all?(&(&1 == 1))
+    if left.vectorized_axes != right.vectorized_axes do
+      flunk_vectorized_axes_mismatch(left, right)
     end
+
+    if shapes_incompatible?(left, right) do
+      flunk_shapes_mismatch(left, right)
+    end
+
+    both_nan = Nx.is_nan(left) |> Nx.logical_and(Nx.is_nan(right))
+
+    left
+    |> Nx.equal(right)
+    |> Nx.logical_or(both_nan)
+    |> Nx.all()
+    |> Nx.to_flat_list()
+    |> Enum.all?(&(&1 == 1))
   end
 
   # Wrap raw scalars/lists in tensors so the struct-field accesses
@@ -75,6 +72,54 @@ defmodule Nx.Testing do
   # pass through unchanged.
   defp to_tensor(%Nx.Tensor{} = t), do: t
   defp to_tensor(other), do: Nx.tensor(other)
+
+  defp flunk_vectorized_axes_mismatch(left, right) do
+    flunk("""
+    Vectorized axes mismatch
+
+    left axes:  #{inspect(left.vectorized_axes)}
+    right axes: #{inspect(right.vectorized_axes)}
+    """)
+  end
+
+  defp flunk_shapes_mismatch(left, right) do
+    flunk("""
+    Shape mismatch
+
+    left shape:  #{inspect(Nx.shape(left))}
+    right shape: #{inspect(Nx.shape(right))}
+    """)
+  end
+
+  defp flunk_not_close(left, right, atol, rtol) do
+    abs_diff = left |> Nx.subtract(right) |> Nx.abs()
+    max_abs = abs_diff |> Nx.devectorize() |> Nx.reduce_max() |> Nx.to_number()
+
+    right_abs = Nx.abs(right)
+
+    max_rel =
+      abs_diff
+      |> Nx.divide(Nx.max(right_abs, Nx.tensor(1.0e-10)))
+      |> Nx.devectorize()
+      |> Nx.reduce_max()
+      |> Nx.to_number()
+
+    flunk("""
+    Tensors differ by more than the tolerance
+
+    atol: #{atol}, rtol: #{rtol}
+    max absolute difference: #{max_abs}
+    max relative difference: #{max_rel}
+
+    left:
+
+    #{inspect(left)}
+
+    right:
+
+    #{inspect(right)}
+    """)
+  end
 
   # Genuine shape mismatches are rejected, but we still allow a scalar
   # (shape `{}`) to compare against a tensor of any shape — that's the
@@ -110,90 +155,18 @@ defmodule Nx.Testing do
     left_t = to_tensor(left)
     right_t = to_tensor(right)
 
-    equals =
-      left_t.vectorized_axes == right_t.vectorized_axes and
-        not shapes_incompatible?(left_t, right_t) and
-        left_t
-        |> Nx.all_close(right_t, atol: atol, rtol: rtol)
-        |> Nx.backend_transfer(Nx.BinaryBackend)
-        |> Nx.to_flat_list()
-        |> Enum.all?(&(&1 == 1))
-
-    if !equals do
-      flunk("""
-      expected
-
-      #{inspect(left)}
-
-      to be within tolerance of
-
-      #{inspect(right)}
-
-      (atol: #{atol}, rtol: #{rtol})
-
-      #{diagnose_difference(left, right)}
-      """)
+    if left_t.vectorized_axes != right_t.vectorized_axes do
+      flunk_vectorized_axes_mismatch(left_t, right_t)
     end
-  end
 
-  # Produces a human-readable diagnostic describing how two tensors differ.
-  # If vectorized axes or shapes don't line up, returns a structural message.
-  # Otherwise computes max absolute and max relative difference across all
-  # elements (including vec axes) so bit-level disagreements hidden by
-  # truncated `inspect` output are still visible in the failure message.
-  defp diagnose_difference(left, right) do
-    left = to_tensor(left)
-    right = to_tensor(right)
-
-    cond do
-      left.vectorized_axes != right.vectorized_axes ->
-        "vectorized_axes differ: left #{inspect(left.vectorized_axes)}, " <>
-          "right #{inspect(right.vectorized_axes)}"
-
-      shapes_incompatible?(left, right) ->
-        "shapes differ: left #{inspect(Nx.shape(left))}, " <>
-          "right #{inspect(Nx.shape(right))}"
-
-      true ->
-        numeric_diagnostic(left, right)
+    if shapes_incompatible?(left_t, right_t) do
+      flunk_shapes_mismatch(left_t, right_t)
     end
-  rescue
-    _ -> ""
-  end
 
-  defp numeric_diagnostic(left, right) do
-    # Devectorize so reductions collapse across vec axes too, and so
-    # `Nx.to_number` on the final scalar doesn't hit a vectorized tensor.
-    left = if left.vectorized_axes == [], do: left, else: Nx.devectorize(left, keep_names: false)
+    equals = left_t |> Nx.all_close(right_t, atol: atol, rtol: rtol) |> Nx.backend_transfer(Nx.BinaryBackend) |> Nx.to_flat_list() |> Enum.all?(&(&1 == 1))
 
-    right =
-      if right.vectorized_axes == [], do: right, else: Nx.devectorize(right, keep_names: false)
-
-    # Promote to a common numeric type so subtraction works for int/float mixes.
-    {left_f, right_f} =
-      case {Nx.type(left), Nx.type(right)} do
-        {{:f, _}, {:f, _}} -> {left, right}
-        {{:c, _}, _} -> {left, Nx.as_type(right, Nx.type(left))}
-        {_, {:c, _}} -> {Nx.as_type(left, Nx.type(right)), right}
-        _ -> {Nx.as_type(left, {:f, 32}), Nx.as_type(right, {:f, 32})}
-      end
-
-    diff = Nx.subtract(left_f, right_f) |> Nx.abs()
-    max_abs = diff |> Nx.reduce_max() |> Nx.to_number()
-
-    # Relative diff: |a - b| / max(|a|, |b|, tiny) to avoid divide by zero.
-    denom =
-      Nx.max(Nx.abs(left_f), Nx.abs(right_f))
-      |> Nx.max(Nx.tensor(1.0e-30))
-
-    max_rel = Nx.divide(diff, denom) |> Nx.reduce_max() |> Nx.to_number()
-
-    "max absolute difference: #{inspect(max_abs)}\n" <>
-      "max relative difference: #{inspect(max_rel)}"
-  rescue
-    # If the diff computation itself fails (mixed complex/real, NaN propagation,
-    # unusual types, etc.), fall back silently — the inspect output above is
-    # still shown.
-    _ -> ""
+    if not equals do
+      flunk_not_close(left_t, right_t, atol, rtol)
+    end
   end
 end
