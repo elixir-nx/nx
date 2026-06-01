@@ -3895,7 +3895,7 @@ defmodule Nx do
   end
 
   @doc """
-  Pads a tensor with a given value.
+  Pads a tensor with a given constant value.
 
   You must specify a padding configuration. A padding
   configuration is a list of tuples consisting of
@@ -3907,7 +3907,7 @@ defmodule Nx do
   the tensor is clipped on either end according to the
   padding width. Interior padding widths cannot be negative.
 
-  See also: `reflect/2`
+  See also: `reflect/2`, `pad_outer/3`
 
   ## Examples
 
@@ -4101,7 +4101,9 @@ defmodule Nx do
 
   """
   @doc type: :shape
-  def pad(tensor, pad_value, padding_config) when is_list(padding_config) do
+  def pad(tensor, pad_value, padding_config)
+      when is_list(padding_config) and
+             (is_number(pad_value) or is_tensor(pad_value)) do
     apply_vectorized(tensor, fn tensor, offset ->
       output_type = binary_type(tensor, pad_value)
       pad_value = to_tensor(pad_value)
@@ -4118,7 +4120,348 @@ defmodule Nx do
     end)
   end
 
-  ## Reflection
+  @padding_types [:cyclic, :mirror, :replicate, :reflect]
+
+  @doc """
+  Pads a tensor at the start and end of each axis with a given constant value or via a given padding type.
+
+  The padding value can either be a scalar number (for constant padding) or an atom specifying the padding type.
+  The following types of padding are supported: :cyclic, :reflect, :mirror, :replicate.
+
+  You must specify a padding configuration. A padding
+  configuration is a list of tuples consisting of
+  `{pad_width_low, pad_width_high}` for each dimension in the
+  input tensor. The padding configuration must be of the same length
+  as the tensor shape.
+
+  Padding widths can be negative. If they are negative,
+  the tensor is clipped on either end according to the
+  padding width. Interior padding widths cannot be negative.
+
+  See also: `reflect/2`, `pad/3`
+
+  ## Examples
+
+  ### Constant Padding
+
+      iex> Nx.pad_outer(Nx.tensor([[1, 2, 3], [4, 5, 6]]), 0, [{1, 1}, {1, 1}])
+      #Nx.Tensor<
+        s32[4][5]
+        [
+          [0, 0, 0, 0, 0],
+          [0, 1, 2, 3, 0],
+          [0, 4, 5, 6, 0],
+          [0, 0, 0, 0, 0]
+        ]
+      >
+
+      iex> Nx.pad_outer(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]), 0, [{-1, -1}, {-1, -1}])
+      #Nx.Tensor<
+        s32[1][1]
+        [
+          [5]
+        ]
+      >
+
+      iex> Nx.pad_outer(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]), 0, [{1, -1}, {1, -1}])
+      #Nx.Tensor<
+        s32[3][3]
+        [
+          [0, 0, 0],
+          [0, 1, 2],
+          [0, 4, 5]
+        ]
+      >
+
+  ### Cyclic Padding
+
+  Cyclic padding repeats the tensors existing values along each axis in their original order.
+
+      iex> Nx.pad_outer(Nx.tensor([0, 1, 2]), :cyclic, [{3, 1}])
+      #Nx.Tensor<
+        s32[7]
+        [0, 1, 2, 0, 1, 2, 0]
+      >
+
+      iex> Nx.pad_outer(Nx.tensor([[0, 1, 2], [3, 4, 5]], names: [:x, :y]), :cyclic, [{2, 0}, {2, 1}])
+      #Nx.Tensor<
+        s32[x: 4][y: 6]
+        [
+          [1, 2, 0, 1, 2, 0],
+          [4, 5, 3, 4, 5, 3],
+          [1, 2, 0, 1, 2, 0],
+          [4, 5, 3, 4, 5, 3]
+        ]
+      >
+
+  ### Mirror padding
+
+  Mirror padding repeats the tensors existing values along each axis in reverse order while including the outer most values.
+
+      iex> Nx.pad_outer(Nx.tensor([0, 1, 2]), :mirror, [{3, 3}])
+      #Nx.Tensor<
+        s32[9]
+        [2, 1, 0, 0, 1, 2, 2, 1, 0]
+      >
+
+      iex> Nx.pad_outer(Nx.tensor([[0, 1, 2], [3, 4, 5]], names: [:x, :y]), :mirror, [{1, 1}, {2, 2}])
+      #Nx.Tensor<
+        s32[x: 4][y: 7]
+        [
+          [1, 0, 0, 1, 2, 2, 1],
+          [1, 0, 0, 1, 2, 2, 1],
+          [4, 3, 3, 4, 5, 5, 4],
+          [4, 3, 3, 4, 5, 5, 4]
+        ]
+      >
+
+  ### Reflection padding
+
+  Reflection padding repeats the tensors existing values along each axis in reverse order skipping the outer most values.
+
+    iex> Nx.pad_outer(Nx.tensor([0, 1, 2]), :reflect, [{3, 1}])
+    #Nx.Tensor<
+      s32[7]
+      [1, 2, 1, 0, 1, 2, 1]
+    >
+
+    iex> Nx.pad_outer(Nx.tensor([[0, 1, 2], [3, 4, 5]], names: [:x, :y]), :reflect, [{2, 0}, {2, 1}])
+    #Nx.Tensor<
+      s32[x: 4][y: 6]
+      [
+        [2, 1, 0, 1, 2, 1],
+        [5, 4, 3, 4, 5, 4],
+        [2, 1, 0, 1, 2, 1],
+        [5, 4, 3, 4, 5, 4]
+      ]
+    >
+
+  ### Replicate padding
+
+  Replicate padding uses the tensors outer most values along each axis as constant padding values.
+
+    iex> Nx.pad_outer(Nx.tensor([0, 1, 2]), :replicate, [{3, 1}])
+    #Nx.Tensor<
+      s32[7]
+      [0, 0, 0, 0, 1, 2, 2]
+    >
+
+    iex> Nx.pad_outer(Nx.tensor([[0, 1, 2], [3, 4, 5]], names: [:x, :y]), :replicate, [{2, 2}, {2, 2}])
+    #Nx.Tensor<
+      s32[x: 6][y: 7]
+      [
+        [0, 0, 0, 1, 2, 2, 2],
+        [0, 0, 0, 1, 2, 2, 2],
+        [0, 0, 0, 1, 2, 2, 2],
+        [3, 3, 3, 4, 5, 5, 5],
+        [3, 3, 3, 4, 5, 5, 5],
+        [3, 3, 3, 4, 5, 5, 5]
+      ]
+    >
+
+  """
+
+  @doc type: :shape
+  def pad_outer(tensor, pad_value_or_type, padding_config)
+      when is_list(padding_config) and
+             (is_number(pad_value_or_type) or is_tensor(pad_value_or_type)) do
+    apply_vectorized(tensor, fn tensor, offset ->
+      output_type = binary_type(tensor, pad_value_or_type)
+      pad_value_or_type = to_tensor(pad_value_or_type)
+
+      if not (pad_value_or_type.shape == {} and pad_value_or_type.vectorized_axes == []) do
+        raise ArgumentError, "padding value must be a scalar and non-vectorized"
+      end
+
+      padding_config =
+        (List.duplicate({0, 0, 0}, offset) ++
+           padding_config)
+        |> Enum.with_index()
+        |> Enum.map(fn
+          {{a, b}, _ax} when is_integer(a) and is_integer(b) ->
+            {a, b, 0}
+
+          {pad, ax} ->
+            raise ArgumentError,
+                  "expected padding config for axis #{ax} to be of the format {left, right}, with left and right as integers, got: #{inspect(pad)}"
+        end)
+
+      shape = Nx.Shape.pad(tensor.shape, padding_config)
+
+      out = %{tensor | type: output_type, shape: shape}
+      impl!(tensor, pad_value_or_type).pad(out, tensor, pad_value_or_type, padding_config)
+    end)
+  end
+
+  def pad_outer(tensor, pad_value_or_type, padding_config) when is_atom(pad_value_or_type) do
+    {left_period, right_period} =
+      case pad_value_or_type do
+        :cyclic ->
+          {&left_cycle_index_period/1, &right_cycle_index_period/1}
+
+        :mirror ->
+          {&left_mirror_index_period/1, &right_mirror_index_period/1}
+
+        :reflect ->
+          {&left_reflect_index_period/1, &right_reflect_index_period/1}
+
+        :replicate ->
+          {&left_replicate_index_period/1, &right_replicate_index_period/1}
+
+        other ->
+          raise ArgumentError,
+                "expected padding type to be either of [#{Enum.join(Enum.map(@padding_types, &inspect/1), ", ")}], got #{inspect(other)}"
+      end
+
+    padding_with_index(tensor,
+      padding_config: padding_config,
+      left_index_period: left_period,
+      right_index_period: right_period
+    )
+  end
+
+  # n == 0 is handled at the call side
+  defp left_cycle_index_period(1), do: Nx.tensor([0])
+
+  defp left_cycle_index_period(n) do
+    Nx.subtract(n - 1, Nx.iota({n})) |> Nx.remainder(n)
+  end
+
+  # n == 0 is handled at the call side
+  defp right_cycle_index_period(1), do: Nx.tensor([0])
+
+  defp right_cycle_index_period(n), do: Nx.iota({n})
+
+  # n == 0 is handled at the call side
+  defp left_mirror_index_period(1), do: Nx.tensor([0])
+
+  defp left_mirror_index_period(n) do
+    # Generates the indices for pre-mirroring on the axis
+    left = Nx.iota({n})
+    right = Nx.subtract(n - 1, left)
+    Nx.concatenate([left, right])
+  end
+
+  # n == 0 is handled at the call side
+  defp right_mirror_index_period(1), do: Nx.tensor([0])
+
+  defp right_mirror_index_period(n) do
+    # Generates the indices for post-mirroring on the axis
+    base = Nx.iota({n})
+    left = Nx.subtract(n - 1, base)
+    right = base
+    Nx.concatenate([left, right])
+  end
+
+  # n == 0 is handled at the call side
+  defp left_reflect_index_period(1), do: Nx.tensor([0])
+
+  defp left_reflect_index_period(n) do
+    # Generates the indices for pre-reflecting on the axis
+    base = Nx.iota({n - 1})
+    left = Nx.add(base, 1)
+    right = Nx.subtract(n - 2, base)
+    Nx.concatenate([left, right])
+  end
+
+  # n == 0 is handled at the call side
+  defp right_reflect_index_period(1), do: Nx.tensor([0])
+
+  defp right_reflect_index_period(n) do
+    # Generates the indices for post-reflecting on the axis
+    base = Nx.iota({n - 1})
+    left = Nx.subtract(n - 2, base)
+    right = Nx.add(base, 1)
+    Nx.concatenate([left, right])
+  end
+
+  # n == 0 is handled at the call side
+  defp left_replicate_index_period(1), do: Nx.tensor([0])
+
+  defp left_replicate_index_period(n), do: Nx.broadcast(0, {n})
+
+  # n == 0 is handled at the call side
+  defp right_replicate_index_period(1), do: Nx.tensor([0])
+
+  defp right_replicate_index_period(n), do: Nx.broadcast(n - 1, {n})
+
+  defp padding_with_index(tensor, opts) do
+    opts = keyword!(opts, [:padding_config, :left_index_period, :right_index_period])
+
+    apply_vectorized(tensor, fn tensor, offset ->
+      padding_config = opts[:padding_config]
+      left_index_period = opts[:left_index_period]
+      right_index_period = opts[:right_index_period]
+
+      unless padding_config do
+        raise ArgumentError, "missing mandatory option :padding_config"
+      end
+
+      padding_config = List.duplicate({0, 0}, offset) ++ padding_config
+
+      rank = Nx.rank(tensor)
+
+      unless rank > 0 do
+        raise ArgumentError, "expected tensor to have rank greater than 0"
+      end
+
+      axes = axes(tensor)
+
+      if rank != length(padding_config) do
+        raise ArgumentError, "expected to have one padding_config entry each tensor axis"
+      end
+
+      Enum.zip_reduce(
+        padding_config,
+        axes,
+        tensor,
+        fn
+          {left_padding, right_padding}, axis, tensor
+          when left_padding >= 0 and right_padding >= 0 ->
+            n = Nx.axis_size(tensor, axis)
+
+            left_padding =
+              if(left_padding > 0) do
+                idx_period = left_index_period.(n)
+                repetitions = div(left_padding, n) + 1
+
+                idx =
+                  Nx.tile(idx_period, [repetitions])
+                  |> Nx.take(Nx.iota({left_padding}))
+                  |> Nx.reverse()
+
+                Nx.take(tensor, idx, axis: axis)
+              end
+
+            right_padding =
+              if(right_padding > 0) do
+                idx_period = right_index_period.(n)
+                repetitions = div(right_padding, n) + 1
+                idx = idx_period |> Nx.tile([repetitions]) |> Nx.take(Nx.iota({right_padding}))
+                Nx.take(tensor, idx, axis: axis)
+              end
+
+            case({left_padding, right_padding}) do
+              {nil, nil} ->
+                tensor
+
+              {nil, right} ->
+                Nx.concatenate([tensor, right], axis: axis)
+
+              {left, nil} ->
+                Nx.concatenate([left, tensor], axis: axis)
+
+              {left, right} ->
+                Nx.concatenate([left, tensor, right], axis: axis)
+            end
+
+          padding, axis, _ ->
+            raise ArgumentError,
+                  "expected padding config for axis #{axis} to be of the format {left, right}, with left and right as non-negative integers, got: #{inspect(padding)}"
+        end
+      )
+    end)
+  end
 
   @doc """
   Returns the type of the tensor.
@@ -17331,6 +17674,8 @@ defmodule Nx do
     impl!(tensor).to_pointer(tensor, opts)
   end
 
+  ## Reflect
+
   @doc """
   Pads a tensor of rank 1 or greater along the given axes through periodic reflections.
 
@@ -17362,98 +17707,15 @@ defmodule Nx do
       >
   """
   @doc type: :shape
+  @deprecated "Use pad_outer/3 instead"
   def reflect(tensor, opts \\ []) do
     opts = keyword!(opts, [:padding_config])
 
-    apply_vectorized(tensor, fn tensor, offset ->
-      padding_config = opts[:padding_config]
-
-      unless padding_config do
-        raise ArgumentError, "missing mandatory option :padding_config"
-      end
-
-      padding_config = List.duplicate({0, 0}, offset) ++ padding_config
-
-      rank = Nx.rank(tensor)
-
-      unless rank > 0 do
-        raise ArgumentError, "expected tensor to have rank greater than 0"
-      end
-
-      axes = axes(tensor)
-
-      if rank != length(padding_config) do
-        raise ArgumentError, "expected to have one padding_config entry each tensor axis"
-      end
-
-      Enum.zip_reduce(
-        padding_config,
-        axes,
-        tensor,
-        fn
-          {left_padding, right_padding}, axis, tensor
-          when left_padding >= 0 and right_padding >= 0 ->
-            n = Nx.axis_size(tensor, axis)
-
-            left_padding =
-              if(left_padding > 0) do
-                idx_period = left_reflect_index_period(n)
-                repetitions = div(left_padding, n) + 1
-
-                idx =
-                  Nx.tile(idx_period, [repetitions])
-                  |> Nx.take(Nx.iota({left_padding}))
-                  |> Nx.reverse()
-
-                Nx.take(tensor, idx, axis: axis)
-              end
-
-            right_padding =
-              if(right_padding > 0) do
-                idx_period = right_reflect_index_period(n)
-                repetitions = div(right_padding, n) + 1
-                idx = idx_period |> Nx.tile([repetitions]) |> Nx.take(Nx.iota({right_padding}))
-                Nx.take(tensor, idx, axis: axis)
-              end
-
-            case({left_padding, right_padding}) do
-              {nil, nil} ->
-                tensor
-
-              {nil, right} ->
-                Nx.concatenate([tensor, right], axis: axis)
-
-              {left, nil} ->
-                Nx.concatenate([left, tensor], axis: axis)
-
-              {left, right} ->
-                Nx.concatenate([left, tensor, right], axis: axis)
-            end
-
-          padding, axis, _ ->
-            raise ArgumentError,
-                  "expected padding config for axis #{axis} to be of the format {left, right}, with left and right as non-negative integers, got: #{inspect(padding)}"
-        end
-      )
-    end)
-  end
-
-  defp left_reflect_index_period(1), do: Nx.tensor([0])
-
-  defp left_reflect_index_period(n) do
-    # Generates the indices for pre-reflecting on the axis
-    left = Nx.iota({n - 1}) |> Nx.add(1)
-    right = Nx.subtract(n - 2, Nx.iota({n - 1}))
-    Nx.concatenate([left, right])
-  end
-
-  defp right_reflect_index_period(1), do: Nx.tensor([0])
-
-  defp right_reflect_index_period(n) do
-    # Generates the indices for post-reflecting on the axis
-    left = Nx.subtract(n - 2, Nx.iota({n - 1}))
-    right = Nx.iota({n - 1}) |> Nx.add(1)
-    Nx.concatenate([left, right])
+    padding_with_index(tensor,
+      padding_config: opts[:padding_config],
+      left_index_period: &left_reflect_index_period/1,
+      right_index_period: &right_reflect_index_period/1
+    )
   end
 
   @doc """
