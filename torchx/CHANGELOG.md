@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.12.0 (2026-05-15)
+
+  * Update to latest Nx
+  * Add `Nx.rfft/2` and `Nx.irfft/2` support
+  * Add `Nx.block/4` support
+  * Fix `Nx.window_scatter_max/min` crash on f64 tensors
+  * Fix visibility hidden symbols
+
 ## v0.11.0 (2026-02-10)
 
   * Update to latest Nx

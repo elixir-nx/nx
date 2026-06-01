@@ -719,70 +719,29 @@ defmodule EXLA.MLIR.Value do
     op(func, "stablehlo.return", values, [])
   end
 
-  def eigh(%Value{function: func} = value, eigenvals_typespec, eigenvecs_typespec) do
-    %{type: op_type} = get_typespec(value)
-
-    operands = [value]
-    result_types = typespecs_to_mlir_types([eigenvals_typespec, eigenvecs_typespec])
-
-    call_target_name =
-      case op_type do
-        {:f, 32} ->
-          "eigh_cpu_custom_call_f32"
-
-        {:f, 64} ->
-          "eigh_cpu_custom_call_f64"
-
-        type ->
-          # Due to matching on EXLA.Defn, we are sure that the device here is always :host
-          raise "Eigh decomposition not supported on :host device for type #{inspect(type)}"
-      end
+  @doc false
+  def custom_call(
+        [%Value{function: func} | _] = operands,
+        typespecs,
+        call_target_name,
+        dictionary_entries \\ []
+      )
+      when is_binary(call_target_name) and is_list(typespecs) and is_list(dictionary_entries) do
+    result_types = typespecs_to_mlir_types(typespecs)
 
     attributes = [
       call_target_name: attr_string(call_target_name),
       api_version: attr_i32(4)
     ]
 
-    [eigenvals, eigenvecs] =
-      op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
-
-    {eigenvals, eigenvecs}
-  end
-
-  def qr(%Value{function: func} = value, q_typespec, r_typespec) do
-    %{type: op_type} = get_typespec(value)
-
-    operands = [value]
-    result_types = typespecs_to_mlir_types([q_typespec, r_typespec])
-
-    call_target_name =
-      case op_type do
-        {:f, 32} ->
-          "qr_cpu_custom_call_f32"
-
-        {:f, 64} ->
-          "qr_cpu_custom_call_f64"
-
-        {:f, 16} ->
-          "qr_cpu_custom_call_f16"
-
-        {:bf, 16} ->
-          "qr_cpu_custom_call_bf16"
-
-        type ->
-          # Due to matching on EXLA.Defn, we are sure that the device here is always :host
-          raise "QR decomposition not supported on :host device for type #{inspect(type)}"
+    attributes =
+      if dictionary_entries != [] do
+        Keyword.put(attributes, :backend_config, backend_config_dict_attr(dictionary_entries))
+      else
+        attributes
       end
 
-    attributes = [
-      call_target_name: attr_string(call_target_name),
-      api_version: attr_i32(4)
-    ]
-
-    [q, r] =
-      op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
-
-    {q, r}
+    op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
   end
 
   def lu(%Value{function: func} = value, p_typespec, l_typespec, u_typespec) do
@@ -1086,6 +1045,23 @@ defmodule EXLA.MLIR.Value do
   defp attr_dict(keyword_list) do
     content = Enum.map_join(keyword_list, ", ", fn {key, value} -> "#{key} = #{value}" end)
     "{#{content}}"
+  end
+
+  # `stablehlo.custom_call` backend_config is a DictionaryAttr; callers supply
+  # `{name, attr}` pairs where `name` is a bare MLIR identifier and `attr` is
+  # valid MLIR attribute syntax for the RHS (StableHLO authors already work at
+  # this level).
+  defp backend_config_dict_attr(pairs) when is_list(pairs) do
+    pairs
+    |> Enum.map(fn
+      {key, value} when is_binary(key) and is_binary(value) ->
+        {key, value}
+
+      other ->
+        raise ArgumentError,
+              "custom_call backend_config dictionary must be a list of {binary_key, binary_attr} pairs, got entry: #{inspect(other)}"
+    end)
+    |> attr_dict()
   end
 
   defp join_list(list) do

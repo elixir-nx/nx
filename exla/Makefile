@@ -21,6 +21,8 @@ EXLA_LIB_DIR = $(PRIV_DIR)/xla_extension/lib
 XLA_EXTENSION_LIB_LINK_PATH = ../$(CWD_RELATIVE_TO_PRIV_PATH)/$(XLA_EXTENSION_LIB)
 EXLA_CACHE_SO_LINK_PATH = $(CWD_RELATIVE_TO_PRIV_PATH)/$(EXLA_CACHE_SO)
 
+.DEFAULT_GOAL := $(EXLA_SO)
+
 # Build flags
 #
 # Note that XLA requires c++17, Fine as well
@@ -86,7 +88,21 @@ else
 	LDFLAGS += -Wl,-rpath,'$$ORIGIN/xla_extension/lib'
 endif
 
-$(EXLA_SO): $(EXLA_CACHE_SO)
+# Optional test dylib: registers qr_cpu_custom_call_f32_exla_alias -> same
+# handler as qr_cpu_custom_call_f32. Built only when MIX_ENV=test.
+TEST_PLUGIN_CC = c_src/exla_test/custom_calls.cc
+TEST_PLUGIN_SO = $(PRIV_DIR)/test/exla_qr_alias.so
+
+$(TEST_PLUGIN_SO): $(TEST_PLUGIN_CC) | $(XLA_EXTENSION_DIR)
+	@ mkdir -p $(dir $@)
+	$(CXX) $(CFLAGS) -shared $(TEST_PLUGIN_CC) -o $@ $(LDFLAGS)
+
+EXLA_SO_DEPS = $(EXLA_CACHE_SO)
+ifeq ($(MIX_ENV),test)
+EXLA_SO_DEPS += $(TEST_PLUGIN_SO)
+endif
+
+$(EXLA_SO): $(EXLA_SO_DEPS)
 	@ mkdir -p $(PRIV_DIR)
 	@ mkdir -p $(PRIV_DIR)/xla_extension
 	@ if [ "${MIX_BUILD_EMBEDDED}" = "true" ]; then \

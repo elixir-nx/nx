@@ -320,6 +320,42 @@ defmodule EXLA.Defn.APITest do
     end
   end
 
+  describe "block ops via Evaluator with EXLA.Backend" do
+    # Regression test: before the fix, eval_apply(:block, ...) wrapped block_apply_default
+    # in a Nx.Defn.Compiler.fun and passed it to backend.block. EXLA.Backend.block JIT-traces
+    # that fun through Nx.Defn.Expr.block, calling it with Expr params. block_apply_default
+    # then hit composite_eval which raised on Expr tensors at the :parameter guard.
+    #
+    # The fix: pass the original callback directly so JIT-tracing works as intended.
+    setup do
+      Nx.default_backend({EXLA.Backend, client: :host})
+      # Override the global EXLA compiler set in test_helper so Evaluator handles defn dispatch
+      Nx.Defn.default_options(compiler: Nx.Defn.Evaluator)
+      :ok
+    end
+
+    defn block_top_k(t), do: Nx.top_k(t, k: 2)
+    defn block_cumulative_sum(t), do: Nx.cumulative_sum(t)
+    defn block_logical_not(t), do: Nx.logical_not(t)
+
+    test "top_k" do
+      t = Nx.tensor([3.0, 1.0, 4.0, 1.0, 5.0], backend: {EXLA.Backend, client: :host})
+      {values, indices} = block_top_k(t)
+      assert_equal(values, Nx.tensor([5.0, 4.0]))
+      assert_equal(indices, Nx.tensor([4, 2]))
+    end
+
+    test "cumulative_sum" do
+      t = Nx.tensor([1.0, 2.0, 3.0, 4.0], backend: {EXLA.Backend, client: :host})
+      assert_equal(block_cumulative_sum(t), Nx.tensor([1.0, 3.0, 6.0, 10.0]))
+    end
+
+    test "logical_not" do
+      t = Nx.tensor([1, 0, 1, 0], backend: {EXLA.Backend, client: :host})
+      assert_equal(block_logical_not(t), Nx.tensor([0, 1, 0, 1], type: :u8))
+    end
+  end
+
   describe "telemetry" do
     defn telemetry_add_two(a, b), do: a + b
 

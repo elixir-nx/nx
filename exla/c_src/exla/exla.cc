@@ -1,3 +1,5 @@
+#include <dlfcn.h>
+
 #include <cstring>
 #include <fine.hpp>
 #include <stdexcept>
@@ -28,6 +30,8 @@
 #include "xla/service/platform_util.h"
 #include "xla/tsl/platform/statusor.h"
 #include "llvm/Support/ThreadPool.h"
+
+#include <vector>
 
 namespace exla {
 
@@ -535,6 +539,19 @@ fine::Ok<> load_pjrt_plugin(ErlNifEnv *env, std::string device_type,
 
 FINE_NIF(load_pjrt_plugin, 0);
 
+// Loads a shared library with RTLD_GLOBAL so XLA FFI static registrations run.
+fine::Ok<> load_dylib(ErlNifEnv *env, std::string path) {
+  void *handle = dlopen(path.c_str(), RTLD_NOW | RTLD_GLOBAL);
+  if (handle == nullptr) {
+    const char *err = dlerror();
+    throw std::invalid_argument(err ? err : "dlopen failed");
+  }
+  (void)handle;
+  return fine::Ok();
+}
+
+FINE_NIF(load_dylib, 0);
+
 int64_t get_device_count(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client) {
   return client->client()->device_count();
 }
@@ -703,15 +720,26 @@ FINE_NIF(start_log_sink, 0);
 // Writes `data` into the memory at `address + offset`.  Intentionally unsafe:
 // no bounds checking.  The caller is responsible for ensuring the pointer is
 // valid and the region is large enough.
-fine::Ok<> write_to_pointer(ErlNifEnv *env, uint64_t address,
-                            ErlNifBinary data, uint64_t offset) {
+fine::Ok<> write_to_pointer(ErlNifEnv *env, uint64_t address, ErlNifBinary data,
+                            uint64_t offset) {
   uint8_t *ptr = reinterpret_cast<uint8_t *>(address);
   std::memcpy(ptr + offset, data.data, data.size);
   return fine::Ok();
 }
-FINE_NIF(write_to_pointer, 0);
+
+#else
+fine::Error<fine::Atom> write_to_pointer(ErlNifEnv *env, uint64_t address,
+                                         ErlNifBinary data, uint64_t offset) {
+  (void)env;
+  (void)address;
+  (void)data;
+  (void)offset;
+  return fine::Error(atoms::not_implemented);
+}
 
 #endif // EXLA_PROD
+
+FINE_NIF(write_to_pointer, 0);
 
 } // namespace exla
 

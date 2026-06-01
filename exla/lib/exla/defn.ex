@@ -9,6 +9,7 @@ defmodule EXLA.Defn do
   alias EXLA.Typespec
   alias EXLA.MLIR.Value
   alias EXLA.MLIR.Function
+  alias EXLA.CustomCall.Spec, as: CustomCallSpec
 
   @doc false
   def __partitions_options__(options) do
@@ -600,78 +601,8 @@ defmodule EXLA.Defn do
     {fun_computation(args, expr, type, state), cache}
   end
 
-  defp cached_recur_operator(
-         :block,
-         %T{
-           data: %Expr{
-             args: [
-               %Nx.Block.LinAlg.QR{},
-               [tensor],
-               {%{type: {type_kind, _}} = q_expr, r_expr},
-               _callback
-             ]
-           }
-         },
-         %{client: %EXLA.Client{platform: :host}, builder: %Function{}} = state,
-         cache
-       )
-       when type_kind != :c do
-    # We match only on platform: :host for MLIR, as we want to support
-    # QR-on-cpu as a custom call only in this case
-    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
-
-    tensor =
-      if op_type(tensor) != q_expr.type do
-        to_type(tensor, q_expr.type)
-      else
-        tensor
-      end
-
-    {q, r} = Value.qr(tensor, expr_to_typespec(q_expr), expr_to_typespec(r_expr))
-    {[q, r], cache}
-  end
-
-  defp cached_recur_operator(
-         :block,
-         %T{
-           data: %Expr{
-             args: [
-               %Nx.Block.LinAlg.Eigh{},
-               [tensor],
-               {%{type: {evec_type_kind, _}} = eigenvals_expr,
-                %{type: {eval_type_kind, _}} = eigenvecs_expr},
-               _callback
-             ]
-           }
-         },
-         %{client: %EXLA.Client{platform: :host}, builder: %Function{}} = state,
-         cache
-       )
-       when evec_type_kind != :c and eval_type_kind != :c do
-    # We match only on platform: :host for MLIR, as we want to support
-    # eigh-on-cpu as a custom call only in this case
-    {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
-
-    # convert to float and ensure that we're either using f32 or f64, because Eigen
-    # only supports f32 and f64 easily.
-    out_type = Nx.Type.merge(Nx.Type.to_floating(eigenvecs_expr.type), {:f, 32})
-
-    tensor =
-      if op_type(tensor) != out_type do
-        to_type(tensor, out_type)
-      else
-        tensor
-      end
-
-    {eigenvals, eigenvecs} =
-      Value.eigh(
-        tensor,
-        expr_to_typespec(%{eigenvals_expr | type: out_type}),
-        expr_to_typespec(%{eigenvecs_expr | type: out_type})
-      )
-
-    {[to_type(eigenvals, eigenvals_expr.type), to_type(eigenvecs, eigenvecs_expr.type)], cache}
-  end
+  # StableHLO-style lowering (gather, top_k, fft): not the C custom_call path;
+  # see `EXLA.CustomCall` for blocks that delegate to native CPU kernels.
 
   defp cached_recur_operator(
          :block,
@@ -736,15 +667,9 @@ defmodule EXLA.Defn do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     opts = [lengths: fft2_struct.lengths, axes: fft2_struct.axes]
+    opts = if eps = fft2_struct.eps, do: Keyword.put(opts, :eps, eps), else: opts
 
-    opts =
-      if eps = fft2_struct.eps do
-        Keyword.put(opts, :eps, eps)
-      else
-        opts
-      end
-
-    {fft2(&Value.fft(&1, :fft, &2, &3), [tensor, opts], expr, state), cache}
+    {fft2(&Value.fft(&1, :fft, &2, &3), [tensor, opts], expr), cache}
   end
 
   defp cached_recur_operator(
@@ -756,15 +681,9 @@ defmodule EXLA.Defn do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     opts = [lengths: ifft2_struct.lengths, axes: ifft2_struct.axes]
+    opts = if eps = ifft2_struct.eps, do: Keyword.put(opts, :eps, eps), else: opts
 
-    opts =
-      if eps = ifft2_struct.eps do
-        Keyword.put(opts, :eps, eps)
-      else
-        opts
-      end
-
-    {fft2(&Value.fft(&1, :ifft, &2, &3), [tensor, opts], expr, state), cache}
+    {fft2(&Value.fft(&1, :ifft, &2, &3), [tensor, opts], expr), cache}
   end
 
   defp cached_recur_operator(
@@ -776,19 +695,11 @@ defmodule EXLA.Defn do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     opts = [length: rfft_struct.length, axis: rfft_struct.axis]
+    opts = if eps = rfft_struct.eps, do: Keyword.put(opts, :eps, eps), else: opts
 
-    opts =
-      if eps = rfft_struct.eps do
-        Keyword.put(opts, :eps, eps)
-      else
-        opts
-      end
-
-    # expr.type is complex; input tensor is real
     input_type = Nx.Type.to_real(expr.type)
 
-    {fft(&Value.fft(&1, :rfft, &2, &3), input_type, expr.type, [tensor, opts], expr, state),
-     cache}
+    {fft(&Value.fft(&1, :rfft, &2, &3), input_type, expr.type, [tensor, opts], expr), cache}
   end
 
   defp cached_recur_operator(
@@ -800,16 +711,8 @@ defmodule EXLA.Defn do
     {tensor, cache} = recur_operator(tensor, state, cache) |> unwrap_single_tensor!()
 
     opts = [length: irfft_struct.length, axis: irfft_struct.axis]
+    opts = if eps = irfft_struct.eps, do: Keyword.put(opts, :eps, eps), else: opts
 
-    opts =
-      if eps = irfft_struct.eps do
-        Keyword.put(opts, :eps, eps)
-      else
-        opts
-      end
-
-    # expr.type is real; input tensor is complex.
-    # pad_n = div(n,2)+1 (the expected input size), while fft_n = n (the output length).
     n = irfft_struct.length
     input_type = Nx.Type.to_complex(expr.type)
 
@@ -819,44 +722,50 @@ defmodule EXLA.Defn do
        expr.type,
        div(n, 2) + 1,
        [tensor, opts],
-       expr,
-       state
+       expr
      ), cache}
   end
 
-  defp cached_recur_operator(:block, %T{data: %Expr{args: args}}, state, cache) do
-    [struct, in_args, expr, _callback] = args
-    %module{} = struct
-
+  # C-backed custom_call blocks (QR, Eigh, …): `EXLA.CustomCall`; else compile default callback.
+  defp cached_recur_operator(
+         :block,
+         %T{data: %Expr{args: [struct, in_args, out, _callback]}},
+         %{client: client, builder: %Function{}} = state,
+         cache
+       ) do
     {call_args, cache} = Enum.map_reduce(in_args, cache, &recur_operator(&1, state, &2))
-    key = computation_key(module, [struct | call_args])
 
-    {call_body, cache} =
-      case cache do
-        %{^key => computation} ->
-          {computation, cache}
+    case EXLA.CustomCall.call(struct, out, in_args, client) do
+      :skip ->
+        default_block_implementation(struct, call_args, out, state, cache)
 
-        %{} ->
-          {computation, cache} =
-            block_computation(
-              block_subfunction_description(struct),
-              call_args,
-              expr,
-              state,
-              cache
-            )
+      {:ok, %CustomCallSpec{} = spec} ->
+        dictionary_entries =
+          case spec.attributes do
+            list when is_list(list) ->
+              list
 
-          {computation, Map.put(cache, key, computation)}
-      end
+            other ->
+              raise ArgumentError,
+                    "EXLA.CustomCall.Spec attributes must be a list of {binary_key, binary_attr} pairs, got: #{inspect(other)}"
+          end
 
-    if token = get_token(cache) do
-      typespecs = [Typespec.token() | container_to_typespecs(expr)]
-      [token | result] = Value.call(state.builder, [token | call_args], call_body, typespecs)
-      {wrap_tuple_result(result, expr), update_token(cache, token)}
-    else
-      typespecs = container_to_typespecs(expr)
-      result = Value.call(state.builder, call_args, call_body, typespecs)
-      {wrap_tuple_result(result, expr), cache}
+        call_args = cast_custom_call_operands(call_args, spec.operand_element_types)
+
+        out_typespecs =
+          [out]
+          |> Composite.flatten_list()
+          |> Enum.map(&expr_to_typespec/1)
+
+        lowered =
+          Value.custom_call(call_args, out_typespecs, spec.call_target_name, dictionary_entries)
+          |> wrap_tuple_result(out)
+
+        {lowered, cache}
+
+      other ->
+        raise ArgumentError,
+              "EXLA.CustomCall.call/4 must return :skip or {:ok, %EXLA.CustomCall.Spec{}}, got: #{inspect(other)}"
     end
   end
 
@@ -996,6 +905,65 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(op, expr, state, cache) do
     {args, cache} = Tree.apply_args(expr, cache, &recur_operator(&1, state, &2))
     {to_operator(op, args, expr, state), cache}
+  end
+
+  defp cast_custom_call_operands(call_args, :default), do: call_args
+
+  defp cast_custom_call_operands(call_args, types) when is_list(types) do
+    n = length(call_args)
+
+    if length(types) != n do
+      raise ArgumentError,
+            "EXLA.CustomCall.Spec operand_element_types must be a list of length #{n} (one per block input), got length #{length(types)}"
+    end
+
+    Enum.zip_with(call_args, types, fn arg, desired ->
+      ts = Value.get_typespec(arg)
+
+      if ts.type == desired do
+        arg
+      else
+        Value.convert(arg, Typespec.tensor(desired, ts.shape))
+      end
+    end)
+  end
+
+  defp cast_custom_call_operands(_call_args, other) do
+    raise ArgumentError,
+          "EXLA.CustomCall.Spec operand_element_types must be :default or a list of Nx types, got: #{inspect(other)}"
+  end
+
+  defp default_block_implementation(struct, call_args, expr, state, cache) do
+    %module{} = struct
+    key = computation_key(module, [struct | call_args])
+
+    {call_body, cache} =
+      case cache do
+        %{^key => computation} ->
+          {computation, cache}
+
+        %{} ->
+          {computation, cache} =
+            block_computation(
+              block_subfunction_description(struct),
+              call_args,
+              expr,
+              state,
+              cache
+            )
+
+          {computation, Map.put(cache, key, computation)}
+      end
+
+    if token = get_token(cache) do
+      typespecs = [Typespec.token() | container_to_typespecs(expr)]
+      [token | result] = Value.call(state.builder, [token | call_args], call_body, typespecs)
+      {wrap_tuple_result(result, expr), update_token(cache, token)}
+    else
+      typespecs = container_to_typespecs(expr)
+      result = Value.call(state.builder, call_args, call_body, typespecs)
+      {wrap_tuple_result(result, expr), cache}
+    end
   end
 
   ## to_operator creation
@@ -1289,11 +1257,11 @@ defmodule EXLA.Defn do
     apply(Value, op, [to_type(arg, type), expr_to_typespec(ans)])
   end
 
-  defp to_operator(:fft, [%Value{} | _] = args, out, state),
-    do: fft(&Value.fft(&1, :fft, &2, &3), out.type, out.type, args, out, state)
+  defp to_operator(:fft, [%Value{} | _] = args, out, _state),
+    do: fft(&Value.fft(&1, :fft, &2, &3), out.type, out.type, args, out)
 
-  defp to_operator(:ifft, [%Value{} | _] = args, out, state),
-    do: fft(&Value.fft(&1, :ifft, &2, &3), out.type, out.type, args, out, state)
+  defp to_operator(:ifft, [%Value{} | _] = args, out, _state),
+    do: fft(&Value.fft(&1, :ifft, &2, &3), out.type, out.type, args, out)
 
   defp to_operator(:is_nan, [%Value{} = arg], out, _state),
     do: Value.is_nan(arg, expr_to_typespec(out))
@@ -1618,7 +1586,7 @@ defmodule EXLA.Defn do
     EXLA.Lib.argsort(state.builder, tensor, dimension, stable, comp, ans.type)
   end
 
-  defp fft(exla_op, input_type, output_type, pad_n \\ nil, [%Value{} = tensor, opts], ans, state) do
+  defp fft(exla_op, input_type, output_type, pad_n \\ nil, [%Value{} = tensor, opts], ans) do
     fft_n = opts[:length]
     pad_n = pad_n || fft_n
     axis = opts[:axis]
@@ -1627,7 +1595,7 @@ defmodule EXLA.Defn do
     shape = op_shape(tensor)
     m = elem(shape, axis)
 
-    tensor = fft_pad_or_slice(tensor, m, pad_n, axis, shape, input_type, state)
+    tensor = fft_pad_or_slice(tensor, m, pad_n, axis, shape, input_type)
 
     last_axis = tuple_size(shape) - 1
 
@@ -1662,7 +1630,7 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp fft2(exla_op, [%Value{} = tensor, opts], %{type: type} = ans, state) do
+  defp fft2(exla_op, [%Value{} = tensor, opts], %{type: type} = ans) do
     [l1, l2] = lengths = opts[:lengths]
     [ax1, ax2] = axes = opts[:axes]
     output_type = Nx.Type.to_complex(type)
@@ -1672,8 +1640,8 @@ defmodule EXLA.Defn do
     m1 = elem(shape, ax1)
     m2 = elem(shape, ax2)
 
-    tensor = fft_pad_or_slice(tensor, m1, l1, ax1, shape, output_type, state)
-    tensor = fft_pad_or_slice(tensor, m2, l2, ax2, op_shape(tensor), output_type, state)
+    tensor = fft_pad_or_slice(tensor, m1, l1, ax1, shape, output_type)
+    tensor = fft_pad_or_slice(tensor, m2, l2, ax2, op_shape(tensor), output_type)
 
     last_axis = tuple_size(shape) - 1
     penultimate_axis = last_axis - 1
@@ -1701,7 +1669,7 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp fft_pad_or_slice(tensor, m, n, axis, shape, output_type, state) do
+  defp fft_pad_or_slice(%Value{function: builder} = tensor, m, n, axis, shape, output_type) do
     cond do
       m == n ->
         tensor
@@ -1726,7 +1694,7 @@ defmodule EXLA.Defn do
         zero_value = if Nx.Type.complex?(output_type), do: Complex.new(0), else: 0
 
         zero =
-          Value.constant(state.builder, [zero_value], Typespec.tensor(output_type, {}))
+          Value.constant(builder, [zero_value], Typespec.tensor(output_type, {}))
 
         padding_config =
           {0, 0, 0}

@@ -2,7 +2,7 @@ defmodule Nx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.11.0"
+  @version "0.12.1"
 
   def project do
     [
@@ -40,7 +40,7 @@ defmodule Nx.MixProject do
 
   defp deps do
     [
-      {:complex, "~> 0.6"},
+      {:complex, "~> 0.7"},
       {:telemetry, "~> 0.4.0 or ~> 1.0"},
       {:ex_doc, "~> 0.29", only: :docs},
       {:makeup, "~> 1.2.1", only: :docs},

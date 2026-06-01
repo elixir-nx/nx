@@ -5466,4 +5466,21 @@ defmodule Nx.Defn.GradTest do
       end)
     end
   end
+
+  describe "closure backend error" do
+    test "raises a helpful error when closure tensor is on a non-default backend" do
+      closure_tensor =
+        Nx.tensor([1.0, 2.0, 3.0])
+        |> Nx.backend_transfer({ProcessBackend, key: :grad_closure_test})
+
+      assert_raise ArgumentError,
+                   ~r"Nx.Defn.grad/2 failed because a tensor captured as a closure",
+                   fn ->
+                     Nx.Defn.grad(Nx.tensor([1.0, 2.0, 3.0]), fn x ->
+                       Nx.add(x, closure_tensor)
+                       |> Nx.sum()
+                     end)
+                   end
+    end
+  end
 end
