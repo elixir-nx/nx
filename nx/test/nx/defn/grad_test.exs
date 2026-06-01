@@ -4885,12 +4885,7 @@ defmodule Nx.Defn.GradTest do
   describe "vectorization" do
     @vec_atol 1.0e-4
 
-    # Compares vectorized grad against per-element grads.
-    #
-    # Accepts either a plain tensor (vectorized internally with `:batch`)
-    # or a pre-vectorized tensor with any number of vec axes. Per-element
-    # grads are computed on devectorized slices and compared to the
-    # corresponding slice of the vectorized grad's devectorized form.
+    # Compares vectorized grad against the grads for each vector entry
     defp check_vectorized_grad(tensor, fun, opts \\ []) do
       vectorized_axes = tensor.vectorized_axes
 
