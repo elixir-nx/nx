@@ -4123,7 +4123,7 @@ defmodule Nx do
   @padding_types [:cyclic, :mirror, :replicate, :reflect]
 
   @doc """
-  Pads a tensor at the start and end of each axis with a given value or a given padding type.
+  Pads a tensor at the start and end of each axis with a given constant value or via a given padding type.
 
   The padding value can either be a scalar number (for constant padding) or an atom specifying the padding type.
   The following types of padding are supported: :cyclic, :reflect, :mirror, :replicate.
