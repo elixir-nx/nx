@@ -4155,6 +4155,24 @@ defmodule Nx do
         ]
       >
 
+      iex> Nx.pad_outer(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]), 0, [{-1, -1}, {-1, -1}])
+      #Nx.Tensor<
+        s32[1][1]
+        [
+          [5]
+        ]
+      >
+
+      iex> Nx.pad_outer(Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]]), 0, [{1, -1}, {1, -1}])
+      #Nx.Tensor<
+        s32[3][3]
+        [
+          [0, 0, 0],
+          [0, 1, 2],
+          [0, 4, 5]
+        ]
+      >
+
   ### Cyclic Padding
 
   Cyclic padding repeats the tensors existing values along each axis in their original order.
@@ -4260,12 +4278,12 @@ defmodule Nx do
            padding_config)
         |> Enum.with_index()
         |> Enum.map(fn
-          {{a, b}, _ax} when is_integer(a) and is_integer(b) and a >= 0 and b >= 0 ->
+          {{a, b}, _ax} when is_integer(a) and is_integer(b) ->
             {a, b, 0}
 
           {pad, ax} ->
             raise ArgumentError,
-                  "expected padding config for axis #{ax} to be of the format {left, right}, with left and right as non-negative integers, got: #{inspect(pad)}"
+                  "expected padding config for axis #{ax} to be of the format {left, right}, with left and right as integers, got: #{inspect(pad)}"
         end)
 
       shape = Nx.Shape.pad(tensor.shape, padding_config)
