@@ -163,7 +163,12 @@ defmodule Nx.Testing do
       flunk_shapes_mismatch(left_t, right_t)
     end
 
-    equals = left_t |> Nx.all_close(right_t, atol: atol, rtol: rtol) |> Nx.backend_transfer(Nx.BinaryBackend) |> Nx.to_flat_list() |> Enum.all?(&(&1 == 1))
+    equals =
+      left_t
+      |> Nx.all_close(right_t, atol: atol, rtol: rtol)
+      |> Nx.backend_transfer(Nx.BinaryBackend)
+      |> Nx.to_flat_list()
+      |> Enum.all?(&(&1 == 1))
 
     if not equals do
       flunk_not_close(left_t, right_t, atol, rtol)

@@ -54,20 +54,20 @@ defmodule Nx.TestingTest do
         end
 
       assert error.message == """
-      Tensors differ by more than the tolerance
+             Tensors differ by more than the tolerance
 
-      atol: 0.0, rtol: 0.0
-      max absolute difference: 9.989738464355469e-5
-      max relative difference: 4.994619666831568e-5
+             atol: 0.0, rtol: 0.0
+             max absolute difference: 9.989738464355469e-5
+             max relative difference: 4.994619666831568e-5
 
-      left:
+             left:
 
-      #{inspect(a)}
+             #{inspect(a)}
 
-      right:
+             right:
 
-      #{inspect(b)}
-      """
+             #{inspect(b)}
+             """
     end
 
     test "error message shows a clear diagnostic for mismatched vec axes" do
@@ -80,11 +80,11 @@ defmodule Nx.TestingTest do
         end
 
       assert error.message == """
-      Vectorized axes mismatch
+             Vectorized axes mismatch
 
-      left axes:  [foo: 2]
-      right axes: [bar: 2]
-      """
+             left axes:  [foo: 2]
+             right axes: [bar: 2]
+             """
     end
   end
 
@@ -110,16 +110,16 @@ defmodule Nx.TestingTest do
         end
 
       assert error.message == """
-      Tensor assertion failed.
+             Tensor assertion failed.
 
-      left:
+             left:
 
-      #{inspect(a)}
+             #{inspect(a)}
 
-      right:
+             right:
 
-      #{inspect(b)}
-      """
+             #{inspect(b)}
+             """
     end
 
     test "error message shows a clear diagnostic for mismatched vec axes" do
@@ -132,11 +132,11 @@ defmodule Nx.TestingTest do
         end
 
       assert error.message == """
-      Vectorized axes mismatch
+             Vectorized axes mismatch
 
-      left axes:  [foo: 2]
-      right axes: [bar: 2]
-      """
+             left axes:  [foo: 2]
+             right axes: [bar: 2]
+             """
     end
 
     test "handles NaN equality correctly" do
@@ -177,11 +177,11 @@ defmodule Nx.TestingTest do
         end
 
       assert error.message == """
-      Shape mismatch
+             Shape mismatch
 
-      left shape:  {4, 1}
-      right shape: {4, 2}
-      """
+             left shape:  {4, 1}
+             right shape: {4, 2}
+             """
     end
   end
 
@@ -204,11 +204,11 @@ defmodule Nx.TestingTest do
         end
 
       assert error.message == """
-      Shape mismatch
+             Shape mismatch
 
-      left shape:  {2, 1}
-      right shape: {2, 2}
-      """
+             left shape:  {2, 1}
+             right shape: {2, 2}
+             """
     end
   end
 end
