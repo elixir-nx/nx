@@ -3116,23 +3116,23 @@ defmodule NxTest do
 
   describe "reflect/2" do
     test "reflects over axes of size 1" do
-      assert Nx.tensor([1, 1, 1, 1]) == Nx.pad(Nx.tensor([1]), :reflect, [{2, 1}])
+      assert Nx.tensor([1, 1, 1, 1]) == Nx.pad_outer(Nx.tensor([1]), :reflect, [{2, 1}])
 
       assert Nx.tensor([[[1, 1, 1, 1]]]) ==
-               Nx.pad(Nx.tensor([[[1]]]), :reflect, [{0, 0}, {0, 0}, {2, 1}])
+               Nx.pad_outer(Nx.tensor([[[1]]]), :reflect, [{0, 0}, {0, 0}, {2, 1}])
     end
 
     test "semantic error on invalid padding config" do
       assert_raise ArgumentError,
                    "expected padding config for axis 0 to be of the format {left, right}, with left and right as non-negative integers, got: {0}",
                    fn ->
-                     Nx.pad(Nx.tensor([0]), :reflect, [{0}])
+                     Nx.pad_outer(Nx.tensor([0]), :reflect, [{0}])
                    end
 
       assert_raise ArgumentError,
                    "expected padding config for axis 2 to be of the format {left, right}, with left and right as non-negative integers, got: {-1, 0}",
                    fn ->
-                     Nx.pad(Nx.tensor([[[0]]]), :reflect, [{0, 0}, {0, 0}, {-1, 0}])
+                     Nx.pad_outer(Nx.tensor([[[0]]]), :reflect, [{0, 0}, {0, 0}, {-1, 0}])
                    end
     end
   end

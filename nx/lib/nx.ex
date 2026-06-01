@@ -3895,10 +3895,7 @@ defmodule Nx do
   end
 
   @doc """
-  Pads a tensor with a given value or a given padding type.
-
-  The padding value can either be a scalar number (for constant padding) or an atom specifying the padding type.
-  The following types of padding are supported: :cyclic, :reflect, :mirror, :replicate.
+  Pads a tensor with a given constant value.
 
   You must specify a padding configuration. A padding
   configuration is a list of tuples consisting of
@@ -3910,7 +3907,7 @@ defmodule Nx do
   the tensor is clipped on either end according to the
   padding width. Interior padding widths cannot be negative.
 
-  See also: `reflect/2`
+  See also: `reflect/2`, `pad_outer/3`
 
   ## Examples
 
@@ -4085,95 +4082,9 @@ defmodule Nx do
         ]
       >
 
-  ### Cyclic padding
-
-  Cyclic padding repeats the tensors existing values along each axis in their original order.
-
-      iex> Nx.pad(Nx.tensor([0, 1, 2]), :cyclic, [{3, 1}])
-      #Nx.Tensor<
-        s32[7]
-        [0, 1, 2, 0, 1, 2, 0]
-      >
-
-      iex> Nx.pad(Nx.tensor([[0, 1, 2], [3, 4, 5]], names: [:x, :y]), :cyclic, [{2, 0}, {2, 1}])
-      #Nx.Tensor<
-        s32[x: 4][y: 6]
-        [
-          [1, 2, 0, 1, 2, 0],
-          [4, 5, 3, 4, 5, 3],
-          [1, 2, 0, 1, 2, 0],
-          [4, 5, 3, 4, 5, 3]
-        ]
-      >
-
-  ### Mirror padding
-
-  Mirror padding repeats the tensors existing values along each axis in reverse order while including the outer most values.
-
-      iex> Nx.pad(Nx.tensor([0, 1, 2]), :mirror, [{3, 3}])
-      #Nx.Tensor<
-        s32[9]
-        [2, 1, 0, 0, 1, 2, 2, 1, 0]
-      >
-
-      iex> Nx.pad(Nx.tensor([[0, 1, 2], [3, 4, 5]], names: [:x, :y]), :mirror, [{1, 1}, {2, 2}])
-      #Nx.Tensor<
-        s32[x: 4][y: 7]
-        [
-          [1, 0, 0, 1, 2, 2, 1],
-          [1, 0, 0, 1, 2, 2, 1],
-          [4, 3, 3, 4, 5, 5, 4],
-          [4, 3, 3, 4, 5, 5, 4]
-        ]
-      >
-
-  ### Reflection padding
-
-  Reflection padding repeats the tensors existing values along each axis in reverse order skipping the outer most values.
-
-    iex> Nx.pad(Nx.tensor([0, 1, 2]), :reflect, [{3, 1}])
-    #Nx.Tensor<
-      s32[7]
-      [1, 2, 1, 0, 1, 2, 1]
-    >
-
-    iex> Nx.pad(Nx.tensor([[0, 1, 2], [3, 4, 5]], names: [:x, :y]), :reflect, [{2, 0}, {2, 1}])
-    #Nx.Tensor<
-      s32[x: 4][y: 6]
-      [
-        [2, 1, 0, 1, 2, 1],
-        [5, 4, 3, 4, 5, 4],
-        [2, 1, 0, 1, 2, 1],
-        [5, 4, 3, 4, 5, 4]
-      ]
-    >
-
-  ### Replicate padding
-
-  Replicate padding uses the tensors outer most values along each axis as constant padding values.
-
-    iex> Nx.pad(Nx.tensor([0, 1, 2]), :replicate, [{3, 1}])
-    #Nx.Tensor<
-      s32[7]
-      [0, 0, 0, 0, 1, 2, 2]
-    >
-
-    iex> Nx.pad(Nx.tensor([[0, 1, 2], [3, 4, 5]], names: [:x, :y]), :replicate, [{2, 2}, {2, 2}])
-    #Nx.Tensor<
-      s32[x: 6][y: 7]
-      [
-        [0, 0, 0, 1, 2, 2, 2],
-        [0, 0, 0, 1, 2, 2, 2],
-        [0, 0, 0, 1, 2, 2, 2],
-        [3, 3, 3, 4, 5, 5, 5],
-        [3, 3, 3, 4, 5, 5, 5],
-        [3, 3, 3, 4, 5, 5, 5]
-      ]
-    >
-
   ### Vectorized tensors
 
-  Like with the non-vectorized case, `pad_value_or_type` must be a non-vectorized scalar tensor.
+  Like with the non-vectorized case, `pad_value` must be a non-vectorized scalar tensor.
   Vectorized axes remain unchanged.
 
       iex> t = Nx.tensor([[1], [2], [3]], names: [nil, :data]) |> Nx.vectorize(:x)
@@ -4190,7 +4101,151 @@ defmodule Nx do
 
   """
   @doc type: :shape
-  def pad(tensor, pad_value_or_type, padding_config)
+  def pad(tensor, pad_value, padding_config)
+      when is_list(padding_config) and
+             (is_number(pad_value) or is_tensor(pad_value)) do
+    apply_vectorized(tensor, fn tensor, offset ->
+      output_type = binary_type(tensor, pad_value)
+      pad_value = to_tensor(pad_value)
+
+      if not (pad_value.shape == {} and pad_value.vectorized_axes == []) do
+        raise ArgumentError, "padding value must be a scalar and non-vectorized"
+      end
+
+      padding_config = List.duplicate({0, 0, 0}, offset) ++ padding_config
+      shape = Nx.Shape.pad(tensor.shape, padding_config)
+
+      out = %{tensor | type: output_type, shape: shape}
+      impl!(tensor, pad_value).pad(out, tensor, pad_value, padding_config)
+    end)
+  end
+
+  @padding_types [:cyclic, :mirror, :replicate, :reflect]
+
+  @doc """
+  Pads a tensor at the start and end of each axis with a given value or a given padding type.
+
+  The padding value can either be a scalar number (for constant padding) or an atom specifying the padding type.
+  The following types of padding are supported: :cyclic, :reflect, :mirror, :replicate.
+
+  You must specify a padding configuration. A padding
+  configuration is a list of tuples consisting of
+  `{pad_width_low, pad_width_high}` for each dimension in the
+  input tensor. The padding configuration must be of the same length
+  as the tensor shape.
+
+  Padding widths can be negative. If they are negative,
+  the tensor is clipped on either end according to the
+  padding width. Interior padding widths cannot be negative.
+
+  See also: `reflect/2`
+
+  ## Examples
+
+  ### Constant Padding
+
+      iex> Nx.pad_outer(Nx.tensor([[1, 2, 3], [4, 5, 6]]), 0, [{1, 1}, {1, 1}])
+      #Nx.Tensor<
+        s32[4][5]
+        [
+          [0, 0, 0, 0, 0],
+          [0, 1, 2, 3, 0],
+          [0, 4, 5, 6, 0],
+          [0, 0, 0, 0, 0]
+        ]
+      >
+
+  ### Cyclic Padding
+
+  Cyclic padding repeats the tensors existing values along each axis in their original order.
+
+      iex> Nx.pad_outer(Nx.tensor([0, 1, 2]), :cyclic, [{3, 1}])
+      #Nx.Tensor<
+        s32[7]
+        [0, 1, 2, 0, 1, 2, 0]
+      >
+
+      iex> Nx.pad_outer(Nx.tensor([[0, 1, 2], [3, 4, 5]], names: [:x, :y]), :cyclic, [{2, 0}, {2, 1}])
+      #Nx.Tensor<
+        s32[x: 4][y: 6]
+        [
+          [1, 2, 0, 1, 2, 0],
+          [4, 5, 3, 4, 5, 3],
+          [1, 2, 0, 1, 2, 0],
+          [4, 5, 3, 4, 5, 3]
+        ]
+      >
+
+  ### Mirror padding
+
+  Mirror padding repeats the tensors existing values along each axis in reverse order while including the outer most values.
+
+      iex> Nx.pad_outer(Nx.tensor([0, 1, 2]), :mirror, [{3, 3}])
+      #Nx.Tensor<
+        s32[9]
+        [2, 1, 0, 0, 1, 2, 2, 1, 0]
+      >
+
+      iex> Nx.pad_outer(Nx.tensor([[0, 1, 2], [3, 4, 5]], names: [:x, :y]), :mirror, [{1, 1}, {2, 2}])
+      #Nx.Tensor<
+        s32[x: 4][y: 7]
+        [
+          [1, 0, 0, 1, 2, 2, 1],
+          [1, 0, 0, 1, 2, 2, 1],
+          [4, 3, 3, 4, 5, 5, 4],
+          [4, 3, 3, 4, 5, 5, 4]
+        ]
+      >
+
+  ### Reflection padding
+
+  Reflection padding repeats the tensors existing values along each axis in reverse order skipping the outer most values.
+
+    iex> Nx.pad_outer(Nx.tensor([0, 1, 2]), :reflect, [{3, 1}])
+    #Nx.Tensor<
+      s32[7]
+      [1, 2, 1, 0, 1, 2, 1]
+    >
+
+    iex> Nx.pad_outer(Nx.tensor([[0, 1, 2], [3, 4, 5]], names: [:x, :y]), :reflect, [{2, 0}, {2, 1}])
+    #Nx.Tensor<
+      s32[x: 4][y: 6]
+      [
+        [2, 1, 0, 1, 2, 1],
+        [5, 4, 3, 4, 5, 4],
+        [2, 1, 0, 1, 2, 1],
+        [5, 4, 3, 4, 5, 4]
+      ]
+    >
+
+  ### Replicate padding
+
+  Replicate padding uses the tensors outer most values along each axis as constant padding values.
+
+    iex> Nx.pad_outer(Nx.tensor([0, 1, 2]), :replicate, [{3, 1}])
+    #Nx.Tensor<
+      s32[7]
+      [0, 0, 0, 0, 1, 2, 2]
+    >
+
+    iex> Nx.pad_outer(Nx.tensor([[0, 1, 2], [3, 4, 5]], names: [:x, :y]), :replicate, [{2, 2}, {2, 2}])
+    #Nx.Tensor<
+      s32[x: 6][y: 7]
+      [
+        [0, 0, 0, 1, 2, 2, 2],
+        [0, 0, 0, 1, 2, 2, 2],
+        [0, 0, 0, 1, 2, 2, 2],
+        [3, 3, 3, 4, 5, 5, 5],
+        [3, 3, 3, 4, 5, 5, 5],
+        [3, 3, 3, 4, 5, 5, 5]
+      ]
+    >
+
+  See also: `reflect/2`, `pad/3`
+  """
+
+  @doc type: :shape
+  def pad_outer(tensor, pad_value_or_type, padding_config)
       when is_list(padding_config) and
              (is_number(pad_value_or_type) or is_tensor(pad_value_or_type)) do
     apply_vectorized(tensor, fn tensor, offset ->
@@ -4201,7 +4256,19 @@ defmodule Nx do
         raise ArgumentError, "padding value must be a scalar and non-vectorized"
       end
 
-      padding_config = List.duplicate({0, 0, 0}, offset) ++ padding_config
+      padding_config =
+        (List.duplicate({0, 0, 0}, offset) ++
+           padding_config)
+        |> Enum.with_index()
+        |> Enum.map(fn
+          {{a, b}, _ax} when is_integer(a) and is_integer(b) and a >= 0 and b >= 0 ->
+            {a, b, 0}
+
+          {pad, ax} ->
+            raise ArgumentError,
+                  "expected padding config for axis #{ax} to be of the format {left, right}, with left and right as non-negative integers, got: #{inspect(pad)}"
+        end)
+
       shape = Nx.Shape.pad(tensor.shape, padding_config)
 
       out = %{tensor | type: output_type, shape: shape}
@@ -4209,8 +4276,7 @@ defmodule Nx do
     end)
   end
 
-  @padding_types [:cyclic, :mirror, :replicate, :reflect]
-  def pad(tensor, pad_value_or_type, padding_config) when is_atom(pad_value_or_type) do
+  def pad_outer(tensor, pad_value_or_type, padding_config) when is_atom(pad_value_or_type) do
     {left_period, right_period} =
       case pad_value_or_type do
         :cyclic ->
@@ -17624,7 +17690,7 @@ defmodule Nx do
       >
   """
   @doc type: :shape
-  @deprecated "Use pad/3 instead"
+  @deprecated "Use pad_outer/3 instead"
   def reflect(tensor, opts \\ []) do
     opts = keyword!(opts, [:padding_config])
 
