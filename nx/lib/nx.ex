@@ -4082,7 +4082,7 @@ defmodule Nx do
         ]
       >
 
-  ### Vectorized tensors
+  ## Vectorized tensors
 
   Like with the non-vectorized case, `pad_value` must be a non-vectorized scalar tensor.
   Vectorized axes remain unchanged.
@@ -4138,7 +4138,7 @@ defmodule Nx do
   the tensor is clipped on either end according to the
   padding width. Interior padding widths cannot be negative.
 
-  See also: `reflect/2`
+  See also: `reflect/2`, `pad/3`
 
   ## Examples
 
@@ -4241,7 +4241,6 @@ defmodule Nx do
       ]
     >
 
-  See also: `reflect/2`, `pad/3`
   """
 
   @doc type: :shape
