@@ -2241,7 +2241,8 @@ defmodule EXLA.Defn do
       Map.has_key?(visited, id) ->
         {visited, cache}
 
-      op == :constant or (op not in [:io_callback, :runtime_call] and shared?(id, op, args, shared_ids)) ->
+      op == :constant or
+          (op not in [:io_callback, :runtime_call] and shared?(id, op, args, shared_ids)) ->
         {_, cache} = recur_operator(expr, state, cache)
         {Map.put(visited, id, true), cache}
 
