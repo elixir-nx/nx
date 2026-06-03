@@ -830,9 +830,11 @@ defmodule EXLA.MLIR.Value do
   encoded callback-server PID (operand 0, same convention as `runtime_call/3`)
   and `tensor_list` is the flat list of tensors to pass to the Elixir callback.
 
-  The custom call returns the same tensor list (passthrough). Each result is
-  aliased back to its corresponding operand via `output_operand_aliases` so that
-  XLA shares the same buffer for input and output — no copy is made.
+  The custom call returns the callback-server PID (operand 0) followed by the same
+  tensor list (passthrough). Each result is aliased back to its corresponding
+  operand via `output_operand_aliases` so that XLA shares the same buffer for
+  input and output — no copy is made. Threading the returned PID into the next
+  `io_callback` establishes program-order dependencies between side effects.
 
   The C++ handler must **not** write to the result buffers; they are already the
   input buffers via the aliasing.
@@ -843,19 +845,24 @@ defmodule EXLA.MLIR.Value do
         callback_id
       ) do
     # operands = [pid_value | tensor_list]
-    # result_types is the tensor list (no PID output)
-    result_types = typespecs_to_mlir_types(typespecs)
-    leaf_count = length(typespecs)
+    # result_types = [pid_value | tensor_list] for ordered side-effect chaining
+    pid_typespec = EXLA.Executable.callback_server_pid_typespec()
+    result_types = typespecs_to_mlir_types([pid_typespec | typespecs])
+    result_count = 1 + length(typespecs)
 
     {callback_id_words, callback_id_size} = term_to_int64_list(callback_id)
 
-    # Each tensor in the list at operand[index + 1] (skipping PID at 0) is aliased
-    # to result[index]. When the tensor list has multiple elements, StableHLO
-    # models the results as a tuple and output_tuple_indices selects each element.
-    aliases =
+    # PID at operand 0 is aliased to result 0; each tensor at operand[index + 1]
+    # is aliased to result[index + 1]. When there are multiple results, StableHLO
+    # models them as a tuple and output_tuple_indices selects each element.
+    pid_alias = attr_output_operand_alias(0, 0, result_count)
+
+    tensor_aliases =
       Enum.map(Enum.with_index(typespecs), fn {_typespec, index} ->
-        attr_output_operand_alias(index + 1, index, leaf_count)
+        attr_output_operand_alias(index + 1, index + 1, result_count)
       end)
+
+    aliases = [pid_alias | tensor_aliases]
 
     attributes = [
       call_target_name: attr_string("exla_io_callback"),

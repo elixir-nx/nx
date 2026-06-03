@@ -2237,7 +2237,11 @@ defmodule Nx do
 
   Ordering between sequential `io_callback` calls is guaranteed through data
   dependencies: since each call returns its input, chaining callbacks produces
-  an explicit dependency edge. No token machinery is required.
+  an explicit dependency edge. On EXLA, independent callbacks are additionally
+  serialized by threading the callback-server PID through each `io_callback`
+  custom call (operand 0 → result 0), so XLA cannot reorder side effects even
+  when their tensor inputs are unrelated. No StableHLO token machinery is
+  required at the Nx expression level.
 
   > #### Device locks {: .warning}
   >

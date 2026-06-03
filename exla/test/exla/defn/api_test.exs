@@ -289,6 +289,38 @@ defmodule EXLA.Defn.APITest do
       assert_equal(a, Nx.tensor(1))
       assert_equal(b, Nx.tensor(2))
     end
+
+    defn ordered_independent_hooks(a, b) do
+      a = hook(a, :first)
+      b = hook(b, :second)
+      a + b
+    end
+
+    test "executes independent hooks in program order via pid chaining" do
+      parent = self()
+      counter = :atomics.new(1, signed: false)
+
+      hooks = %{
+        first: fn value ->
+          order = :atomics.add_get(counter, 1, 1)
+          send(parent, {:order, :first, order})
+          value
+        end,
+        second: fn value ->
+          order = :atomics.add_get(counter, 1, 1)
+          send(parent, {:order, :second, order})
+          value
+        end
+      }
+
+      assert_equal(
+        EXLA.jit(&ordered_independent_hooks/2, hooks: hooks).(Nx.tensor(1), Nx.tensor(2)),
+        Nx.tensor(3)
+      )
+
+      assert_receive {:order, :first, 1}
+      assert_receive {:order, :second, 2}
+    end
   end
 
   describe "cross-client hooks" do

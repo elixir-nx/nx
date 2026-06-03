@@ -215,7 +215,8 @@ defmodule EXLA.Defn do
       builder: function,
       params: Map.new(params ++ outfeed.infeeds),
       scope_ids: Tree.scope_ids(expr),
-      callback_pid_value: callback_pid_value
+      callback_pid_value: callback_pid_value,
+      io_callback_pid: nil
     }
 
     {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
@@ -873,10 +874,13 @@ defmodule EXLA.Defn do
       raise "internal bug: io_callback callback pid operand is missing"
     end
 
-    results =
-      Value.io_callback([callback_pid_value | arg_values], typespecs, id)
+    callback_pid =
+      get_callback_pid(cache) || Map.get(state, :io_callback_pid) || callback_pid_value
 
-    {wrap_tuple_result(results, expr), cache}
+    [callback_pid_result | results] =
+      Value.io_callback([callback_pid | arg_values], typespecs, id)
+
+    {wrap_tuple_result(results, expr), update_callback_pid(cache, callback_pid_result)}
   end
 
   defp cached_recur_operator(
@@ -1774,16 +1778,29 @@ defmodule EXLA.Defn do
   defp new_cache(outfeed),
     do: %{__MODULE__ => outfeed}
 
-  defp merge_outfeed(%{__MODULE__ => outfeed} = cache, %{__MODULE__ => new_outfeed}),
-    do: %{cache | __MODULE__ => Outfeed.with_token(new_outfeed, outfeed.token)}
+  defp merge_outfeed(%{__MODULE__ => outfeed} = cache, %{__MODULE__ => new_outfeed}) do
+    # Keep the outer callback_pid — branch-local io_callback chains must not
+    # leak into sibling branches (SSA dominance). Linear chaining outside
+    # control flow still updates the cache directly via update_callback_pid/2.
+    merged = %{new_outfeed | token: outfeed.token, callback_pid: outfeed.callback_pid}
+    %{cache | __MODULE__ => merged}
+  end
 
   defp reset_token(%{__MODULE__ => outfeed}, token),
     do: %{__MODULE__ => Outfeed.with_token(outfeed, token)}
+
+  defp reset_callback_pid(%{__MODULE__ => outfeed}, callback_pid),
+    do: %{__MODULE__ => Outfeed.with_callback_pid(outfeed, callback_pid)}
 
   defp update_token(%{__MODULE__ => outfeed} = cache, token),
     do: %{cache | __MODULE__ => Outfeed.with_token(outfeed, token)}
 
   defp get_token(%{__MODULE__ => outfeed}), do: outfeed.token
+
+  defp get_callback_pid(%{__MODULE__ => outfeed}), do: outfeed.callback_pid
+
+  defp update_callback_pid(%{__MODULE__ => outfeed} = cache, callback_pid),
+    do: %{cache | __MODULE__ => Outfeed.with_callback_pid(outfeed, callback_pid)}
 
   defp get_outfeed(%{__MODULE__ => value}), do: value
 
@@ -2152,15 +2169,32 @@ defmodule EXLA.Defn do
 
     outer_token = get_token(cache)
 
+    needs_callback_pid =
+      get_callback_pid(cache) != nil or Tree.has_io_callbacks?(on_true) or
+        Tree.has_io_callbacks?(on_false)
+
+    outer_callback_pid = get_callback_pid(cache) || state.callback_pid_value
+
     result_typespecs =
-      if outer_token do
-        [Typespec.token() | out_typespecs]
+      out_typespecs
+      |> then(fn typespecs ->
+        if outer_token, do: [Typespec.token() | typespecs], else: typespecs
+      end)
+
+    {true_computation, cache} =
+      if needs_callback_pid do
+        to_mlir_if_branch(on_true, true_ids, state, cache, outer_callback_pid)
       else
-        out_typespecs
+        to_mlir_if_branch(on_true, true_ids, state, cache)
       end
 
-    {true_computation, cache} = to_mlir_if_branch(on_true, true_ids, state, cache)
-    {false_computation, cache} = to_mlir_if_branch(on_false, false_ids, state, cache)
+    {false_computation, cache} =
+      if needs_callback_pid do
+        to_mlir_if_branch(on_false, false_ids, state, cache, outer_callback_pid)
+      else
+        to_mlir_if_branch(on_false, false_ids, state, cache)
+      end
+
     if_results = Value.if_op(pred_op, true_computation, false_computation, result_typespecs)
 
     if outer_token do
@@ -2207,7 +2241,7 @@ defmodule EXLA.Defn do
       Map.has_key?(visited, id) ->
         {visited, cache}
 
-      op == :constant or shared?(id, op, args, shared_ids) ->
+      op == :constant or (op not in [:io_callback, :runtime_call] and shared?(id, op, args, shared_ids)) ->
         {_, cache} = recur_operator(expr, state, cache)
         {Map.put(visited, id, true), cache}
 
@@ -2231,15 +2265,32 @@ defmodule EXLA.Defn do
 
     {res, res_cache} = recur_composite(expr, & &1, comp_state, cache)
 
-    if token = get_token(cache) do
-      Value.return(state.builder, [token | List.flatten(res)])
-    else
-      Value.return(state.builder, List.flatten(res))
-    end
-
+    Value.return(state.builder, branch_return_values(res, cache))
     Function.pop_region(state.builder)
 
     {region, merge_outfeed(cache, res_cache)}
+  end
+
+  defp to_mlir_if_branch(expr, current_ids, state, cache, outer_callback_pid) do
+    {region, []} = Function.push_region(state.builder, [])
+
+    comp_state = %{state | io_callback_pid: outer_callback_pid, scope_ids: current_ids}
+    cache = reset_callback_pid(cache, outer_callback_pid)
+
+    {res, res_cache} = recur_composite(expr, & &1, comp_state, cache)
+
+    Value.return(state.builder, branch_return_values(res, cache))
+    Function.pop_region(state.builder)
+
+    {region, merge_outfeed(reset_callback_pid(cache, outer_callback_pid), res_cache)}
+  end
+
+  defp branch_return_values(res, cache) do
+    if token = get_token(cache) do
+      [token | List.flatten(res)]
+    else
+      List.flatten(res)
+    end
   end
 
   ## Axes helpers

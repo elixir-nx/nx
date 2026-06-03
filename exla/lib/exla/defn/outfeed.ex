@@ -15,6 +15,7 @@ defmodule EXLA.Defn.Outfeed do
             used_hooks: [],
             compiled_hooks: %{},
             token: nil,
+            callback_pid: nil,
             infeeds: [],
             runtime_callbacks: %{},
             io_callbacks: %{}
@@ -122,6 +123,10 @@ defmodule EXLA.Defn.Outfeed do
   Sets the token to outfeed.
   """
   def with_token(%Outfeed{} = outfeed, token), do: %{outfeed | token: token}
+
+  @doc false
+  def with_callback_pid(%Outfeed{} = outfeed, callback_pid),
+    do: %{outfeed | callback_pid: callback_pid}
 
   @doc """
   Adds a runtime callback to outfeed.

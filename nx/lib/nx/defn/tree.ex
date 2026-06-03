@@ -17,6 +17,20 @@ defmodule Nx.Defn.Tree do
     :side_effect -> true
   end
 
+  @doc """
+  Returns true if the tree contains any `:io_callback` expression nodes.
+  """
+  def has_io_callbacks?(tree) do
+    Composite.reduce(tree, false, fn
+      %T{data: %Expr{op: :io_callback}}, _ -> throw(:io_callback)
+      _, acc -> acc
+    end)
+
+    false
+  catch
+    :io_callback -> true
+  end
+
   defp detect_hook(%T{data: %Expr{op: :io_callback, args: [_, spec, _, _]}} = t, cache, hooks) do
     if io_callback_hook_active?(spec, hooks) do
       throw(:side_effect)
