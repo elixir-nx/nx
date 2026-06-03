@@ -1054,6 +1054,17 @@ defmodule Nx.Defn.Grad do
     [{x, g}]
   end
 
+  defp grad(:io_callback, [tensor_expr, _callback_spec, _out_template, _ref], _ans, g, _batch_count) do
+    gs = List.wrap(g)
+
+    {pairs, []} =
+      Composite.reduce(tensor_expr, {[], gs}, fn child, {pairs, [grad | gs]} ->
+        {[{child, grad} | pairs], gs}
+      end)
+
+    Enum.reverse(pairs)
+  end
+
   defp grad(:conjugate, [%{type: {type, _}} = t], _ans, g, _batch_count) do
     if type == :c do
       [{t, Nx.conjugate(g)}]
