@@ -1054,7 +1054,13 @@ defmodule Nx.Defn.Grad do
     [{x, g}]
   end
 
-  defp grad(:io_callback, [tensor_expr, _callback_spec, _out_template, _ref], _ans, g, _batch_count) do
+  defp grad(
+         :io_callback,
+         [tensor_expr, _callback_spec, _out_template, _ref],
+         _ans,
+         g,
+         _batch_count
+       ) do
     gs = List.wrap(g)
 
     {pairs, []} =
