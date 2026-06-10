@@ -2247,17 +2247,14 @@ defmodule Nx do
       ...> end
       iex> token = Nx.Defn.Expr.create_token()
       iex> x = Nx.tensor([1, 2, 3])
-      iex> {token, x} = Nx.io_call(token, x, &IoCallExample.log/1)
+      iex> {updated_token, x} = Nx.io_call(token, x, &IoCallExample.log/1)
+      iex> match?(%Nx.Tensor{type: :token}, updated_token)
+      true
       iex> Nx.to_flat_list(x)
       [1, 2, 3]
 
   """
   @doc type: :backend
-  def io_call(%Nx.Tensor{} = token, tensor_or_container, name, callback)
-      when is_atom(name) and (is_function(callback, 1) or is_nil(callback)) do
-    io_call(token, tensor_or_container, {:hook, name, callback})
-  end
-
   def io_call(%Nx.Tensor{} = token, tensor_or_container, callback)
       when is_function(callback, 1) do
     io_call(token, tensor_or_container, {:fn, callback})
@@ -2268,6 +2265,12 @@ defmodule Nx do
 
   def io_call(%Nx.Tensor{} = token, tensor_or_container, {:fn, _} = callback_spec),
     do: io_call_impl(token, tensor_or_container, callback_spec)
+
+  @doc type: :backend
+  def io_call(%Nx.Tensor{} = token, tensor_or_container, name, callback)
+      when is_atom(name) and (is_function(callback, 1) or is_nil(callback)) do
+    io_call(token, tensor_or_container, {:hook, name, callback})
+  end
 
   defp io_call_impl(%Nx.Tensor{} = token, tensor_or_container, callback_spec) do
     tensors = Nx.Defn.Composite.flatten_list([tensor_or_container])

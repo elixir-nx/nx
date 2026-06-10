@@ -702,7 +702,11 @@ defmodule EXLA.MLIR.Value do
   end
 
   @doc false
-  def io_call([%Value{} = token_in, %Value{} = callback_pid | leaf_operands], leaf_typespecs, callback_id) do
+  def io_call(
+        [%Value{} = token_in, %Value{} = callback_pid | leaf_operands],
+        leaf_typespecs,
+        callback_id
+      ) do
     [%Value{function: func} | _] = [token_in | leaf_operands]
     leaf_count = length(leaf_typespecs)
     tensor_result_types = typespecs_to_mlir_types(leaf_typespecs)
