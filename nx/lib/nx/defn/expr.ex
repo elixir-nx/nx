@@ -39,7 +39,11 @@ defmodule Nx.Defn.Expr do
 
     * `while(initial, condition, body)`
 
-    * `attach_token(token(%Nx.Defn.Token{}), expr)`
+    * `create_token()`
+
+    * `io_call(token, data, callback_spec)`
+
+    * `attach_token(token, expr)`
 
     * `runtime_call(out, tensor_or_container, opts, fun)`
 
@@ -441,28 +445,66 @@ defmodule Nx.Defn.Expr do
   def id(), do: make_ref()
 
   @doc false
-  def add_hook(token, expr, name, function) do
-    expr = to_container_expr(expr)
-    token = Nx.Defn.Token.add_hook(token, expr, name, function)
-    {token, expr}
+  def create_token do
+    expr(%T{shape: {}, type: :token, names: []}, nil, :create_token, [])
   end
 
   @doc false
-  def attach_token(%T{data: %{op: :token}} = token, expr) do
+  def io_call(%T{} = token, tensor_or_container, callback_spec) do
+    token_expr = to_expr(token)
+
+    tensor_expr =
+      Composite.traverse(tensor_or_container, fn
+        %T{} = t -> to_expr(t)
+        other -> other
+      end)
+
+    [%T{data: %Expr{context: context}} | _] =
+      Composite.flatten_list([tensor_expr])
+
+    ref = make_ref()
+    user_template = Nx.to_template(tensor_or_container)
+    token_template = %T{shape: {}, type: :token, names: []}
+    leaf_count = user_template |> List.wrap() |> Composite.flatten_list() |> length()
+    root_type = tuple_out(1 + leaf_count)
+
+    root =
+      expr(root_type, context, :io_call, [
+        token_expr,
+        tensor_expr,
+        callback_spec,
+        user_template,
+        ref
+      ])
+
+    token_out = expr(token_template, context, :elem, [root, 0])
+    data_out = io_call_data_from_root(root, user_template, context, 1)
+    {token_out, data_out}
+  end
+
+  defp io_call_data_from_root(root, %T{} = template, context, offset) do
+    expr(template, context, :elem, [root, offset])
+  end
+
+  defp io_call_data_from_root(root, user_template, context, offset) do
+    {container_expr, _} =
+      Composite.traverse(user_template, {offset, root}, fn
+        %T{} = template, {i, root} ->
+          {expr(template, context, :elem, [root, i]), {i + 1, root}}
+
+        other, acc ->
+          {other, acc}
+      end)
+
+    container_expr
+  end
+
+  @doc false
+  def attach_token(%T{data: %Expr{}} = token, expr) do
     Composite.traverse(expr, fn tensor ->
       expr = to_expr(tensor)
       expr(expr, expr.data.context, :attach_token, [token, expr])
     end)
-  end
-
-  def attach_token(%Nx.Defn.Token{} = token, expr) do
-    # We first create an expression to store the token
-    # so we have a shared ID to avoid multiple traversals.
-    # The size of the tuple is not used, but the amount of
-    # hooks is a good indicator.
-    size = length(token.hooks)
-    token = expr(%T{shape: {}, type: {:tuple, size}, names: []}, nil, :token, [token])
-    attach_token(token, expr)
   end
 
   @doc false
@@ -1752,12 +1794,14 @@ defmodule Nx.Defn.Expr do
     {var_name, store_line(state, :exprs, expr, type_shape)}
   end
 
-  defp traverse_args(:token, [%Nx.Defn.Token{hooks: hooks}], state) do
-    Enum.map_reduce(hooks, state, fn %{name: name, expr: expr}, state ->
-      {expr, state} = recur_inspect(expr, state)
-      {[Macro.inspect_atom(:key, name), " ", expr], state}
-    end)
+  defp traverse_args(:io_call, [token, data, callback_spec, _template, _ref], state) do
+    {token, state} = recur_inspect(token, state)
+    {data, state} = recur_inspect(data, state)
+    {callback, state} = {io_call_spec_inspect(callback_spec), state}
+    {[token, data, callback], state}
   end
+
+  defp traverse_args(:create_token, [], state), do: {[], state}
 
   defp traverse_args(:cond, [clauses, other], state) do
     Enum.map_reduce(clauses ++ [{true, other}], state, fn {condition, body}, state ->
@@ -1783,6 +1827,9 @@ defmodule Nx.Defn.Expr do
 
   defp traverse_args(_op, args, state),
     do: traverse_args(args, state)
+
+  defp io_call_spec_inspect({:hook, name, _}), do: inspect({:hook, name, nil})
+  defp io_call_spec_inspect({:fn, fun}), do: inspect(fun)
 
   defp traverse_args(args, state) do
     Enum.map_reduce(args, state, &recur_inspect/2)

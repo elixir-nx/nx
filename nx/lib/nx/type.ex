@@ -660,6 +660,7 @@ defmodule Nx.Type do
       iex> Nx.Type.to_string({:f, 64})
       "f64"
   """
+  def to_string(:token), do: "token"
   def to_string({:f8_e4m3fn, 8}), do: "f8_e4m3fn"
   def to_string({type, size}), do: Atom.to_string(type) <> Integer.to_string(size)
 

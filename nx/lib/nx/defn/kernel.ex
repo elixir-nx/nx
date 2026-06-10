@@ -231,7 +231,7 @@ defmodule Nx.Defn.Kernel do
   """
   def print_value(expr, fun, opts) when Kernel.and(is_function(fun, 1), is_list(opts)) do
     token = create_token()
-    {token, _} = hook_token(token, fun.(expr), &IO.inspect(&1, opts))
+    {token, _} = Nx.io_call(token, fun.(expr), fn t -> IO.inspect(t, opts) end)
     attach_token(token, expr)
   end
 
@@ -1329,7 +1329,9 @@ defmodule Nx.Defn.Kernel do
   Defines a hook.
 
   Hooks are a mechanism to execute an anonymous function for
-  side-effects with runtime tensor values.
+  side-effects with runtime tensor values. Internally, hooks are
+  implemented as `Nx.io_call/3` — they create a token, run the
+  callback, and attach the token to the result via `attach_token/2`.
 
   Let's see an example:
 
@@ -1427,9 +1429,17 @@ defmodule Nx.Defn.Kernel do
 
   ## Hooks and tokens
 
-  So far, we have always returned the result of the `hook`
-  call. However, what happens if the values we want to
-  hook are not part of the return value, such as below?
+  Hooks are implemented on top of `Nx.io_call/3`. Each `io_call`
+  takes a token, runs a side-effect callback, and returns
+  `{token, data}` where `data` is the input passed through
+  unchanged. Tokens establish ordering between callbacks.
+
+  When the hooked value is part of the return, `hook/3` handles
+  tokens for you. When it is not, you must thread tokens yourself
+  with `create_token/0`, `hook_token/4`, and `attach_token/2`.
+
+  For example, if the values we want to hook are not part of
+  the return value:
 
       defn add_and_mult(a, b) do
         _add = hook(a + b, :hooks_add, &IO.inspect({:add, &1}))
@@ -1449,22 +1459,25 @@ defmodule Nx.Defn.Kernel do
       end
 
   The example above creates a token and uses `hook_token/4`
-  to create hooks attached to their respective tokens. By using a token,
-  we guarantee that those hooks will be invoked in the order
-  in which they were defined. Then, at the end of the function,
-  we attach the token (and its associated hooks) to the result `mult`.
+  to register hooks in order. By threading the token through
+  each call, those hooks run in the order they were defined.
+  Then `attach_token/2` keeps the token alive in the graph so
+  the hooks are not optimized away.
 
-  In fact, the `hook/3` function is implemented roughly like this:
+  In fact, `hook/3` is implemented roughly like this:
 
       def hook(tensor_expr, name, function) do
-        {token, result} = hook_token(create_token(), tensor_expr, name, function)
+        {token, result} = Nx.io_call(create_token(), tensor_expr, name, function)
         attach_token(token, result)
       end
 
-  Note you must attach the token at the end, otherwise the hooks
-  will be "lost", as if they were not defined. This also applies
-  to conditionals and loops. The token must be attached within
-  the branch they are used. For example, this won't work:
+  And `hook_token/4` is a thin wrapper over `Nx.io_call/4`.
+
+  You must attach the token to a value that is part of the
+  computation result. Otherwise the hooks will be "lost", as if
+  they were not defined. This also applies to conditionals and
+  loops. The token must be attached within the branch they are
+  used. For example, this won't work:
 
       token = create_token()
 
@@ -1493,42 +1506,50 @@ defmodule Nx.Defn.Kernel do
   def hook(expr, name, function) when Kernel.and(is_atom(name), is_function(function, 1)),
     do: unguarded_hook(expr, name, function)
 
-  defp unguarded_hook(expr, name, function) do
-    {token, result} = Nx.Defn.Expr.add_hook(create_token(), expr, name, function)
+  defp unguarded_hook(expr, name, function) when is_atom(name) do
+    {token, result} = Nx.io_call(create_token(), expr, name, function)
+    attach_token(token, result)
+  end
+
+  defp unguarded_hook(expr, _name, function) do
+    {token, result} = Nx.io_call(create_token(), expr, function)
     attach_token(token, result)
   end
 
   @doc """
-  Shortcut for `hook_token/4`.
+  Shortcut for `io_call/4`.
   """
-  def hook_token(token, expr, name_or_function)
+  def hook_token(%Nx.Tensor{} = token, expr, name) when is_atom(name),
+    do: Nx.io_call(token, expr, name, nil)
 
-  def hook_token(%Nx.Defn.Token{} = token, expr, name) when is_atom(name),
-    do: Nx.Defn.Expr.add_hook(token, expr, name, nil)
-
-  def hook_token(%Nx.Defn.Token{} = token, expr, function) when is_function(function, 1),
-    do: Nx.Defn.Expr.add_hook(token, expr, random_hook_name(), function)
+  def hook_token(%Nx.Tensor{} = token, expr, function) when is_function(function, 1),
+    do: Nx.io_call(token, expr, function)
 
   @doc """
   Defines a hook with an existing token. See `hook/3`.
+
+  This is a thin wrapper over `Nx.io_call/4`.
   """
-  def hook_token(%Nx.Defn.Token{} = token, expr, name, function)
+  def hook_token(%Nx.Tensor{} = token, expr, name, function)
       when Kernel.and(is_atom(name), is_function(function, 1)),
-      do: Nx.Defn.Expr.add_hook(token, expr, name, function)
+      do: Nx.io_call(token, expr, name, function)
 
   defp random_hook_name(), do: :"hook_#{System.unique_integer([:positive])}"
 
   @doc """
-  Creates a token for hooks. See `hook/3`.
+  Creates a token for `io_call/3`. See `hook/3`.
   """
   def create_token do
-    Nx.Defn.Token.new()
+    Nx.Defn.Expr.create_token()
   end
 
   @doc """
   Attaches a token to an expression. See `hook/3`.
+
+  This keeps the token alive in the computation graph so ordered
+  `io_call`s are not optimized away.
   """
-  def attach_token(%Nx.Defn.Token{} = token, expr) do
+  def attach_token(%Nx.Tensor{} = token, expr) do
     Nx.Defn.Expr.attach_token(token, expr)
   end
 

@@ -176,6 +176,91 @@ Result InvokeRuntimeCallback(
   return pending->result;
 }
 
+Result InvokeIOCall(xla::ffi::Span<const int64_t> callback_id_words,
+                    uint64_t callback_id_size,
+                    const Arg &callback_server_pid_arg,
+                    const std::vector<Arg> &inputs) {
+  const std::vector<OutputBuffer> empty_outputs;
+  const int64_t callback_server_pid_dim = static_cast<int64_t>(sizeof(ErlNifPid));
+  const size_t callback_server_pid_size = sizeof(ErlNifPid);
+
+  auto pending = fine::make_resource<Pending>(empty_outputs);
+
+  ErlNifEnv *msg_env = enif_alloc_env();
+
+  if (callback_id_size > callback_id_words.size() * sizeof(int64_t)) {
+    Result res;
+    res.ok = false;
+    res.error = "inconsistent callback id size";
+    return res;
+  }
+
+  if (callback_server_pid_arg.dtype != xla::ffi::DataType::U8) {
+    Result res;
+    res.ok = false;
+    res.error = "io_call server pid tensor must have dtype u8";
+    return res;
+  }
+
+  if (callback_server_pid_arg.dims.size() != 1 ||
+      callback_server_pid_arg.dims[0] != callback_server_pid_dim) {
+    Result res;
+    res.ok = false;
+    res.error = "io_call server pid tensor has unexpected shape";
+    return res;
+  }
+
+  if (callback_server_pid_arg.size_bytes != callback_server_pid_size) {
+    Result res;
+    res.ok = false;
+    res.error = "io_call server pid tensor must contain encoded ErlNifPid bytes";
+    return res;
+  }
+
+  const unsigned char *id_bytes =
+      reinterpret_cast<const unsigned char *>(callback_id_words.begin());
+
+  ERL_NIF_TERM callback_id_term;
+  if (!enif_binary_to_term(msg_env, id_bytes, callback_id_size,
+                           &callback_id_term, 0)) {
+    Result res;
+    res.ok = false;
+    res.error = "failed to decode io_call id term";
+    return res;
+  }
+
+  ErlNifPid callback_server_pid;
+  std::memcpy(&callback_server_pid, callback_server_pid_arg.data,
+              sizeof(ErlNifPid));
+
+  std::vector<std::tuple<fine::Term,
+                         std::tuple<xla::ffi::DataType, std::vector<int64_t>>>>
+      args_terms;
+  args_terms.reserve(inputs.size());
+
+  for (const auto &tensor : inputs) {
+    fine::Term bin_term = fine::make_new_binary(
+        msg_env, reinterpret_cast<const char *>(tensor.data),
+        tensor.size_bytes);
+
+    auto arg_tuple =
+        std::make_tuple(bin_term, std::make_tuple(tensor.dtype, tensor.dims));
+
+    args_terms.push_back(arg_tuple);
+  }
+
+  auto msg = std::make_tuple(fine::Atom("exla_io_call"), fine::Term(callback_id_term),
+                             args_terms, pending);
+
+  enif_send(msg_env, &callback_server_pid, msg_env, fine::encode(msg_env, msg));
+  enif_free_env(msg_env);
+
+  std::unique_lock<std::mutex> lock(pending->mu);
+  pending->cv.wait(lock, [&pending] { return pending->done; });
+
+  return pending->result;
+}
+
 } // namespace callback_bridge
 
 } // namespace exla

@@ -289,6 +289,37 @@ defmodule EXLA.Defn.APITest do
       assert_equal(a, Nx.tensor(1))
       assert_equal(b, Nx.tensor(2))
     end
+
+    defn hook_raises(a, b) do
+      hook(a + b, :raises, fn _ -> raise "boom" end)
+    end
+
+    @tag :capture_log
+    test "halts outfeed when hook raises" do
+      assert_raise RuntimeError, ~r/boom/, fn ->
+        EXLA.jit(&hook_raises/2).(2, 3)
+      end
+    end
+
+    defn side_effect_hooks(a, b) do
+      token = create_token()
+      {token, _} = hook_token(token, b, :b)
+      {token, _} = hook_token(token, a, :a)
+      attach_token(token, a + b)
+    end
+
+    test "executes token-ordered hooks in sequence" do
+      parent = self()
+      send_value = fn value -> send(parent, Nx.to_number(value)) end
+
+      assert_equal(
+        EXLA.jit(&side_effect_hooks/2, hooks: %{a: send_value, b: send_value}).(1, 2),
+        Nx.tensor(3)
+      )
+
+      assert_received 2
+      assert_received 1
+    end
   end
 
   describe "cross-client hooks" do

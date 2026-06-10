@@ -696,6 +696,46 @@ defmodule EXLA.MLIR.Value do
     op(func, "stablehlo.create_token", [], result_types) |> one!()
   end
 
+  def after_all([%Value{function: func} | _] = tokens) do
+    result_types = [type_token()]
+    op(func, "stablehlo.after_all", tokens, result_types) |> one!()
+  end
+
+  @doc false
+  def io_call([%Value{} = token_in, %Value{} = callback_pid | leaf_operands], leaf_typespecs, callback_id) do
+    [%Value{function: func} | _] = [token_in | leaf_operands]
+    leaf_count = length(leaf_typespecs)
+    tensor_result_types = typespecs_to_mlir_types(leaf_typespecs)
+    result_types = [type_token() | tensor_result_types]
+
+    {callback_id_words, callback_id_size} = term_to_int64_list(callback_id)
+
+    aliases =
+      Enum.with_index(leaf_typespecs, fn _typespec, index ->
+        attr_output_operand_alias(index + 2, index + 1, leaf_count + 1)
+      end)
+
+    attributes = [
+      call_target_name: attr_string("exla_io_call"),
+      api_version: attr_i32(4),
+      has_side_effect: attr_boolean(true),
+      output_operand_aliases: join_list(aliases),
+      backend_config:
+        attr_dict(
+          callback_id: attr_array_i64_elements(callback_id_words),
+          callback_id_size: attr_ui64(callback_id_size)
+        )
+    ]
+
+    [token_from_call | leaf_results] =
+      op(func, "stablehlo.custom_call", [token_in, callback_pid | leaf_operands], result_types,
+        attributes: attributes
+      )
+
+    token_out = after_all([token_in, token_from_call])
+    [token_out | leaf_results]
+  end
+
   def call(%Function{} = func, args, %Function{} = computation, typespecs) do
     result_types = typespecs_to_mlir_types(typespecs)
     attributes = [callee: attr_symbol_reference(computation.name)]
@@ -821,6 +861,14 @@ defmodule EXLA.MLIR.Value do
     ]
 
     op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
+  end
+
+  defp attr_output_operand_alias(operand_index, _output_index, 1) do
+    "#stablehlo.output_operand_alias<output_tuple_indices = [], operand_index = #{operand_index}, operand_tuple_indices = []>"
+  end
+
+  defp attr_output_operand_alias(operand_index, output_index, _leaf_count) do
+    "#stablehlo.output_operand_alias<output_tuple_indices = [#{output_index}], operand_index = #{operand_index}, operand_tuple_indices = []>"
   end
 
   defp term_to_int64_list(term) do

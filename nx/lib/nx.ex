@@ -2221,6 +2221,80 @@ defmodule Nx do
   end
 
   @doc """
+  Invokes a side-effect callback from within `defn`, returning a token and passthrough data.
+
+  Unlike `runtime_call/4`, `io_call/3` does not compute a new value in the callback.
+  Its purpose is to execute side effects (logging, sending messages, etc.) while
+  preserving explicit ordering through tokens.
+
+  Each call takes the current token and returns `{token, data}` where `data` is the
+  input passed through unchanged:
+
+      token = Nx.Defn.Kernel.create_token()
+      {token, x} = Nx.io_call(token, x, &MyMod.log/1)
+
+  Named hooks can be overridden via `Nx.Defn.jit/2`:
+
+      Nx.io_call(token, x, :my_hook)
+
+  Ordering between `io_call`s is guaranteed by threading the token. Independent calls
+  that do not share a token chain have no ordering guarantee.
+
+  ## Examples
+
+      iex> defmodule IoCallExample do
+      ...>   def log(t), do: t
+      ...> end
+      iex> token = Nx.Defn.Expr.create_token()
+      iex> x = Nx.tensor([1, 2, 3])
+      iex> {token, x} = Nx.io_call(token, x, &IoCallExample.log/1)
+      iex> Nx.to_flat_list(x)
+      [1, 2, 3]
+
+  """
+  @doc type: :backend
+  def io_call(%Nx.Tensor{} = token, tensor_or_container, name, callback)
+      when is_atom(name) and (is_function(callback, 1) or is_nil(callback)) do
+    io_call(token, tensor_or_container, {:hook, name, callback})
+  end
+
+  def io_call(%Nx.Tensor{} = token, tensor_or_container, callback)
+      when is_function(callback, 1) do
+    io_call(token, tensor_or_container, {:fn, callback})
+  end
+
+  def io_call(%Nx.Tensor{} = token, tensor_or_container, {:hook, _, _} = callback_spec),
+      do: io_call_impl(token, tensor_or_container, callback_spec)
+
+  def io_call(%Nx.Tensor{} = token, tensor_or_container, {:fn, _} = callback_spec),
+      do: io_call_impl(token, tensor_or_container, callback_spec)
+
+  defp io_call_impl(%Nx.Tensor{} = token, tensor_or_container, callback_spec) do
+    tensors = Nx.Defn.Composite.flatten_list([tensor_or_container])
+    backend = Nx.Shared.list_impl!(tensors)
+
+    if backend == Nx.Defn.Expr do
+      Nx.Defn.Expr.io_call(token, tensor_or_container, callback_spec)
+    else
+      run_io_call_eager!(callback_spec, tensor_or_container)
+      {token, tensor_or_container}
+    end
+  end
+
+  defp run_io_call_eager!({:fn, fun}, container) when is_function(fun, 1), do: fun.(container)
+
+  defp run_io_call_eager!({:hook, _name, callback}, container)
+       when is_function(callback, 1),
+       do: callback.(container)
+
+  defp run_io_call_eager!({:hook, _name, nil}, _container), do: :ok
+
+  defp run_io_call_eager!(_spec, _container) do
+    raise ArgumentError,
+          "io_call with a hook name is only supported inside defn; pass a function callback instead"
+  end
+
+  @doc """
   Invokes an Elixir function from within `defn`.
 
   This function allows integrating arbitrary Elixir code into `defn` graphs.

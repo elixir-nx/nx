@@ -234,7 +234,8 @@ defmodule EXLA.Defn do
          run_options,
          is_sharded?
        )
-       when Outfeed.will_outfeed(outfeed) or Outfeed.has_runtime_calls(outfeed) do
+       when Outfeed.will_outfeed(outfeed) or Outfeed.has_runtime_calls(outfeed) or
+              Outfeed.has_io_calls(outfeed) do
     if is_sharded? do
       raise ArgumentError, "outfeed is not supported for sharded execution yet"
     end
@@ -426,7 +427,7 @@ defmodule EXLA.Defn do
               # Only create the token when we know it will actually be
               # used, that is: streaming, lazy transfers or hooks
               outfeed =
-                if reverse_infeeds != [] or hooks != %{} or defined_hooks != %{} do
+                if reverse_infeeds != [] do
                   outfeed
                   |> Outfeed.with_token(Value.create_token(builder))
                   |> Outfeed.add_infeeds(builder, reverse_infeeds)
@@ -770,6 +771,60 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
+         :io_call,
+         %T{
+           data: %Expr{
+             id: id,
+             args: [token_expr, tensor_expr, callback_spec, _template, _ref]
+           }
+         },
+         %{client: %EXLA.Client{platform: platform}, callback_pid_value: callback_pid_value} =
+           state,
+         cache
+       )
+       when platform in [:host, :cuda] do
+    {token_in, cache} = recur_operator(token_expr, state, cache) |> unwrap_single_tensor!()
+
+    {reverse_arg_values, cache} =
+      Composite.reduce(tensor_expr, {[], cache}, fn %T{} = expr, {acc, cache} ->
+        {value, cache} = recur_operator(expr, state, cache) |> unwrap_single_tensor!()
+        {[value | acc], cache}
+      end)
+
+    arg_values = Enum.reverse(reverse_arg_values)
+    typespecs = Enum.map(arg_values, &Value.get_typespec/1)
+    arg_template = Nx.to_template(tensor_expr)
+
+    cache = add_io_call(cache, {id, callback_spec, arg_template})
+
+    unless callback_pid_value do
+      raise "internal bug: io_call callback pid operand is missing"
+    end
+
+    results =
+      Value.io_call([token_in, callback_pid_value | arg_values], typespecs, id)
+
+    {results, cache}
+  end
+
+  defp cached_recur_operator(
+         :io_call,
+         _expr,
+         %{client: %EXLA.Client{platform: platform}},
+         _cache
+       ) do
+    raise """
+    Nx.io_call/3 is currently only supported for EXLA CPU (platform: :host) and CUDA (platform: :cuda),
+    but the active EXLA client is configured for platform #{inspect(platform)}.
+    Please run on the :host or :cuda client or wait for future segmentation-based support.
+    """
+  end
+
+  defp cached_recur_operator(:create_token, _expr, %{builder: builder}, cache) do
+    {Value.create_token(builder), cache}
+  end
+
+  defp cached_recur_operator(
          :runtime_call,
          %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template, opts]}} = expr,
          %{client: %EXLA.Client{platform: :host}, callback_pid_value: callback_pid_value} =
@@ -882,24 +937,6 @@ defmodule EXLA.Defn do
     {op, cache} = recur_operator(expr, state, cache)
     {_, cache} = recur_operator(token, state, cache)
     {op, cache}
-  end
-
-  defp cached_recur_operator(:token, %T{data: %Expr{args: [token]}}, state, cache) do
-    builder = state.builder
-
-    cache =
-      List.foldr(token.hooks, cache, fn %{name: name, expr: expr}, cache ->
-        # First traverse the child because if it has hooks,
-        # we need to handle them first
-        {tuple, cache} = recur_flatten(expr, state, cache)
-
-        cache
-        |> get_outfeed()
-        |> Outfeed.maybe_add_function_hook(builder, tuple, name, expr)
-        |> then(&put_outfeed(cache, &1))
-      end)
-
-    {[], cache}
   end
 
   defp cached_recur_operator(op, expr, state, cache) do
@@ -1755,6 +1792,13 @@ defmodule EXLA.Defn do
     cache
     |> get_outfeed()
     |> Outfeed.add_runtime_callback(runtime_callback)
+    |> then(&put_outfeed(cache, &1))
+  end
+
+  defp add_io_call(cache, io_call) do
+    cache
+    |> get_outfeed()
+    |> Outfeed.add_io_call(io_call)
     |> then(&put_outfeed(cache, &1))
   end
 

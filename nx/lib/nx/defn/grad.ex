@@ -171,6 +171,21 @@ defmodule Nx.Defn.Grad do
     acc
   end
 
+  defp parents_args(:io_call, t, id, acc) do
+    reduce_args(:io_call, t, acc, fn arg, {parents, nodes} ->
+      if arg.data.op in @constants do
+        {parents, nodes}
+      else
+        parents = Map.update(parents, arg.data.id, [id], &[id | &1])
+        recur_parents_tree(arg, {parents, nodes})
+      end
+    end)
+  end
+
+  defp parents_args(:create_token, _expr, _id, acc) do
+    acc
+  end
+
   defp parents_args(:block, %{data: %{args: [struct, in_args, _expr, callback]}} = t, id, acc) do
     expr = apply(callback, [struct | in_args])
 
@@ -220,6 +235,9 @@ defmodule Nx.Defn.Grad do
 
   defp reduce_args(:attach_token, %{data: %{args: [_, arg]}}, acc, fun),
     do: fun.(arg, acc)
+
+  defp reduce_args(:io_call, %{data: %{args: [_token, tensor_expr | _]}}, acc, fun),
+    do: Composite.reduce(tensor_expr, acc, fun)
 
   defp reduce_args(:while, %{data: %{args: [initial | _]}}, acc, fun),
     do: Composite.reduce(initial, acc, fun)
@@ -1049,6 +1067,24 @@ defmodule Nx.Defn.Grad do
 
   defp grad(:attach_token, [_, x], _ans, g, _batch_count) do
     [{x, g}]
+  end
+
+  defp grad(:io_call, [_token, tensor_expr, _callback_spec, _template, _ref], _ans, g, _batch_count) do
+    leaf_count = Composite.reduce(tensor_expr, 0, fn _, count -> count + 1 end)
+
+    gs =
+      cond do
+        is_list(g) and length(g) == leaf_count + 1 -> tl(g)
+        is_tuple(g) and tuple_size(g) == leaf_count + 1 -> g |> Tuple.to_list() |> tl()
+        true -> List.wrap(g)
+      end
+
+    {pairs, []} =
+      Composite.reduce(tensor_expr, {[], gs}, fn child, {pairs, [grad | gs]} ->
+        {[{child, grad} | pairs], gs}
+      end)
+
+    Enum.reverse(pairs)
   end
 
   defp grad(:conjugate, [%{type: {type, _}} = t], _ans, g, _batch_count) do

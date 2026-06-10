@@ -16,7 +16,8 @@ defmodule EXLA.Defn.Outfeed do
             compiled_hooks: %{},
             token: nil,
             infeeds: [],
-            runtime_callbacks: %{}
+            runtime_callbacks: %{},
+            io_calls: %{}
 
   ## Functional API
 
@@ -71,8 +72,12 @@ defmodule EXLA.Defn.Outfeed do
   defp used_inputs(_, inputs, _depth, _lazy?),
     do: inputs
 
-  defp used_hooks(%Expr{op: :token, args: [token]}, hooks),
-    do: Enum.reduce(token.hooks, hooks, &Map.put(&2, &1.name, &1.callback))
+  defp used_hooks(%Expr{op: :io_call, args: [_, _, spec, _, _]}, hooks) do
+    case spec do
+      {:hook, name, callback} -> Map.put(hooks, name, callback)
+      {:fn, _} -> hooks
+    end
+  end
 
   defp used_hooks(_, hooks),
     do: hooks
@@ -81,6 +86,7 @@ defmodule EXLA.Defn.Outfeed do
 
   defguard will_outfeed(outfeed) when outfeed.compiled_hooks != %{}
   defguard has_runtime_calls(outfeed) when outfeed.runtime_callbacks != %{}
+  defguard has_io_calls(outfeed) when outfeed.io_calls != %{}
 
   @doc """
   An empty outfeed to be used when not outfeeding is supported.
@@ -131,6 +137,10 @@ defmodule EXLA.Defn.Outfeed do
       ) do
     callback = {fun, out_template, arg_template, opts}
     %{outfeed | runtime_callbacks: Map.put(runtime_callbacks, id, callback)}
+  end
+
+  def add_io_call(%Outfeed{io_calls: io_calls} = outfeed, {id, callback_spec, arg_template}) do
+    %{outfeed | io_calls: Map.put(io_calls, id, {callback_spec, arg_template})}
   end
 
   @doc """
@@ -230,18 +240,37 @@ defmodule EXLA.Defn.Outfeed do
       compiled_hooks: compiled_hooks,
       default_hooks: default_hooks,
       user_hooks: user_hooks,
-      runtime_callbacks: runtime_callbacks
+      runtime_callbacks: runtime_callbacks,
+      io_calls: io_calls
     } =
       outfeed
 
     hooks = Map.merge(default_hooks, user_hooks)
 
     Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
-      init(client, device_id, hooks, compiled_hooks, infeeds, runtime_callbacks, group_leader)
+      init(
+        client,
+        device_id,
+        hooks,
+        compiled_hooks,
+        infeeds,
+        runtime_callbacks,
+        io_calls,
+        group_leader
+      )
     end)
   end
 
-  defp init(client, device_id, hooks, compiled_hooks, infeeds, rt_callbacks, group_leader) do
+  defp init(
+         client,
+         device_id,
+         hooks,
+         compiled_hooks,
+         infeeds,
+         rt_callbacks,
+         io_calls,
+         group_leader
+       ) do
     Process.flag(:trap_exit, true)
     # Copy the group leader so we report to the proper device
     Process.group_leader(self(), group_leader)
@@ -249,10 +278,30 @@ defmodule EXLA.Defn.Outfeed do
     ref = make_ref()
     typespec = EXLA.Typespec.tensor({:u, 16}, {})
 
-    loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks)
+    loop(
+      client,
+      device_id,
+      ref,
+      typespec,
+      hooks,
+      compiled_hooks,
+      infeeds,
+      rt_callbacks,
+      io_calls
+    )
   end
 
-  defp loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks) do
+  defp loop(
+         client,
+         device_id,
+         ref,
+         typespec,
+         hooks,
+         compiled_hooks,
+         infeeds,
+         rt_callbacks,
+         io_calls
+       ) do
     if compiled_hooks != %{} do
       # If we're not outfeeding, we only need to handle the runtime callback
       # and executable stop messaging
@@ -262,7 +311,7 @@ defmodule EXLA.Defn.Outfeed do
     receive do
       {^ref, <<0::native-unsigned-16>>} ->
         # Outfeed is done, now we wait for the computation to finish
-        loop(client, device_id, ref, typespec, hooks, %{}, infeeds, rt_callbacks)
+        loop(client, device_id, ref, typespec, hooks, %{}, infeeds, rt_callbacks, io_calls)
 
       {^ref, <<flag::native-unsigned-16>>} ->
         case Map.fetch!(compiled_hooks, flag) do
@@ -274,7 +323,18 @@ defmodule EXLA.Defn.Outfeed do
               end
 
             EXLA.Client.to_infeed(client, device_id, [{data, data_typespec}])
-            loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks)
+
+            loop(
+              client,
+              device_id,
+              ref,
+              typespec,
+              hooks,
+              compiled_hooks,
+              infeeds,
+              rt_callbacks,
+              io_calls
+            )
 
           {:function, typespecs, name, template} ->
             fun = Map.fetch!(hooks, name)
@@ -294,21 +354,59 @@ defmodule EXLA.Defn.Outfeed do
                   hooks,
                   compiled_hooks,
                   infeeds,
-                  rt_callbacks
+                  rt_callbacks,
+                  io_calls
                 )
             end
         end
 
       {:exla_runtime_call, callback_id, args_spec, reply_tag} ->
         send_runtime_callback_reply(rt_callbacks, callback_id, args_spec, reply_tag)
-        loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks)
+
+        loop(
+          client,
+          device_id,
+          ref,
+          typespec,
+          hooks,
+          compiled_hooks,
+          infeeds,
+          rt_callbacks,
+          io_calls
+        )
+
+      {:exla_io_call, callback_id, args_spec, reply_tag} ->
+        send_io_call_reply(hooks, io_calls, callback_id, args_spec, reply_tag)
+
+        loop(
+          client,
+          device_id,
+          ref,
+          typespec,
+          hooks,
+          compiled_hooks,
+          infeeds,
+          rt_callbacks,
+          io_calls
+        )
 
       :stop ->
         :ok
 
       other ->
         Logger.debug("EXLA.Outfeed ignoring unexpected message: #{inspect(other)}")
-        loop(client, device_id, ref, typespec, hooks, compiled_hooks, infeeds, rt_callbacks)
+
+        loop(
+          client,
+          device_id,
+          ref,
+          typespec,
+          hooks,
+          compiled_hooks,
+          infeeds,
+          rt_callbacks,
+          io_calls
+        )
     end
   end
 
@@ -344,11 +442,11 @@ defmodule EXLA.Defn.Outfeed do
       rescue
         exception ->
           send(self(), :stop)
-          {:error, {:exception, Exception.message(exception)}}
+          {:error, {:exception, Exception.format(:error, exception, __STACKTRACE__)}}
       catch
         kind, reason ->
           send(self(), :stop)
-          {:error, {kind, format_runtime_callback_reason(reason)}}
+          {:error, {kind, Exception.format(kind, reason, __STACKTRACE__)}}
       end
 
     try do
@@ -367,8 +465,69 @@ defmodule EXLA.Defn.Outfeed do
     end
   end
 
-  defp format_runtime_callback_reason(reason) when is_binary(reason), do: reason
-  defp format_runtime_callback_reason(reason), do: inspect(reason)
+  defp resolve_io_call_hook({:fn, fun}, _hooks), do: fun
+
+  defp resolve_io_call_hook({:hook, name, callback}, hooks) do
+    hooks[name] || callback
+  end
+
+  defp invoke_io_call_hook(nil, _tensor_args), do: {:ok, []}
+
+  defp invoke_io_call_hook(fun, tensor_args) when is_function(fun, 1) do
+    try do
+      fun.(tensor_args)
+      {:ok, []}
+    rescue
+      exception ->
+        {:error, {:exception, Exception.format(:error, exception, __STACKTRACE__)}}
+    catch
+      kind, reason ->
+        {:error, {kind, Exception.format(kind, reason, __STACKTRACE__)}}
+    end
+  end
+
+  defp send_io_call_reply(hooks, io_calls, callback_id, args_spec, reply_tag) do
+    reply =
+      try do
+        with {:ok, {callback_spec, arg_template}} <- Map.fetch(io_calls, callback_id),
+             {:ok, tensor_args} <- materialize_io_call_args(arg_template, args_spec) do
+          invoke_io_call_hook(resolve_io_call_hook(callback_spec, hooks), tensor_args)
+        else
+          :error ->
+            Logger.error(
+              "EXLA.Outfeed received io_call id #{inspect(callback_id)} that is not registered"
+            )
+
+            {:error, {:unknown_callback, callback_id}}
+
+          {:error, _} = error ->
+            error
+        end
+      rescue
+        exception ->
+          send(self(), :stop)
+          {:error, {:exception, Exception.format(:error, exception, __STACKTRACE__)}}
+      catch
+        kind, reason ->
+          send(self(), :stop)
+          {:error, {kind, Exception.format(kind, reason, __STACKTRACE__)}}
+      end
+
+    try do
+      case reply do
+        {:ok, []} ->
+          EXLA.NIF.runtime_callback_reply(reply_tag, :ok, [])
+
+        {:error, {tag, reason}} ->
+          EXLA.NIF.runtime_callback_reply(reply_tag, :error, {tag, reason})
+      end
+    rescue
+      _ ->
+        Logger.error(
+          "EXLA.Outfeed failed to send io_call reply to native for tag #{inspect(reply_tag)}"
+        )
+    end
+  end
 
   defp run_runtime_callback({:error, reason}, _fun, _out_template, _opts), do: {:error, reason}
 
@@ -478,6 +637,21 @@ defmodule EXLA.Defn.Outfeed do
   end
 
   defp materialize_callback_args(arg_template, args_spec) do
+    materialize_callback_tensors(arg_template, args_spec, :runtime_call)
+  end
+
+  defp maybe_revectorize(decoded, %Nx.Tensor{vectorized_axes: axes}, :io_call)
+       when axes != [] do
+    Nx.vectorize(decoded, axes)
+  end
+
+  defp maybe_revectorize(decoded, _template, _mode), do: decoded
+
+  defp materialize_io_call_args(arg_template, args_spec) do
+    materialize_callback_tensors(arg_template, args_spec, :io_call)
+  end
+
+  defp materialize_callback_tensors(arg_template, args_spec, mode) do
     {container, remaining} =
       Composite.traverse(arg_template, args_spec, fn
         %Nx.Tensor{} = template, [{bin, {type, shape_list}} | rest] ->
@@ -485,8 +659,15 @@ defmodule EXLA.Defn.Outfeed do
             bin
             |> Nx.from_binary(type)
             |> Nx.reshape(List.to_tuple(shape_list))
+            |> maybe_revectorize(template, mode)
 
-          if Nx.compatible?(decoded, template) do
+          compatible? =
+            case mode do
+              :io_call -> Nx.compatible?(decoded, template)
+              _ -> Nx.compatible?(decoded, template)
+            end
+
+          if compatible? do
             {decoded, rest}
           else
             throw({:error, {:shape_mismatch, decoded, template}})
@@ -500,6 +681,8 @@ defmodule EXLA.Defn.Outfeed do
       [] -> {:ok, container}
       _ -> {:error, {:invalid_args_spec, :extra_values}}
     end
+  catch
+    :throw, {:error, _} = error -> error
   end
 
   defp encode_callback_outputs(container) do

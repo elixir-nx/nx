@@ -147,62 +147,55 @@ defmodule Nx.Defn.KernelTest do
     defp zero_expr(), do: Nx.tensor(0, type: {:u, 8}, backend: Nx.Defn.Expr)
     defp one_expr(), do: Nx.tensor(1, type: {:u, 8}, backend: Nx.Defn.Expr)
 
-    defp token_expr!(%T{
-           data: %Expr{
-             op: :attach_token,
-             args: [%T{data: %Expr{op: :token, args: [token]}}, expr]
-           }
-         }) do
+    defp attach_info!(%T{data: %Expr{op: :attach_token, args: [token, expr]}}) do
       {token, expr}
     end
 
     test "hook/2,3" do
-      {token, expr} = Nx.Defn.Kernel.hook(zero_expr(), :a) |> token_expr!()
-      assert [%{name: :a, callback: nil, expr: ^expr}] = token.hooks
-      assert expr == zero_expr()
+      {token, expr} = Nx.Defn.Kernel.hook(zero_expr(), :a) |> attach_info!()
+      assert %T{data: %Expr{op: :elem, args: [_, 0]}} = token
+      assert %T{data: %Expr{op: :elem, args: [_, 1]}} = expr
 
-      {token, expr} = Nx.Defn.Kernel.hook(zero_expr(), &Function.identity/1) |> token_expr!()
-      assert [%{name: name, callback: callback, expr: ^expr}] = token.hooks
-      assert callback == (&Function.identity/1)
-      assert expr == zero_expr()
-      assert "hook_" <> _ = Atom.to_string(name)
+      rendered = inspect(expr, safe: false)
+      assert rendered =~ "io_call"
+      assert rendered =~ "{:hook, :a"
 
-      {token, expr} = Nx.Defn.Kernel.hook(zero_expr(), :a, &Function.identity/1) |> token_expr!()
-      assert [%{name: :a, callback: callback, expr: ^expr}] = token.hooks
-      assert callback == (&Function.identity/1)
-      assert expr == zero_expr()
+      {token, expr} = Nx.Defn.Kernel.hook(zero_expr(), &Function.identity/1) |> attach_info!()
+      assert %T{data: %Expr{op: :elem, args: [_, 0]}} = token
+      assert %T{data: %Expr{op: :elem, args: [_, 1]}} = expr
+      assert inspect(expr, safe: false) =~ "io_call"
+
+      {token, expr} = Nx.Defn.Kernel.hook(zero_expr(), :a, &Function.identity/1) |> attach_info!()
+      assert %T{data: %Expr{op: :elem, args: [_, 0]}} = token
+      assert %T{data: %Expr{op: :elem, args: [_, 1]}} = expr
+      assert inspect(expr, safe: false) =~ "{:hook, :a"
     end
 
     test "hook_token/3,4" do
       initial_token = Nx.Defn.Kernel.create_token()
+      assert %T{data: %Expr{op: :create_token}} = initial_token
+
       {token, expr} = Nx.Defn.Kernel.hook_token(initial_token, zero_expr(), :a)
-      assert [%{name: :a, callback: nil, expr: ^expr}] = token.hooks
-      assert expr == zero_expr()
+      assert %T{data: %Expr{op: :elem, args: [_, 0]}} = token
+      assert %T{data: %Expr{op: :elem, args: [_, 1]}} = expr
 
       {token, expr} = Nx.Defn.Kernel.hook_token(initial_token, zero_expr(), &Function.identity/1)
-      assert [%{name: name, callback: callback, expr: ^expr}] = token.hooks
-      assert callback == (&Function.identity/1)
-      assert expr == zero_expr()
-      assert "hook_" <> _ = Atom.to_string(name)
+      assert %T{data: %Expr{op: :elem, args: [_, 0]}} = token
+      assert %T{data: %Expr{op: :elem, args: [_, 1]}} = expr
 
       {token, expr} =
         Nx.Defn.Kernel.hook_token(initial_token, zero_expr(), :a, &Function.identity/1)
 
-      assert [%{name: :a, callback: callback, expr: ^expr}] = token.hooks
-      assert callback == (&Function.identity/1)
-      assert expr == zero_expr()
+      assert %T{data: %Expr{op: :elem, args: [_, 0]}} = token
+      assert %T{data: %Expr{op: :elem, args: [_, 1]}} = expr
 
       token = initial_token
       {token, zero} = Nx.Defn.Kernel.hook_token(token, zero_expr(), &Function.identity/1)
       {token, one} = Nx.Defn.Kernel.hook_token(token, one_expr(), :one)
 
-      assert [
-               %{name: :one, callback: nil, expr: ^one},
-               %{name: name, callback: callback, expr: ^zero}
-             ] = token.hooks
-
-      assert callback == (&Function.identity/1)
-      assert "hook_" <> _ = Atom.to_string(name)
+      assert %T{data: %Expr{op: :elem, args: [_, 0]}} = token
+      assert %T{data: %Expr{op: :elem, args: [_, 1]}} = zero
+      assert %T{data: %Expr{op: :elem, args: [_, 1]}} = one
     end
   end
 
