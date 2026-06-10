@@ -2264,10 +2264,10 @@ defmodule Nx do
   end
 
   def io_call(%Nx.Tensor{} = token, tensor_or_container, {:hook, _, _} = callback_spec),
-      do: io_call_impl(token, tensor_or_container, callback_spec)
+    do: io_call_impl(token, tensor_or_container, callback_spec)
 
   def io_call(%Nx.Tensor{} = token, tensor_or_container, {:fn, _} = callback_spec),
-      do: io_call_impl(token, tensor_or_container, callback_spec)
+    do: io_call_impl(token, tensor_or_container, callback_spec)
 
   defp io_call_impl(%Nx.Tensor{} = token, tensor_or_container, callback_spec) do
     tensors = Nx.Defn.Composite.flatten_list([tensor_or_container])

@@ -334,7 +334,13 @@ defmodule Nx.Defn.Evaluator do
     {make_ref(), caches}
   end
 
-  defp eval_apply(:io_call, [token, tensor_expr, callback_spec, out_template, _ref], _ans, state, caches) do
+  defp eval_apply(
+         :io_call,
+         [token, tensor_expr, callback_spec, out_template, _ref],
+         _ans,
+         state,
+         caches
+       ) do
     {_token, caches} = eval(token, state, caches)
     {tensor_value, caches} = composite_eval(tensor_expr, state, caches)
 

@@ -1069,7 +1069,13 @@ defmodule Nx.Defn.Grad do
     [{x, g}]
   end
 
-  defp grad(:io_call, [_token, tensor_expr, _callback_spec, _template, _ref], _ans, g, _batch_count) do
+  defp grad(
+         :io_call,
+         [_token, tensor_expr, _callback_spec, _template, _ref],
+         _ans,
+         g,
+         _batch_count
+       ) do
     leaf_count = Composite.reduce(tensor_expr, 0, fn _, count -> count + 1 end)
 
     gs =
