@@ -17,7 +17,6 @@ defmodule EXLA.Defn.Outfeed do
             token: nil,
             infeeds: [],
             runtime_callbacks: %{},
-            io_calls: %{},
             ignore_undefined_io_calls: false
 
   ## Functional API
@@ -85,9 +84,8 @@ defmodule EXLA.Defn.Outfeed do
 
   ## Struct API
 
-  defguard will_outfeed(outfeed) when outfeed.compiled_hooks != %{}
+  defguard has_compiled_hooks(outfeed) when outfeed.compiled_hooks != %{}
   defguard has_runtime_calls(outfeed) when outfeed.runtime_callbacks != %{}
-  defguard has_io_calls(outfeed) when outfeed.io_calls != %{}
 
   @doc """
   An empty outfeed to be used when not outfeeding is supported.
@@ -143,8 +141,14 @@ defmodule EXLA.Defn.Outfeed do
     %{outfeed | runtime_callbacks: Map.put(runtime_callbacks, id, callback)}
   end
 
-  def add_io_call(%Outfeed{io_calls: io_calls} = outfeed, {id, callback_spec, arg_template}) do
-    %{outfeed | io_calls: Map.put(io_calls, id, {callback_spec, arg_template})}
+  def add_io_call(
+        %Outfeed{compiled_hooks: compiled_hooks} = outfeed,
+        {id, callback_spec, arg_template}
+      ) do
+    %{
+      outfeed
+      | compiled_hooks: Map.put(compiled_hooks, id, {:io_call, callback_spec, arg_template})
+    }
   end
 
   @doc """
@@ -174,55 +178,42 @@ defmodule EXLA.Defn.Outfeed do
   defp flag_typespec(), do: EXLA.Typespec.tensor({:u, 16}, {})
 
   @doc """
-  Adds a function hook if it has a callback defined for it.
-  """
-  def maybe_add_function_hook(%Outfeed{} = outfeed, builder, tuple, name, expr) do
-    cond do
-      name in outfeed.used_hooks ->
-        {outfeed, flag, typespecs} = outfeed_flat_tuple(outfeed, builder, tuple)
-        put_in(outfeed.compiled_hooks[flag], {:function, typespecs, name, Nx.to_template(expr)})
-
-      outfeed.token ->
-        outfeed
-
-      true ->
-        raise "hooks are not supported inside #{builder.name}"
-    end
-  end
-
-  @doc """
   Closes the outfeed at the end of a pipeline.
 
   Note the outfeed may be closed before the computation finishes.
   """
   def close(outfeed, builder)
 
-  def close(%Outfeed{} = outfeed, %Function{} = builder)
-      when will_outfeed(outfeed),
-      do:
-        update_in(
-          outfeed.token,
-          &Value.outfeed(Value.constant(builder, [0], flag_typespec()), &1)
-        )
+  def close(
+        %Outfeed{token: token, compiled_hooks: compiled_hooks} = outfeed,
+        %Function{} = builder
+      )
+      when not is_nil(token) do
+    if has_outfeed_flags?(compiled_hooks) do
+      %{outfeed | token: Value.outfeed(Value.constant(builder, [0], flag_typespec()), token)}
+    else
+      outfeed
+    end
+  end
 
   def close(%Outfeed{} = outfeed, _builder),
     do: outfeed
 
-  defp outfeed_flat_tuple(%Outfeed{token: token, compiled_hooks: ch} = outfeed, builder, tuple) do
-    flag = next_hook(ch)
-    token = Value.outfeed(Value.constant(builder, [flag], flag_typespec()), token)
-    typespecs = Enum.map(tuple, &Value.get_typespec/1)
-
-    token =
-      Enum.reduce(tuple, token, fn elem, token ->
-        Value.outfeed(elem, token)
-      end)
-
-    {%{outfeed | token: token}, flag, typespecs}
+  defp has_outfeed_flags?(compiled_hooks) do
+    Enum.any?(compiled_hooks, fn
+      {_key, {:infeed, _, _}} -> true
+      _ -> false
+    end)
   end
 
   # The index 0 is served for closing streams
-  defp next_hook(compiled_hooks), do: map_size(compiled_hooks) + 1
+  defp next_hook(compiled_hooks) do
+    compiled_hooks
+    |> Map.keys()
+    |> Enum.filter(&is_integer/1)
+    |> Enum.max(fn -> 0 end)
+    |> Kernel.+(1)
+  end
 
   ## Process API
 
@@ -245,7 +236,6 @@ defmodule EXLA.Defn.Outfeed do
       default_hooks: default_hooks,
       user_hooks: user_hooks,
       runtime_callbacks: runtime_callbacks,
-      io_calls: io_calls,
       ignore_undefined_io_calls: ignore_undefined_io_calls
     } =
       outfeed
@@ -260,7 +250,6 @@ defmodule EXLA.Defn.Outfeed do
         compiled_hooks,
         infeeds,
         runtime_callbacks,
-        io_calls,
         ignore_undefined_io_calls,
         group_leader
       )
@@ -274,7 +263,6 @@ defmodule EXLA.Defn.Outfeed do
          compiled_hooks,
          infeeds,
          rt_callbacks,
-         io_calls,
          ignore_undefined_io_calls,
          group_leader
        ) do
@@ -294,7 +282,6 @@ defmodule EXLA.Defn.Outfeed do
       compiled_hooks,
       infeeds,
       rt_callbacks,
-      io_calls,
       ignore_undefined_io_calls
     )
   end
@@ -308,12 +295,9 @@ defmodule EXLA.Defn.Outfeed do
          compiled_hooks,
          infeeds,
          rt_callbacks,
-         io_calls,
          ignore_undefined_io_calls
        ) do
-    if compiled_hooks != %{} do
-      # If we're not outfeeding, we only need to handle the runtime callback
-      # and executable stop messaging
+    if has_outfeed_flags?(compiled_hooks) do
       :ok = EXLA.Client.from_outfeed(client, device_id, [typespec], self(), ref)
     end
 
@@ -326,10 +310,9 @@ defmodule EXLA.Defn.Outfeed do
           ref,
           typespec,
           hooks,
-          %{},
+          drop_outfeed_flags(compiled_hooks),
           infeeds,
           rt_callbacks,
-          io_calls,
           ignore_undefined_io_calls
         )
 
@@ -353,33 +336,8 @@ defmodule EXLA.Defn.Outfeed do
               compiled_hooks,
               infeeds,
               rt_callbacks,
-              io_calls,
               ignore_undefined_io_calls
             )
-
-          {:function, typespecs, name, template} ->
-            fun = Map.fetch!(hooks, name)
-            length = length(typespecs)
-            parent = self()
-            ref = make_ref()
-            pid = spawn(fn -> apply_hook(parent, ref, length, fun, template) end)
-            :ok = EXLA.Client.from_outfeed(client, device_id, typespecs, pid, ref)
-
-            receive do
-              ^ref ->
-                loop(
-                  client,
-                  device_id,
-                  ref,
-                  typespec,
-                  hooks,
-                  compiled_hooks,
-                  infeeds,
-                  rt_callbacks,
-                  io_calls,
-                  ignore_undefined_io_calls
-                )
-            end
         end
 
       {:exla_runtime_call, callback_id, args_spec, reply_tag} ->
@@ -394,14 +352,13 @@ defmodule EXLA.Defn.Outfeed do
           compiled_hooks,
           infeeds,
           rt_callbacks,
-          io_calls,
           ignore_undefined_io_calls
         )
 
       {:exla_io_call, callback_id, args_spec, reply_tag} ->
         send_io_call_reply(
           hooks,
-          io_calls,
+          compiled_hooks,
           callback_id,
           args_spec,
           reply_tag,
@@ -417,7 +374,6 @@ defmodule EXLA.Defn.Outfeed do
           compiled_hooks,
           infeeds,
           rt_callbacks,
-          io_calls,
           ignore_undefined_io_calls
         )
 
@@ -436,22 +392,14 @@ defmodule EXLA.Defn.Outfeed do
           compiled_hooks,
           infeeds,
           rt_callbacks,
-          io_calls,
           ignore_undefined_io_calls
         )
     end
   end
 
-  defp apply_hook(parent, ref, length, fun, template) do
-    buffers =
-      for _ <- 1..length//1 do
-        receive do
-          {^ref, binary} -> binary
-        end
-      end
-
-    send(parent, ref)
-    fun.(EXLA.Defn.Buffers.to_nx!(buffers, template))
+  defp drop_outfeed_flags(compiled_hooks) do
+    keys = for {k, _} <- compiled_hooks, is_integer(k), do: k
+    Map.drop(compiled_hooks, keys)
   end
 
   defp send_runtime_callback_reply(runtime_callbacks, callback_id, args_spec, reply_tag) do
@@ -536,7 +484,7 @@ defmodule EXLA.Defn.Outfeed do
 
   defp send_io_call_reply(
          hooks,
-         io_calls,
+         compiled_hooks,
          callback_id,
          args_spec,
          reply_tag,
@@ -544,7 +492,8 @@ defmodule EXLA.Defn.Outfeed do
        ) do
     reply =
       try do
-        with {:ok, {callback_spec, arg_template}} <- Map.fetch(io_calls, callback_id),
+        with {:ok, {:io_call, callback_spec, arg_template}} <-
+               Map.fetch(compiled_hooks, callback_id),
              {:ok, tensor_args} <- materialize_io_call_args(arg_template, args_spec) do
           resolve_and_invoke_io_call(
             callback_spec,

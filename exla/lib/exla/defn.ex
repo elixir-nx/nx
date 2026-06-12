@@ -234,8 +234,7 @@ defmodule EXLA.Defn do
          run_options,
          is_sharded?
        )
-       when Outfeed.will_outfeed(outfeed) or Outfeed.has_runtime_calls(outfeed) or
-              Outfeed.has_io_calls(outfeed) do
+       when Outfeed.has_compiled_hooks(outfeed) or Outfeed.has_runtime_calls(outfeed) do
     if is_sharded? do
       raise ArgumentError, "outfeed is not supported for sharded execution yet"
     end
