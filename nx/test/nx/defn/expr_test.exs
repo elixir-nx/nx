@@ -433,20 +433,20 @@ defmodule Nx.Defn.ExprTest do
                f32
              \s\s
                Nx.Defn.Expr
-               parameter b:0                           f32
-               parameter c:1                           f32
-               a = create_token                        token
-               d = add b, c                            f32
-               e = io_call a, d, {:hook, :add, nil}    tuple2
-               f = elem e, 0                           token
-               g = multiply b, c                       f32
-               h = io_call f, g, {:hook, :mult, nil}   tuple2
-               i = elem h, 0                           token
-               j = elem e, 1                           f32
-               k = attach_token i, j                   f32
-               l = elem h, 1                           f32
-               m = attach_token i, l                   f32
-               n = subtract k, m                       f32
+               parameter b:0            f32
+               parameter c:1            f32
+               a = create_token         token
+               d = add b, c             f32
+               e = io_call add: a, d    tuple2
+               f = elem e, 0            token
+               g = multiply b, c        f32
+               h = io_call mult: f, g   tuple2
+               i = elem h, 0            token
+               j = elem e, 1            f32
+               k = attach_token i, j    f32
+               l = elem h, 1            f32
+               m = attach_token i, l    f32
+               n = subtract k, m        f32
              >\
              """
     end

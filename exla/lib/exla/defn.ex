@@ -321,6 +321,10 @@ defmodule EXLA.Defn do
        ) do
     {cache, options} = Keyword.pop(options, :cache, true)
     {hooks, options} = Keyword.pop(options, :hooks, %{})
+
+    {ignore_undefined_io_calls, options} =
+      Keyword.pop(options, :ignore_undefined_io_calls, false)
+
     {debug?, options} = Keyword.pop(options, :debug, false)
     {lazy_transfers, options} = Keyword.pop(options, :lazy_transfers, :opt_in)
 
@@ -490,7 +494,11 @@ defmodule EXLA.Defn do
 
       if evaled && cache, do: check_recompilation(key, args_key)
 
-      outfeed = Outfeed.with_user_hooks(outfeed, hooks)
+      outfeed =
+        outfeed
+        |> Outfeed.with_user_hooks(hooks)
+        |> Outfeed.with_ignore_undefined_io_calls(ignore_undefined_io_calls)
+
       {executable, {used_inputs, outputs, outfeed, inputs_and_typespecs}}
     end)
   end

@@ -1787,18 +1787,37 @@ defmodule Nx.Defn.Expr do
     {var_name, store_line(state, :parameters, parameter, type_shape)}
   end
 
+  defp cached_recur_inspect(:io_call, args, type_shape, state) do
+    [token, data, callback_spec, _template, _ref] = args
+    {token, state} = recur_inspect(token, state)
+    {data, state} = recur_inspect(data, state)
+    var_name = var_name(state)
+
+    expr =
+      case callback_spec do
+        {:hook, name, _} ->
+          IO.iodata_to_binary([
+            var_name,
+            " = io_call ",
+            Atom.to_string(name),
+            ": ",
+            token,
+            ", ",
+            data
+          ])
+
+        {:fn, fun} ->
+          IO.iodata_to_binary([var_name, " = io_call ", token, ", ", data, ", ", inspect(fun)])
+      end
+
+    {var_name, store_line(state, :exprs, expr, type_shape)}
+  end
+
   defp cached_recur_inspect(op, args, type_shape, state) do
     {args, state} = traverse_args(op, args, state)
     var_name = var_name(state)
     expr = IO.iodata_to_binary(["#{var_name} = #{op} " | Enum.intersperse(args, ", ")])
     {var_name, store_line(state, :exprs, expr, type_shape)}
-  end
-
-  defp traverse_args(:io_call, [token, data, callback_spec, _template, _ref], state) do
-    {token, state} = recur_inspect(token, state)
-    {data, state} = recur_inspect(data, state)
-    {callback, state} = {io_call_spec_inspect(callback_spec), state}
-    {[token, data, callback], state}
   end
 
   defp traverse_args(:create_token, [], state), do: {[], state}
@@ -1827,9 +1846,6 @@ defmodule Nx.Defn.Expr do
 
   defp traverse_args(_op, args, state),
     do: traverse_args(args, state)
-
-  defp io_call_spec_inspect({:hook, name, _}), do: inspect({:hook, name, nil})
-  defp io_call_spec_inspect({:fn, fun}), do: inspect(fun)
 
   defp traverse_args(args, state) do
     Enum.map_reduce(args, state, &recur_inspect/2)

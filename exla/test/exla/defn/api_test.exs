@@ -207,7 +207,13 @@ defmodule EXLA.Defn.APITest do
     end
 
     test "executes optional hook" do
-      assert_equal(hook_optional(2, 3), Nx.tensor(5))
+      {_pid, ref} =
+        spawn_monitor(fn ->
+          EXLA.jit(&hook_optional/2).(2, 3)
+        end)
+
+      assert_receive {:DOWN, ^ref, :process, _, {%RuntimeError{message: message}, _}}
+      assert message =~ "undefined io_call hook :optional"
 
       assert_equal(
         EXLA.jit(&hook_optional/2, hooks: %{optional: send_to_self(:tag)}).(2, 3),
@@ -216,6 +222,11 @@ defmodule EXLA.Defn.APITest do
 
       assert_receive {:tag, tensor}
       assert_equal(tensor, Nx.tensor(5))
+
+      assert_equal(
+        EXLA.jit(&hook_optional/2, ignore_undefined_io_calls: true).(2, 3),
+        Nx.tensor(5)
+      )
     end
 
     defn hook_factorial(x) do
@@ -296,9 +307,13 @@ defmodule EXLA.Defn.APITest do
 
     @tag :capture_log
     test "halts outfeed when hook raises" do
-      assert_raise RuntimeError, ~r/boom/, fn ->
-        EXLA.jit(&hook_raises/2).(2, 3)
-      end
+      {_pid, ref} =
+        spawn_monitor(fn ->
+          EXLA.jit(&hook_raises/2).(2, 3)
+        end)
+
+      assert_receive {:DOWN, ^ref, :process, _, {%RuntimeError{message: message}, _}}
+      assert message =~ "boom"
     end
 
     defn side_effect_hooks(a, b) do
@@ -319,6 +334,36 @@ defmodule EXLA.Defn.APITest do
 
       assert_received 2
       assert_received 1
+    end
+
+    defn io_call_ordered(a, b) do
+      token = create_token()
+      {token, _} = Nx.io_call(token, b, :b)
+      {token, _} = Nx.io_call(token, a, :a)
+      attach_token(token, a + b)
+    end
+
+    test "executes token-ordered io_calls in sequence" do
+      parent = self()
+      send_value = fn value -> send(parent, Nx.to_number(value)) end
+
+      assert_equal(
+        EXLA.jit(&io_call_ordered/2, hooks: %{a: send_value, b: send_value}).(1, 2),
+        Nx.tensor(3)
+      )
+
+      assert_received 2
+      assert_received 1
+    end
+
+    defn io_call_passthrough(a, b) do
+      token = create_token()
+      {token, sum} = Nx.io_call(token, a + b, &Function.identity/1)
+      attach_token(token, sum)
+    end
+
+    test "executes io_call with anonymous function callback" do
+      assert_equal(EXLA.jit(&io_call_passthrough/2).(2, 3), Nx.tensor(5))
     end
   end
 

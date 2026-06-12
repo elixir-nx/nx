@@ -1540,7 +1540,7 @@ defmodule Nx.Defn.Kernel do
   Creates a token for `io_call/3`. See `hook/3`.
   """
   def create_token do
-    Nx.Defn.Expr.create_token()
+    Nx.create_token()
   end
 
   @doc """

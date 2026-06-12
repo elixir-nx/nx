@@ -8,7 +8,12 @@ defmodule Nx.Defn.Tree do
   alias Nx.Tensor, as: T
 
   @doc """
-  Check if the given tree has any of the given hooks in it.
+  Checks if the given tree has any side effects for the given hooks map.
+
+  Each `:io_call` node is checked independently. For named hooks, a side effect
+  exists when `hooks[name] || default_callback` is a function. Anonymous `io_call`s
+  always count as side effects. Duplicate names across nodes share the same
+  override lookup but ordering is determined by tokens, not by name.
   """
   def has_hooks?(tree, hooks) do
     Composite.reduce(tree, %{}, &detect_hook(&1, &2, hooks))

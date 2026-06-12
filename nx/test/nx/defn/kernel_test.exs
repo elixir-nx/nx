@@ -158,7 +158,7 @@ defmodule Nx.Defn.KernelTest do
 
       rendered = inspect(expr, safe: false)
       assert rendered =~ "io_call"
-      assert rendered =~ "{:hook, :a"
+      assert rendered =~ "a:"
 
       {token, expr} = Nx.Defn.Kernel.hook(zero_expr(), &Function.identity/1) |> attach_info!()
       assert %T{data: %Expr{op: :elem, args: [_, 0]}} = token
@@ -168,7 +168,7 @@ defmodule Nx.Defn.KernelTest do
       {token, expr} = Nx.Defn.Kernel.hook(zero_expr(), :a, &Function.identity/1) |> attach_info!()
       assert %T{data: %Expr{op: :elem, args: [_, 0]}} = token
       assert %T{data: %Expr{op: :elem, args: [_, 1]}} = expr
-      assert inspect(expr, safe: false) =~ "{:hook, :a"
+      assert inspect(expr, safe: false) =~ "a:"
     end
 
     test "hook_token/3,4" do

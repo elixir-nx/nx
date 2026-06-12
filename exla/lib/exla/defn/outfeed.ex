@@ -17,7 +17,8 @@ defmodule EXLA.Defn.Outfeed do
             token: nil,
             infeeds: [],
             runtime_callbacks: %{},
-            io_calls: %{}
+            io_calls: %{},
+            ignore_undefined_io_calls: false
 
   ## Functional API
 
@@ -114,6 +115,9 @@ defmodule EXLA.Defn.Outfeed do
   Sets the user hooks to outfeed.
   """
   def with_user_hooks(%Outfeed{} = outfeed, user_hooks), do: %{outfeed | user_hooks: user_hooks}
+
+  def with_ignore_undefined_io_calls(%Outfeed{} = outfeed, ignore?),
+    do: %{outfeed | ignore_undefined_io_calls: ignore?}
 
   @doc """
   Sets the token to outfeed.
@@ -241,7 +245,8 @@ defmodule EXLA.Defn.Outfeed do
       default_hooks: default_hooks,
       user_hooks: user_hooks,
       runtime_callbacks: runtime_callbacks,
-      io_calls: io_calls
+      io_calls: io_calls,
+      ignore_undefined_io_calls: ignore_undefined_io_calls
     } =
       outfeed
 
@@ -256,6 +261,7 @@ defmodule EXLA.Defn.Outfeed do
         infeeds,
         runtime_callbacks,
         io_calls,
+        ignore_undefined_io_calls,
         group_leader
       )
     end)
@@ -269,6 +275,7 @@ defmodule EXLA.Defn.Outfeed do
          infeeds,
          rt_callbacks,
          io_calls,
+         ignore_undefined_io_calls,
          group_leader
        ) do
     Process.flag(:trap_exit, true)
@@ -287,7 +294,8 @@ defmodule EXLA.Defn.Outfeed do
       compiled_hooks,
       infeeds,
       rt_callbacks,
-      io_calls
+      io_calls,
+      ignore_undefined_io_calls
     )
   end
 
@@ -300,7 +308,8 @@ defmodule EXLA.Defn.Outfeed do
          compiled_hooks,
          infeeds,
          rt_callbacks,
-         io_calls
+         io_calls,
+         ignore_undefined_io_calls
        ) do
     if compiled_hooks != %{} do
       # If we're not outfeeding, we only need to handle the runtime callback
@@ -311,7 +320,18 @@ defmodule EXLA.Defn.Outfeed do
     receive do
       {^ref, <<0::native-unsigned-16>>} ->
         # Outfeed is done, now we wait for the computation to finish
-        loop(client, device_id, ref, typespec, hooks, %{}, infeeds, rt_callbacks, io_calls)
+        loop(
+          client,
+          device_id,
+          ref,
+          typespec,
+          hooks,
+          %{},
+          infeeds,
+          rt_callbacks,
+          io_calls,
+          ignore_undefined_io_calls
+        )
 
       {^ref, <<flag::native-unsigned-16>>} ->
         case Map.fetch!(compiled_hooks, flag) do
@@ -333,7 +353,8 @@ defmodule EXLA.Defn.Outfeed do
               compiled_hooks,
               infeeds,
               rt_callbacks,
-              io_calls
+              io_calls,
+              ignore_undefined_io_calls
             )
 
           {:function, typespecs, name, template} ->
@@ -355,7 +376,8 @@ defmodule EXLA.Defn.Outfeed do
                   compiled_hooks,
                   infeeds,
                   rt_callbacks,
-                  io_calls
+                  io_calls,
+                  ignore_undefined_io_calls
                 )
             end
         end
@@ -372,11 +394,19 @@ defmodule EXLA.Defn.Outfeed do
           compiled_hooks,
           infeeds,
           rt_callbacks,
-          io_calls
+          io_calls,
+          ignore_undefined_io_calls
         )
 
       {:exla_io_call, callback_id, args_spec, reply_tag} ->
-        send_io_call_reply(hooks, io_calls, callback_id, args_spec, reply_tag)
+        send_io_call_reply(
+          hooks,
+          io_calls,
+          callback_id,
+          args_spec,
+          reply_tag,
+          ignore_undefined_io_calls
+        )
 
         loop(
           client,
@@ -387,7 +417,8 @@ defmodule EXLA.Defn.Outfeed do
           compiled_hooks,
           infeeds,
           rt_callbacks,
-          io_calls
+          io_calls,
+          ignore_undefined_io_calls
         )
 
       :stop ->
@@ -405,7 +436,8 @@ defmodule EXLA.Defn.Outfeed do
           compiled_hooks,
           infeeds,
           rt_callbacks,
-          io_calls
+          io_calls,
+          ignore_undefined_io_calls
         )
     end
   end
@@ -471,8 +503,6 @@ defmodule EXLA.Defn.Outfeed do
     hooks[name] || callback
   end
 
-  defp invoke_io_call_hook(nil, _tensor_args), do: {:ok, []}
-
   defp invoke_io_call_hook(fun, tensor_args) when is_function(fun, 1) do
     try do
       fun.(tensor_args)
@@ -486,12 +516,42 @@ defmodule EXLA.Defn.Outfeed do
     end
   end
 
-  defp send_io_call_reply(hooks, io_calls, callback_id, args_spec, reply_tag) do
+  defp resolve_and_invoke_io_call(callback_spec, hooks, tensor_args, ignore_undefined_io_calls) do
+    case resolve_io_call_hook(callback_spec, hooks) do
+      nil when ignore_undefined_io_calls ->
+        {:ok, []}
+
+      nil ->
+        {:error, {:undefined_io_call, undefined_io_call_message(callback_spec)}}
+
+      fun ->
+        invoke_io_call_hook(fun, tensor_args)
+    end
+  end
+
+  defp undefined_io_call_message({:hook, name, _}),
+    do: "undefined io_call hook #{inspect(name)}"
+
+  defp undefined_io_call_message(_), do: "undefined io_call callback"
+
+  defp send_io_call_reply(
+         hooks,
+         io_calls,
+         callback_id,
+         args_spec,
+         reply_tag,
+         ignore_undefined_io_calls
+       ) do
     reply =
       try do
         with {:ok, {callback_spec, arg_template}} <- Map.fetch(io_calls, callback_id),
              {:ok, tensor_args} <- materialize_io_call_args(arg_template, args_spec) do
-          invoke_io_call_hook(resolve_io_call_hook(callback_spec, hooks), tensor_args)
+          resolve_and_invoke_io_call(
+            callback_spec,
+            hooks,
+            tensor_args,
+            ignore_undefined_io_calls
+          )
         else
           :error ->
             Logger.error(
@@ -512,6 +572,10 @@ defmodule EXLA.Defn.Outfeed do
           send(self(), :stop)
           {:error, {kind, Exception.format(kind, reason, __STACKTRACE__)}}
       end
+
+    if match?({:error, _}, reply) do
+      send(self(), :stop)
+    end
 
     try do
       case reply do

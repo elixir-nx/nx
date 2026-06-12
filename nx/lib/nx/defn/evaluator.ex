@@ -8,6 +8,15 @@ defmodule Nx.Defn.Evaluator do
 
   The following options are specific to this compiler:
 
+    * `:hooks` - a map of callbacks to hook into `io_call` side effects by name.
+      This allows overriding named `io_call`s at JIT time without recompiling the
+      graph.
+
+    * `:ignore_undefined_io_calls` - when `true`, named `io_call`s without a
+      default callback or a matching entry in `:hooks` are skipped during
+      evaluation. Defaults to `false`, in which case an undefined named `io_call`
+      raises.
+
     * `:garbage_collect` - when true, garbage collects
       after evaluating each node
 
@@ -42,13 +51,15 @@ defmodule Nx.Defn.Evaluator do
   def __compile__(_key, vars, fun, opts) do
     hooks = Keyword.get(opts, :hooks, %{})
     gc? = Keyword.get(opts, :garbage_collect, false)
+    ignore_undefined_io_calls? = Keyword.get(opts, :ignore_undefined_io_calls, false)
     {expr, output, cache} = precompile(fun, vars, hooks)
 
     fn [params] ->
       state = %{
         params: params,
         gc: gc?,
-        hooks: hooks
+        hooks: hooks,
+        ignore_undefined_io_calls: ignore_undefined_io_calls?
       }
 
       [expr |> composite_eval(state, [cache]) |> apply_output(output)]
@@ -345,8 +356,14 @@ defmodule Nx.Defn.Evaluator do
     {tensor_value, caches} = composite_eval(tensor_expr, state, caches)
 
     case resolve_io_call(callback_spec, state.hooks) do
-      nil -> :ok
-      fun -> fun.(tensor_value)
+      nil when state.ignore_undefined_io_calls ->
+        :ok
+
+      nil ->
+        raise ArgumentError, undefined_io_call_message(callback_spec)
+
+      fun ->
+        fun.(tensor_value)
     end
 
     token = make_ref()
@@ -453,4 +470,9 @@ defmodule Nx.Defn.Evaluator do
 
   defp resolve_io_call({:fn, fun}, _hooks), do: fun
   defp resolve_io_call({:hook, name, callback}, hooks), do: hooks[name] || callback
+
+  defp undefined_io_call_message({:hook, name, _}),
+    do: "undefined io_call hook #{inspect(name)}"
+
+  defp undefined_io_call_message(_), do: "undefined io_call callback"
 end

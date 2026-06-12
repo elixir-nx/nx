@@ -743,11 +743,13 @@ defmodule Nx.Serving do
     {pid, ref} = run_streaming()
 
     defn_options =
-      update_in(defn_options[:hooks], fn acc ->
+      defn_options
+      |> update_in([:hooks], fn acc ->
         Enum.reduce(hooks, acc || %{}, fn hook, acc ->
           Map.put(acc, hook, &run_hook(ref, size, &1, hook))
         end)
       end)
+      |> Keyword.put(:ignore_undefined_io_calls, true)
 
     {{pid, ref}, defn_options}
   end
@@ -1391,11 +1393,13 @@ defmodule Nx.Serving do
 
     partitions =
       Enum.with_index(partitions, fn defn_options, index ->
-        update_in(defn_options[:hooks], fn acc ->
+        defn_options
+        |> update_in([:hooks], fn acc ->
           Enum.reduce(hooks, acc || %{}, fn hook, acc ->
             Map.put(acc, hook, &server_hook(ets, index, hook, &1))
           end)
         end)
+        |> Keyword.put(:ignore_undefined_io_calls, true)
       end)
 
     {:hooks, partitions, ets}
