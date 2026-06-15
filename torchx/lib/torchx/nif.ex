@@ -5,7 +5,7 @@ defmodule Torchx.NIF do
   def __on_load__ do
     case :os.type() do
       {:win32, _} ->
-        Torchx.NIF.DLLLoader.add_dll_directory()
+        Torchx.NIF.DLLLoader.setup()
 
       _ ->
         :ok
