@@ -234,7 +234,7 @@ defmodule EXLA.Defn do
          run_options,
          is_sharded?
        )
-       when Outfeed.has_compiled_hooks(outfeed) or Outfeed.has_runtime_calls(outfeed) do
+       when Outfeed.has_compiled_hooks(outfeed) or Outfeed.has_callbacks(outfeed) do
     if is_sharded? do
       raise ArgumentError, "outfeed is not supported for sharded execution yet"
     end
@@ -799,19 +799,18 @@ defmodule EXLA.Defn do
       end)
 
     arg_values = Enum.reverse(reverse_arg_values)
-    typespecs = Enum.map(arg_values, &Value.get_typespec/1)
     arg_template = Nx.to_template(tensor_expr)
 
-    cache = add_io_call(cache, {id, callback_spec, arg_template})
+    cache = add_callback(cache, {id, callback_spec, nil, arg_template})
 
     unless callback_pid_value do
       raise "internal bug: io_call callback pid operand is missing"
     end
 
-    results =
-      Value.io_call([token_in, callback_pid_value | arg_values], typespecs, id)
+    [token_out] =
+      Value.host_callback([token_in, callback_pid_value | arg_values], [], id)
 
-    {results, cache}
+    {[token_out | arg_values], cache}
   end
 
   defp cached_recur_operator(
@@ -834,45 +833,12 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(
          :runtime_call,
          %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template, opts]}} = expr,
-         %{client: %EXLA.Client{platform: :host}, callback_pid_value: callback_pid_value} =
+         %{client: %EXLA.Client{platform: platform}, callback_pid_value: callback_pid_value} =
            state,
          cache
-       ) do
-    # Flatten the tensor_or_container expression into its tensor leaves so we
-    # can compile each as an independent operand to the host callback.
-    tensor_exprs = Composite.flatten_list([tensor_expr])
-
-    {arg_values, cache} =
-      Enum.map_reduce(tensor_exprs, cache, fn arg, cache ->
-        recur_operator(arg, state, cache) |> unwrap_single_tensor!()
-      end)
-
-    # Build a template container for the tensor_or_container argument so the
-    # callback server can reconstruct the full structure from a flat list of
-    # decoded tensors.
-    arg_template = Nx.to_template(tensor_expr)
-
-    cache = add_runtime_callback(cache, {id, fun, out_template, arg_template, opts})
-
-    typespecs = container_to_typespecs(out_template)
-
-    unless callback_pid_value do
-      raise "internal bug: runtime_call callback pid operand is missing"
-    end
-
-    results =
-      Value.runtime_call([callback_pid_value | arg_values], typespecs, id)
-
-    {wrap_tuple_result(results, expr), cache}
-  end
-
-  defp cached_recur_operator(
-         :runtime_call,
-         %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template, opts]}} = expr,
-         %{client: %EXLA.Client{platform: :cuda}, callback_pid_value: callback_pid_value} =
-           state,
-         cache
-       ) do
+       )
+       when platform in [:host, :cuda] do
+    {token_in, cache} = ensure_callback_token(state, cache)
     tensor_exprs = Composite.flatten_list([tensor_expr])
 
     {arg_values, cache} =
@@ -881,18 +847,18 @@ defmodule EXLA.Defn do
       end)
 
     arg_template = Nx.to_template(tensor_expr)
-
-    cache = add_runtime_callback(cache, {id, fun, out_template, arg_template, opts})
-
     typespecs = container_to_typespecs(out_template)
+
+    cache = add_callback(cache, {id, fun, out_template, arg_template, opts})
 
     unless callback_pid_value do
       raise "internal bug: runtime_call callback pid operand is missing"
     end
 
-    results =
-      Value.runtime_call([callback_pid_value | arg_values], typespecs, id)
+    [token_out | results] =
+      Value.runtime_call([token_in, callback_pid_value | arg_values], typespecs, id)
 
+    cache = update_token(cache, token_out)
     {wrap_tuple_result(results, expr), cache}
   end
 
@@ -1795,18 +1761,22 @@ defmodule EXLA.Defn do
 
   defp put_outfeed(cache, outfeed), do: %{cache | __MODULE__ => outfeed}
 
-  defp add_runtime_callback(cache, runtime_callback) do
+  defp add_callback(cache, callback) do
     cache
     |> get_outfeed()
-    |> Outfeed.add_runtime_callback(runtime_callback)
+    |> Outfeed.add_callback(callback)
     |> then(&put_outfeed(cache, &1))
   end
 
-  defp add_io_call(cache, io_call) do
-    cache
-    |> get_outfeed()
-    |> Outfeed.add_io_call(io_call)
-    |> then(&put_outfeed(cache, &1))
+  defp ensure_callback_token(%{builder: %Function{}} = state, cache) do
+    case get_token(cache) do
+      nil ->
+        token = Value.create_token(state.builder)
+        {token, update_token(cache, token)}
+
+      token ->
+        {token, cache}
+    end
   end
 
   ## Computation helpers

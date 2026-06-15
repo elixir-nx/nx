@@ -194,7 +194,7 @@ defmodule Nx.Defn.Kernel do
 
   The given expression is transformed with `fun` before printing.
 
-  This function is implemented on top of `hook/3` and therefore
+  This function is implemented on top of `io_call/3` and therefore
   has the following restrictions:
 
     * It can only inspect tensors and `Nx.Container`
@@ -1315,20 +1315,20 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  Shortcut for `hook/3`.
+  Shortcut for `io_call/3`.
   """
-  def hook(expr, name_or_function)
+  def io_call(expr, name_or_function)
 
-  def hook(expr, name) when is_atom(name),
-    do: unguarded_hook(expr, name, nil)
+  def io_call(expr, name) when is_atom(name),
+    do: unguarded_io_call(expr, name, nil)
 
-  def hook(expr, function) when is_function(function, 1),
-    do: unguarded_hook(expr, random_hook_name(), function)
+  def io_call(expr, function) when is_function(function, 1),
+    do: unguarded_io_call(expr, random_io_call_name(), function)
 
   @doc """
-  Defines a hook.
+  Defines an io_call.
 
-  Hooks are a mechanism to execute an anonymous function for
+  Io calls are a mechanism to execute an anonymous function for
   side-effects with runtime tensor values. Internally, hooks are
   implemented as `Nx.io_call/3` — they create a token, run the
   callback, and attach the token to the result via `attach_token/2`.
@@ -1339,17 +1339,17 @@ defmodule Nx.Defn.Kernel do
         import Nx.Defn
 
         defn add_and_mult(a, b) do
-          add = hook(a + b, fn tensor -> IO.inspect({:add, tensor}) end)
-          mult = hook(a * b, fn tensor -> IO.inspect({:mult, tensor}) end)
+          add = io_call(a + b, fn tensor -> IO.inspect({:add, tensor}) end)
+          mult = io_call(a * b, fn tensor -> IO.inspect({:mult, tensor}) end)
           {add, mult}
         end
       end
 
-  Note a hook can only access the variables passed as arguments
+  Note an io_call can only access the variables passed as arguments
   to the hook. It cannot access any other variable defined in
   `defn` outside of the hook.
 
-  The `defn` above defines two hooks, one is called with the
+  The `defn` above defines two io_calls, one is called with the
   value of `a + b` and another with `a * b`. Once you invoke
   the function above, you should see this printed:
 
@@ -1363,26 +1363,26 @@ defmodule Nx.Defn.Kernel do
          6
       >}
 
-  In other words, the `hook` function accepts a tensor
+  In other words, the `io_call` function accepts a tensor
   expression as argument and it will invoke a custom
   function with a tensor value at runtime. `hook` returns
   the result of the given expression. The expression can
   be any tensor or a `Nx.Container`.
 
-  Note **you must return the result of the `hook` call**.
+  Note **you must return the result of the `io_call` call**.
   For example, the code below won't inspect the `:add`
-  tuple, because the hook is not returned from `defn`:
+  tuple, because the io_call is not returned from `defn`:
 
       defn add_and_mult(a, b) do
-        _add = hook(a + b, fn tensor -> IO.inspect({:add, tensor}) end)
-        mult = hook(a * b, fn tensor -> IO.inspect({:mult, tensor}) end)
+        _add = io_call(a + b, fn tensor -> IO.inspect({:add, tensor}) end)
+        mult = io_call(a * b, fn tensor -> IO.inspect({:mult, tensor}) end)
         mult
       end
 
   We will learn how to hook into a value that is not part
   of the result in the "Hooks and tokens" section.
 
-  ## Named hooks
+  ## Named io_calls
 
   It is possible to give names to the hooks. This allows them
   to be defined or overridden by calling `Nx.Defn.jit/2`.
@@ -1392,8 +1392,8 @@ defmodule Nx.Defn.Kernel do
         import Nx.Defn
 
         defn add_and_mult(a, b) do
-          add = hook(a + b, :hooks_add)
-          mult = hook(a * b, :hooks_mult)
+          add = io_call(a + b, :io_calls_add)
+          mult = io_call(a * b, :io_calls_mult)
           {add, mult}
         end
       end
@@ -1406,7 +1406,7 @@ defmodule Nx.Defn.Kernel do
         end
       }
 
-      fun = Nx.Defn.jit(&Hooks.add_and_mult/2, hooks: hooks)
+      fun = Nx.Defn.jit(&Hooks.add_and_mult/2, io_calls: io_calls)
       fun.(Nx.tensor(2), Nx.tensor(3))
 
   > **Important!** We recommend to prefix your hook names
@@ -1416,34 +1416,34 @@ defmodule Nx.Defn.Kernel do
   that away and not transfer the tensor from the device
   in the first place.
 
-  You can also mix named hooks with callbacks:
+  You can also mix named io_calls with callbacks:
 
       defn add_and_mult(a, b) do
-        add = hook(a + b, :hooks_add, fn tensor -> IO.inspect({:add, tensor}) end)
-        mult = hook(a * b, :hooks_mult, fn tensor -> IO.inspect({:mult, tensor}) end)
+        add = io_call(a + b, :io_calls_add, fn tensor -> IO.inspect({:add, tensor}) end)
+        mult = io_call(a * b, :io_calls_mult, fn tensor -> IO.inspect({:mult, tensor}) end)
         {add, mult}
       end
 
-  If a hook with the same name is given to `Nx.Defn.jit/2`,
+  If an io_call with the same name is given to `Nx.Defn.jit/2`,
   then it will override the default callback.
 
   ## Hooks and tokens
 
-  Hooks are implemented on top of `Nx.io_call/3`. Each `io_call`
+  Io calls are implemented on top of `Nx.io_call/3`. Each `io_call`
   takes a token, runs a side-effect callback, and returns
   `{token, data}` where `data` is the input passed through
   unchanged. Tokens establish ordering between callbacks.
 
-  When the hooked value is part of the return, `hook/3` handles
+  When the hooked value is part of the return, `io_call/3` handles
   tokens for you. When it is not, you must thread tokens yourself
-  with `create_token/0`, `hook_token/4`, and `attach_token/2`.
+  with `create_token/0`, `io_call_token/4`, and `attach_token/2`.
 
   For example, if the values we want to hook are not part of
   the return value:
 
       defn add_and_mult(a, b) do
-        _add = hook(a + b, :hooks_add, &IO.inspect({:add, &1}))
-        mult = hook(a * b, :hooks_mult, &IO.inspect({:mult, &1}))
+        _add = io_call(a + b, :io_calls_add, &IO.inspect({:add, &1}))
+        mult = io_call(a * b, :io_calls_mult, &IO.inspect({:mult, &1}))
         mult
       end
 
@@ -1453,25 +1453,25 @@ defmodule Nx.Defn.Kernel do
 
       defn add_and_mult(a, b) do
         token = create_token()
-        {token, _add} = hook_token(token, a + b, :hooks_add, &IO.inspect({:add, &1}))
-        {token, mult} = hook_token(token, a * b, :hooks_mult, &IO.inspect({:mult, &1}))
+        {token, _add} = io_call_token(token, a + b, :io_calls_add, &IO.inspect({:add, &1}))
+        {token, mult} = io_call_token(token, a * b, :io_calls_mult, &IO.inspect({:mult, &1}))
         attach_token(token, mult)
       end
 
-  The example above creates a token and uses `hook_token/4`
+  The example above creates a token and uses `io_call_token/4`
   to register hooks in order. By threading the token through
   each call, those hooks run in the order they were defined.
   Then `attach_token/2` keeps the token alive in the graph so
   the hooks are not optimized away.
 
-  In fact, `hook/3` is implemented roughly like this:
+  In fact, `io_call/3` is implemented roughly like this:
 
-      def hook(tensor_expr, name, function) do
+      def io_call(tensor_expr, name, function) do
         {token, result} = Nx.io_call(create_token(), tensor_expr, name, function)
         attach_token(token, result)
       end
 
-  And `hook_token/4` is a thin wrapper over `Nx.io_call/4`.
+  And `io_call_token/4` is a thin wrapper over `Nx.io_call/4`.
 
   You must attach the token to a value that is part of the
   computation result. Otherwise the hooks will be "lost", as if
@@ -1483,9 +1483,9 @@ defmodule Nx.Defn.Kernel do
 
       {token, result} =
         if Nx.any(value) do
-          hook_token(token, some_value)
+          io_call_token(token, some_value)
         else
-          hook_token(token, another_value)
+          io_call_token(token, another_value)
         end
 
       attach_token(token, result)
@@ -1495,23 +1495,23 @@ defmodule Nx.Defn.Kernel do
       token = create_token()
 
       if Nx.any(value) do
-        {token, result} = hook_token(token, some_value)
+        {token, result} = io_call_token(token, some_value)
         attach_token(token, result)
       else
-        {token, result} = hook_token(token, another_value)
+        {token, result} = io_call_token(token, another_value)
         attach_token(token, result)
       end
 
   """
-  def hook(expr, name, function) when Kernel.and(is_atom(name), is_function(function, 1)),
-    do: unguarded_hook(expr, name, function)
+  def io_call(expr, name, function) when Kernel.and(is_atom(name), is_function(function, 1)),
+    do: unguarded_io_call(expr, name, function)
 
-  defp unguarded_hook(expr, name, function) when is_atom(name) do
+  defp unguarded_io_call(expr, name, function) when is_atom(name) do
     {token, result} = Nx.io_call(create_token(), expr, name, function)
     attach_token(token, result)
   end
 
-  defp unguarded_hook(expr, _name, function) do
+  defp unguarded_io_call(expr, _name, function) do
     {token, result} = Nx.io_call(create_token(), expr, function)
     attach_token(token, result)
   end
@@ -1519,32 +1519,32 @@ defmodule Nx.Defn.Kernel do
   @doc """
   Shortcut for `io_call/4`.
   """
-  def hook_token(%Nx.Tensor{} = token, expr, name) when is_atom(name),
+  def io_call_token(%Nx.Tensor{} = token, expr, name) when is_atom(name),
     do: Nx.io_call(token, expr, name, nil)
 
-  def hook_token(%Nx.Tensor{} = token, expr, function) when is_function(function, 1),
+  def io_call_token(%Nx.Tensor{} = token, expr, function) when is_function(function, 1),
     do: Nx.io_call(token, expr, function)
 
   @doc """
-  Defines a hook with an existing token. See `hook/3`.
+  Defines an io_call with an existing token. See `io_call/3`.
 
   This is a thin wrapper over `Nx.io_call/4`.
   """
-  def hook_token(%Nx.Tensor{} = token, expr, name, function)
+  def io_call_token(%Nx.Tensor{} = token, expr, name, function)
       when Kernel.and(is_atom(name), is_function(function, 1)),
       do: Nx.io_call(token, expr, name, function)
 
-  defp random_hook_name(), do: :"hook_#{System.unique_integer([:positive])}"
+  defp random_io_call_name(), do: :"hook_#{System.unique_integer([:positive])}"
 
   @doc """
-  Creates a token for `io_call/3`. See `hook/3`.
+  Creates a token for `io_call/3`. See `io_call/3`.
   """
   def create_token do
     Nx.create_token()
   end
 
   @doc """
-  Attaches a token to an expression. See `hook/3`.
+  Attaches a token to an expression. See `io_call/3`.
 
   This keeps the token alive in the computation graph so ordered
   `io_call`s are not optimized away.

@@ -35,15 +35,15 @@ defmodule Nx.Defn.TreeTest do
 
   describe "has_hooks?" do
     test "returns true if there are hooks" do
-      refute Tree.has_hooks?(factorial(10), %{})
-      refute Tree.has_hooks?(hooked_factorial(1, 2), %{})
-      assert Tree.has_hooks?(hooked_factorial(1, 2), %{example: & &1})
-      assert Tree.has_hooks?(hooked_factorial(1, 2), %{another: & &1})
+      refute Tree.has_io_calls?(factorial(10), %{})
+      refute Tree.has_io_calls?(hooked_factorial(1, 2), %{})
+      assert Tree.has_io_calls?(hooked_factorial(1, 2), %{example: & &1})
+      assert Tree.has_io_calls?(hooked_factorial(1, 2), %{another: & &1})
     end
 
     test "detects side effects for duplicate hook names independently" do
-      refute Tree.has_hooks?(duplicate_hook_names(1, 2), %{})
-      assert Tree.has_hooks?(duplicate_hook_names(1, 2), %{same: & &1})
+      refute Tree.has_io_calls?(duplicate_hook_names(1, 2), %{})
+      assert Tree.has_io_calls?(duplicate_hook_names(1, 2), %{same: & &1})
     end
   end
 

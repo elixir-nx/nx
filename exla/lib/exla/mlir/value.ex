@@ -702,28 +702,21 @@ defmodule EXLA.MLIR.Value do
   end
 
   @doc false
-  def io_call(
+  def host_callback(
         [%Value{} = token_in, %Value{} = callback_pid | leaf_operands],
         leaf_typespecs,
         callback_id
       ) do
     [%Value{function: func} | _] = [token_in | leaf_operands]
-    leaf_count = length(leaf_typespecs)
     tensor_result_types = typespecs_to_mlir_types(leaf_typespecs)
     result_types = [type_token() | tensor_result_types]
 
     {callback_id_words, callback_id_size} = term_to_int64_list(callback_id)
 
-    aliases =
-      Enum.with_index(leaf_typespecs, fn _typespec, index ->
-        attr_output_operand_alias(index + 2, index + 1, leaf_count + 1)
-      end)
-
     attributes = [
-      call_target_name: attr_string("exla_io_call"),
+      call_target_name: attr_string("exla_runtime_callback"),
       api_version: attr_i32(4),
       has_side_effect: attr_boolean(true),
-      output_operand_aliases: join_list(aliases),
       backend_config:
         attr_dict(
           callback_id: attr_array_i64_elements(callback_id_words),
@@ -731,13 +724,13 @@ defmodule EXLA.MLIR.Value do
         )
     ]
 
-    [token_from_call | leaf_results] =
+    [token_from_call | tensor_results] =
       op(func, "stablehlo.custom_call", [token_in, callback_pid | leaf_operands], result_types,
         attributes: attributes
       )
 
     token_out = after_all([token_in, token_from_call])
-    [token_out | leaf_results]
+    [token_out | tensor_results]
   end
 
   def call(%Function{} = func, args, %Function{} = computation, typespecs) do
@@ -839,40 +832,16 @@ defmodule EXLA.MLIR.Value do
   Builds a StableHLO `custom_call` that targets the EXLA Elixir callback bridge.
 
   The `callback_id` is typically the underlying `Nx.Defn.Expr` id of the
-  `:runtime_call` node. It is encoded as a binary (via `:erlang.term_to_binary/1`)
-  and then represented as a list of 64-bit words in the custom call attributes.
+  `:runtime_call` or `:io_call` node. It is encoded as a binary (via
+  `:erlang.term_to_binary/1`) and then represented as a list of 64-bit words in
+  the custom call attributes.
   """
   def runtime_call(
-        [%Value{function: func} | _] = operands,
+        [%Value{} = token_in, %Value{} = callback_pid | leaf_operands],
         typespecs,
         callback_id
       ) do
-    result_types = typespecs_to_mlir_types(typespecs)
-
-    {callback_id_words, callback_id_size} =
-      term_to_int64_list(callback_id)
-
-    attributes = [
-      call_target_name: attr_string("exla_runtime_callback"),
-      # api_version 4 enables the typed FFI API used by our callback handler.
-      api_version: attr_i32(4),
-      has_side_effect: attr_boolean(true),
-      backend_config:
-        attr_dict(
-          callback_id: attr_array_i64_elements(callback_id_words),
-          callback_id_size: attr_ui64(callback_id_size)
-        )
-    ]
-
-    op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
-  end
-
-  defp attr_output_operand_alias(operand_index, _output_index, 1) do
-    "#stablehlo.output_operand_alias<output_tuple_indices = [], operand_index = #{operand_index}, operand_tuple_indices = []>"
-  end
-
-  defp attr_output_operand_alias(operand_index, output_index, _leaf_count) do
-    "#stablehlo.output_operand_alias<output_tuple_indices = [#{output_index}], operand_index = #{operand_index}, operand_tuple_indices = []>"
+    host_callback([token_in, callback_pid | leaf_operands], typespecs, callback_id)
   end
 
   defp term_to_int64_list(term) do

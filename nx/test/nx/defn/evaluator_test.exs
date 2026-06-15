@@ -347,7 +347,7 @@ defmodule Nx.Defn.EvaluatorTest do
       assert_received {:default, tensor}
       assert tensor == Nx.tensor(3)
 
-      fun = Nx.Defn.jit(&basic_hook/2, hooks: %{example: &send_to_self({:custom, &1})})
+      fun = Nx.Defn.jit(&basic_hook/2, io_calls: %{example: &send_to_self({:custom, &1})})
       assert fun.(1, 2) == Nx.tensor(3)
 
       assert_received {:custom, tensor}
@@ -365,7 +365,7 @@ defmodule Nx.Defn.EvaluatorTest do
       assert_received {:default, tuple}
       assert tuple == {Nx.tensor(1), Nx.tensor(2)}
 
-      fun = Nx.Defn.jit(&container_hook/2, hooks: %{example: &send_to_self({:custom, &1})})
+      fun = Nx.Defn.jit(&container_hook/2, io_calls: %{example: &send_to_self({:custom, &1})})
       assert fun.(1, 2) == {Nx.tensor(1), Nx.tensor(2)}
 
       assert_received {:custom, tuple}
@@ -382,37 +382,37 @@ defmodule Nx.Defn.EvaluatorTest do
     test "side effect hooks" do
       drain_mailbox()
 
-      assert_raise ArgumentError, ~r/undefined io_call hook :b/, fn ->
+      assert_raise ArgumentError, ~r/undefined io_call :b/, fn ->
         side_effect_hooks(1, 2)
       end
 
       hooks = %{a: &send_to_self({:a, &1})}
 
-      assert_raise ArgumentError, ~r/undefined io_call hook :b/, fn ->
-        Nx.Defn.jit(&side_effect_hooks/2, hooks: hooks).(1, 2)
+      assert_raise ArgumentError, ~r/undefined io_call :b/, fn ->
+        Nx.Defn.jit(&side_effect_hooks/2, io_calls: hooks).(1, 2)
       end
 
       drain_mailbox()
-      Nx.Defn.jit(&side_effect_hooks/2, hooks: hooks, ignore_undefined_io_calls: true).(1, 2)
+      Nx.Defn.jit(&side_effect_hooks/2, io_calls: hooks, ignore_undefined_io_calls: true).(1, 2)
       assert_received {:a, tensor}
       assert tensor == Nx.tensor(1)
       refute_received _
 
       hooks = %{b: &send_to_self({:b, &1})}
 
-      assert_raise ArgumentError, ~r/undefined io_call hook :a/, fn ->
-        Nx.Defn.jit(&side_effect_hooks/2, hooks: hooks).(1, 2)
+      assert_raise ArgumentError, ~r/undefined io_call :a/, fn ->
+        Nx.Defn.jit(&side_effect_hooks/2, io_calls: hooks).(1, 2)
       end
 
       drain_mailbox()
-      Nx.Defn.jit(&side_effect_hooks/2, hooks: hooks, ignore_undefined_io_calls: true).(1, 2)
+      Nx.Defn.jit(&side_effect_hooks/2, io_calls: hooks, ignore_undefined_io_calls: true).(1, 2)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       refute_received _
 
       drain_mailbox()
       hooks = %{a: &send_to_self({:a, &1}), b: &send_to_self({:b, &1})}
-      Nx.Defn.jit(&side_effect_hooks/2, hooks: hooks).(1, 2)
+      Nx.Defn.jit(&side_effect_hooks/2, io_calls: hooks).(1, 2)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       assert_received {:a, tensor}
@@ -430,19 +430,19 @@ defmodule Nx.Defn.EvaluatorTest do
     test "side effect nested hooks" do
       drain_mailbox()
 
-      assert_raise ArgumentError, ~r/undefined io_call hook :b/, fn ->
+      assert_raise ArgumentError, ~r/undefined io_call :b/, fn ->
         side_effect_nested_hooks(1, 2)
       end
 
       hooks = %{a: &send_to_self({:a, &1})}
 
-      assert_raise ArgumentError, ~r/undefined io_call hook :b/, fn ->
-        Nx.Defn.jit(&side_effect_nested_hooks/2, hooks: hooks).(1, 2)
+      assert_raise ArgumentError, ~r/undefined io_call :b/, fn ->
+        Nx.Defn.jit(&side_effect_nested_hooks/2, io_calls: hooks).(1, 2)
       end
 
       drain_mailbox()
 
-      Nx.Defn.jit(&side_effect_nested_hooks/2, hooks: hooks, ignore_undefined_io_calls: true).(
+      Nx.Defn.jit(&side_effect_nested_hooks/2, io_calls: hooks, ignore_undefined_io_calls: true).(
         1,
         2
       )
@@ -453,13 +453,13 @@ defmodule Nx.Defn.EvaluatorTest do
 
       hooks = %{b: &send_to_self({:b, &1})}
 
-      assert_raise ArgumentError, ~r/undefined io_call hook :a/, fn ->
-        Nx.Defn.jit(&side_effect_nested_hooks/2, hooks: hooks).(1, 2)
+      assert_raise ArgumentError, ~r/undefined io_call :a/, fn ->
+        Nx.Defn.jit(&side_effect_nested_hooks/2, io_calls: hooks).(1, 2)
       end
 
       drain_mailbox()
 
-      Nx.Defn.jit(&side_effect_nested_hooks/2, hooks: hooks, ignore_undefined_io_calls: true).(
+      Nx.Defn.jit(&side_effect_nested_hooks/2, io_calls: hooks, ignore_undefined_io_calls: true).(
         1,
         2
       )
@@ -470,7 +470,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       drain_mailbox()
       hooks = %{a: &send_to_self({:a, &1}), b: &send_to_self({:b, &1})}
-      Nx.Defn.jit(&side_effect_nested_hooks/2, hooks: hooks).(1, 2)
+      Nx.Defn.jit(&side_effect_nested_hooks/2, io_calls: hooks).(1, 2)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       assert_received {:a, tensor}
@@ -488,13 +488,13 @@ defmodule Nx.Defn.EvaluatorTest do
     test "side effect nested hooks with default" do
       drain_mailbox()
 
-      assert_raise ArgumentError, ~r/undefined io_call hook :a/, fn ->
+      assert_raise ArgumentError, ~r/undefined io_call :a/, fn ->
         side_effect_nested_hook_with_default(1, 2)
       end
 
       drain_mailbox()
       hooks = %{a: &send_to_self({:a, &1})}
-      Nx.Defn.jit(&side_effect_nested_hook_with_default/2, hooks: hooks).(1, 2)
+      Nx.Defn.jit(&side_effect_nested_hook_with_default/2, io_calls: hooks).(1, 2)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       assert_received {:a, tensor}
@@ -505,7 +505,7 @@ defmodule Nx.Defn.EvaluatorTest do
       hooks = %{b: &send_to_self({:custom, &1})}
 
       Nx.Defn.jit(&side_effect_nested_hook_with_default/2,
-        hooks: hooks,
+        io_calls: hooks,
         ignore_undefined_io_calls: true
       ).(1, 2)
 
@@ -522,11 +522,11 @@ defmodule Nx.Defn.EvaluatorTest do
     end
 
     test "inside loops" do
-      assert_raise ArgumentError, ~r/undefined io_call hook :while/, fn ->
+      assert_raise ArgumentError, ~r/undefined io_call :while/, fn ->
         hook_upto10(5)
       end
 
-      assert Nx.Defn.jit(&hook_upto10/1, hooks: %{while: &send_to_self({:while, &1})}).(5) ==
+      assert Nx.Defn.jit(&hook_upto10/1, io_calls: %{while: &send_to_self({:while, &1})}).(5) ==
                Nx.tensor(10)
 
       assert_received {:while, tensor}

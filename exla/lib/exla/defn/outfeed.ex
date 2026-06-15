@@ -14,9 +14,9 @@ defmodule EXLA.Defn.Outfeed do
             default_hooks: %{},
             used_hooks: [],
             compiled_hooks: %{},
+            callbacks: %{},
             token: nil,
             infeeds: [],
-            runtime_callbacks: %{},
             ignore_undefined_io_calls: false
 
   ## Functional API
@@ -85,7 +85,7 @@ defmodule EXLA.Defn.Outfeed do
   ## Struct API
 
   defguard has_compiled_hooks(outfeed) when outfeed.compiled_hooks != %{}
-  defguard has_runtime_calls(outfeed) when outfeed.runtime_callbacks != %{}
+  defguard has_callbacks(outfeed) when map_size(outfeed.callbacks) > 0
 
   @doc """
   An empty outfeed to be used when not outfeeding is supported.
@@ -123,32 +123,23 @@ defmodule EXLA.Defn.Outfeed do
   def with_token(%Outfeed{} = outfeed, token), do: %{outfeed | token: token}
 
   @doc """
-  Adds a runtime callback to outfeed.
+  Registers a host callback to outfeed.
+
+  `invoke` is either a callback spec (`{:fn, fun}` or `{:hook, name, callback}`) for
+  side-effect-only callbacks, or a function for callbacks that return tensors.
+  When `out_template` is `nil`, the callback is invoked for side effects only and
+  the native reply is an empty list.
   """
-  def add_runtime_callback(
-        %Outfeed{runtime_callbacks: runtime_callbacks} = outfeed,
-        {id, fun, out_template, arg_template}
-      ) do
-    callback = {fun, out_template, arg_template, nil}
-    %{outfeed | runtime_callbacks: Map.put(runtime_callbacks, id, callback)}
+  def add_callback(%Outfeed{} = outfeed, {id, invoke, out_template, arg_template}) do
+    add_callback(outfeed, {id, invoke, out_template, arg_template, nil})
   end
 
-  def add_runtime_callback(
-        %Outfeed{runtime_callbacks: runtime_callbacks} = outfeed,
-        {id, fun, out_template, arg_template, opts}
+  def add_callback(
+        %Outfeed{callbacks: callbacks} = outfeed,
+        {id, invoke, out_template, arg_template, opts}
       ) do
-    callback = {fun, out_template, arg_template, opts}
-    %{outfeed | runtime_callbacks: Map.put(runtime_callbacks, id, callback)}
-  end
-
-  def add_io_call(
-        %Outfeed{compiled_hooks: compiled_hooks} = outfeed,
-        {id, callback_spec, arg_template}
-      ) do
-    %{
-      outfeed
-      | compiled_hooks: Map.put(compiled_hooks, id, {:io_call, callback_spec, arg_template})
-    }
+    callback = {invoke, out_template, arg_template, opts}
+    %{outfeed | callbacks: Map.put(callbacks, id, callback)}
   end
 
   @doc """
@@ -235,7 +226,7 @@ defmodule EXLA.Defn.Outfeed do
       compiled_hooks: compiled_hooks,
       default_hooks: default_hooks,
       user_hooks: user_hooks,
-      runtime_callbacks: runtime_callbacks,
+      callbacks: callbacks,
       ignore_undefined_io_calls: ignore_undefined_io_calls
     } =
       outfeed
@@ -249,7 +240,7 @@ defmodule EXLA.Defn.Outfeed do
         hooks,
         compiled_hooks,
         infeeds,
-        runtime_callbacks,
+        callbacks,
         ignore_undefined_io_calls,
         group_leader
       )
@@ -262,7 +253,7 @@ defmodule EXLA.Defn.Outfeed do
          hooks,
          compiled_hooks,
          infeeds,
-         rt_callbacks,
+         callbacks,
          ignore_undefined_io_calls,
          group_leader
        ) do
@@ -281,7 +272,7 @@ defmodule EXLA.Defn.Outfeed do
       hooks,
       compiled_hooks,
       infeeds,
-      rt_callbacks,
+      callbacks,
       ignore_undefined_io_calls
     )
   end
@@ -294,7 +285,7 @@ defmodule EXLA.Defn.Outfeed do
          hooks,
          compiled_hooks,
          infeeds,
-         rt_callbacks,
+         callbacks,
          ignore_undefined_io_calls
        ) do
     if has_outfeed_flags?(compiled_hooks) do
@@ -312,7 +303,7 @@ defmodule EXLA.Defn.Outfeed do
           hooks,
           drop_outfeed_flags(compiled_hooks),
           infeeds,
-          rt_callbacks,
+          callbacks,
           ignore_undefined_io_calls
         )
 
@@ -335,30 +326,15 @@ defmodule EXLA.Defn.Outfeed do
               hooks,
               compiled_hooks,
               infeeds,
-              rt_callbacks,
+              callbacks,
               ignore_undefined_io_calls
             )
         end
 
       {:exla_runtime_call, callback_id, args_spec, reply_tag} ->
-        send_runtime_callback_reply(rt_callbacks, callback_id, args_spec, reply_tag)
-
-        loop(
-          client,
-          device_id,
-          ref,
-          typespec,
+        send_callback_reply(
+          callbacks,
           hooks,
-          compiled_hooks,
-          infeeds,
-          rt_callbacks,
-          ignore_undefined_io_calls
-        )
-
-      {:exla_io_call, callback_id, args_spec, reply_tag} ->
-        send_io_call_reply(
-          hooks,
-          compiled_hooks,
           callback_id,
           args_spec,
           reply_tag,
@@ -373,7 +349,7 @@ defmodule EXLA.Defn.Outfeed do
           hooks,
           compiled_hooks,
           infeeds,
-          rt_callbacks,
+          callbacks,
           ignore_undefined_io_calls
         )
 
@@ -391,7 +367,7 @@ defmodule EXLA.Defn.Outfeed do
           hooks,
           compiled_hooks,
           infeeds,
-          rt_callbacks,
+          callbacks,
           ignore_undefined_io_calls
         )
     end
@@ -402,22 +378,31 @@ defmodule EXLA.Defn.Outfeed do
     Map.drop(compiled_hooks, keys)
   end
 
-  defp send_runtime_callback_reply(runtime_callbacks, callback_id, args_spec, reply_tag) do
+  defp send_callback_reply(
+         callbacks,
+         hooks,
+         callback_id,
+         args_spec,
+         reply_tag,
+         ignore_undefined_io_calls
+       ) do
     reply =
       try do
-        case Map.fetch(runtime_callbacks, callback_id) do
-          {:ok, {fun, out_template, arg_template, opts}} ->
-            args_spec
-            |> decode_callback_args(arg_template)
-            |> run_runtime_callback(fun, out_template, opts)
-            |> encode_runtime_callback_reply()
-
+        with {:ok, callback} <- Map.fetch(callbacks, callback_id),
+             {:ok, tensor_args} <- materialize_callback_args(callback, args_spec) do
+          callback
+          |> invoke_callback(hooks, tensor_args, ignore_undefined_io_calls)
+          |> encode_callback_reply()
+        else
           :error ->
             Logger.error(
               "EXLA.Outfeed received callback id #{inspect(callback_id)} that is not registered"
             )
 
-            encode_runtime_callback_reply({:error, :unknown_callback})
+            encode_callback_reply({:error, :unknown_callback})
+
+          {:error, _} = error ->
+            error
         end
       rescue
         exception ->
@@ -429,6 +414,10 @@ defmodule EXLA.Defn.Outfeed do
           {:error, {kind, Exception.format(kind, reason, __STACKTRACE__)}}
       end
 
+    deliver_native_reply(reply_tag, reply)
+  end
+
+  defp deliver_native_reply(reply_tag, reply) do
     try do
       case reply do
         {:ok, payload} ->
@@ -445,13 +434,35 @@ defmodule EXLA.Defn.Outfeed do
     end
   end
 
-  defp resolve_io_call_hook({:fn, fun}, _hooks), do: fun
+  defp invoke_callback({invoke, nil, _arg_template, _opts}, hooks, tensor_args, ignore?) do
+    invoke_side_effect(invoke, hooks, tensor_args, ignore?)
+  end
 
-  defp resolve_io_call_hook({:hook, name, callback}, hooks) do
+  defp invoke_callback({fun, out_template, _arg_template, opts}, _hooks, tensor_args, _ignore?)
+       when is_function(fun) do
+    run_runtime_callback({:ok, tensor_args}, fun, out_template, opts)
+  end
+
+  defp resolve_hook({:fn, fun}, _hooks), do: fun
+
+  defp resolve_hook({:hook, name, callback}, hooks) do
     hooks[name] || callback
   end
 
-  defp invoke_io_call_hook(fun, tensor_args) when is_function(fun, 1) do
+  defp invoke_side_effect(callback_spec, hooks, tensor_args, ignore_undefined_io_calls) do
+    case resolve_hook(callback_spec, hooks) do
+      nil when ignore_undefined_io_calls ->
+        {:ok, []}
+
+      nil ->
+        {:error, {:undefined_io_call, undefined_io_call_message(callback_spec)}}
+
+      fun ->
+        run_side_effect(fun, tensor_args)
+    end
+  end
+
+  defp run_side_effect(fun, tensor_args) when is_function(fun, 1) do
     try do
       fun.(tensor_args)
       {:ok, []}
@@ -464,101 +475,12 @@ defmodule EXLA.Defn.Outfeed do
     end
   end
 
-  defp resolve_and_invoke_io_call(callback_spec, hooks, tensor_args, ignore_undefined_io_calls) do
-    case resolve_io_call_hook(callback_spec, hooks) do
-      nil when ignore_undefined_io_calls ->
-        {:ok, []}
-
-      nil ->
-        {:error, {:undefined_io_call, undefined_io_call_message(callback_spec)}}
-
-      fun ->
-        invoke_io_call_hook(fun, tensor_args)
-    end
-  end
-
   defp undefined_io_call_message({:hook, name, _}),
     do: "undefined io_call hook #{inspect(name)}"
 
   defp undefined_io_call_message(_), do: "undefined io_call callback"
 
-  defp send_io_call_reply(
-         hooks,
-         compiled_hooks,
-         callback_id,
-         args_spec,
-         reply_tag,
-         ignore_undefined_io_calls
-       ) do
-    reply =
-      try do
-        with {:ok, {:io_call, callback_spec, arg_template}} <-
-               Map.fetch(compiled_hooks, callback_id),
-             {:ok, tensor_args} <- materialize_io_call_args(arg_template, args_spec) do
-          resolve_and_invoke_io_call(
-            callback_spec,
-            hooks,
-            tensor_args,
-            ignore_undefined_io_calls
-          )
-        else
-          :error ->
-            Logger.error(
-              "EXLA.Outfeed received io_call id #{inspect(callback_id)} that is not registered"
-            )
-
-            {:error, {:unknown_callback, callback_id}}
-
-          {:error, _} = error ->
-            error
-        end
-      rescue
-        exception ->
-          send(self(), :stop)
-          {:error, {:exception, Exception.format(:error, exception, __STACKTRACE__)}}
-      catch
-        kind, reason ->
-          send(self(), :stop)
-          {:error, {kind, Exception.format(kind, reason, __STACKTRACE__)}}
-      end
-
-    if match?({:error, _}, reply) do
-      send(self(), :stop)
-    end
-
-    try do
-      case reply do
-        {:ok, []} ->
-          EXLA.NIF.runtime_callback_reply(reply_tag, :ok, [])
-
-        {:error, {tag, reason}} ->
-          EXLA.NIF.runtime_callback_reply(reply_tag, :error, {tag, reason})
-      end
-    rescue
-      _ ->
-        Logger.error(
-          "EXLA.Outfeed failed to send io_call reply to native for tag #{inspect(reply_tag)}"
-        )
-    end
-  end
-
   defp run_runtime_callback({:error, reason}, _fun, _out_template, _opts), do: {:error, reason}
-
-  defp run_runtime_callback({:ok, tensor_args}, fun, nil, opts) do
-    try do
-      if opts do
-        fun.(tensor_args, opts)
-      else
-        fun.(tensor_args)
-      end
-    rescue
-      exception ->
-        {:error, {:exception, exception, __STACKTRACE__}}
-    catch
-      kind, reason ->
-        {:error, {kind, reason}}
-    end
-  end
 
   defp run_runtime_callback({:ok, tensor_args}, fun, out_template, opts) do
     result =
@@ -589,21 +511,22 @@ defmodule EXLA.Defn.Outfeed do
     end
   end
 
-  defp decode_callback_args(args_spec, arg_template) when is_list(args_spec) do
-    materialize_callback_args(arg_template, args_spec)
+  defp materialize_callback_args({_, _, arg_template, _}, args_spec) when is_list(args_spec) do
+    materialize_callback_tensors(arg_template, args_spec)
   catch
     {:error, reason} ->
-      raise ArgumentError, "invalid args_spec #{inspect(reason)}"
+      {:error, {:decode_failed, ArgumentError.exception("invalid args_spec #{inspect(reason)}")}}
   end
 
-  defp decode_callback_args(other, _arg_template) do
-    raise ArgumentError, "invalid args_spec #{inspect(other)}"
+  defp materialize_callback_args({_, _, _arg_template, _}, other) do
+    {:error, {:invalid_args_spec, other}}
   end
 
-  defp encode_runtime_callback_reply(:ok), do: {:ok, []}
-  defp encode_runtime_callback_reply({:ok, value}), do: {:ok, encode_callback_outputs(value)}
+  defp encode_callback_reply(:ok), do: {:ok, []}
+  defp encode_callback_reply({:ok, []}), do: {:ok, []}
+  defp encode_callback_reply({:ok, value}), do: {:ok, encode_callback_outputs(value)}
 
-  defp encode_runtime_callback_reply({:error, {:shape_mismatch, left, right}}) do
+  defp encode_callback_reply({:error, {:shape_mismatch, left, right}}) do
     msg =
       "expected the runtime_call function to match the given output template " <>
         "#{inspect(right)}, got: #{inspect(left)}"
@@ -611,7 +534,7 @@ defmodule EXLA.Defn.Outfeed do
     raise ArgumentError.exception(msg)
   end
 
-  defp encode_runtime_callback_reply({:error, {:invalid_result, left, right}}) do
+  defp encode_callback_reply({:error, {:invalid_result, left, right}}) do
     msg =
       "expected the runtime_call function to return a value compatible with the output " <>
         "template #{inspect(right)}, got: #{inspect(left)}"
@@ -619,52 +542,52 @@ defmodule EXLA.Defn.Outfeed do
     raise ArgumentError.exception(msg)
   end
 
-  defp encode_runtime_callback_reply({:error, {:decode_failed, exception}}) do
+  defp encode_callback_reply({:error, {:undefined_io_call, message}}) do
+    raise ArgumentError.exception(message)
+  end
+
+  defp encode_callback_reply({:error, {:decode_failed, exception}}) do
     msg = Exception.message(exception)
     msg = "failed to decode Elixir callback arguments: #{msg}"
     raise ArgumentError.exception(msg)
   end
 
-  defp encode_runtime_callback_reply({:error, {:invalid_args_spec, other}}) do
+  defp encode_callback_reply({:error, {:invalid_args_spec, other}}) do
     msg = "invalid args_spec for Elixir callback: #{inspect(other)}"
     raise ArgumentError.exception(msg)
   end
 
-  defp encode_runtime_callback_reply({:error, :unknown_callback}) do
+  defp encode_callback_reply({:error, :unknown_callback}) do
     msg = "unknown EXLA runtime_call callback id"
     raise RuntimeError.exception(msg)
   end
 
-  defp encode_runtime_callback_reply({:error, {:exception, exception, _stack}}) do
+  defp encode_callback_reply({:error, {:exception, exception, _stack}}) do
     raise exception
   end
 
-  defp encode_runtime_callback_reply({:error, {kind, reason}}) do
+  defp encode_callback_reply({:error, {kind, reason}}) when is_binary(reason) do
+    msg = "Elixir callback #{kind}: #{reason}"
+    raise RuntimeError.exception(msg)
+  end
+
+  defp encode_callback_reply({:error, {kind, reason}}) do
     msg = "Elixir callback #{kind}: #{inspect(reason)}"
     raise RuntimeError.exception(msg)
   end
 
-  defp encode_runtime_callback_reply({:error, reason}) do
+  defp encode_callback_reply({:error, reason}) do
     msg = "Elixir callback error: #{inspect(reason)}"
     raise RuntimeError.exception(msg)
   end
 
-  defp materialize_callback_args(arg_template, args_spec) do
-    materialize_callback_tensors(arg_template, args_spec, :runtime_call)
-  end
-
-  defp maybe_revectorize(decoded, %Nx.Tensor{vectorized_axes: axes}, :io_call)
-       when axes != [] do
+  defp maybe_revectorize(decoded, %Nx.Tensor{vectorized_axes: axes}) when axes != [] do
     Nx.vectorize(decoded, axes)
   end
 
-  defp maybe_revectorize(decoded, _template, _mode), do: decoded
+  defp maybe_revectorize(decoded, _template), do: decoded
 
-  defp materialize_io_call_args(arg_template, args_spec) do
-    materialize_callback_tensors(arg_template, args_spec, :io_call)
-  end
-
-  defp materialize_callback_tensors(arg_template, args_spec, mode) do
+  defp materialize_callback_tensors(arg_template, args_spec) do
     {container, remaining} =
       Composite.traverse(arg_template, args_spec, fn
         %Nx.Tensor{} = template, [{bin, {type, shape_list}} | rest] ->
@@ -672,15 +595,9 @@ defmodule EXLA.Defn.Outfeed do
             bin
             |> Nx.from_binary(type)
             |> Nx.reshape(List.to_tuple(shape_list))
-            |> maybe_revectorize(template, mode)
+            |> maybe_revectorize(template)
 
-          compatible? =
-            case mode do
-              :io_call -> Nx.compatible?(decoded, template)
-              _ -> Nx.compatible?(decoded, template)
-            end
-
-          if compatible? do
+          if Nx.compatible?(decoded, template) do
             {decoded, rest}
           else
             throw({:error, {:shape_mismatch, decoded, template}})

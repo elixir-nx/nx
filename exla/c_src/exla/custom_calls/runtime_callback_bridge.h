@@ -75,11 +75,6 @@ Result InvokeRuntimeCallback(
     const Arg &callback_server_pid_arg, const std::vector<Arg> &inputs,
     const std::vector<OutputBuffer> &outputs);
 
-Result InvokeIOCall(xla::ffi::Span<const int64_t> callback_id_words,
-                  uint64_t callback_id_size,
-                  const Arg &callback_server_pid_arg,
-                  const std::vector<Arg> &inputs);
-
 fine::Ok<> runtime_callback_reply(ErlNifEnv *env,
                                   fine::ResourcePtr<Pending> pending,
                                   fine::Atom status, fine::Term result);

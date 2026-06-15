@@ -185,7 +185,7 @@ defmodule EXLA.Defn.APITest do
 
     test "executes hook with callback" do
       assert_equal(
-        EXLA.jit(&hook_default/2, hooks: %{default: send_to_self(:tag)}).(2, 3),
+        EXLA.jit(&hook_default/2, io_calls: %{default: send_to_self(:tag)}).(2, 3),
         Nx.tensor(5)
       )
 
@@ -194,7 +194,7 @@ defmodule EXLA.Defn.APITest do
 
       # Executing again with another tag works
       assert_equal(
-        EXLA.jit(&hook_default/2, hooks: %{default: send_to_self(:another_tag)}).(2, 3),
+        EXLA.jit(&hook_default/2, io_calls: %{default: send_to_self(:another_tag)}).(2, 3),
         Nx.tensor(5)
       )
 
@@ -213,10 +213,10 @@ defmodule EXLA.Defn.APITest do
         end)
 
       assert_receive {:DOWN, ^ref, :process, _, {%RuntimeError{message: message}, _}}
-      assert message =~ "undefined io_call hook :optional"
+      assert message =~ "undefined io_call :optional"
 
       assert_equal(
-        EXLA.jit(&hook_optional/2, hooks: %{optional: send_to_self(:tag)}).(2, 3),
+        EXLA.jit(&hook_optional/2, io_calls: %{optional: send_to_self(:tag)}).(2, 3),
         Nx.tensor(5)
       )
 
@@ -240,7 +240,7 @@ defmodule EXLA.Defn.APITest do
 
     test "executes hook within while" do
       assert_equal(
-        EXLA.jit(&hook_factorial/1, hooks: %{factorial: send_to_self(:tag)}).(5),
+        EXLA.jit(&hook_factorial/1, io_calls: %{factorial: send_to_self(:tag)}).(5),
         Nx.tensor(120.0)
       )
 
@@ -264,7 +264,7 @@ defmodule EXLA.Defn.APITest do
 
     test "executes hook within cond" do
       assert_equal(
-        EXLA.jit(&hook_cond/2, hooks: %{cond: send_to_self(:tag)}).(1, 4),
+        EXLA.jit(&hook_cond/2, io_calls: %{cond: send_to_self(:tag)}).(1, 4),
         Nx.tensor(2.0)
       )
 
@@ -272,7 +272,7 @@ defmodule EXLA.Defn.APITest do
       assert_equal(tensor, Nx.tensor(2.0))
 
       assert_equal(
-        EXLA.jit(&hook_cond/2, hooks: %{cond: send_to_self(:tag)}).(-1, 4),
+        EXLA.jit(&hook_cond/2, io_calls: %{cond: send_to_self(:tag)}).(-1, 4),
         Nx.tensor(8.0)
       )
 
@@ -280,7 +280,7 @@ defmodule EXLA.Defn.APITest do
       assert_equal(tensor, Nx.tensor(8))
 
       assert_equal(
-        EXLA.jit(&hook_cond/2, hooks: %{cond: send_to_self(:tag)}).(0, 4),
+        EXLA.jit(&hook_cond/2, io_calls: %{cond: send_to_self(:tag)}).(0, 4),
         Nx.tensor(16.0)
       )
 
@@ -294,7 +294,7 @@ defmodule EXLA.Defn.APITest do
 
     test "executes hook with container" do
       container = %Container{a: 1, b: 2, c: :reset, d: :elem}
-      EXLA.jit(&hook_container/1, hooks: %{container: send_to_self(:tag)}).(container)
+      EXLA.jit(&hook_container/1, io_calls: %{container: send_to_self(:tag)}).(container)
 
       assert_receive {:tag, %Container{a: a, b: b, c: nil, d: :elem}}
       assert_equal(a, Nx.tensor(1))
@@ -328,7 +328,7 @@ defmodule EXLA.Defn.APITest do
       send_value = fn value -> send(parent, Nx.to_number(value)) end
 
       assert_equal(
-        EXLA.jit(&side_effect_hooks/2, hooks: %{a: send_value, b: send_value}).(1, 2),
+        EXLA.jit(&side_effect_hooks/2, io_calls: %{a: send_value, b: send_value}).(1, 2),
         Nx.tensor(3)
       )
 
@@ -348,7 +348,7 @@ defmodule EXLA.Defn.APITest do
       send_value = fn value -> send(parent, Nx.to_number(value)) end
 
       assert_equal(
-        EXLA.jit(&io_call_ordered/2, hooks: %{a: send_value, b: send_value}).(1, 2),
+        EXLA.jit(&io_call_ordered/2, io_calls: %{a: send_value, b: send_value}).(1, 2),
         Nx.tensor(3)
       )
 
@@ -387,7 +387,7 @@ defmodule EXLA.Defn.APITest do
       tasks =
         for client <- [:host, :other_host], _ <- 1..4 do
           Task.async(fn ->
-            EXLA.jit(&hooked_add/2, client: client, hooks: %{add: hook_fn}).(2, 3)
+            EXLA.jit(&hooked_add/2, client: client, io_calls: %{add: hook_fn}).(2, 3)
           end)
         end
 
