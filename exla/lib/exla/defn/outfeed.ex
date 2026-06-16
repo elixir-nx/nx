@@ -483,8 +483,6 @@ defmodule EXLA.Defn.Outfeed do
 
   defp undefined_io_call_message(_), do: "undefined io_call callback"
 
-  defp run_runtime_callback({:error, reason}, _fun, _out_template, _opts), do: {:error, reason}
-
   defp run_runtime_callback({:ok, tensor_args}, fun, out_template, opts) do
     result =
       try do
@@ -525,7 +523,6 @@ defmodule EXLA.Defn.Outfeed do
     {:error, {:invalid_args_spec, other}}
   end
 
-  defp encode_callback_reply(:ok), do: {:ok, []}
   defp encode_callback_reply({:ok, []}), do: {:ok, []}
   defp encode_callback_reply({:ok, value}), do: {:ok, encode_callback_outputs(value)}
 

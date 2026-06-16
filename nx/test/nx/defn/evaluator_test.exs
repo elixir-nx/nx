@@ -393,7 +393,12 @@ defmodule Nx.Defn.EvaluatorTest do
       end
 
       drain_mailbox()
-      Nx.Defn.jit(&side_effect_io_calls/2, io_calls: io_calls, ignore_undefined_io_calls: true).(1, 2)
+
+      Nx.Defn.jit(&side_effect_io_calls/2,
+        io_calls: io_calls,
+        ignore_undefined_io_calls: true
+      ).(1, 2)
+
       assert_received {:a, tensor}
       assert tensor == Nx.tensor(1)
       refute_received _
@@ -405,7 +410,12 @@ defmodule Nx.Defn.EvaluatorTest do
       end
 
       drain_mailbox()
-      Nx.Defn.jit(&side_effect_io_calls/2, io_calls: io_calls, ignore_undefined_io_calls: true).(1, 2)
+
+      Nx.Defn.jit(&side_effect_io_calls/2,
+        io_calls: io_calls,
+        ignore_undefined_io_calls: true
+      ).(1, 2)
+
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       refute_received _
@@ -442,10 +452,10 @@ defmodule Nx.Defn.EvaluatorTest do
 
       drain_mailbox()
 
-      Nx.Defn.jit(&side_effect_nested_io_calls/2, io_calls: io_calls, ignore_undefined_io_calls: true).(
-        1,
-        2
-      )
+      Nx.Defn.jit(&side_effect_nested_io_calls/2,
+        io_calls: io_calls,
+        ignore_undefined_io_calls: true
+      ).(1, 2)
 
       assert_received {:a, tensor}
       assert tensor == Nx.tensor(1)
@@ -459,10 +469,10 @@ defmodule Nx.Defn.EvaluatorTest do
 
       drain_mailbox()
 
-      Nx.Defn.jit(&side_effect_nested_io_calls/2, io_calls: io_calls, ignore_undefined_io_calls: true).(
-        1,
-        2
-      )
+      Nx.Defn.jit(&side_effect_nested_io_calls/2,
+        io_calls: io_calls,
+        ignore_undefined_io_calls: true
+      ).(1, 2)
 
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
