@@ -595,7 +595,7 @@ defmodule Nx.Serving do
 
   ## Options
 
-    * `:hooks` - a list of hook names that will become streaming events
+    * `:io_calls` - a list of io_call names that will become streaming events
 
   ## Implementation details
 
@@ -613,7 +613,7 @@ defmodule Nx.Serving do
   `Stream.transform/3` to process those events into something
   usable by callers.
 
-  If the `:hooks` option is given, only a single `:batch` event
+  If the `:io_calls` option is given, only a single `:batch` event
   is emitted, at the end, as detailed next.
 
   ### Batch limits
@@ -636,7 +636,7 @@ defmodule Nx.Serving do
   most common batches.
   """
   def streaming(%Nx.Serving{} = serving, opts \\ []) do
-    hooks = Keyword.get(opts, :hooks, [])
+    hooks = Keyword.get(opts, :io_calls, [])
 
     if serving.streaming do
       raise ArgumentError, "serving is already marked as streaming"
@@ -744,7 +744,7 @@ defmodule Nx.Serving do
 
     defn_options =
       defn_options
-      |> update_in([:hooks], fn acc ->
+      |> update_in([:io_calls], fn acc ->
         Enum.reduce(hooks, acc || %{}, fn hook, acc ->
           Map.put(acc, hook, &run_hook(ref, size, &1, hook))
         end)
@@ -1394,7 +1394,7 @@ defmodule Nx.Serving do
     partitions =
       Enum.with_index(partitions, fn defn_options, index ->
         defn_options
-        |> update_in([:hooks], fn acc ->
+        |> update_in([:io_calls], fn acc ->
           Enum.reduce(hooks, acc || %{}, fn hook, acc ->
             Map.put(acc, hook, &server_hook(ets, index, hook, &1))
           end)

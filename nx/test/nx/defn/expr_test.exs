@@ -419,8 +419,8 @@ defmodule Nx.Defn.ExprTest do
 
     defn sub_add_mult(a, b) do
       token = create_token()
-      {token, add} = hook_token(token, a + b, :add, &IO.inspect({:add, &1}))
-      {token, mult} = hook_token(token, a * b, :mult, &IO.inspect({:mult, &1}))
+      {token, add} = io_call_token(token, a + b, :add, &IO.inspect({:add, &1}))
+      {token, mult} = io_call_token(token, a * b, :mult, &IO.inspect({:mult, &1}))
       {add, mult} = attach_token(token, {add, mult})
       add - mult
     end

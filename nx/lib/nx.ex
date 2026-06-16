@@ -2243,11 +2243,10 @@ defmodule Nx do
       token = Nx.create_token()
       {token, x} = Nx.io_call(token, x, &MyMod.log/1)
 
-  Named `io_call`s can be overridden at JIT time via the `:hooks` option, which
-  provides a hook into side-effect callbacks (and potentially runtime calls in
-  the future):
+  Named `io_call`s can be overridden at JIT time via the `:io_calls` option, which
+  maps each name to a side-effect callback:
 
-      Nx.Defn.jit(fun, hooks: %{my_hook: &MyMod.log/1})
+      Nx.Defn.jit(fun, io_calls: %{my_io_call: &MyMod.log/1})
 
   Ordering between `io_call`s is guaranteed by threading the token. Independent calls
   that do not share a token chain have no ordering guarantee.
@@ -2273,13 +2272,13 @@ defmodule Nx do
   @doc type: :backend
   def io_call(%Nx.Tensor{} = token, tensor_or_container, name)
       when is_atom(name) do
-    io_call_impl(token, tensor_or_container, {:hook, name, nil})
+    io_call_impl(token, tensor_or_container, {:named, name, nil})
   end
 
   @doc type: :backend
   def io_call(%Nx.Tensor{} = token, tensor_or_container, name, callback)
       when is_atom(name) and (is_function(callback, 1) or is_nil(callback)) do
-    io_call_impl(token, tensor_or_container, {:hook, name, callback})
+    io_call_impl(token, tensor_or_container, {:named, name, callback})
   end
 
   defp io_call_impl(%Nx.Tensor{} = token, tensor_or_container, callback_spec) do
@@ -2296,9 +2295,9 @@ defmodule Nx do
 
   defp run_io_call_eager!({:fn, fun}, container) when is_function(fun, 1), do: fun.(container)
 
-  defp run_io_call_eager!({:hook, name, _}, _container) do
+  defp run_io_call_eager!({:named, name, _}, _container) do
     raise ArgumentError,
-          "io_call hook #{inspect(name)} is only supported inside defn; pass a function callback instead"
+          "named io_call #{inspect(name)} is only supported inside defn; pass a function callback instead"
   end
 
   defp run_io_call_eager!(_spec, _container) do

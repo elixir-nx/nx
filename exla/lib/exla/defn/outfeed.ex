@@ -10,10 +10,10 @@ defmodule EXLA.Defn.Outfeed do
   alias EXLA.MLIR.Function
   alias EXLA.MLIR.Value
 
-  defstruct user_hooks: %{},
-            default_hooks: %{},
-            used_hooks: [],
-            compiled_hooks: %{},
+  defstruct user_io_calls: %{},
+            default_io_calls: %{},
+            used_io_call_names: [],
+            infeed_flags: %{},
             callbacks: %{},
             token: nil,
             infeeds: [],
@@ -22,9 +22,9 @@ defmodule EXLA.Defn.Outfeed do
   ## Functional API
 
   @doc """
-  Computes used inputs by depth and used hooks.
+  Computes used inputs by depth and used io_calls.
   """
-  def used_inputs_and_hooks(expr, force_inputs, lazy_transfers) do
+  def used_inputs_and_io_calls(expr, force_inputs, lazy_transfers) do
     if lazy_transfers not in [:always, :never, :opt_in] do
       raise ArgumentError,
             ":lazy_transfers must be either :always or :never, got: #{inspect(lazy_transfers)}"
@@ -33,14 +33,14 @@ defmodule EXLA.Defn.Outfeed do
     lazy? = lazy_transfers == :always
     inputs = Map.from_keys(force_inputs, nil)
 
-    {_, used_inputs, used_hooks} =
-      Composite.reduce(expr, {%{}, inputs, %{}}, &used_inputs_and_hooks(&1, &2, 0, lazy?))
+    {_, used_inputs, used_io_calls} =
+      Composite.reduce(expr, {%{}, inputs, %{}}, &used_inputs_and_io_calls(&1, &2, 0, lazy?))
 
-    {used_inputs, used_hooks}
+    {used_inputs, used_io_calls}
   end
 
-  defp used_inputs_and_hooks(%T{data: %Expr{id: id} = expr} = t, acc, depth, lazy?) do
-    {seen, inputs, hooks} = acc
+  defp used_inputs_and_io_calls(%T{data: %Expr{id: id} = expr} = t, acc, depth, lazy?) do
+    {seen, inputs, io_calls} = acc
 
     case seen do
       %{^id => true} ->
@@ -50,11 +50,11 @@ defmodule EXLA.Defn.Outfeed do
         depth = depth + 1
         seen = Map.put(seen, id, true)
         inputs = used_inputs(expr, inputs, depth, lazy?)
-        hooks = used_hooks(expr, hooks)
-        acc = {seen, inputs, hooks}
+        io_calls = used_io_calls(expr, io_calls)
+        acc = {seen, inputs, io_calls}
 
         t
-        |> Tree.apply_args(acc, &{&1, used_inputs_and_hooks(&1, &2, depth, lazy?)})
+        |> Tree.apply_args(acc, &{&1, used_inputs_and_io_calls(&1, &2, depth, lazy?)})
         |> elem(1)
     end
   end
@@ -72,19 +72,19 @@ defmodule EXLA.Defn.Outfeed do
   defp used_inputs(_, inputs, _depth, _lazy?),
     do: inputs
 
-  defp used_hooks(%Expr{op: :io_call, args: [_, _, spec, _, _]}, hooks) do
+  defp used_io_calls(%Expr{op: :io_call, args: [_, _, spec, _, _]}, io_calls) do
     case spec do
-      {:hook, name, callback} -> Map.put(hooks, name, callback)
-      {:fn, _} -> hooks
+      {:named, name, callback} -> Map.put(io_calls, name, callback)
+      {:fn, _} -> io_calls
     end
   end
 
-  defp used_hooks(_, hooks),
-    do: hooks
+  defp used_io_calls(_, io_calls),
+    do: io_calls
 
   ## Struct API
 
-  defguard has_compiled_hooks(outfeed) when outfeed.compiled_hooks != %{}
+  defguard has_infeed_flags(outfeed) when outfeed.infeed_flags != %{}
   defguard has_callbacks(outfeed) when map_size(outfeed.callbacks) > 0
 
   @doc """
@@ -97,22 +97,24 @@ defmodule EXLA.Defn.Outfeed do
   @doc """
   An outfeed struct to track the need for outfeeds during compilation.
   """
-  def new(user_hooks, default_hooks) when is_map(user_hooks) and is_map(default_hooks) do
-    # Hooks with default callbacks or user callbacks are part of the cache key
-    used_hooks =
-      Enum.sort(for {k, v} <- default_hooks, v != nil or Map.has_key?(user_hooks, k), do: k)
+  def new(user_io_calls, default_io_calls)
+      when is_map(user_io_calls) and is_map(default_io_calls) do
+    # Io calls with default callbacks or user callbacks are part of the cache key
+    used_io_call_names =
+      Enum.sort(for {k, v} <- default_io_calls, v != nil or Map.has_key?(user_io_calls, k), do: k)
 
-    # We don't store the user hooks yet, because we don't want them to be cached
+    # We don't store the user io_calls yet, because we don't want them to be cached
     %Outfeed{
-      default_hooks: default_hooks,
-      used_hooks: used_hooks
+      default_io_calls: default_io_calls,
+      used_io_call_names: used_io_call_names
     }
   end
 
   @doc """
-  Sets the user hooks to outfeed.
+  Sets the user io_calls to outfeed.
   """
-  def with_user_hooks(%Outfeed{} = outfeed, user_hooks), do: %{outfeed | user_hooks: user_hooks}
+  def with_user_io_calls(%Outfeed{} = outfeed, user_io_calls),
+    do: %{outfeed | user_io_calls: user_io_calls}
 
   def with_ignore_undefined_io_calls(%Outfeed{} = outfeed, ignore?),
     do: %{outfeed | ignore_undefined_io_calls: ignore?}
@@ -125,7 +127,7 @@ defmodule EXLA.Defn.Outfeed do
   @doc """
   Registers a host callback to outfeed.
 
-  `invoke` is either a callback spec (`{:fn, fun}` or `{:hook, name, callback}`) for
+  `invoke` is either a callback spec (`{:fn, fun}` or `{:named, name, callback}`) for
   side-effect-only callbacks, or a function for callbacks that return tensors.
   When `out_template` is `nil`, the callback is invoked for side effects only and
   the native reply is an empty list.
@@ -143,27 +145,27 @@ defmodule EXLA.Defn.Outfeed do
   end
 
   @doc """
-  Adds an infeed hook.
+  Adds lazy-transfer infeed flags to the computation.
   """
   def add_infeeds(%Outfeed{} = outfeed, builder, entries) do
-    %{compiled_hooks: compiled_hooks, token: token} = outfeed
+    %{infeed_flags: infeed_flags, token: token} = outfeed
 
     # Reversed because higher depth comes first
-    {infeeds, {compiled_hooks, token}} =
+    {infeeds, {infeed_flags, token}} =
       entries
       |> List.keysort(1, :desc)
-      |> Enum.map_reduce({compiled_hooks, token}, fn
-        {pos, _, typespec}, {compiled_hooks, token} ->
-          next_flag = next_hook(compiled_hooks)
-          compiled_hooks = Map.put(compiled_hooks, next_flag, {:infeed, pos, typespec})
+      |> Enum.map_reduce({infeed_flags, token}, fn
+        {pos, _, typespec}, {infeed_flags, token} ->
+          next_flag = next_infeed_flag(infeed_flags)
+          infeed_flags = Map.put(infeed_flags, next_flag, {:infeed, pos, typespec})
 
           token = Value.outfeed(Value.constant(builder, [next_flag], flag_typespec()), token)
           {token, [input]} = Value.infeed(token, [typespec])
 
-          {{pos, input}, {compiled_hooks, token}}
+          {{pos, input}, {infeed_flags, token}}
       end)
 
-    %{outfeed | compiled_hooks: compiled_hooks, token: token, infeeds: infeeds}
+    %{outfeed | infeed_flags: infeed_flags, token: token, infeeds: infeeds}
   end
 
   defp flag_typespec(), do: EXLA.Typespec.tensor({:u, 16}, {})
@@ -176,11 +178,11 @@ defmodule EXLA.Defn.Outfeed do
   def close(outfeed, builder)
 
   def close(
-        %Outfeed{token: token, compiled_hooks: compiled_hooks} = outfeed,
+        %Outfeed{token: token, infeed_flags: infeed_flags} = outfeed,
         %Function{} = builder
       )
       when not is_nil(token) do
-    if has_outfeed_flags?(compiled_hooks) do
+    if active_infeed_flags?(infeed_flags) do
       %{outfeed | token: Value.outfeed(Value.constant(builder, [0], flag_typespec()), token)}
     else
       outfeed
@@ -190,16 +192,16 @@ defmodule EXLA.Defn.Outfeed do
   def close(%Outfeed{} = outfeed, _builder),
     do: outfeed
 
-  defp has_outfeed_flags?(compiled_hooks) do
-    Enum.any?(compiled_hooks, fn
+  defp active_infeed_flags?(infeed_flags) do
+    Enum.any?(infeed_flags, fn
       {_key, {:infeed, _, _}} -> true
       _ -> false
     end)
   end
 
-  # The index 0 is served for closing streams
-  defp next_hook(compiled_hooks) do
-    compiled_hooks
+  # The index 0 is reserved for closing the outfeed stream
+  defp next_infeed_flag(infeed_flags) do
+    infeed_flags
     |> Map.keys()
     |> Enum.filter(&is_integer/1)
     |> Enum.max(fn -> 0 end)
@@ -223,22 +225,22 @@ defmodule EXLA.Defn.Outfeed do
     %{client: client, device_id: device_id} = executable
 
     %{
-      compiled_hooks: compiled_hooks,
-      default_hooks: default_hooks,
-      user_hooks: user_hooks,
+      infeed_flags: infeed_flags,
+      default_io_calls: default_io_calls,
+      user_io_calls: user_io_calls,
       callbacks: callbacks,
       ignore_undefined_io_calls: ignore_undefined_io_calls
     } =
       outfeed
 
-    hooks = Map.merge(default_hooks, user_hooks)
+    io_calls = Map.merge(default_io_calls, user_io_calls)
+    callbacks = resolve_callbacks(callbacks, io_calls)
 
     Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
       init(
         client,
         device_id,
-        hooks,
-        compiled_hooks,
+        infeed_flags,
         infeeds,
         callbacks,
         ignore_undefined_io_calls,
@@ -250,8 +252,7 @@ defmodule EXLA.Defn.Outfeed do
   defp init(
          client,
          device_id,
-         hooks,
-         compiled_hooks,
+         infeed_flags,
          infeeds,
          callbacks,
          ignore_undefined_io_calls,
@@ -269,8 +270,7 @@ defmodule EXLA.Defn.Outfeed do
       device_id,
       ref,
       typespec,
-      hooks,
-      compiled_hooks,
+      infeed_flags,
       infeeds,
       callbacks,
       ignore_undefined_io_calls
@@ -282,13 +282,12 @@ defmodule EXLA.Defn.Outfeed do
          device_id,
          ref,
          typespec,
-         hooks,
-         compiled_hooks,
+         infeed_flags,
          infeeds,
          callbacks,
          ignore_undefined_io_calls
        ) do
-    if has_outfeed_flags?(compiled_hooks) do
+    if active_infeed_flags?(infeed_flags) do
       :ok = EXLA.Client.from_outfeed(client, device_id, [typespec], self(), ref)
     end
 
@@ -300,15 +299,14 @@ defmodule EXLA.Defn.Outfeed do
           device_id,
           ref,
           typespec,
-          hooks,
-          drop_outfeed_flags(compiled_hooks),
+          drop_infeed_flags(infeed_flags),
           infeeds,
           callbacks,
           ignore_undefined_io_calls
         )
 
       {^ref, <<flag::native-unsigned-16>>} ->
-        case Map.fetch!(compiled_hooks, flag) do
+        case Map.fetch!(infeed_flags, flag) do
           {:infeed, index, data_typespec} ->
             data =
               case Map.fetch!(infeeds, index) do
@@ -323,8 +321,7 @@ defmodule EXLA.Defn.Outfeed do
               device_id,
               ref,
               typespec,
-              hooks,
-              compiled_hooks,
+              infeed_flags,
               infeeds,
               callbacks,
               ignore_undefined_io_calls
@@ -334,7 +331,6 @@ defmodule EXLA.Defn.Outfeed do
       {:exla_runtime_call, callback_id, args_spec, reply_tag} ->
         send_callback_reply(
           callbacks,
-          hooks,
           callback_id,
           args_spec,
           reply_tag,
@@ -346,8 +342,7 @@ defmodule EXLA.Defn.Outfeed do
           device_id,
           ref,
           typespec,
-          hooks,
-          compiled_hooks,
+          infeed_flags,
           infeeds,
           callbacks,
           ignore_undefined_io_calls
@@ -364,8 +359,7 @@ defmodule EXLA.Defn.Outfeed do
           device_id,
           ref,
           typespec,
-          hooks,
-          compiled_hooks,
+          infeed_flags,
           infeeds,
           callbacks,
           ignore_undefined_io_calls
@@ -373,14 +367,30 @@ defmodule EXLA.Defn.Outfeed do
     end
   end
 
-  defp drop_outfeed_flags(compiled_hooks) do
-    keys = for {k, _} <- compiled_hooks, is_integer(k), do: k
-    Map.drop(compiled_hooks, keys)
+  defp drop_infeed_flags(infeed_flags) do
+    keys = for {k, _} <- infeed_flags, is_integer(k), do: k
+    Map.drop(infeed_flags, keys)
+  end
+
+  defp resolve_callbacks(callbacks, io_calls) do
+    Map.new(callbacks, fn {id, {invoke, out_template, arg_template, opts}} ->
+      {id, {resolve_invoke(invoke, io_calls), out_template, arg_template, opts}}
+    end)
+  end
+
+  defp resolve_invoke(fun, _io_calls) when is_function(fun), do: fun
+
+  defp resolve_invoke({:fn, fun}, _io_calls), do: {:fn, fun}
+
+  defp resolve_invoke({:named, name, callback}, io_calls) do
+    case io_calls[name] || callback do
+      nil -> {:named, name, nil}
+      fun -> {:fn, fun}
+    end
   end
 
   defp send_callback_reply(
          callbacks,
-         hooks,
          callback_id,
          args_spec,
          reply_tag,
@@ -391,7 +401,7 @@ defmodule EXLA.Defn.Outfeed do
         with {:ok, callback} <- Map.fetch(callbacks, callback_id),
              {:ok, tensor_args} <- materialize_callback_args(callback, args_spec) do
           callback
-          |> invoke_callback(hooks, tensor_args, ignore_undefined_io_calls)
+          |> invoke_callback(tensor_args, ignore_undefined_io_calls)
           |> encode_callback_reply()
         else
           :error ->
@@ -434,32 +444,25 @@ defmodule EXLA.Defn.Outfeed do
     end
   end
 
-  defp invoke_callback({invoke, nil, _arg_template, _opts}, hooks, tensor_args, ignore?) do
-    invoke_side_effect(invoke, hooks, tensor_args, ignore?)
+  defp invoke_callback({invoke, nil, _arg_template, _opts}, tensor_args, ignore?) do
+    invoke_side_effect(invoke, tensor_args, ignore?)
   end
 
-  defp invoke_callback({fun, out_template, _arg_template, opts}, _hooks, tensor_args, _ignore?)
+  defp invoke_callback({fun, out_template, _arg_template, opts}, tensor_args, _ignore?)
        when is_function(fun) do
     run_runtime_callback({:ok, tensor_args}, fun, out_template, opts)
   end
 
-  defp resolve_hook({:fn, fun}, _hooks), do: fun
-
-  defp resolve_hook({:hook, name, callback}, hooks) do
-    hooks[name] || callback
+  defp invoke_side_effect({:fn, fun}, tensor_args, _ignore?) when is_function(fun, 1) do
+    run_side_effect(fun, tensor_args)
   end
 
-  defp invoke_side_effect(callback_spec, hooks, tensor_args, ignore_undefined_io_calls) do
-    case resolve_hook(callback_spec, hooks) do
-      nil when ignore_undefined_io_calls ->
-        {:ok, []}
+  defp invoke_side_effect({:named, _name, _}, _tensor_args, true) do
+    {:ok, []}
+  end
 
-      nil ->
-        {:error, {:undefined_io_call, undefined_io_call_message(callback_spec)}}
-
-      fun ->
-        run_side_effect(fun, tensor_args)
-    end
+  defp invoke_side_effect({:named, name, _}, _tensor_args, false) do
+    {:error, {:undefined_io_call, undefined_io_call_message({:named, name, nil})}}
   end
 
   defp run_side_effect(fun, tensor_args) when is_function(fun, 1) do
@@ -475,8 +478,8 @@ defmodule EXLA.Defn.Outfeed do
     end
   end
 
-  defp undefined_io_call_message({:hook, name, _}),
-    do: "undefined io_call hook #{inspect(name)}"
+  defp undefined_io_call_message({:named, name, _}),
+    do: "undefined io_call #{inspect(name)}"
 
   defp undefined_io_call_message(_), do: "undefined io_call callback"
 

@@ -51,11 +51,11 @@ defmodule Nx.ServingTest do
   defn add_five_round_about(batch) do
     batch
     |> Nx.multiply(2)
-    |> hook(:double)
+    |> io_call(:double)
     |> Nx.add(10)
-    |> hook(:plus_ten)
+    |> io_call(:plus_ten)
     |> Nx.divide(2)
-    |> hook(:to_be_ignored)
+    |> io_call(:to_be_ignored)
   end
 
   describe "run/2" do
@@ -273,7 +273,9 @@ defmodule Nx.ServingTest do
     end
 
     test "with input streaming and hooks" do
-      serving = Nx.Serving.jit(&Nx.multiply(&1, 2)) |> Nx.Serving.streaming(io_calls: [:foo, :bar])
+      serving =
+        Nx.Serving.jit(&Nx.multiply(&1, 2)) |> Nx.Serving.streaming(io_calls: [:foo, :bar])
+
       stream = Stream.map([[1, 2], [3]], &Nx.Batch.concatenate([Nx.tensor(&1)]))
 
       assert_raise ArgumentError,

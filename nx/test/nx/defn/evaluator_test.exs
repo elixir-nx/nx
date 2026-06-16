@@ -336,7 +336,7 @@ defmodule Nx.Defn.EvaluatorTest do
       end
     end
 
-    defn basic_hook(a, b), do: hook(a + b, :example, &send_to_self({:default, &1}))
+    defn basic_hook(a, b), do: io_call(a + b, :example, &send_to_self({:default, &1}))
 
     test "basic hook with overriddes" do
       assert basic_hook(1, 2) == Nx.tensor(3)
@@ -354,7 +354,7 @@ defmodule Nx.Defn.EvaluatorTest do
       assert tensor == Nx.tensor(3)
     end
 
-    defn container_hook(a, b), do: hook({a, b}, :example, &send_to_self({:default, &1}))
+    defn container_hook(a, b), do: io_call({a, b}, :example, &send_to_self({:default, &1}))
 
     test "container hook with overriddes" do
       assert container_hook(1, 2) == {Nx.tensor(1), Nx.tensor(2)}
@@ -374,8 +374,8 @@ defmodule Nx.Defn.EvaluatorTest do
 
     defn side_effect_hooks(a, b) do
       token = create_token()
-      {token, _} = hook_token(token, b, :b)
-      {token, _} = hook_token(token, a, :a)
+      {token, _} = io_call_token(token, b, :b)
+      {token, _} = io_call_token(token, a, :a)
       attach_token(token, {a, b})
     end
 
@@ -422,9 +422,9 @@ defmodule Nx.Defn.EvaluatorTest do
 
     defn side_effect_nested_hooks(a, b) do
       token = create_token()
-      {token, _} = hook_token(token, b, :b)
+      {token, _} = io_call_token(token, b, :b)
       a = attach_token(token, a)
-      hook(a, :a)
+      io_call(a, :a)
     end
 
     test "side effect nested hooks" do
@@ -480,9 +480,9 @@ defmodule Nx.Defn.EvaluatorTest do
 
     defn side_effect_nested_hook_with_default(a, b) do
       token = create_token()
-      {token, _} = hook_token(token, b, :b, &send_to_self({:b, &1}))
+      {token, _} = io_call_token(token, b, :b, &send_to_self({:b, &1}))
       a = attach_token(token, a)
-      hook(a, :a)
+      io_call(a, :a)
     end
 
     test "side effect nested hooks with default" do
@@ -517,7 +517,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
     defn hook_upto10(x) do
       while x, Nx.less(x, 10) do
-        hook(x + 1, :while)
+        io_call(x + 1, :while)
       end
     end
 
@@ -550,7 +550,7 @@ defmodule Nx.Defn.EvaluatorTest do
     # The goal of those tests is to show that expressions inside cond are cached,
     # regardless of evaluation order.
     defn cond_cache_left(bool, a, b) do
-      res = hook(a + b, :example, &send_to_self({:hook, &1}))
+      res = io_call(a + b, :example, &send_to_self({:hook, &1}))
 
       cond =
         if bool do
@@ -573,7 +573,7 @@ defmodule Nx.Defn.EvaluatorTest do
     end
 
     defn cond_cache_right(bool, a, b) do
-      res = hook(a + b, :example, &send_to_self({:hook, &1}))
+      res = io_call(a + b, :example, &send_to_self({:hook, &1}))
 
       cond =
         if bool do
@@ -596,7 +596,7 @@ defmodule Nx.Defn.EvaluatorTest do
     end
 
     defn cond_cache_both(bool, a, b) do
-      res = hook(a + b, :example, &send_to_self({:hook, &1}))
+      res = io_call(a + b, :example, &send_to_self({:hook, &1}))
 
       left =
         if bool do

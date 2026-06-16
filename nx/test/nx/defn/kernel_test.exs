@@ -151,8 +151,8 @@ defmodule Nx.Defn.KernelTest do
       {token, expr}
     end
 
-    test "hook/2,3" do
-      {token, expr} = Nx.Defn.Kernel.hook(zero_expr(), :a) |> attach_info!()
+    test "io_call/2,3" do
+      {token, expr} = Nx.Defn.Kernel.io_call(zero_expr(), :a) |> attach_info!()
       assert %T{data: %Expr{op: :elem, args: [_, 0]}} = token
       assert %T{data: %Expr{op: :elem, args: [_, 1]}} = expr
 
@@ -160,38 +160,42 @@ defmodule Nx.Defn.KernelTest do
       assert rendered =~ "io_call"
       assert rendered =~ "a:"
 
-      {token, expr} = Nx.Defn.Kernel.hook(zero_expr(), &Function.identity/1) |> attach_info!()
+      {token, expr} = Nx.Defn.Kernel.io_call(zero_expr(), &Function.identity/1) |> attach_info!()
       assert %T{data: %Expr{op: :elem, args: [_, 0]}} = token
       assert %T{data: %Expr{op: :elem, args: [_, 1]}} = expr
       assert inspect(expr, safe: false) =~ "io_call"
 
-      {token, expr} = Nx.Defn.Kernel.hook(zero_expr(), :a, &Function.identity/1) |> attach_info!()
+      {token, expr} =
+        Nx.Defn.Kernel.io_call(zero_expr(), :a, &Function.identity/1) |> attach_info!()
+
       assert %T{data: %Expr{op: :elem, args: [_, 0]}} = token
       assert %T{data: %Expr{op: :elem, args: [_, 1]}} = expr
       assert inspect(expr, safe: false) =~ "a:"
     end
 
-    test "hook_token/3,4" do
+    test "io_call_token/3,4" do
       initial_token = Nx.Defn.Kernel.create_token()
       assert %T{data: %Expr{op: :create_token}} = initial_token
 
-      {token, expr} = Nx.Defn.Kernel.hook_token(initial_token, zero_expr(), :a)
-      assert %T{data: %Expr{op: :elem, args: [_, 0]}} = token
-      assert %T{data: %Expr{op: :elem, args: [_, 1]}} = expr
-
-      {token, expr} = Nx.Defn.Kernel.hook_token(initial_token, zero_expr(), &Function.identity/1)
+      {token, expr} = Nx.Defn.Kernel.io_call_token(initial_token, zero_expr(), :a)
       assert %T{data: %Expr{op: :elem, args: [_, 0]}} = token
       assert %T{data: %Expr{op: :elem, args: [_, 1]}} = expr
 
       {token, expr} =
-        Nx.Defn.Kernel.hook_token(initial_token, zero_expr(), :a, &Function.identity/1)
+        Nx.Defn.Kernel.io_call_token(initial_token, zero_expr(), &Function.identity/1)
+
+      assert %T{data: %Expr{op: :elem, args: [_, 0]}} = token
+      assert %T{data: %Expr{op: :elem, args: [_, 1]}} = expr
+
+      {token, expr} =
+        Nx.Defn.Kernel.io_call_token(initial_token, zero_expr(), :a, &Function.identity/1)
 
       assert %T{data: %Expr{op: :elem, args: [_, 0]}} = token
       assert %T{data: %Expr{op: :elem, args: [_, 1]}} = expr
 
       token = initial_token
-      {token, zero} = Nx.Defn.Kernel.hook_token(token, zero_expr(), &Function.identity/1)
-      {token, one} = Nx.Defn.Kernel.hook_token(token, one_expr(), :one)
+      {token, zero} = Nx.Defn.Kernel.io_call_token(token, zero_expr(), &Function.identity/1)
+      {token, one} = Nx.Defn.Kernel.io_call_token(token, one_expr(), :one)
 
       assert %T{data: %Expr{op: :elem, args: [_, 0]}} = token
       assert %T{data: %Expr{op: :elem, args: [_, 1]}} = zero

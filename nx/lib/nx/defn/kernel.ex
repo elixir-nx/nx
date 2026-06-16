@@ -1329,13 +1329,13 @@ defmodule Nx.Defn.Kernel do
   Defines an io_call.
 
   Io calls are a mechanism to execute an anonymous function for
-  side-effects with runtime tensor values. Internally, hooks are
-  implemented as `Nx.io_call/3` — they create a token, run the
-  callback, and attach the token to the result via `attach_token/2`.
+  side-effects with runtime tensor values. Internally, an io_call
+  creates a token, runs the callback, and attaches the token to the
+  result via `attach_token/2`.
 
   Let's see an example:
 
-      defmodule Hooks do
+      defmodule IoCalls do
         import Nx.Defn
 
         defn add_and_mult(a, b) do
@@ -1346,14 +1346,14 @@ defmodule Nx.Defn.Kernel do
       end
 
   Note an io_call can only access the variables passed as arguments
-  to the hook. It cannot access any other variable defined in
-  `defn` outside of the hook.
+  to the io_call. It cannot access any other variable defined in
+  `defn` outside of the io_call.
 
   The `defn` above defines two io_calls, one is called with the
   value of `a + b` and another with `a * b`. Once you invoke
   the function above, you should see this printed:
 
-      Hooks.add_and_mult(2, 3)
+      IoCalls.add_and_mult(2, 3)
       {:add, #Nx.Tensor<
          s32
          5
@@ -1365,7 +1365,7 @@ defmodule Nx.Defn.Kernel do
 
   In other words, the `io_call` function accepts a tensor
   expression as argument and it will invoke a custom
-  function with a tensor value at runtime. `hook` returns
+  function with a tensor value at runtime. `io_call` returns
   the result of the given expression. The expression can
   be any tensor or a `Nx.Container`.
 
@@ -1379,90 +1379,90 @@ defmodule Nx.Defn.Kernel do
         mult
       end
 
-  We will learn how to hook into a value that is not part
-  of the result in the "Hooks and tokens" section.
+  We will learn how to call into a value that is not part
+  of the result in the "Tokens and ordering" section.
 
   ## Named io_calls
 
-  It is possible to give names to the hooks. This allows them
+  It is possible to give names to io_calls. This allows them
   to be defined or overridden by calling `Nx.Defn.jit/2`.
   Let's see an example:
 
-      defmodule Hooks do
+      defmodule IoCalls do
         import Nx.Defn
 
         defn add_and_mult(a, b) do
-          add = io_call(a + b, :io_calls_add)
-          mult = io_call(a * b, :io_calls_mult)
+          add = io_call(a + b, :my_app_add)
+          mult = io_call(a * b, :my_app_mult)
           {add, mult}
         end
       end
 
-  Now you can pass the hook as argument as follows:
+  Now you can pass the io_call as argument as follows:
 
-      hooks = %{
-        hooks_add: fn tensor ->
+      io_calls = %{
+        my_app_add: fn tensor ->
           IO.inspect {:add, tensor}
         end
       }
 
-      fun = Nx.Defn.jit(&Hooks.add_and_mult/2, io_calls: io_calls)
+      fun = Nx.Defn.jit(&IoCalls.add_and_mult/2, io_calls: io_calls)
       fun.(Nx.tensor(2), Nx.tensor(3))
 
-  > **Important!** We recommend to prefix your hook names
+  > **Important!** We recommend to prefix your io_call names
   > by the name of your project to avoid conflicts.
 
-  If a named hook is not given, compilers can optimize
+  If a named io_call is not given, compilers can optimize
   that away and not transfer the tensor from the device
   in the first place.
 
   You can also mix named io_calls with callbacks:
 
       defn add_and_mult(a, b) do
-        add = io_call(a + b, :io_calls_add, fn tensor -> IO.inspect({:add, tensor}) end)
-        mult = io_call(a * b, :io_calls_mult, fn tensor -> IO.inspect({:mult, tensor}) end)
+        add = io_call(a + b, :my_app_add, fn tensor -> IO.inspect({:add, tensor}) end)
+        mult = io_call(a * b, :my_app_mult, fn tensor -> IO.inspect({:mult, tensor}) end)
         {add, mult}
       end
 
   If an io_call with the same name is given to `Nx.Defn.jit/2`,
   then it will override the default callback.
 
-  ## Hooks and tokens
+  ## Tokens and ordering
 
   Io calls are implemented on top of `Nx.io_call/3`. Each `io_call`
   takes a token, runs a side-effect callback, and returns
   `{token, data}` where `data` is the input passed through
   unchanged. Tokens establish ordering between callbacks.
 
-  When the hooked value is part of the return, `io_call/3` handles
+  When the io_call value is part of the return, `io_call/3` handles
   tokens for you. When it is not, you must thread tokens yourself
   with `create_token/0`, `io_call_token/4`, and `attach_token/2`.
 
-  For example, if the values we want to hook are not part of
+  For example, if the values we want to observe are not part of
   the return value:
 
       defn add_and_mult(a, b) do
-        _add = io_call(a + b, :io_calls_add, &IO.inspect({:add, &1}))
-        mult = io_call(a * b, :io_calls_mult, &IO.inspect({:mult, &1}))
+        _add = io_call(a + b, :my_app_add, &IO.inspect({:add, &1}))
+        mult = io_call(a * b, :my_app_mult, &IO.inspect({:mult, &1}))
         mult
       end
 
   In such cases, you must use tokens. Tokens are used to
-  create an ordering over hooks, ensuring hooks execute
+  create an ordering over io_calls, ensuring they execute
   in a certain sequence:
 
       defn add_and_mult(a, b) do
         token = create_token()
-        {token, _add} = io_call_token(token, a + b, :io_calls_add, &IO.inspect({:add, &1}))
-        {token, mult} = io_call_token(token, a * b, :io_calls_mult, &IO.inspect({:mult, &1}))
+        {token, _add} = io_call_token(token, a + b, :my_app_add, &IO.inspect({:add, &1}))
+        {token, mult} = io_call_token(token, a * b, :my_app_mult, &IO.inspect({:mult, &1}))
         attach_token(token, mult)
       end
 
   The example above creates a token and uses `io_call_token/4`
-  to register hooks in order. By threading the token through
-  each call, those hooks run in the order they were defined.
+  to register io_calls in order. By threading the token through
+  each call, those io_calls run in the order they were defined.
   Then `attach_token/2` keeps the token alive in the graph so
-  the hooks are not optimized away.
+  the io_calls are not optimized away.
 
   In fact, `io_call/3` is implemented roughly like this:
 
@@ -1474,7 +1474,7 @@ defmodule Nx.Defn.Kernel do
   And `io_call_token/4` is a thin wrapper over `Nx.io_call/4`.
 
   You must attach the token to a value that is part of the
-  computation result. Otherwise the hooks will be "lost", as if
+  computation result. Otherwise the io_calls will be "lost", as if
   they were not defined. This also applies to conditionals and
   loops. The token must be attached within the branch they are
   used. For example, this won't work:
@@ -1534,7 +1534,7 @@ defmodule Nx.Defn.Kernel do
       when Kernel.and(is_atom(name), is_function(function, 1)),
       do: Nx.io_call(token, expr, name, function)
 
-  defp random_io_call_name(), do: :"hook_#{System.unique_integer([:positive])}"
+  defp random_io_call_name(), do: :"io_call_#{System.unique_integer([:positive])}"
 
   @doc """
   Creates a token for `io_call/3`. See `io_call/3`.

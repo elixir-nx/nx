@@ -69,7 +69,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "tokens" do
-    defn grad_token(t), do: value_and_grad(t, fn t -> hook(Nx.pow(t, 2), :grad) end)
+    defn grad_token(t), do: value_and_grad(t, fn t -> io_call(Nx.pow(t, 2), :grad) end)
 
     test "computes grad with token" do
       parent = self()
@@ -81,7 +81,7 @@ defmodule Nx.Defn.GradTest do
       assert tensor == Nx.tensor(9)
     end
 
-    defn token_grad(t), do: hook(grad(t, &Nx.pow(&1, 2)), :grad)
+    defn token_grad(t), do: io_call(grad(t, &Nx.pow(&1, 2)), :grad)
 
     test "computes token with grad" do
       parent = self()

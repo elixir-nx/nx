@@ -8,12 +8,12 @@ defmodule Nx.Defn.Evaluator do
 
   The following options are specific to this compiler:
 
-    * `:hooks` - a map of callbacks to hook into `io_call` side effects by name.
+    * `:io_calls` - a map of callbacks to override named `io_call` side effects.
       This allows overriding named `io_call`s at JIT time without recompiling the
       graph.
 
     * `:ignore_undefined_io_calls` - when `true`, named `io_call`s without a
-      default callback or a matching entry in `:hooks` are skipped during
+      default callback or a matching entry in `:io_calls` are skipped during
       evaluation. Defaults to `false`, in which case an undefined named `io_call`
       raises.
 
@@ -49,16 +49,16 @@ defmodule Nx.Defn.Evaluator do
 
   @impl true
   def __compile__(_key, vars, fun, opts) do
-    hooks = Keyword.get(opts, :hooks, %{})
+    io_calls = Keyword.get(opts, :io_calls, %{})
     gc? = Keyword.get(opts, :garbage_collect, false)
     ignore_undefined_io_calls? = Keyword.get(opts, :ignore_undefined_io_calls, false)
-    {expr, output, cache} = precompile(fun, vars, hooks)
+    {expr, output, cache} = precompile(fun, vars, io_calls)
 
     fn [params] ->
       state = %{
         params: params,
         gc: gc?,
-        hooks: hooks,
+        io_calls: io_calls,
         ignore_undefined_io_calls: ignore_undefined_io_calls?
       }
 
@@ -80,13 +80,13 @@ defmodule Nx.Defn.Evaluator do
     result
   end
 
-  defp precompile(fun, vars, hooks) do
+  defp precompile(fun, vars, io_calls) do
     {expr, output} =
       vars
       |> fun.()
       |> Composite.traverse([], &{Nx.devectorize(&1), [Nx.to_template(&1) | &2]})
 
-    state = %{hooks: hooks, parent_ids: nil, current_ids: nil}
+    state = %{io_calls: io_calls, parent_ids: nil, current_ids: nil}
     {expr, cache} = init_compute_cache(expr, state)
     {expr, Enum.reverse(output), cache}
   end
@@ -355,7 +355,7 @@ defmodule Nx.Defn.Evaluator do
     {_token, caches} = eval(token, state, caches)
     {tensor_value, caches} = composite_eval(tensor_expr, state, caches)
 
-    case resolve_io_call(callback_spec, state.hooks) do
+    case resolve_io_call(callback_spec, state.io_calls) do
       nil when state.ignore_undefined_io_calls ->
         :ok
 
@@ -468,11 +468,11 @@ defmodule Nx.Defn.Evaluator do
     [fn -> other end | acc]
   end
 
-  defp resolve_io_call({:fn, fun}, _hooks), do: fun
-  defp resolve_io_call({:hook, name, callback}, hooks), do: hooks[name] || callback
+  defp resolve_io_call({:fn, fun}, _io_calls), do: fun
+  defp resolve_io_call({:named, name, callback}, io_calls), do: io_calls[name] || callback
 
-  defp undefined_io_call_message({:hook, name, _}),
-    do: "undefined io_call hook #{inspect(name)}"
+  defp undefined_io_call_message({:named, name, _}),
+    do: "undefined io_call #{inspect(name)}"
 
   defp undefined_io_call_message(_), do: "undefined io_call callback"
 end

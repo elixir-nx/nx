@@ -234,7 +234,7 @@ defmodule EXLA.Defn do
          run_options,
          is_sharded?
        )
-       when Outfeed.has_compiled_hooks(outfeed) or Outfeed.has_callbacks(outfeed) do
+       when Outfeed.has_infeed_flags(outfeed) or Outfeed.has_callbacks(outfeed) do
     if is_sharded? do
       raise ArgumentError, "outfeed is not supported for sharded execution yet"
     end
@@ -319,7 +319,7 @@ defmodule EXLA.Defn do
          to_computation
        ) do
     {cache, options} = Keyword.pop(options, :cache, true)
-    {hooks, options} = Keyword.pop(options, :hooks, %{})
+    {io_calls, options} = Keyword.pop(options, :io_calls, %{})
 
     {ignore_undefined_io_calls, options} =
       Keyword.pop(options, :ignore_undefined_io_calls, false)
@@ -352,7 +352,7 @@ defmodule EXLA.Defn do
       client: client.name,
       args: args_key,
       lazy_transfers: lazy_transfers,
-      hooks: Map.keys(hooks),
+      io_calls: Map.keys(io_calls),
       options: options
     }
 
@@ -365,12 +365,15 @@ defmodule EXLA.Defn do
           {{cache_fun, cache_fun}, Keyword.delete(options, EXLA)}
         end
 
-      {eval_time, {expr, {ref, outputs, {used_inputs, defined_hooks}}}} =
+      {eval_time, {expr, {ref, outputs, {used_inputs, defined_io_calls}}}} =
         :timer.tc(fn ->
           expr_cache_fun.({key, args_key, lazy_transfers}, fn ->
             expr = fun.(vars)
-            inputs_and_hooks = Outfeed.used_inputs_and_hooks(expr, used_inputs, lazy_transfers)
-            {expr, {make_ref(), Nx.to_template(expr), inputs_and_hooks}}
+
+            inputs_and_io_calls =
+              Outfeed.used_inputs_and_io_calls(expr, used_inputs, lazy_transfers)
+
+            {expr, {make_ref(), Nx.to_template(expr), inputs_and_io_calls}}
           end)
         end)
 
@@ -382,8 +385,8 @@ defmodule EXLA.Defn do
         )
       end
 
-      outfeed = Outfeed.new(hooks, defined_hooks)
-      comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
+      outfeed = Outfeed.new(io_calls, defined_io_calls)
+      comp_key = {ref, client.name, outfeed.used_io_call_names, lazy_transfers, options}
 
       {comp_time, {evaled, {xla_time, executable, inputs_and_typespecs, outfeed}}} =
         :timer.tc(fn ->
@@ -428,7 +431,7 @@ defmodule EXLA.Defn do
               end
 
               # Only create the token when we know it will actually be
-              # used, that is: streaming, lazy transfers or hooks
+              # used, that is: streaming, lazy transfers or io_calls
               outfeed =
                 if reverse_infeeds != [] do
                   outfeed
@@ -495,7 +498,7 @@ defmodule EXLA.Defn do
 
       outfeed =
         outfeed
-        |> Outfeed.with_user_hooks(hooks)
+        |> Outfeed.with_user_io_calls(io_calls)
         |> Outfeed.with_ignore_undefined_io_calls(ignore_undefined_io_calls)
 
       {executable, {used_inputs, outputs, outfeed, inputs_and_typespecs}}
@@ -1738,7 +1741,7 @@ defmodule EXLA.Defn do
     )
   end
 
-  ## Cache and hook helpers helpers
+  ## Cache and io_call helpers
 
   defp no_token_cache(),
     do: %{__MODULE__ => Outfeed.empty()}

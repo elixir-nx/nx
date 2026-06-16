@@ -1795,7 +1795,7 @@ defmodule Nx.Defn.Expr do
 
     expr =
       case callback_spec do
-        {:hook, name, _} ->
+        {:named, name, _} ->
           IO.iodata_to_binary([
             var_name,
             " = io_call ",

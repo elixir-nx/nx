@@ -174,7 +174,7 @@ defmodule EXLA.Defn.APITest do
     end
 
     defn hook_default(a, b) do
-      hook(a + b, :default, send_to_self(:default))
+      io_call(a + b, :default, send_to_self(:default))
     end
 
     test "executes hook with default" do
@@ -203,7 +203,7 @@ defmodule EXLA.Defn.APITest do
     end
 
     defn hook_optional(a, b) do
-      hook(a + b, :optional)
+      io_call(a + b, :optional)
     end
 
     test "executes optional hook" do
@@ -232,7 +232,7 @@ defmodule EXLA.Defn.APITest do
     defn hook_factorial(x) do
       {factorial, _} =
         while {factorial = 1.0, x}, Nx.greater(x, 1) do
-          hook({factorial * x, x - 1}, :factorial)
+          io_call({factorial * x, x - 1}, :factorial)
         end
 
       factorial
@@ -256,9 +256,9 @@ defmodule EXLA.Defn.APITest do
 
     defn hook_cond(a, b) do
       cond do
-        a == -1 -> hook(b * 2, :cond)
-        a == 1 -> hook(b / 2, :cond)
-        true -> hook(Nx.pow(b, 2), :cond)
+        a == -1 -> io_call(b * 2, :cond)
+        a == 1 -> io_call(b / 2, :cond)
+        true -> io_call(Nx.pow(b, 2), :cond)
       end
     end
 
@@ -289,7 +289,7 @@ defmodule EXLA.Defn.APITest do
     end
 
     defn hook_container(container) do
-      hook(container, :container)
+      io_call(container, :container)
     end
 
     test "executes hook with container" do
@@ -302,7 +302,7 @@ defmodule EXLA.Defn.APITest do
     end
 
     defn hook_raises(a, b) do
-      hook(a + b, :raises, fn _ -> raise "boom" end)
+      io_call(a + b, :raises, fn _ -> raise "boom" end)
     end
 
     @tag :capture_log
@@ -318,8 +318,8 @@ defmodule EXLA.Defn.APITest do
 
     defn side_effect_hooks(a, b) do
       token = create_token()
-      {token, _} = hook_token(token, b, :b)
-      {token, _} = hook_token(token, a, :a)
+      {token, _} = io_call_token(token, b, :b)
+      {token, _} = io_call_token(token, a, :a)
       attach_token(token, a + b)
     end
 
@@ -369,7 +369,7 @@ defmodule EXLA.Defn.APITest do
 
   describe "cross-client hooks" do
     defn hooked_add(a, b) do
-      hook(a + b, :add)
+      io_call(a + b, :add)
     end
 
     test "concurrent hooks on different clients serialize on same device" do

@@ -20,20 +20,20 @@ defmodule Nx.Defn.TreeTest do
     factorial
   end
 
-  defn with_hook(a, b), do: hook(a + b, :example)
+  defn with_hook(a, b), do: io_call(a + b, :example)
 
   defn hooked_factorial(a, b) do
-    {hook(factorial(with_hook(a, b)), :another), b}
+    {io_call(factorial(with_hook(a, b)), :another), b}
   end
 
   defn duplicate_hook_names(a, b) do
     token = create_token()
-    {token, ha} = hook_token(token, a, :same)
-    {token, hb} = hook_token(token, b, :same)
+    {token, ha} = io_call_token(token, a, :same)
+    {token, hb} = io_call_token(token, b, :same)
     attach_token(token, ha + hb)
   end
 
-  describe "has_hooks?" do
+  describe "has_io_calls?" do
     test "returns true if there are hooks" do
       refute Tree.has_io_calls?(factorial(10), %{})
       refute Tree.has_io_calls?(hooked_factorial(1, 2), %{})

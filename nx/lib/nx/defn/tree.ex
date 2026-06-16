@@ -8,43 +8,47 @@ defmodule Nx.Defn.Tree do
   alias Nx.Tensor, as: T
 
   @doc """
-  Checks if the given tree has any side effects for the given hooks map.
+  Checks if the given tree has any side effects for the given io_calls map.
 
-  Each `:io_call` node is checked independently. For named hooks, a side effect
-  exists when `hooks[name] || default_callback` is a function. Anonymous `io_call`s
+  Each `:io_call` node is checked independently. For named io_calls, a side effect
+  exists when `io_calls[name] || default_callback` is a function. Anonymous `io_call`s
   always count as side effects. Duplicate names across nodes share the same
   override lookup but ordering is determined by tokens, not by name.
   """
-  def has_hooks?(tree, hooks) do
-    Composite.reduce(tree, %{}, &detect_hook(&1, &2, hooks))
+  def has_io_calls?(tree, io_calls) do
+    Composite.reduce(tree, %{}, &detect_io_call(&1, &2, io_calls))
     false
   catch
     :side_effect -> true
   end
 
-  defp detect_hook(%T{data: %Expr{op: :io_call, args: [_, _, spec, _, _]}} = t, cache, hooks) do
+  defp detect_io_call(
+         %T{data: %Expr{op: :io_call, args: [_, _, spec, _, _]}} = t,
+         cache,
+         io_calls
+       ) do
     side_effect? =
       case spec do
-        {:hook, name, callback} -> hooks[name] || callback
+        {:named, name, callback} -> io_calls[name] || callback
         {:fn, _} -> true
       end
 
     if side_effect? do
       throw(:side_effect)
     else
-      fallback_detect_hook(t, cache, hooks)
+      fallback_detect_io_call(t, cache, io_calls)
     end
   end
 
-  defp detect_hook(t, cache, hooks), do: fallback_detect_hook(t, cache, hooks)
+  defp detect_io_call(t, cache, io_calls), do: fallback_detect_io_call(t, cache, io_calls)
 
-  defp fallback_detect_hook(%T{data: %Expr{id: id}} = t, cache, hooks) do
+  defp fallback_detect_io_call(%T{data: %Expr{id: id}} = t, cache, io_calls) do
     case cache do
       %{^id => _} ->
         cache
 
       %{} ->
-        {_, cache} = apply_args(t, cache, &{&1, detect_hook(&1, &2, hooks)})
+        {_, cache} = apply_args(t, cache, &{&1, detect_io_call(&1, &2, io_calls)})
         Map.put(cache, id, true)
     end
   end
