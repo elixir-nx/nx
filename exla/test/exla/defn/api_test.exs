@@ -167,7 +167,7 @@ defmodule EXLA.Defn.APITest do
     end
   end
 
-  describe "hooks" do
+  describe "io_calls" do
     defp send_to_self(tag) do
       parent = self()
       fn value -> send(parent, {tag, value}) end
@@ -177,13 +177,13 @@ defmodule EXLA.Defn.APITest do
       io_call(a + b, :default, send_to_self(:default))
     end
 
-    test "executes hook with default" do
+    test "executes io_call with default" do
       assert hook_default(2, 3)
       assert_receive {:default, tensor}
       assert_equal(tensor, Nx.tensor(5))
     end
 
-    test "executes hook with callback" do
+    test "executes io_call with callback" do
       assert_equal(
         EXLA.jit(&hook_default/2, io_calls: %{default: send_to_self(:tag)}).(2, 3),
         Nx.tensor(5)
@@ -206,7 +206,7 @@ defmodule EXLA.Defn.APITest do
       io_call(a + b, :optional)
     end
 
-    test "executes optional hook" do
+    test "executes optional io_call" do
       {_pid, ref} =
         spawn_monitor(fn ->
           EXLA.jit(&hook_optional/2).(2, 3)
@@ -238,7 +238,7 @@ defmodule EXLA.Defn.APITest do
       factorial
     end
 
-    test "executes hook within while" do
+    test "executes io_call within while" do
       assert_equal(
         EXLA.jit(&hook_factorial/1, io_calls: %{factorial: send_to_self(:tag)}).(5),
         Nx.tensor(120.0)
@@ -262,7 +262,7 @@ defmodule EXLA.Defn.APITest do
       end
     end
 
-    test "executes hook within cond" do
+    test "executes io_call within cond" do
       assert_equal(
         EXLA.jit(&hook_cond/2, io_calls: %{cond: send_to_self(:tag)}).(1, 4),
         Nx.tensor(2.0)
@@ -292,7 +292,7 @@ defmodule EXLA.Defn.APITest do
       io_call(container, :container)
     end
 
-    test "executes hook with container" do
+    test "executes io_call with container" do
       container = %Container{a: 1, b: 2, c: :reset, d: :elem}
       EXLA.jit(&hook_container/1, io_calls: %{container: send_to_self(:tag)}).(container)
 
@@ -306,7 +306,7 @@ defmodule EXLA.Defn.APITest do
     end
 
     @tag :capture_log
-    test "halts outfeed when hook raises" do
+    test "halts outfeed when io_call raises" do
       {_pid, ref} =
         spawn_monitor(fn ->
           EXLA.jit(&hook_raises/2).(2, 3)
@@ -323,7 +323,7 @@ defmodule EXLA.Defn.APITest do
       attach_token(token, a + b)
     end
 
-    test "executes token-ordered hooks in sequence" do
+    test "executes token-ordered io_call_tokens in sequence" do
       parent = self()
       send_value = fn value -> send(parent, Nx.to_number(value)) end
 
@@ -367,17 +367,17 @@ defmodule EXLA.Defn.APITest do
     end
   end
 
-  describe "cross-client hooks" do
+  describe "cross-client io_calls" do
     defn hooked_add(a, b) do
       io_call(a + b, :add)
     end
 
-    test "concurrent hooks on different clients serialize on same device" do
+    test "concurrent io_calls on different clients serialize on same device" do
       parent = self()
-      hook_fn = fn value -> send(parent, {:hooked, value}) end
+      io_call_fn = fn value -> send(parent, {:io_called, value}) end
 
       # Exercises the pattern that previously caused SIGABRT: multiple EXLA
-      # clients running hooks (outfeed) concurrently on the same device.
+      # clients running io_calls (outfeed) concurrently on the same device.
       # The device-level lock key ensures these serialize rather than
       # corrupting XLA's global per-device outfeed queue.
       #
@@ -387,7 +387,7 @@ defmodule EXLA.Defn.APITest do
       tasks =
         for client <- [:host, :other_host], _ <- 1..4 do
           Task.async(fn ->
-            EXLA.jit(&hooked_add/2, client: client, io_calls: %{add: hook_fn}).(2, 3)
+            EXLA.jit(&hooked_add/2, client: client, io_calls: %{add: io_call_fn}).(2, 3)
           end)
         end
 

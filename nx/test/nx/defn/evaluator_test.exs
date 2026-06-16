@@ -325,7 +325,7 @@ defmodule Nx.Defn.EvaluatorTest do
              """
   end
 
-  describe "hooks" do
+  describe "io_calls" do
     defp send_to_self(value), do: send(self(), value)
 
     defp drain_mailbox do
@@ -338,7 +338,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
     defn basic_hook(a, b), do: io_call(a + b, :example, &send_to_self({:default, &1}))
 
-    test "basic hook with overriddes" do
+    test "basic io_call with overriddes" do
       assert basic_hook(1, 2) == Nx.tensor(3)
       assert_received {:default, tensor}
       assert tensor == Nx.tensor(3)
@@ -356,7 +356,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
     defn container_hook(a, b), do: io_call({a, b}, :example, &send_to_self({:default, &1}))
 
-    test "container hook with overriddes" do
+    test "container io_call with overriddes" do
       assert container_hook(1, 2) == {Nx.tensor(1), Nx.tensor(2)}
       assert_received {:default, tuple}
       assert tuple == {Nx.tensor(1), Nx.tensor(2)}
@@ -372,47 +372,47 @@ defmodule Nx.Defn.EvaluatorTest do
       assert tuple == {Nx.tensor(1), Nx.tensor(2)}
     end
 
-    defn side_effect_hooks(a, b) do
+    defn side_effect_io_calls(a, b) do
       token = create_token()
       {token, _} = io_call_token(token, b, :b)
       {token, _} = io_call_token(token, a, :a)
       attach_token(token, {a, b})
     end
 
-    test "side effect hooks" do
+    test "side effect io_calls" do
       drain_mailbox()
 
       assert_raise ArgumentError, ~r/undefined io_call :b/, fn ->
-        side_effect_hooks(1, 2)
+        side_effect_io_calls(1, 2)
       end
 
-      hooks = %{a: &send_to_self({:a, &1})}
+      io_calls = %{a: &send_to_self({:a, &1})}
 
       assert_raise ArgumentError, ~r/undefined io_call :b/, fn ->
-        Nx.Defn.jit(&side_effect_hooks/2, io_calls: hooks).(1, 2)
+        Nx.Defn.jit(&side_effect_io_calls/2, io_calls: io_calls).(1, 2)
       end
 
       drain_mailbox()
-      Nx.Defn.jit(&side_effect_hooks/2, io_calls: hooks, ignore_undefined_io_calls: true).(1, 2)
+      Nx.Defn.jit(&side_effect_io_calls/2, io_calls: io_calls, ignore_undefined_io_calls: true).(1, 2)
       assert_received {:a, tensor}
       assert tensor == Nx.tensor(1)
       refute_received _
 
-      hooks = %{b: &send_to_self({:b, &1})}
+      io_calls = %{b: &send_to_self({:b, &1})}
 
       assert_raise ArgumentError, ~r/undefined io_call :a/, fn ->
-        Nx.Defn.jit(&side_effect_hooks/2, io_calls: hooks).(1, 2)
+        Nx.Defn.jit(&side_effect_io_calls/2, io_calls: io_calls).(1, 2)
       end
 
       drain_mailbox()
-      Nx.Defn.jit(&side_effect_hooks/2, io_calls: hooks, ignore_undefined_io_calls: true).(1, 2)
+      Nx.Defn.jit(&side_effect_io_calls/2, io_calls: io_calls, ignore_undefined_io_calls: true).(1, 2)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       refute_received _
 
       drain_mailbox()
-      hooks = %{a: &send_to_self({:a, &1}), b: &send_to_self({:b, &1})}
-      Nx.Defn.jit(&side_effect_hooks/2, io_calls: hooks).(1, 2)
+      io_calls = %{a: &send_to_self({:a, &1}), b: &send_to_self({:b, &1})}
+      Nx.Defn.jit(&side_effect_io_calls/2, io_calls: io_calls).(1, 2)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       assert_received {:a, tensor}
@@ -420,29 +420,29 @@ defmodule Nx.Defn.EvaluatorTest do
       refute_received _
     end
 
-    defn side_effect_nested_hooks(a, b) do
+    defn side_effect_nested_io_calls(a, b) do
       token = create_token()
       {token, _} = io_call_token(token, b, :b)
       a = attach_token(token, a)
       io_call(a, :a)
     end
 
-    test "side effect nested hooks" do
+    test "side effect nested io_calls" do
       drain_mailbox()
 
       assert_raise ArgumentError, ~r/undefined io_call :b/, fn ->
-        side_effect_nested_hooks(1, 2)
+        side_effect_nested_io_calls(1, 2)
       end
 
-      hooks = %{a: &send_to_self({:a, &1})}
+      io_calls = %{a: &send_to_self({:a, &1})}
 
       assert_raise ArgumentError, ~r/undefined io_call :b/, fn ->
-        Nx.Defn.jit(&side_effect_nested_hooks/2, io_calls: hooks).(1, 2)
+        Nx.Defn.jit(&side_effect_nested_io_calls/2, io_calls: io_calls).(1, 2)
       end
 
       drain_mailbox()
 
-      Nx.Defn.jit(&side_effect_nested_hooks/2, io_calls: hooks, ignore_undefined_io_calls: true).(
+      Nx.Defn.jit(&side_effect_nested_io_calls/2, io_calls: io_calls, ignore_undefined_io_calls: true).(
         1,
         2
       )
@@ -451,15 +451,15 @@ defmodule Nx.Defn.EvaluatorTest do
       assert tensor == Nx.tensor(1)
       refute_received _
 
-      hooks = %{b: &send_to_self({:b, &1})}
+      io_calls = %{b: &send_to_self({:b, &1})}
 
       assert_raise ArgumentError, ~r/undefined io_call :a/, fn ->
-        Nx.Defn.jit(&side_effect_nested_hooks/2, io_calls: hooks).(1, 2)
+        Nx.Defn.jit(&side_effect_nested_io_calls/2, io_calls: io_calls).(1, 2)
       end
 
       drain_mailbox()
 
-      Nx.Defn.jit(&side_effect_nested_hooks/2, io_calls: hooks, ignore_undefined_io_calls: true).(
+      Nx.Defn.jit(&side_effect_nested_io_calls/2, io_calls: io_calls, ignore_undefined_io_calls: true).(
         1,
         2
       )
@@ -469,8 +469,8 @@ defmodule Nx.Defn.EvaluatorTest do
       refute_received _
 
       drain_mailbox()
-      hooks = %{a: &send_to_self({:a, &1}), b: &send_to_self({:b, &1})}
-      Nx.Defn.jit(&side_effect_nested_hooks/2, io_calls: hooks).(1, 2)
+      io_calls = %{a: &send_to_self({:a, &1}), b: &send_to_self({:b, &1})}
+      Nx.Defn.jit(&side_effect_nested_io_calls/2, io_calls: io_calls).(1, 2)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       assert_received {:a, tensor}
@@ -485,7 +485,7 @@ defmodule Nx.Defn.EvaluatorTest do
       io_call(a, :a)
     end
 
-    test "side effect nested hooks with default" do
+    test "side effect nested io_calls with default" do
       drain_mailbox()
 
       assert_raise ArgumentError, ~r/undefined io_call :a/, fn ->
@@ -493,8 +493,8 @@ defmodule Nx.Defn.EvaluatorTest do
       end
 
       drain_mailbox()
-      hooks = %{a: &send_to_self({:a, &1})}
-      Nx.Defn.jit(&side_effect_nested_hook_with_default/2, io_calls: hooks).(1, 2)
+      io_calls = %{a: &send_to_self({:a, &1})}
+      Nx.Defn.jit(&side_effect_nested_hook_with_default/2, io_calls: io_calls).(1, 2)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       assert_received {:a, tensor}
@@ -502,10 +502,10 @@ defmodule Nx.Defn.EvaluatorTest do
       refute_received _
 
       drain_mailbox()
-      hooks = %{b: &send_to_self({:custom, &1})}
+      io_calls = %{b: &send_to_self({:custom, &1})}
 
       Nx.Defn.jit(&side_effect_nested_hook_with_default/2,
-        io_calls: hooks,
+        io_calls: io_calls,
         ignore_undefined_io_calls: true
       ).(1, 2)
 
@@ -550,7 +550,7 @@ defmodule Nx.Defn.EvaluatorTest do
     # The goal of those tests is to show that expressions inside cond are cached,
     # regardless of evaluation order.
     defn cond_cache_left(bool, a, b) do
-      res = io_call(a + b, :example, &send_to_self({:hook, &1}))
+      res = io_call(a + b, :example, &send_to_self({:io_call, &1}))
 
       cond =
         if bool do
@@ -564,16 +564,16 @@ defmodule Nx.Defn.EvaluatorTest do
 
     test "on lhs" do
       assert cond_cache_left(0, 1, 2) == Nx.tensor(0)
-      assert_received {:hook, _}
-      refute_received {:hook, _}
+      assert_received {:io_call, _}
+      refute_received {:io_call, _}
 
       assert cond_cache_left(1, 1, 2) == Nx.tensor(9)
-      assert_received {:hook, _}
-      refute_received {:hook, _}
+      assert_received {:io_call, _}
+      refute_received {:io_call, _}
     end
 
     defn cond_cache_right(bool, a, b) do
-      res = io_call(a + b, :example, &send_to_self({:hook, &1}))
+      res = io_call(a + b, :example, &send_to_self({:io_call, &1}))
 
       cond =
         if bool do
@@ -587,16 +587,16 @@ defmodule Nx.Defn.EvaluatorTest do
 
     test "on rhs" do
       assert cond_cache_right(0, 1, 2) == Nx.tensor(0)
-      assert_received {:hook, _}
-      refute_received {:hook, _}
+      assert_received {:io_call, _}
+      refute_received {:io_call, _}
 
       assert cond_cache_right(1, 1, 2) == Nx.tensor(9)
-      assert_received {:hook, _}
-      refute_received {:hook, _}
+      assert_received {:io_call, _}
+      refute_received {:io_call, _}
     end
 
     defn cond_cache_both(bool, a, b) do
-      res = io_call(a + b, :example, &send_to_self({:hook, &1}))
+      res = io_call(a + b, :example, &send_to_self({:io_call, &1}))
 
       left =
         if bool do
@@ -617,12 +617,12 @@ defmodule Nx.Defn.EvaluatorTest do
 
     test "on both" do
       assert cond_cache_both(0, 4, 5) == Nx.tensor(-81)
-      assert_received {:hook, _}
-      refute_received {:hook, _}
+      assert_received {:io_call, _}
+      refute_received {:io_call, _}
 
       assert cond_cache_both(1, 4, 5) == Nx.tensor(162)
-      assert_received {:hook, _}
-      refute_received {:hook, _}
+      assert_received {:io_call, _}
+      refute_received {:io_call, _}
     end
 
     defn cond_cache_map(state) do

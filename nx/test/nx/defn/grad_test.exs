@@ -74,10 +74,10 @@ defmodule Nx.Defn.GradTest do
     test "computes grad with token" do
       parent = self()
 
-      fun = Nx.Defn.jit(&grad_token/1, io_calls: %{grad: &send(parent, {:hook, &1})})
+      fun = Nx.Defn.jit(&grad_token/1, io_calls: %{grad: &send(parent, {:io_call, &1})})
       assert fun.(Nx.tensor(3)) == {Nx.tensor(9), Nx.tensor(6.0)}
 
-      assert_receive {:hook, tensor}
+      assert_receive {:io_call, tensor}
       assert tensor == Nx.tensor(9)
     end
 
@@ -86,10 +86,10 @@ defmodule Nx.Defn.GradTest do
     test "computes token with grad" do
       parent = self()
 
-      fun = Nx.Defn.jit(&token_grad/1, io_calls: %{grad: &send(parent, {:hook, &1})})
+      fun = Nx.Defn.jit(&token_grad/1, io_calls: %{grad: &send(parent, {:io_call, &1})})
       assert fun.(Nx.tensor(3)) == Nx.tensor(6.0)
 
-      assert_receive {:hook, tensor}
+      assert_receive {:io_call, tensor}
       assert tensor == Nx.tensor(6.0)
     end
   end

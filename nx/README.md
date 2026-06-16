@@ -16,7 +16,7 @@ Nx is a multi-dimensional tensors library for Elixir with multi-staged compilati
 
   * Built-in distributed² serving: encapsulate complex numerical pipelines into `Nx.Serving`. Servings provide batching, streaming, and partitioning out of the box. You can distribute servings over multiple CPU cores and GPU devices, as well as over a cluster of machines;
 
-  * Support for hooks, allowing developers to send and receive data from CPUs/GPUs/TPUs while computations are running;
+  * Support for io_calls, allowing developers to send and receive data from CPUs/GPUs/TPUs while computations are running;
 
   * Support for linear algebra primitives via `Nx.LinAlg`;
 
@@ -158,7 +158,7 @@ elixir f64                3.11 - 4924.56x slower +321.63 ms
 
 See the [`bench`](https://github.com/elixir-nx/nx/tree/main/exla/bench) and [`examples`](https://github.com/elixir-nx/nx/tree/main/exla/examples) directory inside the EXLA project for more information.
 
-Many of Elixir's features are supported inside `defn`, such as the pipe operator, aliases, conditionals, pattern-matching, and more. It also brings exclusive features to numerical definitions, such as `while` loops, automatic differentiation via the `grad` function, hooks to inspect data running on the GPU, and more.
+Many of Elixir's features are supported inside `defn`, such as the pipe operator, aliases, conditionals, pattern-matching, and more. It also brings exclusive features to numerical definitions, such as `while` loops, automatic differentiation via the `grad` function, io_calls to inspect data running on the GPU, and more.
 
 ## Working with processes
 
