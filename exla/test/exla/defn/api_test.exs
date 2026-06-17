@@ -206,6 +206,7 @@ defmodule EXLA.Defn.APITest do
       io_call(a + b, :optional)
     end
 
+    @tag :capture_log
     test "executes optional io_call" do
       {_pid, ref} =
         spawn_monitor(fn ->
