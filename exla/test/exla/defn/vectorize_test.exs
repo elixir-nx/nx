@@ -160,6 +160,7 @@ defmodule EXLA.Defn.VectorizeTest do
   describe "cond" do
     deftransformp send_value(val, opts \\ []) do
       pid = opts[:pid] || self()
+
       Nx.Defn.Kernel.io_call(
         val,
         &send(pid, {:vectorization_test, &1, clause: opts[:clause]})
