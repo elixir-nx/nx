@@ -1,41 +1,40 @@
 #include "runtime_callback_bridge.h"
 
 #include <cstring>
-#include <vector>
 #include <string>
+#include <vector>
 
 #include "xla/ffi/api/ffi.h"
 #include "xla/ffi/ffi_api.h"
 
 namespace ffi = xla::ffi;
 
+namespace exla::callback_bridge {
+
+Arg::Arg(const xla::ffi::AnyBuffer &buf) {
+  dtype = buf.element_type();
+  auto d = buf.dimensions();
+  dims.assign(d.begin(), d.end());
+  data = reinterpret_cast<const uint8_t *>(buf.untyped_data());
+  size_bytes = buf.size_bytes();
+}
+
+OutputBuffer::OutputBuffer(const xla::ffi::AnyBuffer &buf) {
+  data = static_cast<uint8_t *>(buf.untyped_data());
+  size = ffi::ByteWidth(buf.element_type()) *
+         static_cast<size_t>(buf.element_count());
+}
+
+} // namespace exla::callback_bridge
+
 namespace {
-
-exla::callback_bridge::Arg arg_from_buffer(const ffi::AnyBuffer &buf) {
-  exla::callback_bridge::Arg tensor;
-  tensor.dtype = buf.element_type();
-
-  auto dims = buf.dimensions();
-  tensor.dims.assign(dims.begin(), dims.end());
-
-  tensor.data = reinterpret_cast<const uint8_t *>(buf.untyped_data());
-  tensor.size_bytes = buf.size_bytes();
-
-  return tensor;
-}
-
-exla::callback_bridge::OutputBuffer output_buffer_from(const ffi::AnyBuffer &out) {
-  exla::callback_bridge::OutputBuffer buf;
-  buf.data = static_cast<uint8_t *>(out.untyped_data());
-  buf.size = ffi::ByteWidth(out.element_type()) *
-             static_cast<size_t>(out.element_count());
-  return buf;
-}
 
 ffi::Error
 exla_runtime_callback_impl(ffi::RemainingArgs args,
                            ffi::Span<const int64_t> callback_id_words,
                            uint64_t callback_id_size, ffi::RemainingRets rets) {
+  // args[0] = token_in, args[1] = callback_server_pid, args[2..] = leaf
+  // operands
   if (args.size() < 2) {
     return ffi::Error(ffi::ErrorCode::kInternal,
                       "host callback missing token and callback server pid operands");
@@ -43,46 +42,37 @@ exla_runtime_callback_impl(ffi::RemainingArgs args,
 
   std::vector<exla::callback_bridge::Arg> inputs;
   inputs.reserve(args.size() - 2);
-  exla::callback_bridge::Arg callback_server_pid_arg;
 
-  for (size_t i = 0; i < args.size(); ++i) {
-    auto maybe_buf_or = args.get<ffi::AnyBuffer>(i);
-    if (!maybe_buf_or) {
-      return maybe_buf_or.error();
+  auto callback_server_pid_or = args.get<ffi::AnyBuffer>(1);
+  if (!callback_server_pid_or) {
+    return callback_server_pid_or.error();
+  }
+  exla::callback_bridge::Arg callback_server_pid_arg(*callback_server_pid_or);
+
+  for (size_t i = 2; i < args.size(); ++i) {
+    auto buf_or = args.get<ffi::AnyBuffer>(i);
+    if (!buf_or) {
+      return buf_or.error();
     }
 
-    ffi::AnyBuffer buf = *maybe_buf_or;
-
-    if (i == 0) {
-      if (buf.element_type() != xla::ffi::DataType::TOKEN) {
-        return ffi::Error(ffi::ErrorCode::kInternal,
-                          "host callback operand 0 must be a token");
-      }
-      continue;
-    }
-
-    exla::callback_bridge::Arg tensor = arg_from_buffer(buf);
-
-    if (i == 1) {
-      callback_server_pid_arg = std::move(tensor);
-    } else {
-      inputs.push_back(std::move(tensor));
-    }
+    inputs.push_back(exla::callback_bridge::Arg(*buf_or));
   }
 
-  // rets[0] is the output token produced by the custom call itself.
-  // Elixir only fills tensor outputs starting at rets[1].
+  // rets[0] is the output token produced by the custom call itself;
+  // the token is produced by the result buffer instantiation.
+
+  // tensor outputs start at rets[1].
   std::vector<exla::callback_bridge::OutputBuffer> outputs;
-  outputs.reserve(rets.size() > 0 ? rets.size() - 1 : 0);
+  outputs.reserve(rets.size() - 1);
 
   for (size_t i = 1; i < rets.size(); ++i) {
-    auto maybe_ret_or = rets.get<ffi::AnyBuffer>(i);
-    if (!maybe_ret_or) {
-      return maybe_ret_or.error();
+    auto ret_or = rets.get<ffi::AnyBuffer>(i);
+    if (!ret_or) {
+      return ret_or.error();
     }
 
-    ffi::Result<ffi::AnyBuffer> ret = *maybe_ret_or;
-    outputs.push_back(output_buffer_from(*ret));
+    ffi::Result<ffi::AnyBuffer> ret = *ret_or;
+    outputs.push_back(exla::callback_bridge::OutputBuffer(*ret));
   }
 
   exla::callback_bridge::Result result =

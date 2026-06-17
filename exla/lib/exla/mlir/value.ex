@@ -708,8 +708,7 @@ defmodule EXLA.MLIR.Value do
         callback_id
       ) do
     [%Value{function: func} | _] = [token_in | leaf_operands]
-    tensor_result_types = typespecs_to_mlir_types(leaf_typespecs)
-    result_types = [type_token() | tensor_result_types]
+    result_types = [type_token() | typespecs_to_mlir_types(leaf_typespecs)]
 
     {callback_id_words, callback_id_size} = term_to_int64_list(callback_id)
 
@@ -724,13 +723,9 @@ defmodule EXLA.MLIR.Value do
         )
     ]
 
-    [token_from_call | tensor_results] =
-      op(func, "stablehlo.custom_call", [token_in, callback_pid | leaf_operands], result_types,
-        attributes: attributes
-      )
-
-    token_out = after_all([token_in, token_from_call])
-    [token_out | tensor_results]
+    op(func, "stablehlo.custom_call", [token_in, callback_pid | leaf_operands], result_types,
+      attributes: attributes
+    )
   end
 
   def call(%Function{} = func, args, %Function{} = computation, typespecs) do

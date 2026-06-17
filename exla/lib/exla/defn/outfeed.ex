@@ -481,8 +481,6 @@ defmodule EXLA.Defn.Outfeed do
   defp undefined_io_call_message({:named, name, _}),
     do: "undefined io_call #{inspect(name)}"
 
-  defp undefined_io_call_message(_), do: "undefined io_call callback"
-
   defp run_runtime_callback({:ok, tensor_args}, fun, out_template, opts) do
     result =
       try do
