@@ -528,7 +528,9 @@ defmodule EXLA.Defn do
 
   defp normalize_env_value(%Nx.Tensor{type: type, shape: shape}), do: {type, shape}
   defp normalize_env_value(v) when is_list(v), do: Enum.map(v, &normalize_env_value/1)
-  defp normalize_env_value(v) when is_tuple(v), do: v |> Tuple.to_list() |> Enum.map(&normalize_env_value/1) |> List.to_tuple()
+
+  defp normalize_env_value(v) when is_tuple(v),
+    do: v |> Tuple.to_list() |> Enum.map(&normalize_env_value/1) |> List.to_tuple()
 
   defp normalize_env_value(v) when is_map(v) and not is_struct(v),
     do: Map.new(v, fn {k, val} -> {normalize_env_value(k), normalize_env_value(val)} end)
