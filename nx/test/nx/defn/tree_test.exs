@@ -27,10 +27,9 @@ defmodule Nx.Defn.TreeTest do
   end
 
   defn duplicate_hook_names(a, b) do
-    token = create_token()
-    {token, ha} = io_call_token(token, a, :same)
-    {token, hb} = io_call_token(token, b, :same)
-    attach_token(token, ha + hb)
+    ha = io_call(a, :same)
+    hb = io_call(b, :same)
+    ha + hb
   end
 
   describe "has_io_calls?" do

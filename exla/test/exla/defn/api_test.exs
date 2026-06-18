@@ -318,13 +318,12 @@ defmodule EXLA.Defn.APITest do
     end
 
     defn side_effect_hooks(a, b) do
-      token = create_token()
-      {token, _} = io_call_token(token, b, :b)
-      {token, _} = io_call_token(token, a, :a)
-      attach_token(token, a + b)
+      b = io_call(b, :b)
+      a = io_call(a, :a)
+      a + b
     end
 
-    test "executes token-ordered io_call_tokens in sequence" do
+    test "executes io_calls as side effects" do
       parent = self()
       send_value = fn value -> send(parent, Nx.to_number(value)) end
 
@@ -338,13 +337,12 @@ defmodule EXLA.Defn.APITest do
     end
 
     defn io_call_ordered(a, b) do
-      token = create_token()
-      {token, _} = Nx.io_call(token, b, :b)
-      {token, _} = Nx.io_call(token, a, :a)
-      attach_token(token, a + b)
+      b = io_call(b, :b)
+      a = io_call(a, :a)
+      a + b
     end
 
-    test "executes token-ordered io_calls in sequence" do
+    test "executes io_calls in sequence" do
       parent = self()
       send_value = fn value -> send(parent, Nx.to_number(value)) end
 
@@ -357,10 +355,52 @@ defmodule EXLA.Defn.APITest do
       assert_received 1
     end
 
+    defn io_call_chain(a, b, c) do
+      a = io_call(a, :a)
+      b = io_call(b, :b)
+      c = io_call(c, :c)
+      a + c + b
+    end
+
+    test "executes independent io_calls in program order" do
+      parent = self()
+      counter = :counters.new(1, [])
+
+      send_value =
+        fn value ->
+          current_counter = :counters.get(counter, 1)
+          :counters.add(counter, 1, 1)
+          send(parent, {:tag, Nx.to_number(value), current_counter})
+        end
+
+      # If definition ordering was not preserved, the delay and result usage ordering in the defn
+      # would cause the assertions to fail.
+      send_value_with_delay =
+        fn value ->
+          Process.sleep(500)
+          send_value.(value)
+        end
+
+      assert_equal(
+        EXLA.jit(&io_call_chain/3,
+          io_calls: %{a: send_value, b: send_value_with_delay, c: send_value}
+        ).(
+          1,
+          2,
+          3
+        ),
+        Nx.tensor(6)
+      )
+
+      # The returned counters ensure io_call ordering is preserved
+
+      assert_received {:tag, 1, 0}
+      assert_received {:tag, 2, 1}
+      assert_received {:tag, 3, 2}
+    end
+
     defn io_call_passthrough(a, b) do
-      token = create_token()
-      {token, sum} = Nx.io_call(token, a + b, &Function.identity/1)
-      attach_token(token, sum)
+      io_call(a + b, &Function.identity/1)
     end
 
     test "executes io_call with anonymous function callback" do

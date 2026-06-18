@@ -230,9 +230,7 @@ defmodule Nx.Defn.Kernel do
 
   """
   def print_value(expr, fun, opts) when Kernel.and(is_function(fun, 1), is_list(opts)) do
-    token = create_token()
-    {token, _} = Nx.io_call(token, fun.(expr), fn t -> IO.inspect(t, opts) end)
-    attach_token(token, expr)
+    Nx.io_call(expr, fn t -> IO.inspect(fun.(t), opts) end)
   end
 
   @doc """
@@ -1320,18 +1318,17 @@ defmodule Nx.Defn.Kernel do
   def io_call(expr, name_or_function)
 
   def io_call(expr, name) when is_atom(name),
-    do: unguarded_io_call(expr, name, nil)
+    do: Nx.io_call(expr, name)
 
   def io_call(expr, function) when is_function(function, 1),
-    do: unguarded_io_call(expr, random_io_call_name(), function)
+    do: Nx.io_call(expr, function)
 
   @doc """
   Defines an io_call.
 
   Io calls are a mechanism to execute an anonymous function for
-  side-effects with runtime tensor values. Internally, an io_call
-  creates a token, runs the callback, and attaches the token to the
-  result via `attach_token/2`.
+  side-effects with runtime tensor values. The data is passed through
+  unchanged.
 
   Let's see an example:
 
@@ -1379,9 +1376,6 @@ defmodule Nx.Defn.Kernel do
         mult
       end
 
-  We will learn how to call into a value that is not part
-  of the result in the "Tokens and ordering" section.
-
   ## Named io_calls
 
   It is possible to give names to io_calls. This allows them
@@ -1427,131 +1421,9 @@ defmodule Nx.Defn.Kernel do
   If an io_call with the same name is given to `Nx.Defn.jit/2`,
   then it will override the default callback.
 
-  ## Tokens and ordering
-
-  Io calls are implemented on top of `Nx.io_call/3`. Each `io_call`
-  takes a token, runs a side-effect callback, and returns
-  `{token, data}` where `data` is the input passed through
-  unchanged. Tokens establish ordering between callbacks.
-
-  When the io_call value is part of the return, `io_call/3` handles
-  tokens for you. When it is not, you must thread tokens yourself
-  with `create_token/0`, `io_call_token/4`, and `attach_token/2`.
-
-  For example, if the values we want to observe are not part of
-  the return value:
-
-      defn add_and_mult(a, b) do
-        _add = io_call(a + b, :my_app_add, &IO.inspect({:add, &1}))
-        mult = io_call(a * b, :my_app_mult, &IO.inspect({:mult, &1}))
-        mult
-      end
-
-  In such cases, you must use tokens. Tokens are used to
-  create an ordering over io_calls, ensuring they execute
-  in a certain sequence:
-
-      defn add_and_mult(a, b) do
-        token = create_token()
-        {token, _add} = io_call_token(token, a + b, :my_app_add, &IO.inspect({:add, &1}))
-        {token, mult} = io_call_token(token, a * b, :my_app_mult, &IO.inspect({:mult, &1}))
-        attach_token(token, mult)
-      end
-
-  The example above creates a token and uses `io_call_token/4`
-  to register io_calls in order. By threading the token through
-  each call, those io_calls run in the order they were defined.
-  Then `attach_token/2` keeps the token alive in the graph so
-  the io_calls are not optimized away.
-
-  In fact, `io_call/3` is implemented roughly like this:
-
-      def io_call(tensor_expr, name, function) do
-        {token, result} = Nx.io_call(create_token(), tensor_expr, name, function)
-        attach_token(token, result)
-      end
-
-  And `io_call_token/4` is a thin wrapper over `Nx.io_call/4`.
-
-  You must attach the token to a value that is part of the
-  computation result. Otherwise the io_calls will be "lost", as if
-  they were not defined. This also applies to conditionals and
-  loops. The token must be attached within the branch they are
-  used. For example, this won't work:
-
-      token = create_token()
-
-      {token, result} =
-        if Nx.any(value) do
-          io_call_token(token, some_value)
-        else
-          io_call_token(token, another_value)
-        end
-
-      attach_token(token, result)
-
-  Instead, you must write:
-
-      token = create_token()
-
-      if Nx.any(value) do
-        {token, result} = io_call_token(token, some_value)
-        attach_token(token, result)
-      else
-        {token, result} = io_call_token(token, another_value)
-        attach_token(token, result)
-      end
-
   """
   def io_call(expr, name, function) when Kernel.and(is_atom(name), is_function(function, 1)),
-    do: unguarded_io_call(expr, name, function)
-
-  defp unguarded_io_call(expr, name, function) when is_atom(name) do
-    {token, result} = Nx.io_call(create_token(), expr, name, function)
-    attach_token(token, result)
-  end
-
-  defp unguarded_io_call(expr, _name, function) do
-    {token, result} = Nx.io_call(create_token(), expr, function)
-    attach_token(token, result)
-  end
-
-  @doc """
-  Shortcut for `io_call/4`.
-  """
-  def io_call_token(%Nx.Tensor{} = token, expr, name) when is_atom(name),
-    do: Nx.io_call(token, expr, name, nil)
-
-  def io_call_token(%Nx.Tensor{} = token, expr, function) when is_function(function, 1),
-    do: Nx.io_call(token, expr, function)
-
-  @doc """
-  Defines an io_call with an existing token. See `io_call/3`.
-
-  This is a thin wrapper over `Nx.io_call/4`.
-  """
-  def io_call_token(%Nx.Tensor{} = token, expr, name, function)
-      when Kernel.and(is_atom(name), is_function(function, 1)),
-      do: Nx.io_call(token, expr, name, function)
-
-  defp random_io_call_name(), do: :"io_call_#{System.unique_integer([:positive])}"
-
-  @doc """
-  Creates a token for `io_call/3`. See `io_call/3`.
-  """
-  def create_token do
-    Nx.create_token()
-  end
-
-  @doc """
-  Attaches a token to an expression. See `io_call/3`.
-
-  This keeps the token alive in the computation graph so ordered
-  `io_call`s are not optimized away.
-  """
-  def attach_token(%Nx.Tensor{} = token, expr) do
-    Nx.Defn.Expr.attach_token(token, expr)
-  end
+    do: Nx.io_call(expr, name, function)
 
   @doc """
   Asserts the keyword list has the given keys.

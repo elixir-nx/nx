@@ -23,7 +23,7 @@ defmodule Nx.Defn.Tree do
   end
 
   defp detect_io_call(
-         %T{data: %Expr{op: :io_call, args: [_, _, spec, _, _]}} = t,
+         %T{data: %Expr{op: :io_call, args: [_, spec, _, _]}} = t,
          cache,
          io_calls
        ) do
@@ -208,14 +208,9 @@ defmodule Nx.Defn.Tree do
   end
 
   def apply_args(%T{data: %Expr{op: :io_call, args: args}}, _type, acc, fun) do
-    [token_expr, tensor_expr, callback_spec, template, ref] = args
-    {token_expr, acc} = fun.(token_expr, acc)
+    [tensor_expr, callback_spec, template, ref] = args
     {tensor_expr, acc} = Composite.traverse(tensor_expr, acc, fun)
-    {[token_expr, tensor_expr, callback_spec, template, ref], acc}
-  end
-
-  def apply_args(%T{data: %Expr{op: :create_token, args: _args}}, _type, acc, _fun) do
-    {[], acc}
+    {[tensor_expr, callback_spec, template, ref], acc}
   end
 
   def apply_args(%T{data: %Expr{op: :runtime_call, args: args}}, _type, acc, fun) do

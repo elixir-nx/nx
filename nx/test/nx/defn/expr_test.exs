@@ -418,10 +418,8 @@ defmodule Nx.Defn.ExprTest do
     end
 
     defn sub_add_mult(a, b) do
-      token = create_token()
-      {token, add} = io_call_token(token, a + b, :add, &IO.inspect({:add, &1}))
-      {token, mult} = io_call_token(token, a * b, :mult, &IO.inspect({:mult, &1}))
-      {add, mult} = attach_token(token, {add, mult})
+      add = io_call(a + b, :add, &IO.inspect({:add, &1}))
+      mult = io_call(a * b, :mult, &IO.inspect({:mult, &1}))
       add - mult
     end
 
@@ -433,20 +431,13 @@ defmodule Nx.Defn.ExprTest do
                f32
              \s\s
                Nx.Defn.Expr
-               parameter b:0            f32
-               parameter c:1            f32
-               a = create_token         token
-               d = add b, c             f32
-               e = io_call add: a, d    tuple2
-               f = elem e, 0            token
-               g = multiply b, c        f32
-               h = io_call mult: f, g   tuple2
-               i = elem h, 0            token
-               j = elem e, 1            f32
-               k = attach_token i, j    f32
-               l = elem h, 1            f32
-               m = attach_token i, l    f32
-               n = subtract k, m        f32
+               parameter a:0         f32
+               parameter b:1         f32
+               c = add a, b          f32
+               d = io_call add: c    f32
+               e = multiply a, b     f32
+               f = io_call mult: e   f32
+               g = subtract d, f     f32
              >\
              """
     end

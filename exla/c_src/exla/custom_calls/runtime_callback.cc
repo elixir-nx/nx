@@ -29,27 +29,31 @@ OutputBuffer::OutputBuffer(const xla::ffi::AnyBuffer &buf) {
 
 namespace {
 
-ffi::Error
-exla_runtime_callback_impl(ffi::RemainingArgs args,
-                           ffi::Span<const int64_t> callback_id_words,
-                           uint64_t callback_id_size, ffi::RemainingRets rets) {
-  // args[0] = token_in, args[1] = callback_server_pid, args[2..] = leaf
-  // operands
-  if (args.size() < 2) {
+ffi::Error exla_runtime_callback_impl(
+    ffi::RemainingArgs args, ffi::Span<const int64_t> callback_id_words,
+    uint64_t callback_id_size, uint64_t num_aliased_data_outputs,
+    ffi::RemainingRets rets) {
+  // We currently only support leading aliased outputs, but this is just
+  // a way to make things easier. We can extend this to support index-based
+  // aliasing in the future.
+
+  // args[0] = callback_server_pid, args[1..] = leaf operands
+
+  if (args.size() < 1) {
     return ffi::Error(ffi::ErrorCode::kInternal,
-                      "host callback missing token and callback server pid operands");
+                      "host callback missing callback server pid operand");
   }
 
   std::vector<exla::callback_bridge::Arg> inputs;
-  inputs.reserve(args.size() - 2);
+  inputs.reserve(args.size() - 1);
 
-  auto callback_server_pid_or = args.get<ffi::AnyBuffer>(1);
+  auto callback_server_pid_or = args.get<ffi::AnyBuffer>(0);
   if (!callback_server_pid_or) {
     return callback_server_pid_or.error();
   }
   exla::callback_bridge::Arg callback_server_pid_arg(*callback_server_pid_or);
 
-  for (size_t i = 2; i < args.size(); ++i) {
+  for (size_t i = 1; i < args.size(); ++i) {
     auto buf_or = args.get<ffi::AnyBuffer>(i);
     if (!buf_or) {
       return buf_or.error();
@@ -58,14 +62,16 @@ exla_runtime_callback_impl(ffi::RemainingArgs args,
     inputs.push_back(exla::callback_bridge::Arg(*buf_or));
   }
 
-  // rets[0] is the output token produced by the custom call itself;
-  // the token is produced by the result buffer instantiation.
-
-  // tensor outputs start at rets[1].
+  // rets[0 .. num_aliased_data_outputs-1] are aliased to the input operands;
+  // the callback is not expected to fill them.
+  // Non-aliased outputs (runtime_call results) start at
+  // num_aliased_data_outputs.
   std::vector<exla::callback_bridge::OutputBuffer> outputs;
-  outputs.reserve(rets.size() - 1);
+  size_t first_real_ret = static_cast<size_t>(num_aliased_data_outputs);
+  outputs.reserve(rets.size() > first_real_ret ? rets.size() - first_real_ret
+                                               : 0);
 
-  for (size_t i = 1; i < rets.size(); ++i) {
+  for (size_t i = first_real_ret; i < rets.size(); ++i) {
     auto ret_or = rets.get<ffi::AnyBuffer>(i);
     if (!ret_or) {
       return ret_or.error();
@@ -94,6 +100,7 @@ XLA_FFI_DEFINE_HANDLER_SYMBOL(exla_runtime_callback, exla_runtime_callback_impl,
                                   .RemainingArgs()
                                   .Attr<ffi::Span<const int64_t>>("callback_id")
                                   .Attr<uint64_t>("callback_id_size")
+                                  .Attr<uint64_t>("num_aliased_data_outputs")
                                   .RemainingRets());
 
 XLA_FFI_REGISTER_HANDLER(ffi::GetXlaFfiApi(), "exla_runtime_callback", "Host",

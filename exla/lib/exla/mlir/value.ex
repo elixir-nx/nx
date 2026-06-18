@@ -703,27 +703,56 @@ defmodule EXLA.MLIR.Value do
 
   @doc false
   def host_callback(
-        [%Value{} = token_in, %Value{} = callback_pid | leaf_operands],
+        [%Value{} = callback_pid | leaf_operands],
         leaf_typespecs,
-        callback_id
+        callback_id,
+        num_aliased_data_outputs \\ 0
       ) do
-    [%Value{function: func} | _] = [token_in | leaf_operands]
-    result_types = [type_token() | typespecs_to_mlir_types(leaf_typespecs)]
+    [%Value{function: func} | _] = [callback_pid | leaf_operands]
+    result_types = typespecs_to_mlir_types(leaf_typespecs)
 
     {callback_id_words, callback_id_size} = term_to_int64_list(callback_id)
 
-    attributes = [
-      call_target_name: attr_string("exla_runtime_callback"),
-      api_version: attr_i32(4),
-      has_side_effect: attr_boolean(true),
-      backend_config:
-        attr_dict(
-          callback_id: attr_array_i64_elements(callback_id_words),
-          callback_id_size: attr_ui64(callback_id_size)
-        )
-    ]
+    # Build output_operand_aliases for aliased (pass-through) outputs.
+    # Inputs: [cb_pid(0), leaf_0(1), leaf_1(2), ...]
+    # Aliased outputs occupy indices 0..num_aliased_data_outputs-1.
+    # For a single aliased output: tuple_indices = [] (no tuple wrapping).
+    # For multiple aliased outputs: tuple_indices = [i] (tuple element index).
+    aliases =
+      if num_aliased_data_outputs > 0 do
+        total_outputs = length(leaf_typespecs)
 
-    op(func, "stablehlo.custom_call", [token_in, callback_pid | leaf_operands], result_types,
+        Enum.map(0..(num_aliased_data_outputs - 1), fn i ->
+          output_tuple_indices =
+            if total_outputs == 1, do: "[]", else: "[#{i}]"
+
+          "#stablehlo.output_operand_alias<output_tuple_indices = #{output_tuple_indices}, operand_index = #{i + 1}, operand_tuple_indices = []>"
+        end)
+      else
+        []
+      end
+
+    attributes =
+      [
+        call_target_name: attr_string("exla_runtime_callback"),
+        api_version: attr_i32(4),
+        has_side_effect: attr_boolean(true),
+        backend_config:
+          attr_dict(
+            callback_id: attr_array_i64_elements(callback_id_words),
+            callback_id_size: attr_ui64(callback_id_size),
+            num_aliased_data_outputs: attr_ui64(num_aliased_data_outputs)
+          )
+      ]
+
+    attributes =
+      if aliases != [] do
+        Keyword.put(attributes, :output_operand_aliases, join_list(aliases))
+      else
+        attributes
+      end
+
+    op(func, "stablehlo.custom_call", [callback_pid | leaf_operands], result_types,
       attributes: attributes
     )
   end
@@ -832,11 +861,11 @@ defmodule EXLA.MLIR.Value do
   the custom call attributes.
   """
   def runtime_call(
-        [%Value{} = token_in, %Value{} = callback_pid | leaf_operands],
+        [%Value{} = callback_pid | leaf_operands],
         typespecs,
         callback_id
       ) do
-    host_callback([token_in, callback_pid | leaf_operands], typespecs, callback_id)
+    host_callback([callback_pid | leaf_operands], typespecs, callback_id, 0)
   end
 
   defp term_to_int64_list(term) do

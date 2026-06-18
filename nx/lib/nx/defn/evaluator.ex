@@ -199,13 +199,10 @@ defmodule Nx.Defn.Evaluator do
     {[clauses_cache, last_cache, Map.keys(all_ids)], cache}
   end
 
-  defp compute_cache(:create_token, _, _state, cache), do: {[], cache}
-
   defp compute_cache(:io_call, %{data: %Expr{args: args}}, state, cache) do
-    [token, tensor_expr, callback_spec, template, ref] = args
-    {_, cache} = composite_compute_cache(token, state, cache)
+    [tensor_expr, callback_spec, template, ref] = args
     {_, cache} = composite_compute_cache(tensor_expr, state, cache)
-    {[token, tensor_expr, callback_spec, template, ref], cache}
+    {[tensor_expr, callback_spec, template, ref], cache}
   end
 
   defp compute_cache(_op, tensor, state, cache) do
@@ -289,9 +286,33 @@ defmodule Nx.Defn.Evaluator do
     {elem(tuple, i), caches}
   end
 
-  defp eval_apply(:attach_token, [token, expr], _ans, state, caches) do
-    {_, caches} = eval(token, state, caches)
-    eval(expr, state, caches)
+  defp eval_apply(:io_call, [tensor_expr, callback_spec, out_template, _ref], _ans, state, caches) do
+    {tensor_value, caches} = composite_eval(tensor_expr, state, caches)
+
+    case resolve_io_call(callback_spec, state.io_calls) do
+      nil when state.ignore_undefined_io_calls ->
+        :ok
+
+      nil ->
+        raise ArgumentError, undefined_io_call_message(callback_spec)
+
+      fun ->
+        fun.(tensor_value)
+    end
+
+    result =
+      case out_template do
+        %Nx.Tensor{} ->
+          tensor_value
+
+        _ ->
+          tensor_value
+          |> List.wrap()
+          |> Composite.flatten_list()
+          |> List.to_tuple()
+      end
+
+    {result, caches}
   end
 
   defp eval_apply(:fun, [length, expr, expr_cache], _ans, state, caches) do
@@ -339,48 +360,6 @@ defmodule Nx.Defn.Evaluator do
       end
 
     {backend.block(struct, out, in_args, callback), caches}
-  end
-
-  defp eval_apply(:create_token, [], _ans, _state, caches) do
-    {make_ref(), caches}
-  end
-
-  defp eval_apply(
-         :io_call,
-         [token, tensor_expr, callback_spec, out_template, _ref],
-         _ans,
-         state,
-         caches
-       ) do
-    {_token, caches} = eval(token, state, caches)
-    {tensor_value, caches} = composite_eval(tensor_expr, state, caches)
-
-    case resolve_io_call(callback_spec, state.io_calls) do
-      nil when state.ignore_undefined_io_calls ->
-        :ok
-
-      nil ->
-        raise ArgumentError, undefined_io_call_message(callback_spec)
-
-      fun ->
-        fun.(tensor_value)
-    end
-
-    token = make_ref()
-
-    result =
-      case out_template do
-        %Nx.Tensor{} ->
-          {token, tensor_value}
-
-        _ ->
-          tensor_value
-          |> List.wrap()
-          |> Composite.flatten_list()
-          |> then(fn leaves -> List.to_tuple([token | leaves]) end)
-      end
-
-    {result, caches}
   end
 
   defp eval_apply(:runtime_call, [expr, fun, out_template, opts], _ans, state, caches) do

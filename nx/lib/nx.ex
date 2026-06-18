@@ -2221,75 +2221,55 @@ defmodule Nx do
   end
 
   @doc """
-  Creates a token for `io_call/3`.
+  Invokes a side-effect callback from within `defn`, passing data through unchanged.
 
-  Tokens establish ordering between side-effect callbacks. See `io_call/3`.
-  """
-  @doc type: :backend
-  def create_token do
-    Nx.Defn.Expr.create_token()
-  end
+  Unlike `runtime_call/4`, `io_call/2` does not compute a new value in the callback.
+  Its purpose is to execute side effects (logging, sending messages, etc.) and
+  returns the original data unchanged:
 
-  @doc """
-  Invokes a side-effect callback from within `defn`, returning a token and passthrough data.
-
-  Unlike `runtime_call/4`, `io_call/3` does not compute a new value in the callback.
-  Its purpose is to execute side effects (logging, sending messages, etc.) while
-  preserving explicit ordering through tokens.
-
-  Each call takes the current token and returns `{token, data}` where `data` is the
-  input passed through unchanged:
-
-      token = Nx.create_token()
-      {token, x} = Nx.io_call(token, x, &MyMod.log/1)
+      x = Nx.io_call(x, &MyMod.log/1)
 
   Named `io_call`s can be overridden at JIT time via the `:io_calls` option, which
   maps each name to a side-effect callback:
 
       Nx.Defn.jit(fun, io_calls: %{my_io_call: &MyMod.log/1})
 
-  Ordering between `io_call`s is guaranteed by threading the token. Independent calls
-  that do not share a token chain have no ordering guarantee.
-
   ## Examples
 
       iex> defmodule IoCallExample do
       ...>   def log(t), do: t
       ...> end
-      iex> token = Nx.create_token()
       iex> x = Nx.tensor([1, 2, 3])
-      iex> {%Nx.Tensor{type: :token}, x} = Nx.io_call(token, x, &IoCallExample.log/1)
+      iex> x = Nx.io_call(x, &IoCallExample.log/1)
       iex> inspect(x)
       "#Nx.Tensor<\\n  s32[3]\\n  [1, 2, 3]\\n>"
 
   """
   @doc type: :backend
-  def io_call(%Nx.Tensor{} = token, tensor_or_container, callback)
-      when is_function(callback, 1) do
-    io_call_impl(token, tensor_or_container, {:fn, callback})
+  def io_call(tensor_or_container, callback) when is_function(callback, 1) do
+    io_call_impl(tensor_or_container, {:fn, callback})
   end
 
   @doc type: :backend
-  def io_call(%Nx.Tensor{} = token, tensor_or_container, name)
-      when is_atom(name) do
-    io_call_impl(token, tensor_or_container, {:named, name, nil})
+  def io_call(tensor_or_container, name) when is_atom(name) do
+    io_call_impl(tensor_or_container, {:named, name, nil})
   end
 
   @doc type: :backend
-  def io_call(%Nx.Tensor{} = token, tensor_or_container, name, callback)
+  def io_call(tensor_or_container, name, callback)
       when is_atom(name) and (is_function(callback, 1) or is_nil(callback)) do
-    io_call_impl(token, tensor_or_container, {:named, name, callback})
+    io_call_impl(tensor_or_container, {:named, name, callback})
   end
 
-  defp io_call_impl(%Nx.Tensor{} = token, tensor_or_container, callback_spec) do
+  defp io_call_impl(tensor_or_container, callback_spec) do
     tensors = Nx.Defn.Composite.flatten_list([tensor_or_container])
     backend = Nx.Shared.list_impl!(tensors)
 
     if backend == Nx.Defn.Expr do
-      Nx.Defn.Expr.io_call(token, tensor_or_container, callback_spec)
+      Nx.Defn.Expr.io_call(tensor_or_container, callback_spec)
     else
       run_io_call_eager!(callback_spec, tensor_or_container)
-      {token, tensor_or_container}
+      tensor_or_container
     end
   end
 

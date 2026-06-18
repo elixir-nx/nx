@@ -373,10 +373,9 @@ defmodule Nx.Defn.EvaluatorTest do
     end
 
     defn side_effect_io_calls(a, b) do
-      token = create_token()
-      {token, _} = io_call_token(token, b, :b)
-      {token, _} = io_call_token(token, a, :a)
-      attach_token(token, {a, b})
+      b = io_call(b, :b)
+      a = io_call(a, :a)
+      {b, a}
     end
 
     test "side effect io_calls" do
@@ -431,10 +430,9 @@ defmodule Nx.Defn.EvaluatorTest do
     end
 
     defn side_effect_nested_io_calls(a, b) do
-      token = create_token()
-      {token, _} = io_call_token(token, b, :b)
-      a = attach_token(token, a)
-      io_call(a, :a)
+      b = io_call(b, :b)
+      a = io_call(a, :a)
+      {b, a}
     end
 
     test "side effect nested io_calls" do
@@ -489,10 +487,9 @@ defmodule Nx.Defn.EvaluatorTest do
     end
 
     defn side_effect_nested_hook_with_default(a, b) do
-      token = create_token()
-      {token, _} = io_call_token(token, b, :b, &send_to_self({:b, &1}))
-      a = attach_token(token, a)
-      io_call(a, :a)
+      b = io_call(b, :b, &send_to_self({:b, &1}))
+      a = io_call(a, :a)
+      {a, b}
     end
 
     test "side effect nested io_calls with default" do
@@ -754,7 +751,7 @@ defmodule Nx.Defn.EvaluatorTest do
       t = Nx.iota({2, 3}, vectorized_axes: [a: 1], type: :s32)
 
       message = """
-      test/nx/defn/evaluator_test.exs:723: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
+      test/nx/defn/evaluator_test.exs:720: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
 
       {\e[32m
        <<<<< Body (do-block) <<<<<
@@ -786,7 +783,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       error =
         """
-        test/nx/defn/evaluator_test.exs:723: condition must be a scalar tensor, got: #Nx.Tensor<
+        test/nx/defn/evaluator_test.exs:720: condition must be a scalar tensor, got: #Nx.Tensor<
           vectorized[x: 1]
           u8[1]
         \s\s

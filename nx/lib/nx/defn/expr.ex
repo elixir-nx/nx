@@ -39,11 +39,7 @@ defmodule Nx.Defn.Expr do
 
     * `while(initial, condition, body)`
 
-    * `create_token()`
-
-    * `io_call(token, data, callback_spec)`
-
-    * `attach_token(token, expr)`
+    * `io_call(data, callback_spec)`
 
     * `runtime_call(out, tensor_or_container, opts, fun)`
 
@@ -445,14 +441,7 @@ defmodule Nx.Defn.Expr do
   def id(), do: make_ref()
 
   @doc false
-  def create_token do
-    expr(%T{shape: {}, type: :token, names: []}, nil, :create_token, [])
-  end
-
-  @doc false
-  def io_call(%T{} = token, tensor_or_container, callback_spec) do
-    token_expr = to_expr(token)
-
+  def io_call(tensor_or_container, callback_spec) do
     tensor_expr =
       Composite.traverse(tensor_or_container, fn
         %T{} = t -> to_expr(t)
@@ -464,31 +453,30 @@ defmodule Nx.Defn.Expr do
 
     ref = make_ref()
     user_template = Nx.to_template(tensor_or_container)
-    token_template = %T{shape: {}, type: :token, names: []}
     leaf_count = user_template |> List.wrap() |> Composite.flatten_list() |> length()
-    root_type = tuple_out(1 + leaf_count)
+
+    root_type =
+      case user_template do
+        %T{} = template -> template
+        _ -> tuple_out(leaf_count)
+      end
 
     root =
       expr(root_type, context, :io_call, [
-        token_expr,
         tensor_expr,
         callback_spec,
         user_template,
         ref
       ])
 
-    token_out = expr(token_template, context, :elem, [root, 0])
-    data_out = io_call_data_from_root(root, user_template, context, 1)
-    {token_out, data_out}
+    io_call_data_from_root(root, user_template, context)
   end
 
-  defp io_call_data_from_root(root, %T{} = template, context, offset) do
-    expr(template, context, :elem, [root, offset])
-  end
+  defp io_call_data_from_root(root, %T{}, _context), do: root
 
-  defp io_call_data_from_root(root, user_template, context, offset) do
+  defp io_call_data_from_root(root, user_template, context) do
     {container_expr, _} =
-      Composite.traverse(user_template, {offset, root}, fn
+      Composite.traverse(user_template, {0, root}, fn
         %T{} = template, {i, root} ->
           {expr(template, context, :elem, [root, i]), {i + 1, root}}
 
@@ -497,14 +485,6 @@ defmodule Nx.Defn.Expr do
       end)
 
     container_expr
-  end
-
-  @doc false
-  def attach_token(%T{data: %Expr{}} = token, expr) do
-    Composite.traverse(expr, fn tensor ->
-      expr = to_expr(tensor)
-      expr(expr, expr.data.context, :attach_token, [token, expr])
-    end)
   end
 
   @doc false
@@ -1788,26 +1768,17 @@ defmodule Nx.Defn.Expr do
   end
 
   defp cached_recur_inspect(:io_call, args, type_shape, state) do
-    [token, data, callback_spec, _template, _ref] = args
-    {token, state} = recur_inspect(token, state)
+    [data, callback_spec, _template, _ref] = args
     {data, state} = recur_inspect(data, state)
     var_name = var_name(state)
 
     expr =
       case callback_spec do
         {:named, name, _} ->
-          IO.iodata_to_binary([
-            var_name,
-            " = io_call ",
-            Atom.to_string(name),
-            ": ",
-            token,
-            ", ",
-            data
-          ])
+          IO.iodata_to_binary([var_name, " = io_call ", Atom.to_string(name), ": ", data])
 
         {:fn, fun} ->
-          IO.iodata_to_binary([var_name, " = io_call ", token, ", ", data, ", ", inspect(fun)])
+          IO.iodata_to_binary([var_name, " = io_call ", data, ", ", inspect(fun)])
       end
 
     {var_name, store_line(state, :exprs, expr, type_shape)}
@@ -1819,8 +1790,6 @@ defmodule Nx.Defn.Expr do
     expr = IO.iodata_to_binary(["#{var_name} = #{op} " | Enum.intersperse(args, ", ")])
     {var_name, store_line(state, :exprs, expr, type_shape)}
   end
-
-  defp traverse_args(:create_token, [], state), do: {[], state}
 
   defp traverse_args(:cond, [clauses, other], state) do
     Enum.map_reduce(clauses ++ [{true, other}], state, fn {condition, body}, state ->

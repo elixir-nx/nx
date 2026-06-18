@@ -430,8 +430,8 @@ defmodule EXLA.Defn do
                 end)
               end
 
-              # Only create the token when we know it will actually be
-              # used, that is: streaming, lazy transfers or io_calls
+              # Only create the token when it will actually be used, that is:
+              # streaming (infeed/outfeed) or lazy transfers
               outfeed =
                 if reverse_infeeds != [] do
                   outfeed
@@ -785,7 +785,7 @@ defmodule EXLA.Defn do
          %T{
            data: %Expr{
              id: id,
-             args: [token_expr, tensor_expr, callback_spec, _template, _ref]
+             args: [tensor_expr, callback_spec, _template, _ref]
            }
          },
          %{client: %EXLA.Client{platform: platform}, callback_pid_value: callback_pid_value} =
@@ -793,8 +793,6 @@ defmodule EXLA.Defn do
          cache
        )
        when platform in [:host, :cuda] do
-    {token_in, cache} = recur_operator(token_expr, state, cache) |> unwrap_single_tensor!()
-
     {reverse_arg_values, cache} =
       Composite.reduce(tensor_expr, {[], cache}, fn %T{} = expr, {acc, cache} ->
         {value, cache} = recur_operator(expr, state, cache) |> unwrap_single_tensor!()
@@ -810,10 +808,19 @@ defmodule EXLA.Defn do
       raise "internal bug: io_call callback pid operand is missing"
     end
 
-    [token_out] =
-      Value.host_callback([token_in, callback_pid_value | arg_values], [], id)
+    leaf_typespecs = Enum.map(arg_values, &Value.get_typespec/1)
+    num_aliased = length(leaf_typespecs)
 
-    {[token_out | arg_values], cache}
+    aliased_outputs =
+      Value.host_callback([callback_pid_value | arg_values], leaf_typespecs, id, num_aliased)
+
+    result =
+      case arg_template do
+        %Nx.Tensor{} -> hd(aliased_outputs)
+        _ -> aliased_outputs
+      end
+
+    {result, cache}
   end
 
   defp cached_recur_operator(
@@ -829,10 +836,6 @@ defmodule EXLA.Defn do
     """
   end
 
-  defp cached_recur_operator(:create_token, _expr, %{builder: builder}, cache) do
-    {Value.create_token(builder), cache}
-  end
-
   defp cached_recur_operator(
          :runtime_call,
          %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template, opts]}} = expr,
@@ -841,7 +844,6 @@ defmodule EXLA.Defn do
          cache
        )
        when platform in [:host, :cuda] do
-    {token_in, cache} = ensure_callback_token(state, cache)
     tensor_exprs = Composite.flatten_list([tensor_expr])
 
     {arg_values, cache} =
@@ -858,10 +860,8 @@ defmodule EXLA.Defn do
       raise "internal bug: runtime_call callback pid operand is missing"
     end
 
-    [token_out | results] =
-      Value.runtime_call([token_in, callback_pid_value | arg_values], typespecs, id)
+    results = Value.runtime_call([callback_pid_value | arg_values], typespecs, id)
 
-    cache = update_token(cache, token_out)
     {wrap_tuple_result(results, expr), cache}
   end
 
@@ -907,12 +907,6 @@ defmodule EXLA.Defn do
       )
 
     {[p, l, u], cache}
-  end
-
-  defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
-    {op, cache} = recur_operator(expr, state, cache)
-    {_, cache} = recur_operator(token, state, cache)
-    {op, cache}
   end
 
   defp cached_recur_operator(op, expr, state, cache) do
@@ -1769,17 +1763,6 @@ defmodule EXLA.Defn do
     |> get_outfeed()
     |> Outfeed.add_callback(callback)
     |> then(&put_outfeed(cache, &1))
-  end
-
-  defp ensure_callback_token(%{builder: %Function{}} = state, cache) do
-    case get_token(cache) do
-      nil ->
-        token = Value.create_token(state.builder)
-        {token, update_token(cache, token)}
-
-      token ->
-        {token, cache}
-    end
   end
 
   ## Computation helpers
