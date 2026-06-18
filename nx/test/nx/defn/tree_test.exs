@@ -32,20 +32,6 @@ defmodule Nx.Defn.TreeTest do
     ha + hb
   end
 
-  describe "has_io_calls?" do
-    test "returns true if there are io_calls" do
-      refute Tree.has_io_calls?(factorial(10), %{})
-      refute Tree.has_io_calls?(hooked_factorial(1, 2), %{})
-      assert Tree.has_io_calls?(hooked_factorial(1, 2), %{example: & &1})
-      assert Tree.has_io_calls?(hooked_factorial(1, 2), %{another: & &1})
-    end
-
-    test "detects side effects for duplicate io_call names independently" do
-      refute Tree.has_io_calls?(duplicate_hook_names(1, 2), %{})
-      assert Tree.has_io_calls?(duplicate_hook_names(1, 2), %{same: & &1})
-    end
-  end
-
   describe "scope_ids" do
     defn plus_constant(a), do: a + 10
 

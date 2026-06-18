@@ -1425,6 +1425,53 @@ defmodule Nx.Defn.Kernel do
   def io_call(expr, name, function) when Kernel.and(is_atom(name), is_function(function, 1)),
     do: Nx.io_call(expr, name, function)
 
+  @deprecated "Use io_call/2 instead."
+  def hook(expr, name_or_function)
+
+  @deprecated "Use io_call/2 instead."
+  def hook(expr, name) when is_atom(name), do: io_call(expr, name)
+
+  @deprecated "Use io_call/2 instead."
+  def hook(expr, function) when is_function(function, 1), do: io_call(expr, function)
+
+  @deprecated "Use io_call/3 instead."
+  def hook(expr, name, function) when Kernel.and(is_atom(name), is_function(function, 1)),
+    do: io_call(expr, name, function)
+
+  @deprecated "Tokens are no longer needed. Use io_call/2 instead."
+  def hook_token(_token, expr, name) when is_atom(name),
+    do: {create_token(), io_call(expr, name)}
+
+  @deprecated "Tokens are no longer needed. Use io_call/2 instead."
+  def hook_token(_token, expr, function) when is_function(function, 1),
+    do: {create_token(), io_call(expr, function)}
+
+  @deprecated "Tokens are no longer needed. Use io_call/3 instead."
+  def hook_token(_token, expr, name, function)
+      when Kernel.and(is_atom(name), is_function(function, 1)),
+      do: {create_token(), io_call(expr, name, function)}
+
+  @deprecated "Tokens are no longer needed. Use io_call/2 instead."
+  def io_call_token(_token, expr, name) when is_atom(name),
+    do: {create_token(), io_call(expr, name)}
+
+  @deprecated "Tokens are no longer needed. Use io_call/2 instead."
+  def io_call_token(_token, expr, function) when is_function(function, 1),
+    do: {create_token(), io_call(expr, function)}
+
+  @deprecated "Tokens are no longer needed. Use io_call/3 instead."
+  def io_call_token(_token, expr, name, function)
+      when Kernel.and(is_atom(name), is_function(function, 1)),
+      do: {create_token(), io_call(expr, name, function)}
+
+  @deprecated "Tokens are no longer needed. Ordering is handled automatically by io_call/2."
+  def create_token do
+    Nx.tensor(0, type: :u8)
+  end
+
+  @deprecated "Tokens are no longer needed. Return the result of io_call/2 directly."
+  def attach_token(_token, expr), do: expr
+
   @doc """
   Asserts the keyword list has the given keys.
 

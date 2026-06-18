@@ -423,7 +423,7 @@ defmodule Nx.Defn.ExprTest do
       add - mult
     end
 
-    test "with tokens" do
+    test "with io_calls" do
       result = sub_add_mult(Nx.template({}, {:f, 32}), Nx.template({}, {:f, 32}))
 
       assert inspect(result, safe: false) == """
@@ -442,7 +442,7 @@ defmodule Nx.Defn.ExprTest do
              """
     end
 
-    defn add_sub_mult_no_tokens(a, b, c, d) do
+    defn add_sub_mult_no_io_call(a, b, c, d) do
       a
       |> Nx.add(b)
       |> Nx.subtract(c)
@@ -452,7 +452,7 @@ defmodule Nx.Defn.ExprTest do
     test "with limit option" do
       t = Nx.template({}, :f32)
 
-      result = add_sub_mult_no_tokens(t, t, t, t)
+      result = add_sub_mult_no_io_call(t, t, t, t)
 
       full_expr = """
       #Nx.Tensor<

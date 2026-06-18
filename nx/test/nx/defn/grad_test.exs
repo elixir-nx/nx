@@ -68,25 +68,25 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
-  describe "tokens" do
-    defn grad_token(t), do: value_and_grad(t, fn t -> io_call(Nx.pow(t, 2), :grad) end)
+  describe "io_calls" do
+    defn grad_io_call(t), do: value_and_grad(t, fn t -> io_call(Nx.pow(t, 2), :grad) end)
 
-    test "computes grad with token" do
+    test "computes grad with io_call" do
       parent = self()
 
-      fun = Nx.Defn.jit(&grad_token/1, io_calls: %{grad: &send(parent, {:io_call, &1})})
+      fun = Nx.Defn.jit(&grad_io_call/1, io_calls: %{grad: &send(parent, {:io_call, &1})})
       assert fun.(Nx.tensor(3)) == {Nx.tensor(9), Nx.tensor(6.0)}
 
       assert_receive {:io_call, tensor}
       assert tensor == Nx.tensor(9)
     end
 
-    defn token_grad(t), do: io_call(grad(t, &Nx.pow(&1, 2)), :grad)
+    defn io_call_grad(t), do: io_call(grad(t, &Nx.pow(&1, 2)), :grad)
 
-    test "computes token with grad" do
+    test "computes io_call with grad" do
       parent = self()
 
-      fun = Nx.Defn.jit(&token_grad/1, io_calls: %{grad: &send(parent, {:io_call, &1})})
+      fun = Nx.Defn.jit(&io_call_grad/1, io_calls: %{grad: &send(parent, {:io_call, &1})})
       assert fun.(Nx.tensor(3)) == Nx.tensor(6.0)
 
       assert_receive {:io_call, tensor}

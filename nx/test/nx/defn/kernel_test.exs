@@ -143,7 +143,7 @@ defmodule Nx.Defn.KernelTest do
     end
   end
 
-  describe "tokens" do
+  describe "io_calls" do
     defp zero_expr(), do: Nx.tensor(0, type: {:u, 8}, backend: Nx.Defn.Expr)
 
     test "io_call/2,3" do
