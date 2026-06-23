@@ -381,6 +381,7 @@ defmodule EXLA.Defn.Outfeed do
     end
   end
 
+  defp run_runtime_callback({:ok, tensor_args}, fun, out_template, opts) do
     result =
       try do
         if opts do
