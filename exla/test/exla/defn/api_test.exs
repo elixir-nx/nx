@@ -320,102 +320,102 @@ defmodule EXLA.Defn.APITest do
     end
   end
 
-    defn hook_raises(a, b) do
-      hook(a + b, :raises, fn _ -> raise "boom" end)
-    end
+  defn hook_raises(a, b) do
+    hook(a + b, :raises, fn _ -> raise "boom" end)
+  end
 
-    @tag :capture_log
-    test "halts callback server when hook raises" do
-      {_pid, ref} =
-        spawn_monitor(fn ->
-          EXLA.jit(&hook_raises/2).(2, 3)
-        end)
+  @tag :capture_log
+  test "halts callback server when hook raises" do
+    {_pid, ref} =
+      spawn_monitor(fn ->
+        EXLA.jit(&hook_raises/2).(2, 3)
+      end)
 
-      assert_receive {:DOWN, ^ref, :process, _, {%RuntimeError{message: message}, _}}
-      assert message =~ "boom"
-    end
+    assert_receive {:DOWN, ^ref, :process, _, {%RuntimeError{message: message}, _}}
+    assert message =~ "boom"
+  end
 
-    defn side_effect_hooks(a, b) do
-      b = hook(b, :b)
-      a = hook(a, :a)
-      a + b
-    end
+  defn side_effect_hooks(a, b) do
+    b = hook(b, :b)
+    a = hook(a, :a)
+    a + b
+  end
 
-    test "executes hooks as side effects" do
-      parent = self()
-      send_value = fn value -> send(parent, Nx.to_number(value)) end
+  test "executes hooks as side effects" do
+    parent = self()
+    send_value = fn value -> send(parent, Nx.to_number(value)) end
 
-      assert_equal(
-        EXLA.jit(&side_effect_hooks/2, hooks: %{a: send_value, b: send_value}).(1, 2),
-        Nx.tensor(3)
-      )
+    assert_equal(
+      EXLA.jit(&side_effect_hooks/2, hooks: %{a: send_value, b: send_value}).(1, 2),
+      Nx.tensor(3)
+    )
 
-      assert_received 2
-      assert_received 1
-    end
+    assert_received 2
+    assert_received 1
+  end
 
-    defn hook_ordered(a, b) do
-      b = hook(b, :b)
-      a = hook(a, :a)
-      a + b
-    end
+  defn hook_ordered(a, b) do
+    b = hook(b, :b)
+    a = hook(a, :a)
+    a + b
+  end
 
-    test "executes hooks in sequence" do
-      parent = self()
-      send_value = fn value -> send(parent, Nx.to_number(value)) end
+  test "executes hooks in sequence" do
+    parent = self()
+    send_value = fn value -> send(parent, Nx.to_number(value)) end
 
-      assert_equal(
-        EXLA.jit(&hook_ordered/2, hooks: %{a: send_value, b: send_value}).(1, 2),
-        Nx.tensor(3)
-      )
+    assert_equal(
+      EXLA.jit(&hook_ordered/2, hooks: %{a: send_value, b: send_value}).(1, 2),
+      Nx.tensor(3)
+    )
 
-      assert_received 2
-      assert_received 1
-    end
+    assert_received 2
+    assert_received 1
+  end
 
-    defn hook_chain(a, b, c) do
-      a = hook(a, :a)
-      b = hook(b, :b)
-      c = hook(c, :c)
-      a + c + b
-    end
+  defn hook_chain(a, b, c) do
+    a = hook(a, :a)
+    b = hook(b, :b)
+    c = hook(c, :c)
+    a + c + b
+  end
 
-    test "executes independent hooks in program order" do
-      parent = self()
-      counter = :counters.new(1, [])
+  test "executes independent hooks in program order" do
+    parent = self()
+    counter = :counters.new(1, [])
 
-      send_value =
-        fn value ->
-          current_counter = :counters.get(counter, 1)
-          :counters.add(counter, 1, 1)
-          send(parent, {:tag, Nx.to_number(value), current_counter})
-        end
+    send_value =
+      fn value ->
+        current_counter = :counters.get(counter, 1)
+        :counters.add(counter, 1, 1)
+        send(parent, {:tag, Nx.to_number(value), current_counter})
+      end
 
-      send_value_with_delay =
-        fn value ->
-          Process.sleep(500)
-          send_value.(value)
-        end
+    send_value_with_delay =
+      fn value ->
+        Process.sleep(500)
+        send_value.(value)
+      end
 
-      assert_equal(
-        EXLA.jit(&hook_chain/3,
-          hooks: %{a: send_value, b: send_value_with_delay, c: send_value}
-        ).(1, 2, 3),
-        Nx.tensor(6)
-      )
+    assert_equal(
+      EXLA.jit(&hook_chain/3,
+        hooks: %{a: send_value, b: send_value_with_delay, c: send_value}
+      ).(1, 2, 3),
+      Nx.tensor(6)
+    )
 
-      assert_received {:tag, 1, 0}
-      assert_received {:tag, 2, 1}
-      assert_received {:tag, 3, 2}
-    end
+    assert_received {:tag, 1, 0}
+    assert_received {:tag, 2, 1}
+    assert_received {:tag, 3, 2}
+  end
 
-    defn hook_passthrough(a, b) do
-      hook(a + b, &Function.identity/1)
-    end
+  defn hook_passthrough(a, b) do
+    hook(a + b, &Function.identity/1)
+  end
 
-    test "executes hook with anonymous function callback" do
-      assert_equal(EXLA.jit(&hook_passthrough/2).(2, 3), Nx.tensor(5))
-    end
+  test "executes hook with anonymous function callback" do
+    assert_equal(EXLA.jit(&hook_passthrough/2).(2, 3), Nx.tensor(5))
+  end
 
   describe "block ops via Evaluator with EXLA.Backend" do
     # Regression test: before the fix, eval_apply(:block, ...) wrapped block_apply_default

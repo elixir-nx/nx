@@ -251,7 +251,15 @@ defmodule EXLA.Defn.Outfeed do
     receive do
       {^ref, <<0::native-unsigned-16>>} ->
         # Outfeed is done, now we wait for the computation to finish
-        loop(client, device_id, ref, typespec, drop_infeed_flags(infeed_flags), infeeds, callbacks)
+        loop(
+          client,
+          device_id,
+          ref,
+          typespec,
+          drop_infeed_flags(infeed_flags),
+          infeeds,
+          callbacks
+        )
 
       {^ref, <<flag::native-unsigned-16>>} ->
         case Map.fetch!(infeed_flags, flag) do
