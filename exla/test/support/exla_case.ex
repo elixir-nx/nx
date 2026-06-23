@@ -12,6 +12,18 @@ defmodule EXLA.Case do
     end
   end
 
+  setup tags do
+    # Set Logger metadata to track which test emits logs
+    if tags[:test] do
+      Logger.metadata(
+        test: tags[:test],
+        test_module: inspect(tags[:module])
+      )
+    end
+
+    :ok
+  end
+
   def to_binary_backend(tensor) do
     Nx.backend_copy(tensor, Nx.BinaryBackend)
   end
