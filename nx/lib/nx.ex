@@ -3903,17 +3903,19 @@ defmodule Nx do
   for each dimension in the input tensor. The padding
   configuration must be of the same length as the tensor shape.
 
-  It means:
-  - `pad_width_low`: number of padding values added before the dimension.
-  - `pad_width_high`: number of padding values added after the dimension.
-  - `pad_width_interior`: number of padding values inserted between existing elements.
+    - `pad_width_low`: number of leading entries added to the padding axis.
+    - `pad_width_high`: number of trailing entries added to the padding axis.
+    - `pad_width_interior`: number of padding entries inserted between existing elements along the padding axis.
 
-  tensor = Nx.tensor([1, 2, 3])
-
-  Nx.pad(tensor, 0, [{2, 1, 1}])
-
-  [0, 0, 1, 0, 2, 0, 3, 0]
- └low┘  └ interior ┘  high
+      ```elixir
+      tensor = Nx.tensor([10, 20, 30])
+      Nx.pad(tensor, 0, [{2, 1, 3}])
+      #Nx.Tensor<
+        s32[11]
+        [0, 0, 10, 0, 20, 0, 30, 0, 0, 0]
+      >
+      # └ low ┘  └ interior ┘   └ high ┘
+      ```
 
   Padding widths can be negative. If they are negative,
   the tensor is clipped on either end according to the
