@@ -494,33 +494,35 @@ defmodule EXLA.Defn do
     end)
   end
 
-  @recompilation_threshold 10
-
   defp check_recompilation(key, args_key, outputs) do
-    {:module, mod} = :erlang.fun_info(key, :module)
-    {:new_index, idx} = :erlang.fun_info(key, :new_index)
-    {:env, env} = :erlang.fun_info(key, :env)
+    threshold = Application.get_env(:exla, :check_recompilation, :infinity)
 
-    out_key =
-      [outputs]
-      |> Nx.Defn.Composite.flatten_list()
-      |> Enum.map(&{&1.type, &1.shape})
+    if is_integer(threshold) do
+      {:module, mod} = :erlang.fun_info(key, :module)
+      {:new_index, idx} = :erlang.fun_info(key, :new_index)
+      {:env, env} = :erlang.fun_info(key, :env)
 
-    # Normalize the env by replacing %Nx.Tensor{} values with {type, shape}
-    # so the counter key is stable for same-shaped tensors but distinguishes
-    # closures that capture different non-tensor metadata (e.g. different block ops).
-    normalized_env = normalize_env(env)
+      out_key =
+        [outputs]
+        |> Nx.Defn.Composite.flatten_list()
+        |> Enum.map(&{&1.type, &1.shape})
 
-    count = EXLA.Defn.LockedCache.count({mod, idx, args_key, out_key, normalized_env})
+      # Normalize the env by replacing %Nx.Tensor{} values with {type, shape}
+      # so the counter key is stable for same-shaped tensors but distinguishes
+      # closures that capture different non-tensor metadata (e.g. different block ops).
+      normalized_env = normalize_env(env)
 
-    if count == @recompilation_threshold do
-      Logger.warning(
-        "EXLA has compiled #{inspect(key)} #{count} times with the same input " <>
-          "shapes. This typically means tensor values are being captured inside a " <>
-          "closure passed to defn, jit, or value_and_grad. Each distinct captured " <>
-          "value forces a full recompilation. Pass changing tensors as explicit " <>
-          "function arguments instead."
-      )
+      count = EXLA.Defn.LockedCache.count({mod, idx, args_key, out_key, normalized_env})
+
+      if count == threshold do
+        Logger.warning(
+          "EXLA has compiled #{inspect(key)} #{count} times with the same input " <>
+            "shapes. This typically means tensor values are being captured inside a " <>
+            "closure passed to defn, jit, or value_and_grad. Each distinct captured " <>
+            "value forces a full recompilation. Pass changing tensors as explicit " <>
+            "function arguments instead."
+        )
+      end
     end
   end
 
