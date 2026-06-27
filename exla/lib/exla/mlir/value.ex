@@ -696,6 +696,62 @@ defmodule EXLA.MLIR.Value do
     op(func, "stablehlo.create_token", [], result_types) |> one!()
   end
 
+  @doc false
+  def host_callback(
+        [%Value{} = callback_pid | leaf_operands],
+        leaf_typespecs,
+        callback_id,
+        num_aliased_data_outputs \\ 0
+      ) do
+    [%Value{function: func} | _] = [callback_pid | leaf_operands]
+    result_types = typespecs_to_mlir_types(leaf_typespecs)
+
+    {callback_id_words, callback_id_size} = term_to_int64_list(callback_id)
+
+    # Build output_operand_aliases for aliased (pass-through) outputs.
+    # Inputs: [cb_pid(0), leaf_0(1), leaf_1(2), ...]
+    # Aliased outputs occupy indices 0..num_aliased_data_outputs-1.
+    # For a single aliased output: tuple_indices = [] (no tuple wrapping).
+    # For multiple aliased outputs: tuple_indices = [i] (tuple element index).
+    aliases =
+      if num_aliased_data_outputs > 0 do
+        total_outputs = length(leaf_typespecs)
+
+        Enum.map(0..(num_aliased_data_outputs - 1), fn i ->
+          output_tuple_indices =
+            if total_outputs == 1, do: "[]", else: "[#{i}]"
+
+          "#stablehlo.output_operand_alias<output_tuple_indices = #{output_tuple_indices}, operand_index = #{i + 1}, operand_tuple_indices = []>"
+        end)
+      else
+        []
+      end
+
+    attributes =
+      [
+        call_target_name: attr_string("exla_runtime_callback"),
+        api_version: attr_i32(4),
+        has_side_effect: attr_boolean(true),
+        backend_config:
+          attr_dict(
+            callback_id: attr_array_i64_elements(callback_id_words),
+            callback_id_size: attr_ui64(callback_id_size),
+            num_aliased_data_outputs: attr_ui64(num_aliased_data_outputs)
+          )
+      ]
+
+    attributes =
+      if aliases != [] do
+        Keyword.put(attributes, :output_operand_aliases, join_list(aliases))
+      else
+        attributes
+      end
+
+    op(func, "stablehlo.custom_call", [callback_pid | leaf_operands], result_types,
+      attributes: attributes
+    )
+  end
+
   def call(%Function{} = func, args, %Function{} = computation, typespecs) do
     result_types = typespecs_to_mlir_types(typespecs)
     attributes = [callee: attr_symbol_reference(computation.name)]
@@ -795,32 +851,16 @@ defmodule EXLA.MLIR.Value do
   Builds a StableHLO `custom_call` that targets the EXLA Elixir callback bridge.
 
   The `callback_id` is typically the underlying `Nx.Defn.Expr` id of the
-  `:runtime_call` node. It is encoded as a binary (via `:erlang.term_to_binary/1`)
-  and then represented as a list of 64-bit words in the custom call attributes.
+  `:runtime_call` or `:io_call` node. It is encoded as a binary (via
+  `:erlang.term_to_binary/1`) and then represented as a list of 64-bit words in
+  the custom call attributes.
   """
   def runtime_call(
-        [%Value{function: func} | _] = operands,
+        [%Value{} = callback_pid | leaf_operands],
         typespecs,
         callback_id
       ) do
-    result_types = typespecs_to_mlir_types(typespecs)
-
-    {callback_id_words, callback_id_size} =
-      term_to_int64_list(callback_id)
-
-    attributes = [
-      call_target_name: attr_string("exla_runtime_callback"),
-      # api_version 4 enables the typed FFI API used by our callback handler.
-      api_version: attr_i32(4),
-      has_side_effect: attr_boolean(true),
-      backend_config:
-        attr_dict(
-          callback_id: attr_array_i64_elements(callback_id_words),
-          callback_id_size: attr_ui64(callback_id_size)
-        )
-    ]
-
-    op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
+    host_callback([callback_pid | leaf_operands], typespecs, callback_id, 0)
   end
 
   defp term_to_int64_list(term) do

@@ -20,6 +20,9 @@ struct Arg {
   std::vector<int64_t> dims;
   const uint8_t *data = nullptr;
   size_t size_bytes = 0;
+
+  Arg() = default;
+  Arg(const xla::ffi::AnyBuffer &buf);
 };
 
 // Result of an Elixir callback. On success, data has already been copied into
@@ -35,6 +38,8 @@ struct Result {
 struct OutputBuffer {
   uint8_t *data = nullptr;
   size_t size = 0;
+
+  OutputBuffer(const xla::ffi::AnyBuffer &buf);
 };
 
 // Per-callback pending state used to synchronize between the XLA host thread

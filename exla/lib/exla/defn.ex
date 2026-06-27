@@ -234,7 +234,7 @@ defmodule EXLA.Defn do
          run_options,
          is_sharded?
        )
-       when Outfeed.will_outfeed(outfeed) or Outfeed.has_runtime_calls(outfeed) do
+       when Outfeed.has_infeed_flags(outfeed) or Outfeed.has_callbacks(outfeed) do
     if is_sharded? do
       raise ArgumentError, "outfeed is not supported for sharded execution yet"
     end
@@ -320,6 +320,7 @@ defmodule EXLA.Defn do
        ) do
     {cache, options} = Keyword.pop(options, :cache, true)
     {hooks, options} = Keyword.pop(options, :hooks, %{})
+
     {debug?, options} = Keyword.pop(options, :debug, false)
     {lazy_transfers, options} = Keyword.pop(options, :lazy_transfers, :opt_in)
 
@@ -365,7 +366,10 @@ defmodule EXLA.Defn do
         :timer.tc(fn ->
           expr_cache_fun.({key, args_key, lazy_transfers}, fn ->
             expr = fun.(vars)
-            inputs_and_hooks = Outfeed.used_inputs_and_hooks(expr, used_inputs, lazy_transfers)
+
+            inputs_and_hooks =
+              Outfeed.used_inputs_and_hooks(expr, used_inputs, lazy_transfers)
+
             {expr, {make_ref(), Nx.to_template(expr), inputs_and_hooks}}
           end)
         end)
@@ -423,10 +427,10 @@ defmodule EXLA.Defn do
                 end)
               end
 
-              # Only create the token when we know it will actually be
-              # used, that is: streaming, lazy transfers or hooks
+              # Only create the token when it will actually be used, that is:
+              # streaming (infeed/outfeed) or lazy transfers
               outfeed =
-                if reverse_infeeds != [] or hooks != %{} or defined_hooks != %{} do
+                if reverse_infeeds != [] do
                   outfeed
                   |> Outfeed.with_token(Value.create_token(builder))
                   |> Outfeed.add_infeeds(builder, reverse_infeeds)
@@ -490,6 +494,7 @@ defmodule EXLA.Defn do
       if evaled && cache, do: check_recompilation(key, args_key)
 
       outfeed = Outfeed.with_user_hooks(outfeed, hooks)
+
       {executable, {used_inputs, outputs, outfeed, inputs_and_typespecs}}
     end)
   end
@@ -769,48 +774,31 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp cached_recur_operator(
-         :runtime_call,
-         %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template, opts]}} = expr,
-         %{client: %EXLA.Client{platform: :host}, callback_pid_value: callback_pid_value} =
-           state,
-         cache
-       ) do
-    # Flatten the tensor_or_container expression into its tensor leaves so we
-    # can compile each as an independent operand to the host callback.
-    tensor_exprs = Composite.flatten_list([tensor_expr])
+  defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
+    {op, cache} = recur_operator(expr, state, cache)
+    {_, cache} = recur_operator(token, state, cache)
+    {op, cache}
+  end
 
-    {arg_values, cache} =
-      Enum.map_reduce(tensor_exprs, cache, fn arg, cache ->
-        recur_operator(arg, state, cache) |> unwrap_single_tensor!()
+  defp cached_recur_operator(:token, %T{data: %Expr{args: [token]}}, state, cache) do
+    cache =
+      List.foldr(token.hooks, cache, fn %{name: name, expr: expr, callback: callback}, cache ->
+        {_, cache} = recur_flatten(expr, state, cache)
+        id = make_ref()
+        add_host_hook_callback(cache, state, id, name, callback, expr)
       end)
 
-    # Build a template container for the tensor_or_container argument so the
-    # callback server can reconstruct the full structure from a flat list of
-    # decoded tensors.
-    arg_template = Nx.to_template(tensor_expr)
-
-    cache = add_runtime_callback(cache, {id, fun, out_template, arg_template, opts})
-
-    typespecs = container_to_typespecs(out_template)
-
-    unless callback_pid_value do
-      raise "internal bug: runtime_call callback pid operand is missing"
-    end
-
-    results =
-      Value.runtime_call([callback_pid_value | arg_values], typespecs, id)
-
-    {wrap_tuple_result(results, expr), cache}
+    {[], cache}
   end
 
   defp cached_recur_operator(
          :runtime_call,
          %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template, opts]}} = expr,
-         %{client: %EXLA.Client{platform: :cuda}, callback_pid_value: callback_pid_value} =
+         %{client: %EXLA.Client{platform: platform}, callback_pid_value: callback_pid_value} =
            state,
          cache
-       ) do
+       )
+       when platform in [:host, :cuda] do
     tensor_exprs = Composite.flatten_list([tensor_expr])
 
     {arg_values, cache} =
@@ -819,17 +807,15 @@ defmodule EXLA.Defn do
       end)
 
     arg_template = Nx.to_template(tensor_expr)
-
-    cache = add_runtime_callback(cache, {id, fun, out_template, arg_template, opts})
-
     typespecs = container_to_typespecs(out_template)
+
+    cache = add_callback(cache, {id, fun, out_template, arg_template, opts})
 
     unless callback_pid_value do
       raise "internal bug: runtime_call callback pid operand is missing"
     end
 
-    results =
-      Value.runtime_call([callback_pid_value | arg_values], typespecs, id)
+    results = Value.runtime_call([callback_pid_value | arg_values], typespecs, id)
 
     {wrap_tuple_result(results, expr), cache}
   end
@@ -878,33 +864,59 @@ defmodule EXLA.Defn do
     {[p, l, u], cache}
   end
 
-  defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
-    {op, cache} = recur_operator(expr, state, cache)
-    {_, cache} = recur_operator(token, state, cache)
-    {op, cache}
-  end
-
-  defp cached_recur_operator(:token, %T{data: %Expr{args: [token]}}, state, cache) do
-    builder = state.builder
-
-    cache =
-      List.foldr(token.hooks, cache, fn %{name: name, expr: expr}, cache ->
-        # First traverse the child because if it has hooks,
-        # we need to handle them first
-        {tuple, cache} = recur_flatten(expr, state, cache)
-
-        cache
-        |> get_outfeed()
-        |> Outfeed.maybe_add_function_hook(builder, tuple, name, expr)
-        |> then(&put_outfeed(cache, &1))
-      end)
-
-    {[], cache}
-  end
-
   defp cached_recur_operator(op, expr, state, cache) do
     {args, cache} = Tree.apply_args(expr, cache, &recur_operator(&1, state, &2))
     {to_operator(op, args, expr, state), cache}
+  end
+
+  defp add_host_hook_callback(cache, state, id, name, callback, tensor_expr) do
+    %{
+      client: %EXLA.Client{platform: platform},
+      callback_pid_value: callback_pid_value
+    } = state
+
+    outfeed = get_outfeed(cache)
+
+    if name in outfeed.used_hooks do
+      case platform do
+        p when p in [:host, :cuda] ->
+          {reverse_arg_values, cache} =
+            Composite.reduce(tensor_expr, {[], cache}, fn %T{} = expr, {acc, cache} ->
+              {value, cache} = recur_operator(expr, state, cache) |> unwrap_single_tensor!()
+              {[value | acc], cache}
+            end)
+
+          arg_values = Enum.reverse(reverse_arg_values)
+          arg_template = Nx.to_template(tensor_expr)
+          callback_spec = {:named, name, callback}
+
+          cache = add_callback(cache, {id, callback_spec, nil, arg_template})
+
+          unless callback_pid_value do
+            raise "internal bug: hook callback pid operand is missing"
+          end
+
+          leaf_typespecs = Enum.map(arg_values, &Value.get_typespec/1)
+          num_aliased = length(leaf_typespecs)
+
+          Value.host_callback(
+            [callback_pid_value | arg_values],
+            leaf_typespecs,
+            id,
+            num_aliased
+          )
+
+          cache
+
+        other ->
+          raise """
+          hooks are currently only supported for EXLA CPU (platform: :host) and CUDA (platform: :cuda),
+          but the active EXLA client is configured for platform #{inspect(other)}.
+          """
+      end
+    else
+      cache
+    end
   end
 
   defp cast_custom_call_operands(call_args, :default), do: call_args
@@ -1728,7 +1740,7 @@ defmodule EXLA.Defn do
     )
   end
 
-  ## Cache and hook helpers helpers
+  ## Cache and hook helpers
 
   defp no_token_cache(),
     do: %{__MODULE__ => Outfeed.empty()}
@@ -1751,10 +1763,10 @@ defmodule EXLA.Defn do
 
   defp put_outfeed(cache, outfeed), do: %{cache | __MODULE__ => outfeed}
 
-  defp add_runtime_callback(cache, runtime_callback) do
+  defp add_callback(cache, callback) do
     cache
     |> get_outfeed()
-    |> Outfeed.add_runtime_callback(runtime_callback)
+    |> Outfeed.add_callback(callback)
     |> then(&put_outfeed(cache, &1))
   end
 
