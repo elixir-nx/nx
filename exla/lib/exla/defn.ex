@@ -491,7 +491,7 @@ defmodule EXLA.Defn do
         :telemetry.execute([:exla, :compilation], measurements, %{key: key})
       end
 
-      if evaled && cache, do: check_recompilation(key, args_key)
+      if evaled && cache, do: check_recompilation(key, args_key, outputs)
 
       outfeed = Outfeed.with_user_hooks(outfeed, hooks)
 
@@ -499,23 +499,66 @@ defmodule EXLA.Defn do
     end)
   end
 
-  @recompilation_threshold 10
+  defp check_recompilation(key, args_key, outputs) do
+    threshold = Application.get_env(:exla, :check_recompilation, :infinity)
 
-  defp check_recompilation(key, args_key) do
-    {:module, mod} = :erlang.fun_info(key, :module)
-    {:new_index, idx} = :erlang.fun_info(key, :new_index)
-    count = EXLA.Defn.LockedCache.count({mod, idx, args_key})
+    if is_integer(threshold) do
+      {:module, mod} = :erlang.fun_info(key, :module)
+      {:new_index, idx} = :erlang.fun_info(key, :new_index)
+      {:env, env} = :erlang.fun_info(key, :env)
 
-    if count == @recompilation_threshold do
-      Logger.warning(
-        "EXLA has compiled #{inspect(key)} #{count} times with the same input " <>
-          "shapes. This typically means tensor values are being captured inside a " <>
-          "closure passed to defn, jit, or value_and_grad. Each distinct captured " <>
-          "value forces a full recompilation. Pass changing tensors as explicit " <>
-          "function arguments instead."
-      )
+      out_key =
+        [outputs]
+        |> Nx.Defn.Composite.flatten_list()
+        |> Enum.map(&{&1.type, &1.shape})
+
+      # Normalize the env by replacing %Nx.Tensor{} values with {type, shape}
+      # so the counter key is stable for same-shaped tensors but distinguishes
+      # closures that capture different non-tensor metadata (e.g. different block ops).
+      normalized_env = normalize_env(env)
+
+      count = EXLA.Defn.LockedCache.count({mod, idx, args_key, out_key, normalized_env})
+
+      if count == threshold do
+        Logger.warning(
+          "EXLA has compiled #{inspect(key)} #{count} times with the same input " <>
+            "shapes. This typically means tensor values are being captured inside a " <>
+            "closure passed to defn, jit, or value_and_grad. Each distinct captured " <>
+            "value forces a full recompilation. Pass changing tensors as explicit " <>
+            "function arguments instead."
+        )
+      end
     end
   end
+
+  defp normalize_env(env) when is_list(env), do: Enum.map(env, &normalize_env_value/1)
+
+  defp normalize_env_value(%Nx.Tensor{type: type, shape: shape}), do: {type, shape}
+
+  defp normalize_env_value(v) when is_list(v) do
+    map_improper_list(v, &normalize_env_value/1, [])
+  end
+
+  defp normalize_env_value(v) when is_tuple(v),
+    do: v |> Tuple.to_list() |> Enum.map(&normalize_env_value/1) |> List.to_tuple()
+
+  defp normalize_env_value(v) when is_map(v) and not is_struct(v),
+    do: Map.new(v, fn {k, val} -> {normalize_env_value(k), normalize_env_value(val)} end)
+
+  defp normalize_env_value(v), do: v
+
+  # Tail-recursive improper list map that handles both proper and improper lists.
+  defp map_improper_list([h | t], fun, acc) when is_list(t) do
+    map_improper_list(t, fun, [fun.(h) | acc])
+  end
+
+  defp map_improper_list([h | t], fun, acc) do
+    # t is not a list: improper tail
+    result = [fun.(h) | fun.(t)]
+    :lists.reverse(acc, result)
+  end
+
+  defp map_improper_list([], _fun, acc), do: :lists.reverse(acc)
 
   defp us_to_ms(time), do: Float.round(time / 1000, 1)
 
