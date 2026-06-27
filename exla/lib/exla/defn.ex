@@ -529,7 +529,10 @@ defmodule EXLA.Defn do
   defp normalize_env(env) when is_list(env), do: Enum.map(env, &normalize_env_value/1)
 
   defp normalize_env_value(%Nx.Tensor{type: type, shape: shape}), do: {type, shape}
-  defp normalize_env_value(v) when is_list(v), do: Enum.map(v, &normalize_env_value/1)
+
+  defp normalize_env_value(v) when is_list(v) do
+    map_improper_list(v, &normalize_env_value/1, [])
+  end
 
   defp normalize_env_value(v) when is_tuple(v),
     do: v |> Tuple.to_list() |> Enum.map(&normalize_env_value/1) |> List.to_tuple()
@@ -538,6 +541,20 @@ defmodule EXLA.Defn do
     do: Map.new(v, fn {k, val} -> {normalize_env_value(k), normalize_env_value(val)} end)
 
   defp normalize_env_value(v), do: v
+
+  # Tail-recursive improper list map that handles both proper and improper lists.
+  defp map_improper_list([h | t], fun, acc) when is_list(t) do
+    map_improper_list(t, fun, [fun.(h) | acc])
+  end
+
+  defp map_improper_list([h | t], fun, acc) do
+    # t is not a list: improper tail
+    result = [fun.(h) | fun.(t)]
+    :lists.reverse(acc, result)
+  end
+
+  defp map_improper_list([], _fun, acc), do: :lists.reverse(acc)
+
 
   defp us_to_ms(time), do: Float.round(time / 1000, 1)
 
