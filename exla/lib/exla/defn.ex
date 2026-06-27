@@ -555,7 +555,6 @@ defmodule EXLA.Defn do
 
   defp map_improper_list([], _fun, acc), do: :lists.reverse(acc)
 
-
   defp us_to_ms(time), do: Float.round(time / 1000, 1)
 
   ## Operator handling
