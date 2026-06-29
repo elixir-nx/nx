@@ -12,7 +12,7 @@ defmodule EXLA.Defn.Outfeed do
 
   defstruct user_hooks: %{},
             default_hooks: %{},
-            used_hook_names: [],
+            used_hooks: [],
             infeed_flags: %{},
             callbacks: %{},
             token: nil,
@@ -98,19 +98,19 @@ defmodule EXLA.Defn.Outfeed do
   """
   def new(user_hooks, default_hooks)
       when is_map(user_hooks) and is_map(default_hooks) do
-    # Io calls with default callbacks or user callbacks are part of the cache key
-    used_hook_names =
+    # Hooks with default callbacks or user callbacks are part of the cache key
+    used_hooks =
       Enum.sort(for {k, v} <- default_hooks, v != nil or Map.has_key?(user_hooks, k), do: k)
 
     # We don't store the user hooks yet, because we don't want them to be cached
     %Outfeed{
       default_hooks: default_hooks,
-      used_hook_names: used_hook_names
+      used_hooks: used_hooks
     }
   end
 
   @doc """
-  Sets the user hooks to outfeed.
+  Sets the user hooks for callbacks.
   """
   def with_user_hooks(%Outfeed{} = outfeed, user_hooks),
     do: %{outfeed | user_hooks: user_hooks}
