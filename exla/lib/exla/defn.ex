@@ -383,7 +383,7 @@ defmodule EXLA.Defn do
       end
 
       outfeed = Outfeed.new(hooks, defined_hooks)
-      comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
+      comp_key = {ref, client.name, outfeed.used_hook_names, lazy_transfers, options}
 
       {comp_time, {evaled, {xla_time, executable, inputs_and_typespecs, outfeed}}} =
         :timer.tc(fn ->
@@ -774,21 +774,60 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
-    {op, cache} = recur_operator(expr, state, cache)
-    {_, cache} = recur_operator(token, state, cache)
-    {op, cache}
-  end
-
-  defp cached_recur_operator(:token, %T{data: %Expr{args: [token]}}, state, cache) do
-    cache =
-      List.foldr(token.hooks, cache, fn %{name: name, expr: expr, callback: callback}, cache ->
-        {_, cache} = recur_flatten(expr, state, cache)
-        id = make_ref()
-        add_host_hook_callback(cache, state, id, name, callback, expr)
+  defp cached_recur_operator(
+         :hook,
+         %T{
+           data: %Expr{
+             id: id,
+             args: [tensor_expr, callback_spec, _template, _ref]
+           }
+         },
+         %{client: %EXLA.Client{platform: platform}, callback_pid_value: callback_pid_value} =
+           state,
+         cache
+       )
+       when platform in [:host, :cuda] do
+    {reverse_arg_values, cache} =
+      Composite.reduce(tensor_expr, {[], cache}, fn %T{} = expr, {acc, cache} ->
+        {value, cache} = recur_operator(expr, state, cache) |> unwrap_single_tensor!()
+        {[value | acc], cache}
       end)
 
-    {[], cache}
+    arg_values = Enum.reverse(reverse_arg_values)
+    arg_template = Nx.to_template(tensor_expr)
+
+    cache = add_callback(cache, {id, callback_spec, nil, arg_template})
+
+    unless callback_pid_value do
+      raise "internal bug: hook callback pid operand is missing"
+    end
+
+    leaf_typespecs = Enum.map(arg_values, &Value.get_typespec/1)
+    num_aliased = length(leaf_typespecs)
+
+    aliased_outputs =
+      Value.host_callback([callback_pid_value | arg_values], leaf_typespecs, id, num_aliased)
+
+    result =
+      case arg_template do
+        %Nx.Tensor{} -> hd(aliased_outputs)
+        _ -> aliased_outputs
+      end
+
+    {result, cache}
+  end
+
+  defp cached_recur_operator(
+         :hook,
+         _expr,
+         %{client: %EXLA.Client{platform: platform}},
+         _cache
+       ) do
+    raise """
+    Nx.hook/3 is currently only supported for EXLA CPU (platform: :host) and CUDA (platform: :cuda),
+    but the active EXLA client is configured for platform #{inspect(platform)}.
+    Please run on the :host or :cuda client or wait for future segmentation-based support.
+    """
   end
 
   defp cached_recur_operator(
@@ -867,56 +906,6 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(op, expr, state, cache) do
     {args, cache} = Tree.apply_args(expr, cache, &recur_operator(&1, state, &2))
     {to_operator(op, args, expr, state), cache}
-  end
-
-  defp add_host_hook_callback(cache, state, id, name, callback, tensor_expr) do
-    %{
-      client: %EXLA.Client{platform: platform},
-      callback_pid_value: callback_pid_value
-    } = state
-
-    outfeed = get_outfeed(cache)
-
-    if name in outfeed.used_hooks do
-      case platform do
-        p when p in [:host, :cuda] ->
-          {reverse_arg_values, cache} =
-            Composite.reduce(tensor_expr, {[], cache}, fn %T{} = expr, {acc, cache} ->
-              {value, cache} = recur_operator(expr, state, cache) |> unwrap_single_tensor!()
-              {[value | acc], cache}
-            end)
-
-          arg_values = Enum.reverse(reverse_arg_values)
-          arg_template = Nx.to_template(tensor_expr)
-          callback_spec = {:named, name, callback}
-
-          cache = add_callback(cache, {id, callback_spec, nil, arg_template})
-
-          unless callback_pid_value do
-            raise "internal bug: hook callback pid operand is missing"
-          end
-
-          leaf_typespecs = Enum.map(arg_values, &Value.get_typespec/1)
-          num_aliased = length(leaf_typespecs)
-
-          Value.host_callback(
-            [callback_pid_value | arg_values],
-            leaf_typespecs,
-            id,
-            num_aliased
-          )
-
-          cache
-
-        other ->
-          raise """
-          hooks are currently only supported for EXLA CPU (platform: :host) and CUDA (platform: :cuda),
-          but the active EXLA client is configured for platform #{inspect(other)}.
-          """
-      end
-    else
-      cache
-    end
   end
 
   defp cast_custom_call_operands(call_args, :default), do: call_args

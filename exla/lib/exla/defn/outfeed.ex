@@ -12,7 +12,7 @@ defmodule EXLA.Defn.Outfeed do
 
   defstruct user_hooks: %{},
             default_hooks: %{},
-            used_hooks: [],
+            used_hook_names: [],
             infeed_flags: %{},
             callbacks: %{},
             token: nil,
@@ -71,8 +71,12 @@ defmodule EXLA.Defn.Outfeed do
   defp used_inputs(_, inputs, _depth, _lazy?),
     do: inputs
 
-  defp used_hooks(%Expr{op: :token, args: [token]}, hooks),
-    do: Enum.reduce(token.hooks, hooks, &Map.put(&2, &1.name, &1.callback))
+  defp used_hooks(%Expr{op: :hook, args: [_, _, spec, _, _]}, hooks) do
+    case spec do
+      {:named, name, callback} -> Map.put(hooks, name, callback)
+      {:fn, _} -> hooks
+    end
+  end
 
   defp used_hooks(_, hooks),
     do: hooks
@@ -94,19 +98,19 @@ defmodule EXLA.Defn.Outfeed do
   """
   def new(user_hooks, default_hooks)
       when is_map(user_hooks) and is_map(default_hooks) do
-    # Hooks with default callbacks or user callbacks are part of the cache key
-    used_hooks =
+    # Io calls with default callbacks or user callbacks are part of the cache key
+    used_hook_names =
       Enum.sort(for {k, v} <- default_hooks, v != nil or Map.has_key?(user_hooks, k), do: k)
 
     # We don't store the user hooks yet, because we don't want them to be cached
     %Outfeed{
       default_hooks: default_hooks,
-      used_hooks: used_hooks
+      used_hook_names: used_hook_names
     }
   end
 
   @doc """
-  Sets the user hooks for callbacks.
+  Sets the user hooks to outfeed.
   """
   def with_user_hooks(%Outfeed{} = outfeed, user_hooks),
     do: %{outfeed | user_hooks: user_hooks}
@@ -446,10 +450,6 @@ defmodule EXLA.Defn.Outfeed do
         "template #{inspect(right)}, got: #{inspect(left)}"
 
     raise ArgumentError.exception(msg)
-  end
-
-  defp encode_callback_reply({:error, {:undefined_hook, message}}) do
-    raise ArgumentError.exception(message)
   end
 
   defp encode_callback_reply({:error, {:decode_failed, exception}}) do

@@ -418,14 +418,12 @@ defmodule Nx.Defn.ExprTest do
     end
 
     defn sub_add_mult(a, b) do
-      token = create_token()
-      {token, add} = hook_token(token, a + b, :add, &IO.inspect({:add, &1}))
-      {token, mult} = hook_token(token, a * b, :mult, &IO.inspect({:mult, &1}))
-      {add, mult} = attach_token(token, {add, mult})
+      add = hook(a + b, :add, &IO.inspect({:add, &1}))
+      mult = hook(a * b, :mult, &IO.inspect({:mult, &1}))
       add - mult
     end
 
-    test "with tokens" do
+    test "with hooks" do
       result = sub_add_mult(Nx.template({}, {:f, 32}), Nx.template({}, {:f, 32}))
 
       assert inspect(result, safe: false) == """
@@ -433,19 +431,18 @@ defmodule Nx.Defn.ExprTest do
                f32
              \s\s
                Nx.Defn.Expr
-               parameter a:0               f32
-               parameter b:1               f32
-               c = multiply a, b           f32
-               d = add a, b                f32
-               e = token mult: c, add: d   tuple2
-               f = attach_token e, d       f32
-               g = attach_token e, c       f32
-               h = subtract f, g           f32
+               parameter a:0       f32
+               parameter b:1       f32
+               c = add a, b        f32
+               d = hook add: c     f32
+               e = multiply a, b   f32
+               f = hook mult: e    f32
+               g = subtract d, f   f32
              >\
              """
     end
 
-    defn add_sub_mult_no_tokens(a, b, c, d) do
+    defn add_sub_mult_no_io_call(a, b, c, d) do
       a
       |> Nx.add(b)
       |> Nx.subtract(c)
@@ -455,7 +452,7 @@ defmodule Nx.Defn.ExprTest do
     test "with limit option" do
       t = Nx.template({}, :f32)
 
-      result = add_sub_mult_no_tokens(t, t, t, t)
+      result = add_sub_mult_no_io_call(t, t, t, t)
 
       full_expr = """
       #Nx.Tensor<

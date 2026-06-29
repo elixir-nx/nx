@@ -26,13 +26,10 @@ defmodule Nx.Defn.TreeTest do
     {hook(factorial(with_hook(a, b)), :another), b}
   end
 
-  describe "has_hooks?" do
-    test "returns true if there are hooks" do
-      refute Tree.has_hooks?(factorial(10), %{})
-      refute Tree.has_hooks?(hooked_factorial(1, 2), %{})
-      assert Tree.has_hooks?(hooked_factorial(1, 2), %{example: & &1})
-      assert Tree.has_hooks?(hooked_factorial(1, 2), %{another: & &1})
-    end
+  defn duplicate_hook_names(a, b) do
+    ha = hook(a, :same)
+    hb = hook(b, :same)
+    ha + hb
   end
 
   describe "scope_ids" do

@@ -328,6 +328,14 @@ defmodule Nx.Defn.EvaluatorTest do
   describe "hooks" do
     defp send_to_self(value), do: send(self(), value)
 
+    defp drain_mailbox do
+      receive do
+        _ -> drain_mailbox()
+      after
+        0 -> :ok
+      end
+    end
+
     defn basic_hook(a, b), do: hook(a + b, :example, &send_to_self({:default, &1}))
 
     test "basic hook with overriddes" do
@@ -365,91 +373,109 @@ defmodule Nx.Defn.EvaluatorTest do
     end
 
     defn side_effect_hooks(a, b) do
-      token = create_token()
-      {token, _} = hook_token(token, b, :b)
-      {token, _} = hook_token(token, a, :a)
-      attach_token(token, {a, b})
+      b = hook(b, :b)
+      a = hook(a, :a)
+      {b, a}
     end
 
     test "side effect hooks" do
-      side_effect_hooks(1, 2)
+      drain_mailbox()
+
+      assert side_effect_hooks(1, 2) == {Nx.tensor(2), Nx.tensor(1)}
       refute_received _
 
       hooks = %{a: &send_to_self({:a, &1})}
+
       Nx.Defn.jit(&side_effect_hooks/2, hooks: hooks).(1, 2)
+
       assert_received {:a, tensor}
       assert tensor == Nx.tensor(1)
       refute_received _
 
       hooks = %{b: &send_to_self({:b, &1})}
+
       Nx.Defn.jit(&side_effect_hooks/2, hooks: hooks).(1, 2)
+
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       refute_received _
 
+      drain_mailbox()
       hooks = %{a: &send_to_self({:a, &1}), b: &send_to_self({:b, &1})}
       Nx.Defn.jit(&side_effect_hooks/2, hooks: hooks).(1, 2)
-      {:messages, [b: _, a: _]} = Process.info(self(), :messages)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       assert_received {:a, tensor}
       assert tensor == Nx.tensor(1)
+      refute_received _
     end
 
     defn side_effect_nested_hooks(a, b) do
-      token = create_token()
-      {token, _} = hook_token(token, b, :b)
-      a = attach_token(token, a)
-      hook(a, :a)
+      b = hook(b, :b)
+      a = hook(a, :a)
+      {b, a}
     end
 
     test "side effect nested hooks" do
-      side_effect_nested_hooks(1, 2)
-      refute_received _
+      drain_mailbox()
+
+      assert side_effect_nested_hooks(1, 2) == {Nx.tensor(2), Nx.tensor(1)}
 
       hooks = %{a: &send_to_self({:a, &1})}
+
       Nx.Defn.jit(&side_effect_nested_hooks/2, hooks: hooks).(1, 2)
+
       assert_received {:a, tensor}
       assert tensor == Nx.tensor(1)
       refute_received _
 
       hooks = %{b: &send_to_self({:b, &1})}
+
       Nx.Defn.jit(&side_effect_nested_hooks/2, hooks: hooks).(1, 2)
+
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       refute_received _
 
+      drain_mailbox()
       hooks = %{a: &send_to_self({:a, &1}), b: &send_to_self({:b, &1})}
       Nx.Defn.jit(&side_effect_nested_hooks/2, hooks: hooks).(1, 2)
-      {:messages, [b: _, a: _]} = Process.info(self(), :messages)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       assert_received {:a, tensor}
       assert tensor == Nx.tensor(1)
+      refute_received _
     end
 
     defn side_effect_nested_hook_with_default(a, b) do
-      token = create_token()
-      {token, _} = hook_token(token, b, :b, &send_to_self({:b, &1}))
-      a = attach_token(token, a)
-      hook(a, :a)
+      b = hook(b, :b, &send_to_self({:b, &1}))
+      a = hook(a, :a)
+      {a, b}
     end
 
     test "side effect nested hooks with default" do
-      side_effect_nested_hook_with_default(1, 2)
+      drain_mailbox()
+
+      assert side_effect_nested_hook_with_default(1, 2) == {Nx.tensor(1), Nx.tensor(2)}
+
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
+      refute_received _
 
+      drain_mailbox()
       hooks = %{a: &send_to_self({:a, &1})}
       Nx.Defn.jit(&side_effect_nested_hook_with_default/2, hooks: hooks).(1, 2)
-      {:messages, [b: _, a: _]} = Process.info(self(), :messages)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       assert_received {:a, tensor}
       assert tensor == Nx.tensor(1)
+      refute_received _
 
+      drain_mailbox()
       hooks = %{b: &send_to_self({:custom, &1})}
+
       Nx.Defn.jit(&side_effect_nested_hook_with_default/2, hooks: hooks).(1, 2)
+
       assert_received {:custom, tensor}
       assert tensor == Nx.tensor(2)
 
@@ -479,6 +505,9 @@ defmodule Nx.Defn.EvaluatorTest do
       assert tensor == Nx.tensor(9)
       assert_received {:while, tensor}
       assert tensor == Nx.tensor(10)
+      refute_received _
+
+      assert Nx.Defn.jit(&hook_upto10/1).(5) == Nx.tensor(10)
       refute_received _
     end
   end
@@ -681,7 +710,7 @@ defmodule Nx.Defn.EvaluatorTest do
       t = Nx.iota({2, 3}, vectorized_axes: [a: 1], type: :s32)
 
       message = """
-      test/nx/defn/evaluator_test.exs:650: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
+      test/nx/defn/evaluator_test.exs:679: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
 
       {\e[32m
        <<<<< Body (do-block) <<<<<
@@ -713,7 +742,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       error =
         """
-        test/nx/defn/evaluator_test.exs:650: condition must be a scalar tensor, got: #Nx.Tensor<
+        test/nx/defn/evaluator_test.exs:679: condition must be a scalar tensor, got: #Nx.Tensor<
           vectorized[x: 1]
           u8[1]
         \s\s

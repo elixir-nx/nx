@@ -8,6 +8,10 @@ defmodule Nx.Defn.Evaluator do
 
   The following options are specific to this compiler:
 
+    * `:hooks` - a map of callbacks to override named `hook` side effects.
+      This allows overriding named `hook`s at JIT time without recompiling the
+      graph. The legacy `:hooks` option is also accepted.
+
     * `:garbage_collect` - when true, garbage collects
       after evaluating each node
 
@@ -40,7 +44,11 @@ defmodule Nx.Defn.Evaluator do
 
   @impl true
   def __compile__(_key, vars, fun, opts) do
-    hooks = Keyword.get(opts, :hooks, %{})
+    hooks =
+      opts
+      |> Keyword.get(:hooks, %{})
+      |> then(&Map.merge(Keyword.get(opts, :hooks, %{}), &1))
+
     gc? = Keyword.get(opts, :garbage_collect, false)
     {expr, output, cache} = precompile(fun, vars, hooks)
 
@@ -188,29 +196,10 @@ defmodule Nx.Defn.Evaluator do
     {[clauses_cache, last_cache, Map.keys(all_ids)], cache}
   end
 
-  defp compute_cache(:token, %{data: %Expr{args: [token]}}, state, cache) do
-    hooks = state.hooks
-
-    {exprs_hooks, cache} =
-      Enum.flat_map_reduce(token.hooks, cache, fn
-        %{callback: callback, expr: expr, name: name}, cache ->
-          hook_fun = hooks[name] || callback
-
-          cond do
-            hook_fun ->
-              {expr, cache} = composite_compute_cache(expr, state, cache)
-              {[{expr, hook_fun}], cache}
-
-            Tree.has_hooks?(expr, hooks) ->
-              {expr, cache} = composite_compute_cache(expr, state, cache)
-              {[{expr, nil}], cache}
-
-            true ->
-              {[], cache}
-          end
-      end)
-
-    {[exprs_hooks], cache}
+  defp compute_cache(:hook, %{data: %Expr{args: args}}, state, cache) do
+    [tensor_expr, callback_spec, template, ref] = args
+    {_, cache} = composite_compute_cache(tensor_expr, state, cache)
+    {[tensor_expr, callback_spec, template, ref], cache}
   end
 
   defp compute_cache(_op, tensor, state, cache) do
@@ -294,9 +283,30 @@ defmodule Nx.Defn.Evaluator do
     {elem(tuple, i), caches}
   end
 
-  defp eval_apply(:attach_token, [token, expr], _ans, state, caches) do
-    {_, caches} = eval(token, state, caches)
-    eval(expr, state, caches)
+  defp eval_apply(:hook, [tensor_expr, callback_spec, out_template, _ref], _ans, state, caches) do
+    {tensor_value, caches} = composite_eval(tensor_expr, state, caches)
+
+    case resolve_hook(callback_spec, state.hooks) do
+      nil ->
+        :ok
+
+      fun ->
+        fun.(tensor_value)
+    end
+
+    result =
+      case out_template do
+        %Nx.Tensor{} ->
+          tensor_value
+
+        _ ->
+          tensor_value
+          |> List.wrap()
+          |> Composite.flatten_list()
+          |> List.to_tuple()
+      end
+
+    {result, caches}
   end
 
   defp eval_apply(:fun, [length, expr, expr_cache], _ans, state, caches) do
@@ -330,17 +340,6 @@ defmodule Nx.Defn.Evaluator do
   defp eval_apply(:while, [initial, pred, block, while_cache], _ans, state, caches) do
     {initial, caches} = composite_eval(initial, state, caches)
     {while(initial, pred, block, state, [while_cache]), caches}
-  end
-
-  defp eval_apply(:token, [exprs_hooks], _ans, state, caches) do
-    caches =
-      List.foldr(exprs_hooks, caches, fn {expr, hook_fun}, caches ->
-        {res, caches} = composite_eval(expr, state, caches)
-        hook_fun && hook_fun.(res)
-        caches
-      end)
-
-    {{}, caches}
   end
 
   defp eval_apply(:block, [struct, in_args, expr, callback], ans, state, caches) do
@@ -441,4 +440,7 @@ defmodule Nx.Defn.Evaluator do
   defp composite_to_params(other, acc) do
     [fn -> other end | acc]
   end
+
+  defp resolve_hook({:fn, fun}, _hooks), do: fun
+  defp resolve_hook({:named, name, callback}, hooks), do: hooks[name] || callback
 end
