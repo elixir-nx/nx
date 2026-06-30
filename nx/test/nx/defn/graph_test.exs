@@ -1,6 +1,8 @@
 defmodule Nx.Defn.GraphTest do
   use ExUnit.Case, async: true
 
+  import Nx.Defn
+
   alias Nx.Defn.Graph
   alias Nx.Defn.Graph.Stage
 
@@ -8,6 +10,47 @@ defmodule Nx.Defn.GraphTest do
   alias Nx.Defn.Expr
 
   doctest Nx.Defn.Graph
+
+  defn count(x), do: while(x, Nx.less(x, 10), do: Nx.add(x, 1))
+
+  defn pre_while(x) do
+    a = Nx.multiply(x, 2)
+    w = while a, Nx.less(a, 10), do: Nx.add(a, 1)
+    Nx.add(w, 100)
+  end
+
+  defn tuple_while(x) do
+    y = Nx.multiply(x, 2)
+
+    {a, b} =
+      while {x, y}, Nx.less(x, 10) do
+        {Nx.add(x, 1), Nx.add(y, 2)}
+      end
+
+    Nx.add(a, b)
+  end
+
+  defn tuple_while_params(x, y) do
+    {a, b} =
+      while {x, y}, Nx.less(x, 10) do
+        {Nx.add(x, 1), Nx.add(y, 2)}
+      end
+
+    Nx.add(a, b)
+  end
+
+  defn pre_cond(x, y) do
+    a = Nx.add(x, y)
+
+    c =
+      cond do
+        Nx.greater(a, 5) -> Nx.add(a, 1)
+        true -> Nx.subtract(a, 1)
+      end
+
+    d = Nx.multiply(c, 2)
+    Nx.add(d, 100)
+  end
 
   describe "split/2" do
     test "simple expression with 1 split and no common nodes" do
@@ -783,4 +826,176 @@ defmodule Nx.Defn.GraphTest do
       assert Graph.run(chain_both, args) == expected_result
     end
   end
+
+  describe "split with control flow" do
+    test "tail-position while split :before keeps the loop sub-scope opaque" do
+      x = Nx.tensor(0, type: :s32)
+      expr = Nx.Defn.debug_expr(&count/1).(x)
+
+      stages =
+        Graph.split(expr, fn
+          %T{data: %Expr{op: :while}} -> :before
+          _ -> :none
+        end)
+
+      # The loop condition (`less`) and body (`add`) must never leak out of the
+      # while sub-scope as stage outputs.
+      ops_in_stage_outputs =
+        for stage <- stages,
+            output <- stage.expr |> wrap_outputs(),
+            %T{data: %Expr{op: op}} <- Nx.Defn.Composite.flatten_list([output]),
+            do: op
+
+      refute :less in ops_in_stage_outputs
+
+      # The while node passes through as a single opaque unit.
+      assert Enum.any?(stages, fn stage ->
+               stage.expr
+               |> wrap_outputs()
+               |> Enum.any?(&match?(%T{data: %Expr{op: :while}}, &1))
+             end)
+
+      assert Graph.run(stages, [x]) |> Nx.to_number() == 10
+    end
+
+    test "non-tail while split :both isolates the pre/while/post stages" do
+      x = Nx.tensor(1, type: :s32)
+
+      ground_truth =
+        Nx.Defn.jit(&pre_while/1, compiler: Nx.Defn.Evaluator).(x)
+        |> Nx.to_number()
+
+      assert ground_truth == 110
+
+      expr = Nx.Defn.debug_expr(&pre_while/1).(x)
+
+      stages =
+        Graph.split(expr, fn
+          %T{data: %Expr{op: :while}} -> :both
+          _ -> :none
+        end)
+
+      assert [stage_0, stage_1, stage_2] = stages
+
+      # stage 0: the pre-while computation (multiply)
+      assert {%T{data: %Expr{op: :multiply}}} = stage_0.expr
+
+      # stage 1: the while node, sub-scope untouched
+      assert {%T{data: %Expr{op: :while, args: [initial, _arg, pred, block]}}} = stage_1.expr
+      assert %T{data: %Expr{op: :parameter}} = initial
+      assert %T{data: %Expr{op: :less}} = pred
+      assert %T{data: %Expr{op: :add}} = block
+
+      # stage 2: the post-while computation (add 100)
+      assert %T{data: %Expr{op: :add}} = stage_2.expr
+
+      assert Graph.run(stages, [x]) |> Nx.to_number() == 110
+    end
+
+    test "multi-value (tuple-carry) while round-trips in every split mode" do
+      x = Nx.tensor(0, type: :s32)
+
+      ground_truth =
+        Nx.Defn.jit(&tuple_while/1, compiler: Nx.Defn.Evaluator).(x)
+        |> Nx.to_number()
+
+      expr = Nx.Defn.debug_expr(&tuple_while/1).(x)
+
+      for mode <- [:none, :before, :after, :both] do
+        stages =
+          Graph.split(expr, fn
+            %T{data: %Expr{op: :while}} -> mode
+            _ -> :none
+          end)
+
+        assert Graph.run(stages, [x]) |> Nx.to_number() == ground_truth,
+               "tuple-carry while failed for split mode #{inspect(mode)}"
+      end
+    end
+
+    test "tuple-carry while with all-parameter initial round-trips in every split mode" do
+      x = Nx.tensor(0, type: :s32)
+      y = Nx.tensor(5, type: :s32)
+
+      ground_truth =
+        Nx.Defn.jit(&tuple_while_params/2, compiler: Nx.Defn.Evaluator).(x, y)
+        |> Nx.to_number()
+
+      expr = Nx.Defn.debug_expr(&tuple_while_params/2).(x, y)
+
+      for mode <- [:none, :before, :after, :both] do
+        stages =
+          Graph.split(expr, fn
+            %T{data: %Expr{op: :while}} -> mode
+            _ -> :none
+          end)
+
+        assert Graph.run(stages, [x, y]) |> Nx.to_number() == ground_truth,
+               "all-parameter tuple-carry while failed for split mode #{inspect(mode)}"
+      end
+    end
+
+    test "cond passes through intact when splitting an unrelated node" do
+      x = Nx.tensor(3, type: :s32)
+      y = Nx.tensor(4, type: :s32)
+
+      ground_truth =
+        Nx.Defn.jit(&pre_cond/2, compiler: Nx.Defn.Evaluator).(x, y)
+        |> Nx.to_number()
+
+      expr = Nx.Defn.debug_expr(&pre_cond/2).(x, y)
+
+      # Split before the multiply, which feeds the cond. The cond must not be
+      # split apart and its parent-scope dependency (`b`) must be remapped.
+      stages =
+        Graph.split(expr, fn
+          %T{data: %Expr{op: :multiply}} -> :before
+          _ -> :none
+        end)
+
+      assert length(stages) >= 2
+
+      # The cond node survives intact in one of the stages.
+      assert Enum.any?(stages, fn stage ->
+               stage.expr |> wrap_outputs() |> Enum.any?(&contains_op?(&1, :cond))
+             end)
+
+      assert Graph.run(stages, [x, y]) |> Nx.to_number() == ground_truth
+    end
+
+    test "cond split :after isolates the cond in its own stage" do
+      x = Nx.tensor(10, type: :s32)
+      y = Nx.tensor(20, type: :s32)
+
+      ground_truth =
+        Nx.Defn.jit(&pre_cond/2, compiler: Nx.Defn.Evaluator).(x, y)
+        |> Nx.to_number()
+
+      expr = Nx.Defn.debug_expr(&pre_cond/2).(x, y)
+
+      stages =
+        Graph.split(expr, fn
+          %T{data: %Expr{op: :cond}} -> :after
+          _ -> :none
+        end)
+
+      assert Graph.run(stages, [x, y]) |> Nx.to_number() == ground_truth
+    end
+  end
+
+  defp wrap_outputs(expr) when is_tuple(expr), do: Tuple.to_list(expr)
+  defp wrap_outputs(expr), do: [expr]
+
+  defp contains_op?(%T{data: %Expr{op: target}}, target), do: true
+
+  defp contains_op?(%T{} = expr, target) do
+    {_, found} =
+      Nx.Defn.Tree.apply_args(expr, false, fn arg, found ->
+        {arg, found or contains_op?(arg, target)}
+      end)
+
+    found
+  end
+
+  defp contains_op?(_other, _target), do: false
 end
