@@ -132,8 +132,12 @@ defmodule Nx.Defn.Graph do
 
   @doc """
   Executes the stage chain with the given arguments.
+
+  `opts` is an optional keyword list forwarded to `Nx.Defn.jit_apply/3`
+  for each stage, allowing the caller to control the compiler and other
+  JIT options.
   """
-  def run(chain, args) do
+  def run(chain, args, opts \\ []) when is_list(opts) do
     scope =
       Enum.with_index(args, fn arg, idx -> {{nil, idx}, arg} end)
       |> Map.new()
@@ -147,7 +151,7 @@ defmodule Nx.Defn.Graph do
             Map.fetch!(scope, source)
           end)
 
-        case Nx.Defn.jit_apply(fn _ -> expr end, [List.to_tuple(args)]) do
+        case Nx.Defn.jit_apply(fn _ -> expr end, [List.to_tuple(args)], opts) do
           %T{} = tensor ->
             {tensor, Map.put(scope, {id, 0}, tensor)}
 
