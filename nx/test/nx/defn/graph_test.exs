@@ -1,3 +1,8 @@
+defmodule Nx.Defn.GraphTest.RuntimeCallback do
+  @moduledoc false
+  def add_pair({a, b}, _opts), do: Nx.add(a, b)
+end
+
 defmodule Nx.Defn.GraphTest do
   use ExUnit.Case, async: true
 
@@ -983,8 +988,109 @@ defmodule Nx.Defn.GraphTest do
     end
   end
 
+  describe "split/run regression coverage" do
+    # The second rewrite pass (`composite_rewrite_subtree`) runs on every stage's
+    # expression, including the final stage even with no splits. Without per-id
+    # memoization, a heavily-shared DAG is walked once per incoming edge, which is
+    # exponential. A doubling chain of depth `n` has `n` nodes but `2^n` tree
+    # paths, so an unmemoized rewrite cannot finish within the timeout.
+    @tag timeout: 10_000
+    test "split over a heavily-shared (doubling-chain) DAG completes and round-trips" do
+      depth = 45
+      x = Nx.tensor([1.0, 2.0], type: :f32)
+
+      fun = fn x -> Enum.reduce(1..depth, x, fn _, acc -> Nx.add(acc, acc) end) end
+
+      expected = Nx.Defn.jit_apply(fun, [x])
+      expr = Nx.Defn.debug_expr(fun).(x)
+
+      stages = Graph.split(expr, fn _ -> :none end)
+
+      assert Graph.run(stages, [x]) == expected
+    end
+
+    test "runtime_call with tuple operands feeding a split point round-trips" do
+      a = Nx.tensor([1.0, 2.0], type: :f32)
+      b = Nx.tensor([3.0, 4.0], type: :f32)
+
+      callback = &Nx.Defn.GraphTest.RuntimeCallback.add_pair/2
+
+      fun = fn a, b ->
+        # The operands `{a, b}` are stored as a container inside the runtime_call
+        # args; splitting `:before` the downstream `add` pulls the runtime_call
+        # into a non-final stage, where its operands must be collected.
+        r = Nx.runtime_call(a, {a, b}, [], callback)
+        Nx.add(r, a)
+      end
+
+      expected = Nx.Defn.jit(fun, compiler: Nx.Defn.Evaluator).(a, b)
+      expr = Nx.Defn.debug_expr(fun).(a, b)
+
+      stages =
+        Graph.split(expr, fn
+          %T{data: %Expr{op: :add}} -> :before
+          _ -> :none
+        end)
+
+      # The stage holding the runtime_call must declare an argument for every
+      # parameter its expression references, otherwise its operands were dropped.
+      rc_stage =
+        Enum.find(stages, fn stage ->
+          stage.expr |> wrap_outputs() |> Enum.any?(&contains_op?(&1, :runtime_call))
+        end)
+
+      assert rc_stage
+
+      referenced_indices =
+        rc_stage.expr
+        |> wrap_outputs()
+        |> Enum.flat_map(&collect_param_indices(&1, []))
+        |> Enum.uniq()
+
+      assert Enum.all?(referenced_indices, &(&1 < length(rc_stage.arguments)))
+
+      assert Graph.run(stages, [a, b], compiler: Nx.Defn.Evaluator) == expected
+    end
+
+    test "run/3 returns a non-tuple (map) container as the final output" do
+      x = Nx.tensor([1, 2, 3], type: :s32)
+
+      fun = fn x ->
+        a = Nx.add(x, 1)
+        b = Nx.multiply(a, 2)
+        %{sum: Nx.sum(b), doubled: b}
+      end
+
+      expected = Nx.Defn.jit(fun, compiler: Nx.Defn.Evaluator).(x)
+      expr = Nx.Defn.debug_expr(fun).(x)
+
+      stages =
+        Graph.split(expr, fn
+          %T{data: %Expr{op: :multiply}} -> :before
+          _ -> :none
+        end)
+
+      assert Graph.run(stages, [x], compiler: Nx.Defn.Evaluator) == expected
+    end
+  end
+
   defp wrap_outputs(expr) when is_tuple(expr), do: Tuple.to_list(expr)
   defp wrap_outputs(expr), do: [expr]
+
+  # Collects every `:parameter` index referenced inside `expr`. Uses
+  # `Nx.Defn.Tree.apply_args/3`, which descends into `runtime_call` operands.
+  defp collect_param_indices(%T{data: %Expr{op: :parameter, args: [idx]}}, acc), do: [idx | acc]
+
+  defp collect_param_indices(%T{} = expr, acc) do
+    {_, acc} =
+      Nx.Defn.Tree.apply_args(expr, acc, fn arg, acc ->
+        {arg, collect_param_indices(arg, acc)}
+      end)
+
+    acc
+  end
+
+  defp collect_param_indices(_other, acc), do: acc
 
   defp contains_op?(%T{data: %Expr{op: target}}, target), do: true
 

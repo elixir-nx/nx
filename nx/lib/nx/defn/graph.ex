@@ -155,7 +155,7 @@ defmodule Nx.Defn.Graph do
           %T{} = tensor ->
             {tensor, Map.put(scope, {id, 0}, tensor)}
 
-          tuple ->
+          tuple when is_tuple(tuple) ->
             {_idx, scope} =
               tuple
               |> Tuple.to_list()
@@ -164,6 +164,13 @@ defmodule Nx.Defn.Graph do
               end)
 
             {tuple, scope}
+
+          # Arbitrary container (map/struct). Intermediate stages always emit a
+          # tuple of tensors, so this only occurs for the final stage, whose
+          # output is the chain's return value and has no downstream consumers;
+          # thread it through without indexing it into the scope.
+          other ->
+            {other, scope}
         end
       end)
 
@@ -736,7 +743,7 @@ defmodule Nx.Defn.Graph do
     {ans, {Map.put(cache, id, ans), state}}
   end
 
-  defp composite_rewrite_subtree(container, state, acc \\ %{used_args: %{}})
+  defp composite_rewrite_subtree(container, state, acc \\ %{used_args: %{}, cache: %{}})
 
   defp composite_rewrite_subtree(container, state, acc) when is_list(container) do
     Enum.map_reduce(container, acc, fn
@@ -755,7 +762,26 @@ defmodule Nx.Defn.Graph do
     Composite.traverse(container, acc, &rewrite_subtree(&1, state, &2))
   end
 
-  defp rewrite_subtree(%T{data: %Expr{id: id, op: :parameter}} = expr, state, acc) do
+  # Memoize per node id within a single `composite_rewrite_subtree` pass. The
+  # rewrite is pure given a fixed `nodes_to_replace` (constant for one pass), so
+  # a shared subtree need only be rewritten once. Without this, a heavily-shared
+  # DAG (e.g. a many-layer transformer graph) is walked once per incoming edge,
+  # which is exponential. `used_args` is an id-keyed map, so collecting a node's
+  # parameters once is sufficient; revisits return the cached node untouched.
+  defp rewrite_subtree(%T{data: %Expr{id: id}} = expr, state, acc) do
+    case acc.cache do
+      %{^id => cached} ->
+        {cached, acc}
+
+      _ ->
+        {res, acc} = do_rewrite_subtree(expr, state, acc)
+        {res, %{acc | cache: Map.put(acc.cache, id, res)}}
+    end
+  end
+
+  defp rewrite_subtree(other, state, acc), do: do_rewrite_subtree(other, state, acc)
+
+  defp do_rewrite_subtree(%T{data: %Expr{id: id, op: :parameter}} = expr, state, acc) do
     case state.nodes_to_replace do
       %{^id => res} ->
         # This parameter is being replaced by a stage output - collect the replacement
@@ -770,7 +796,7 @@ defmodule Nx.Defn.Graph do
     end
   end
 
-  defp rewrite_subtree(
+  defp do_rewrite_subtree(
          %T{data: %Expr{op: :block, id: id, args: [struct, in_args, subexpr, fun]}} = expr,
          state,
          acc
@@ -789,7 +815,7 @@ defmodule Nx.Defn.Graph do
     end
   end
 
-  defp rewrite_subtree(
+  defp do_rewrite_subtree(
          %T{data: %Expr{op: :while, id: id, args: [initial, arg, pred, block]}} = expr,
          state,
          acc
@@ -806,7 +832,7 @@ defmodule Nx.Defn.Graph do
     end
   end
 
-  defp rewrite_subtree(
+  defp do_rewrite_subtree(
          %T{data: %Expr{op: :cond, id: id, args: [clauses, last]}} = expr,
          state,
          acc
@@ -831,7 +857,7 @@ defmodule Nx.Defn.Graph do
     end
   end
 
-  defp rewrite_subtree(%T{data: %Expr{op: :fun, id: id}} = expr, state, acc) do
+  defp do_rewrite_subtree(%T{data: %Expr{op: :fun, id: id}} = expr, state, acc) do
     case state.nodes_to_replace do
       %{^id => res} ->
         {res, put_in(acc.used_args[id], res)}
@@ -842,7 +868,7 @@ defmodule Nx.Defn.Graph do
     end
   end
 
-  defp rewrite_subtree(
+  defp do_rewrite_subtree(
          %T{data: %Expr{id: id, op: :elem, args: [tuple_expr, index]}} = expr,
          state,
          acc
@@ -875,7 +901,27 @@ defmodule Nx.Defn.Graph do
     end
   end
 
-  defp rewrite_subtree(%T{data: %Expr{id: id, args: args}} = expr, state, acc) do
+  defp do_rewrite_subtree(
+         %T{data: %Expr{op: :runtime_call, id: id, args: [tensor_expr, callback, out, opts]}} = expr,
+         state,
+         acc
+       ) do
+    case state.nodes_to_replace do
+      %{^id => res} ->
+        {res, put_in(acc.used_args[id], res)}
+
+      _ ->
+        # The operands live in `tensor_expr` (an Nx container, usually a tuple);
+        # `callback`/`out`/`opts` are opaque. The generic clause's list handling
+        # skips non-list container elements, which would drop the operands'
+        # parameters from `used_args`. Traverse them here (mirrors
+        # `Nx.Defn.Tree.apply_args/4`'s `:runtime_call` clause).
+        {tensor_expr, acc} = composite_rewrite_subtree(tensor_expr, state, acc)
+        {put_in(expr.data.args, [tensor_expr, callback, out, opts]), acc}
+    end
+  end
+
+  defp do_rewrite_subtree(%T{data: %Expr{id: id, args: args}} = expr, state, acc) do
     case state.nodes_to_replace do
       %{^id => res} ->
         # nodes_to_replace always contains a param
@@ -887,5 +933,5 @@ defmodule Nx.Defn.Graph do
     end
   end
 
-  defp rewrite_subtree(other, _, acc), do: {other, acc}
+  defp do_rewrite_subtree(other, _, acc), do: {other, acc}
 end
