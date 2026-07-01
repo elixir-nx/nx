@@ -1441,8 +1441,13 @@ defmodule Nx.Defn.Kernel do
     do: unguarded_hook(expr, name, function)
 
   defp unguarded_hook(expr, name, function) do
-    {token, result} = Nx.Defn.Expr.add_hook(Nx.Defn.Token.new(), expr, name, function)
-    Nx.Defn.Expr.attach_token(token, result)
+    spec =
+      case function do
+        nil -> {:named, name, nil}
+        fun -> {:named, name, fun}
+      end
+
+    Nx.Defn.Expr.hook(expr, spec)
   end
 
   @doc """
