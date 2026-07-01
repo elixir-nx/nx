@@ -2086,7 +2086,7 @@ defmodule Nx.BinaryBackend do
                 %Complex{re: re} ->
                   number_to_binary(trunc(re), output_type)
 
-                _ when is_number(x) ->
+                x when is_number(x) ->
                   number_to_binary(trunc(x), output_type)
 
                 :nan ->
@@ -2132,7 +2132,7 @@ defmodule Nx.BinaryBackend do
               {_, :nan} -> false
               {:infinity, _} -> true
               {_, :infinity} -> false
-              {a, b} -> a >= b
+              {a, b} when is_number(a) and is_number(b) -> a >= b
             end
           end
 
@@ -2146,7 +2146,7 @@ defmodule Nx.BinaryBackend do
               {_, :nan} -> true
               {:infinity, _} -> false
               {_, :infinity} -> true
-              {a, b} -> a <= b
+              {a, b} when is_number(a) and is_number(b) -> a <= b
             end
           end
       end

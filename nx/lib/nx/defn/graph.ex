@@ -902,7 +902,8 @@ defmodule Nx.Defn.Graph do
   end
 
   defp do_rewrite_subtree(
-         %T{data: %Expr{op: :runtime_call, id: id, args: [tensor_expr, callback, out, opts]}} = expr,
+         %T{data: %Expr{op: :runtime_call, id: id, args: [tensor_expr, callback, out, opts]}} =
+           expr,
          state,
          acc
        ) do
