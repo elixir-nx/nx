@@ -2,6 +2,8 @@ defmodule Nx.Defn.Token do
   @moduledoc """
   A `defn` token used by hooks.
 
+  Deprecated. Use `hook/2-3` instead. Will be removed in a future release.
+
   ## Documentation for compilers
 
   The token has a `hooks` field as a list of maps of the shape:
@@ -15,19 +17,17 @@ defmodule Nx.Defn.Token do
   The `hooks` field must only be accessed by `defn` compilers.
   """
 
-  @deprecated "Tokens are deprecated. Use hook/2-3 instead. Will be removed in a future release."
-
   # Hooks are stored with the hooks declared first
   # at the end of the list.
   defstruct hooks: []
 
   @doc false
   def new do
-    %Nx.Defn.Token{}
+    %__MODULE__{}
   end
 
   @doc false
-  def add_hook(%Nx.Defn.Token{} = token, expr, name, callback)
+  def add_hook(%__MODULE__{} = token, expr, name, callback)
       when is_atom(name) and (is_function(callback) or is_nil(callback)) do
     hook = %{expr: expr, name: name, callback: callback}
     update_in(token.hooks, &[hook | &1])
