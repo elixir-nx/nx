@@ -3619,16 +3619,12 @@ defmodule Nx do
           raise ArgumentError,
                 "split must be an integer greater than zero and less than the length of the given axis"
 
-        is_float(split) and float_split_index > 0 and float_split_index < axis_size ->
+        float_split_index > 0 and float_split_index < axis_size ->
           {float_split_index, axis_size - float_split_index}
-
-        is_float(split) ->
-          raise ArgumentError,
-                "split must be a float such that 0 < split and ceil(split * axis_size) < 1"
 
         true ->
           raise ArgumentError,
-                "invalid split received, expected a float or an integer, got: #{inspect(split)}"
+                "split must be a float such that 0 < split and ceil(split * axis_size) < 1"
       end
 
     {
