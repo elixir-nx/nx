@@ -143,8 +143,9 @@ defmodule Nx.Defn.KernelTest do
     end
   end
 
-  describe "hooks" do
+  describe "tokens" do
     defp zero_expr(), do: Nx.tensor(0, type: {:u, 8}, backend: Nx.Defn.Expr)
+    defp one_expr(), do: Nx.tensor(1, type: {:u, 8}, backend: Nx.Defn.Expr)
 
     test "hook/2,3" do
       result = Nx.Defn.Kernel.hook(zero_expr(), :a)
@@ -159,6 +160,41 @@ defmodule Nx.Defn.KernelTest do
       result = Nx.Defn.Kernel.hook(zero_expr(), :a, &Function.identity/1)
       assert %T{data: %Expr{op: :hook}} = result
       assert inspect(result, safe: false) =~ "a:"
+    end
+
+    test "hook_token/3,4" do
+      initial_token = Nx.Defn.Kernel.create_token()
+      {token, expr} = Nx.Defn.Kernel.hook_token(initial_token, zero_expr(), :a)
+      assert [%{name: :a, callback: nil, expr: ^expr}] = token.hooks
+      assert expr == zero_expr()
+
+      {token, expr} = Nx.Defn.Kernel.hook_token(initial_token, zero_expr(), &Function.identity/1)
+      assert [%{name: name, callback: callback, expr: ^expr}] = token.hooks
+      assert callback == (&Function.identity/1)
+      assert expr == zero_expr()
+      assert "hook_" <> _ = Atom.to_string(name)
+
+      {token, expr} =
+        Nx.Defn.Kernel.hook_token(initial_token, zero_expr(), :a, &Function.identity/1)
+
+      assert [%{name: :a, callback: callback, expr: ^expr}] = token.hooks
+      assert callback == (&Function.identity/1)
+      assert expr == zero_expr()
+
+      token = initial_token
+      {token, zero} = Nx.Defn.Kernel.hook_token(token, zero_expr(), &Function.identity/1)
+      {token, one} = Nx.Defn.Kernel.hook_token(token, one_expr(), :one)
+
+      assert [
+               %{name: :one, callback: nil, expr: ^one},
+               %{name: name, callback: callback, expr: ^zero}
+             ] = token.hooks
+
+      assert callback == (&Function.identity/1)
+      assert "hook_" <> _ = Atom.to_string(name)
+
+      result = Nx.Defn.Kernel.attach_token(token, one)
+      assert %T{data: %Expr{op: :hook}} = result
     end
   end
 

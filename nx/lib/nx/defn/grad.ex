@@ -1058,28 +1058,15 @@ defmodule Nx.Defn.Grad do
     [{x, Nx.multiply(g, gs)}]
   end
 
-  defp grad(
-         :hook,
-         [tensor_expr, _callback_spec, _template, _ref],
-         _ans,
-         g,
-         _batch_count
-       ) do
-    leaf_count = Composite.reduce(tensor_expr, 0, fn _, count -> count + 1 end)
+  defp grad(:hook, [tensor_expr, _, _, _], _ans, g, _batch_count) do
+    gs = List.wrap(g)
 
-    gs =
-      cond do
-        is_list(g) and length(g) == leaf_count -> g
-        is_tuple(g) and tuple_size(g) == leaf_count -> Tuple.to_list(g)
-        true -> List.wrap(g)
-      end
-
-    {pairs, []} =
+    {pairs, _} =
       Composite.reduce(tensor_expr, {[], gs}, fn child, {pairs, [grad | gs]} ->
         {[{child, grad} | pairs], gs}
       end)
 
-    Enum.reverse(pairs)
+    pairs
   end
 
   defp grad(:conjugate, [%{type: {type, _}} = t], _ans, g, _batch_count) do

@@ -132,8 +132,12 @@ defmodule Nx.Defn.Graph do
 
   @doc """
   Executes the stage chain with the given arguments.
+
+  `opts` is an optional keyword list forwarded to `Nx.Defn.jit_apply/3`
+  for each stage, allowing the caller to control the compiler and other
+  JIT options.
   """
-  def run(chain, args) do
+  def run(chain, args, opts \\ []) when is_list(opts) do
     scope =
       Enum.with_index(args, fn arg, idx -> {{nil, idx}, arg} end)
       |> Map.new()
@@ -147,11 +151,11 @@ defmodule Nx.Defn.Graph do
             Map.fetch!(scope, source)
           end)
 
-        case Nx.Defn.jit_apply(fn _ -> expr end, [List.to_tuple(args)]) do
+        case Nx.Defn.jit_apply(fn _ -> expr end, [List.to_tuple(args)], opts) do
           %T{} = tensor ->
             {tensor, Map.put(scope, {id, 0}, tensor)}
 
-          tuple ->
+          tuple when is_tuple(tuple) ->
             {_idx, scope} =
               tuple
               |> Tuple.to_list()
@@ -160,6 +164,13 @@ defmodule Nx.Defn.Graph do
               end)
 
             {tuple, scope}
+
+          # Arbitrary container (map/struct). Intermediate stages always emit a
+          # tuple of tensors, so this only occurs for the final stage, whose
+          # output is the chain's return value and has no downstream consumers;
+          # thread it through without indexing it into the scope.
+          other ->
+            {other, scope}
         end
       end)
 
@@ -190,6 +201,9 @@ defmodule Nx.Defn.Graph do
       nodes_to_replace: %{},
       expr_split_fn: normalized_fn,
       split_acc: initial_acc,
+      # When true, split decisions are forced to :none. Used while traversing
+      # inside a `cond` so conditionally-executed computation is never hoisted.
+      force_none: false,
       # args is a map of id -> {stage_id, output_container_position}
       args: %{}
     }
@@ -291,12 +305,21 @@ defmodule Nx.Defn.Graph do
           :elem ->
             eval_apply(:elem, ans, {cache, state})
 
+          :while ->
+            eval_while(ans, {cache, state})
+
+          :cond ->
+            eval_cond(ans, {cache, state})
+
+          :fun ->
+            eval_fun(ans, {cache, state})
+
           _ ->
             # First process the arguments with the current accumulator
             {args, {cache, state}} = Nx.Defn.Tree.apply_args(ans, {cache, state}, &eval/2)
 
             # Then check if we should split based on this node
-            {split_decision, new_acc} = state.expr_split_fn.(ans, state.split_acc)
+            {split_decision, new_acc} = split_decision(ans, state)
             state = %{state | split_acc: new_acc}
 
             case split_decision do
@@ -321,6 +344,140 @@ defmodule Nx.Defn.Graph do
 
   defp eval(other, {cache, state}) do
     {other, {cache, state}}
+  end
+
+  # Returns the split decision for `ans`, honoring `force_none`. While traversing
+  # inside a `cond`, splits must never be initiated (that would hoist conditionally
+  # executed computation out of the branch), so we force `:none`.
+  defp split_decision(_ans, %{force_none: true} = state), do: {:none, state.split_acc}
+  defp split_decision(ans, state), do: state.expr_split_fn.(ans, state.split_acc)
+
+  # `while` introduces a hermetic sub-scope: only `initial` (args[0]) belongs to the
+  # parent scope. `arg`/`pred`/`block` reference sub-scope parameters and must remain
+  # opaque, so we never traverse, hoist, or parameterize them here.
+  defp eval_while(
+         %T{data: %Expr{id: id, args: [initial, arg, pred, block]}} = ans,
+         {cache, state}
+       ) do
+    {initial, {cache, state}} = composite_eval(initial, state, cache)
+    ans = put_in(ans.data.args, [initial, arg, pred, block])
+
+    {split_decision, new_acc} = split_decision(ans, state)
+    state = %{state | split_acc: new_acc}
+
+    case split_decision do
+      :none ->
+        {ans, {Map.put(cache, id, ans), state}}
+
+      :after ->
+        split_after(ans, ans.data.args, {cache, state})
+
+      :before ->
+        while_split_before(ans, initial, {cache, state})
+
+      :both ->
+        {before_result, {cache, state}} = while_split_before(ans, initial, {cache, state})
+        split_after(before_result, before_result.data.args, {cache, state})
+    end
+  end
+
+  # `:before` for a `while` hoists only the parent-scope operands, i.e. the tensor
+  # leaves of `initial`, keeping the loop sub-scope intact.
+  defp while_split_before(
+         %T{data: %Expr{args: [_initial, arg, pred, block]}} = ans,
+         initial,
+         {cache, state}
+       ) do
+    nodes_to_replace = state.nodes_to_replace
+    stage_id = make_ref()
+
+    {new_initial, {tensor_args, _out_position, state}} =
+      Composite.traverse(initial, {[], 0, state}, fn
+        %T{data: %Expr{op: :parameter}} = leaf, {tensor_args, out_position, state} ->
+          state =
+            case Map.has_key?(state.args, leaf.data.id) do
+              false ->
+                %{state | args: Map.put(state.args, leaf.data.id, {stage_id, out_position})}
+
+              true ->
+                state
+            end
+
+          {leaf, {tensor_args, out_position, state}}
+
+        %T{} = leaf, {tensor_args, out_position, state} ->
+          param = Expr.parameter(leaf, map_size(state.args))
+
+          state = %{
+            state
+            | args: Map.put(state.args, param.data.id, {stage_id, out_position}),
+              nodes_to_replace: Map.put(state.nodes_to_replace, leaf.data.id, param)
+          }
+
+          {param, {[leaf | tensor_args], out_position + 1, state}}
+      end)
+
+    case tensor_args do
+      [] ->
+        # No parent-scope computations to hoist, so there is no prior stage to
+        # create. Leave the while inline; for `:both` the caller's `split_after`
+        # still isolates it in its own stage.
+        {ans, {cache, state}}
+
+      _ ->
+        new_expr = put_in(ans.data.args, [new_initial, arg, pred, block])
+        stage_expr = List.to_tuple(Enum.reverse(tensor_args))
+
+        state =
+          update_in(
+            state.expression_chain,
+            &[{stage_id, stage_expr, nodes_to_replace} | &1]
+          )
+
+        cache = Map.put(cache, new_expr.data.id, new_expr)
+        {new_expr, {cache, state}}
+    end
+  end
+
+  # `cond` shares the parent scope: its predicates and clause bodies reference
+  # parent-scope tensors directly. We traverse them to collect/remap parent-scope
+  # dependencies (forcing :none so no conditionally-executed work is hoisted), but
+  # treat the `cond` itself as an opaque unit for splitting.
+  defp eval_cond(%T{data: %Expr{id: id, args: [clauses, last]}} = ans, {cache, state}) do
+    outer_force_none = state.force_none
+    state = %{state | force_none: true}
+
+    {clauses, {cache, state}} =
+      Enum.map_reduce(clauses, {cache, state}, fn {pred, body}, {cache, state} ->
+        {pred, {cache, state}} = eval(pred, {cache, state})
+        {body, {cache, state}} = composite_eval(body, state, cache)
+        {{pred, body}, {cache, state}}
+      end)
+
+    {last, {cache, state}} = composite_eval(last, state, cache)
+    state = %{state | force_none: outer_force_none}
+
+    ans = put_in(ans.data.args, [clauses, last])
+
+    {split_decision, new_acc} = split_decision(ans, state)
+    state = %{state | split_acc: new_acc}
+
+    case split_decision do
+      :none ->
+        {ans, {Map.put(cache, id, ans), state}}
+
+      # A `cond` exposes no top-level hoistable operands, so every split decision
+      # collapses to isolating the opaque node in its own stage. Routing through
+      # `split_before` would wrongly hoist `last`.
+      _ ->
+        split_after(ans, ans.data.args, {cache, state})
+    end
+  end
+
+  # `fun` wraps a hermetic body (defn closures receive all external values as
+  # arguments), so it is an opaque leaf. Function values are not splittable.
+  defp eval_fun(%T{data: %Expr{id: id}} = ans, {cache, state}) do
+    {ans, {Map.put(cache, id, ans), state}}
   end
 
   defp split_before(expr, args, {cache, state}) do
@@ -444,31 +601,87 @@ defmodule Nx.Defn.Graph do
 
     # The stage computes the current expression with its original args
     new_expr = put_in(expr.data.args, args)
-    stage_expr = {new_expr}
 
-    # Create a parameter that represents the output of this stage
-    result_param = Expr.parameter(new_expr, map_size(state.args))
+    case new_expr do
+      %T{type: {:tuple, _}, data: %Expr{op: op}} when op in [:while, :cond] ->
+        split_after_tuple(new_expr, stage_id, nodes_to_replace, {cache, state})
 
-    # Update state to track this stage output
+      _ ->
+        stage_expr = {new_expr}
+
+        # Create a parameter that represents the output of this stage
+        result_param = Expr.parameter(new_expr, map_size(state.args))
+
+        # Update state to track this stage output
+        state = %{
+          state
+          | args: Map.put(state.args, result_param.data.id, {stage_id, 0}),
+            nodes_to_replace: Map.put(state.nodes_to_replace, new_expr.data.id, result_param)
+        }
+
+        state =
+          update_in(
+            state.expression_chain,
+            &[
+              {stage_id, stage_expr, nodes_to_replace}
+              | &1
+            ]
+          )
+
+        cache = Map.put(cache, result_param.data.id, result_param)
+
+        {result_param, {cache, state}}
+    end
+  end
+
+  # A tuple-typed opaque node (e.g. a multi-value `while`/`cond`) cannot be carried
+  # across a stage boundary as a single value: the evaluator does not accept
+  # tuple-valued parameters. We therefore flatten it into one stage output per tuple
+  # element and replace the node with a literal tuple of per-element parameters, so
+  # downstream `elem/2` projections resolve directly to those parameters.
+  defp split_after_tuple(new_expr, stage_id, nodes_to_replace, {cache, state}) do
+    leaves = tuple_output_leaves(new_expr)
+    elems = Expr.tuple(new_expr, leaves)
+
+    {params, state} =
+      elems
+      |> Tuple.to_list()
+      |> Enum.with_index()
+      |> Enum.map_reduce(state, fn {elem_expr, index}, state ->
+        param = Expr.parameter(elem_expr, map_size(state.args))
+        state = %{state | args: Map.put(state.args, param.data.id, {stage_id, index})}
+        {param, state}
+      end)
+
+    result = List.to_tuple(params)
+
     state = %{
       state
-      | args: Map.put(state.args, result_param.data.id, {stage_id, 0}),
-        nodes_to_replace: Map.put(state.nodes_to_replace, new_expr.data.id, result_param)
+      | nodes_to_replace: Map.put(state.nodes_to_replace, new_expr.data.id, result)
     }
 
     state =
       update_in(
         state.expression_chain,
         &[
-          {stage_id, stage_expr, nodes_to_replace}
+          {stage_id, elems, nodes_to_replace}
           | &1
         ]
       )
 
-    cache = Map.put(cache, result_param.data.id, result_param)
+    cache = Map.put(cache, new_expr.data.id, result)
 
-    {result_param, {cache, state}}
+    {result, {cache, state}}
   end
+
+  # Output element templates for an opaque control-flow node, used to project its
+  # tuple result into per-element stage outputs. For `while` the carried `arg`
+  # mirrors the output shape; for `cond` the `last` clause is the output template.
+  defp tuple_output_leaves(%T{data: %Expr{op: :while, args: [_initial, arg, _pred, _block]}}),
+    do: Composite.flatten_list([arg])
+
+  defp tuple_output_leaves(%T{data: %Expr{op: :cond, args: [_clauses, last]}}),
+    do: Composite.flatten_list([last])
 
   defp split_both(expr, args, {cache, state}) do
     # For :both mode, we need to check if split_before would create intermediate computations
@@ -530,7 +743,7 @@ defmodule Nx.Defn.Graph do
     {ans, {Map.put(cache, id, ans), state}}
   end
 
-  defp composite_rewrite_subtree(container, state, acc \\ %{used_args: %{}})
+  defp composite_rewrite_subtree(container, state, acc \\ %{used_args: %{}, cache: %{}})
 
   defp composite_rewrite_subtree(container, state, acc) when is_list(container) do
     Enum.map_reduce(container, acc, fn
@@ -549,7 +762,26 @@ defmodule Nx.Defn.Graph do
     Composite.traverse(container, acc, &rewrite_subtree(&1, state, &2))
   end
 
-  defp rewrite_subtree(%T{data: %Expr{id: id, op: :parameter}} = expr, state, acc) do
+  # Memoize per node id within a single `composite_rewrite_subtree` pass. The
+  # rewrite is pure given a fixed `nodes_to_replace` (constant for one pass), so
+  # a shared subtree need only be rewritten once. Without this, a heavily-shared
+  # DAG (e.g. a many-layer transformer graph) is walked once per incoming edge,
+  # which is exponential. `used_args` is an id-keyed map, so collecting a node's
+  # parameters once is sufficient; revisits return the cached node untouched.
+  defp rewrite_subtree(%T{data: %Expr{id: id}} = expr, state, acc) do
+    case acc.cache do
+      %{^id => cached} ->
+        {cached, acc}
+
+      _ ->
+        {res, acc} = do_rewrite_subtree(expr, state, acc)
+        {res, %{acc | cache: Map.put(acc.cache, id, res)}}
+    end
+  end
+
+  defp rewrite_subtree(other, state, acc), do: do_rewrite_subtree(other, state, acc)
+
+  defp do_rewrite_subtree(%T{data: %Expr{id: id, op: :parameter}} = expr, state, acc) do
     case state.nodes_to_replace do
       %{^id => res} ->
         # This parameter is being replaced by a stage output - collect the replacement
@@ -564,7 +796,7 @@ defmodule Nx.Defn.Graph do
     end
   end
 
-  defp rewrite_subtree(
+  defp do_rewrite_subtree(
          %T{data: %Expr{op: :block, id: id, args: [struct, in_args, subexpr, fun]}} = expr,
          state,
          acc
@@ -583,7 +815,60 @@ defmodule Nx.Defn.Graph do
     end
   end
 
-  defp rewrite_subtree(
+  defp do_rewrite_subtree(
+         %T{data: %Expr{op: :while, id: id, args: [initial, arg, pred, block]}} = expr,
+         state,
+         acc
+       ) do
+    case state.nodes_to_replace do
+      %{^id => res} ->
+        {res, put_in(acc.used_args[id], res)}
+
+      _ ->
+        # Only `initial` belongs to the parent scope; the loop sub-scope
+        # (arg/pred/block) is hermetic and kept as is.
+        {initial, acc} = composite_rewrite_subtree(initial, state, acc)
+        {put_in(expr.data.args, [initial, arg, pred, block]), acc}
+    end
+  end
+
+  defp do_rewrite_subtree(
+         %T{data: %Expr{op: :cond, id: id, args: [clauses, last]}} = expr,
+         state,
+         acc
+       ) do
+    case state.nodes_to_replace do
+      %{^id => res} ->
+        {res, put_in(acc.used_args[id], res)}
+
+      _ ->
+        # `cond` shares the parent scope, so we must recurse into preds/bodies/last
+        # to remap parameters. The generic clause's `composite_rewrite_subtree` does
+        # not descend into the `{pred, body}` tuples.
+        {clauses, acc} =
+          Enum.map_reduce(clauses, acc, fn {pred, body}, acc ->
+            {pred, acc} = rewrite_subtree(pred, state, acc)
+            {body, acc} = composite_rewrite_subtree(body, state, acc)
+            {{pred, body}, acc}
+          end)
+
+        {last, acc} = composite_rewrite_subtree(last, state, acc)
+        {put_in(expr.data.args, [clauses, last]), acc}
+    end
+  end
+
+  defp do_rewrite_subtree(%T{data: %Expr{op: :fun, id: id}} = expr, state, acc) do
+    case state.nodes_to_replace do
+      %{^id => res} ->
+        {res, put_in(acc.used_args[id], res)}
+
+      _ ->
+        # `fun` wraps a hermetic body, so it is kept opaque.
+        {expr, acc}
+    end
+  end
+
+  defp do_rewrite_subtree(
          %T{data: %Expr{id: id, op: :elem, args: [tuple_expr, index]}} = expr,
          state,
          acc
@@ -608,18 +893,36 @@ defmodule Nx.Defn.Graph do
             param = Expr.parameter(elem_expr, index)
             {param, put_in(acc.used_args[elem_expr.data.id], param)}
 
-          # Tuple tensor: create a parameter pointing to this index
-          %T{type: {:tuple, _}} ->
-            param = Expr.parameter(expr, index)
-            {param, put_in(acc.used_args[param.data.id], param)}
-
+          # Otherwise the tuple is computed in this stage (e.g. an opaque `while`/`cond`
+          # still inline, or a tuple-output op); keep the `elem` projection as is.
           _ ->
             {put_in(expr.data.args, [tuple_expr, index]), acc}
         end
     end
   end
 
-  defp rewrite_subtree(%T{data: %Expr{id: id, args: args}} = expr, state, acc) do
+  defp do_rewrite_subtree(
+         %T{data: %Expr{op: :runtime_call, id: id, args: [tensor_expr, callback, out, opts]}} =
+           expr,
+         state,
+         acc
+       ) do
+    case state.nodes_to_replace do
+      %{^id => res} ->
+        {res, put_in(acc.used_args[id], res)}
+
+      _ ->
+        # The operands live in `tensor_expr` (an Nx container, usually a tuple);
+        # `callback`/`out`/`opts` are opaque. The generic clause's list handling
+        # skips non-list container elements, which would drop the operands'
+        # parameters from `used_args`. Traverse them here (mirrors
+        # `Nx.Defn.Tree.apply_args/4`'s `:runtime_call` clause).
+        {tensor_expr, acc} = composite_rewrite_subtree(tensor_expr, state, acc)
+        {put_in(expr.data.args, [tensor_expr, callback, out, opts]), acc}
+    end
+  end
+
+  defp do_rewrite_subtree(%T{data: %Expr{id: id, args: args}} = expr, state, acc) do
     case state.nodes_to_replace do
       %{^id => res} ->
         # nodes_to_replace always contains a param
@@ -631,5 +934,5 @@ defmodule Nx.Defn.Graph do
     end
   end
 
-  defp rewrite_subtree(other, _, acc), do: {other, acc}
+  defp do_rewrite_subtree(other, _, acc), do: {other, acc}
 end

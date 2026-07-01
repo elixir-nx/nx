@@ -164,8 +164,16 @@ defmodule Nx.Defn.Tree do
   def apply_args(%T{data: %Expr{op: :hook, args: args}}, _type, acc, fun) do
     [tensor_expr, callback_spec, template, ref] = args
     {tensor_expr, acc} = Composite.traverse(tensor_expr, acc, fun)
+    {callback_spec, acc} = traverse_token_hook_spec(callback_spec, acc, fun)
     {[tensor_expr, callback_spec, template, ref], acc}
   end
+
+  defp traverse_token_hook_spec({:token_hook, hooked_expr, inner_spec}, acc, fun) do
+    {hooked_expr, acc} = Composite.traverse(hooked_expr, acc, fun)
+    {{:token_hook, hooked_expr, inner_spec}, acc}
+  end
+
+  defp traverse_token_hook_spec(callback_spec, acc, _fun), do: {callback_spec, acc}
 
   def apply_args(%T{data: %Expr{op: :runtime_call, args: args}}, _type, acc, fun) do
     [tensor_expr, callback, out_template, opts] = args

@@ -441,6 +441,36 @@ defmodule Nx.Defn.Expr do
   def id(), do: make_ref()
 
   @doc false
+  def add_hook(%Nx.Defn.Token{} = token, expr, name, function)
+      when is_atom(name) and (is_function(function) or is_nil(function)) do
+    expr = to_container_expr(expr)
+    token = Nx.Defn.Token.add_hook(token, expr, name, function)
+    {token, expr}
+  end
+
+  @doc false
+  def attach_token(%Nx.Defn.Token{hooks: []}, expr), do: to_container_expr(expr)
+
+  def attach_token(%Nx.Defn.Token{hooks: hooks}, expr) do
+    expr = to_container_expr(expr)
+
+    hooks
+    |> Enum.reverse()
+    |> Enum.reduce(expr, fn %{expr: hooked_expr, name: name, callback: callback}, acc ->
+      hooked_expr = to_container_expr(hooked_expr)
+      inner_spec = hook_callback_spec(name, callback)
+      hook(acc, {:token_hook, hooked_expr, inner_spec})
+    end)
+  end
+
+  defp hook_callback_spec(name, nil) when is_atom(name), do: {:named, name, nil}
+
+  defp hook_callback_spec(name, callback) when is_atom(name) and is_function(callback, 1),
+    do: {:named, name, callback}
+
+  defp hook_callback_spec(_name, callback) when is_function(callback, 1), do: {:fn, callback}
+
+  @doc false
   def hook(tensor_or_container, callback_spec) do
     tensor_expr =
       Composite.traverse(tensor_or_container, fn
@@ -453,7 +483,7 @@ defmodule Nx.Defn.Expr do
 
     ref = make_ref()
     user_template = Nx.to_template(tensor_or_container)
-    leaf_count = user_template |> List.wrap() |> Composite.flatten_list() |> length()
+    leaf_count = Composite.reduce(user_template, 0, fn _, acc -> acc + 1 end)
 
     root_type =
       case user_template do
@@ -1772,13 +1802,27 @@ defmodule Nx.Defn.Expr do
     {data, state} = recur_inspect(data, state)
     var_name = var_name(state)
 
-    expr =
+    {expr, state} =
       case callback_spec do
+        {:token_hook, hooked_expr, inner_spec} ->
+          {hooked_expr, state} = recur_inspect(hooked_expr, state)
+
+          hook_io =
+            case inner_spec do
+              {:named, name, _} ->
+                IO.iodata_to_binary(["hook ", Atom.to_string(name), ": ", hooked_expr])
+
+              {:fn, fun} ->
+                IO.iodata_to_binary(["hook ", hooked_expr, ", ", inspect(fun)])
+            end
+
+          {IO.iodata_to_binary([var_name, " = ", hook_io, "; ", data]), state}
+
         {:named, name, _} ->
-          IO.iodata_to_binary([var_name, " = hook ", Atom.to_string(name), ": ", data])
+          {IO.iodata_to_binary([var_name, " = hook ", Atom.to_string(name), ": ", data]), state}
 
         {:fn, fun} ->
-          IO.iodata_to_binary([var_name, " = hook ", data, ", ", inspect(fun)])
+          {IO.iodata_to_binary([var_name, " = hook ", data, ", ", inspect(fun)]), state}
       end
 
     {var_name, store_line(state, :exprs, expr, type_shape)}

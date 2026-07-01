@@ -822,21 +822,63 @@ defmodule EXLA.Defn do
          %T{
            data: %Expr{
              id: id,
-             args: [tensor_expr, callback_spec, _template, _ref]
+             args: [tensor_expr, {:token_hook, hooked_expr, inner_spec}, _template, _ref]
            }
-         },
+         } = hook_expr,
          %{client: %EXLA.Client{platform: platform}, callback_pid_value: callback_pid_value} =
            state,
          cache
        )
        when platform in [:host, :cuda] do
-    {reverse_arg_values, cache} =
-      Composite.reduce(tensor_expr, {[], cache}, fn %T{} = expr, {acc, cache} ->
+    {reverse_hooked_values, reverse_hooked_typespecs, cache} =
+      Composite.reduce(hooked_expr, {[], [], cache}, fn %T{} = expr, {acc, typespecs, cache} ->
         {value, cache} = recur_operator(expr, state, cache) |> unwrap_single_tensor!()
-        {[value | acc], cache}
+        {[value | acc], [Value.get_typespec(value) | typespecs], cache}
+      end)
+
+    hooked_values = Enum.reverse(reverse_hooked_values)
+    hooked_typespecs = Enum.reverse(reverse_hooked_typespecs)
+    hooked_template = Nx.to_template(hooked_expr)
+
+    cache = add_callback(cache, {id, inner_spec, nil, hooked_template})
+
+    unless callback_pid_value do
+      raise "internal bug: hook callback pid operand is missing"
+    end
+
+    num_aliased = length(hooked_typespecs)
+
+    Value.host_callback(
+      [callback_pid_value | hooked_values],
+      hooked_typespecs,
+      id,
+      num_aliased
+    )
+
+    recur_hook_pass(tensor_expr, hook_expr, state, cache)
+  end
+
+  defp cached_recur_operator(
+         :hook,
+         %T{
+           data: %Expr{
+             id: id,
+             args: [tensor_expr, callback_spec, _template, _ref]
+           }
+         } = hook_expr,
+         %{client: %EXLA.Client{platform: platform}, callback_pid_value: callback_pid_value} =
+           state,
+         cache
+       )
+       when platform in [:host, :cuda] do
+    {reverse_arg_values, reverse_typespecs, cache} =
+      Composite.reduce(tensor_expr, {[], [], cache}, fn %T{} = expr, {acc, typespecs, cache} ->
+        {value, cache} = recur_operator(expr, state, cache) |> unwrap_single_tensor!()
+        {[value | acc], [Value.get_typespec(value) | typespecs], cache}
       end)
 
     arg_values = Enum.reverse(reverse_arg_values)
+    leaf_typespecs = Enum.reverse(reverse_typespecs)
     arg_template = Nx.to_template(tensor_expr)
 
     cache = add_callback(cache, {id, callback_spec, nil, arg_template})
@@ -845,19 +887,12 @@ defmodule EXLA.Defn do
       raise "internal bug: hook callback pid operand is missing"
     end
 
-    leaf_typespecs = Enum.map(arg_values, &Value.get_typespec/1)
     num_aliased = length(leaf_typespecs)
 
     aliased_outputs =
       Value.host_callback([callback_pid_value | arg_values], leaf_typespecs, id, num_aliased)
 
-    result =
-      case arg_template do
-        %Nx.Tensor{} -> hd(aliased_outputs)
-        _ -> aliased_outputs
-      end
-
-    {result, cache}
+    {wrap_tuple_result(aliased_outputs, hook_expr), cache}
   end
 
   defp cached_recur_operator(
@@ -867,7 +902,7 @@ defmodule EXLA.Defn do
          _cache
        ) do
     raise """
-    Nx.hook/3 is currently only supported for EXLA CPU (platform: :host) and CUDA (platform: :cuda),
+    hook/3 is currently only supported for EXLA CPU (platform: :host) and CUDA (platform: :cuda),
     but the active EXLA client is configured for platform #{inspect(platform)}.
     Please run on the :host or :cuda client or wait for future segmentation-based support.
     """
@@ -2336,6 +2371,22 @@ defmodule EXLA.Defn do
 
   defp to_mlir_logical(%Value{} = value) do
     to_type(value, {:pred, 8})
+  end
+
+  defp recur_hook_pass(%T{data: %Expr{}} = expr, _hook_expr, state, cache) do
+    recur_operator(expr, state, cache)
+  end
+
+  defp recur_hook_pass(composite, hook_expr, state, cache) do
+    {values, cache} =
+      composite
+      |> List.wrap()
+      |> Composite.flatten_list()
+      |> Enum.map_reduce(cache, fn %T{} = expr, cache ->
+        recur_operator(expr, state, cache) |> unwrap_single_tensor!()
+      end)
+
+    {wrap_tuple_result(values, hook_expr), cache}
   end
 
   defp container_to_typespecs(container) do

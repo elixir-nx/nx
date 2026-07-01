@@ -230,7 +230,7 @@ defmodule Nx.Defn.Kernel do
 
   """
   def print_value(expr, fun, opts) when Kernel.and(is_function(fun, 1), is_list(opts)) do
-    Nx.hook(expr, fn t -> IO.inspect(fun.(t), opts) end)
+    Nx.Defn.Expr.hook(expr, {:fn, fn t -> IO.inspect(fun.(t), opts) end})
   end
 
   @doc """
@@ -1318,10 +1318,10 @@ defmodule Nx.Defn.Kernel do
   def hook(expr, name_or_function)
 
   def hook(expr, name) when is_atom(name),
-    do: Nx.hook(expr, name)
+    do: unguarded_hook(expr, name, nil)
 
   def hook(expr, function) when is_function(function, 1),
-    do: Nx.hook(expr, function)
+    do: unguarded_hook(expr, random_hook_name(), function)
 
   @doc """
   Defines a hook.
@@ -1421,9 +1421,71 @@ defmodule Nx.Defn.Kernel do
   If an hook with the same name is given to `Nx.Defn.jit/2`,
   then it will override the default callback.
 
+  ## Hooks and tokens
+
+  If the values you want to hook are not part of the return value,
+  you can use tokens to enforce hook ordering:
+
+      defn add_and_mult(a, b) do
+        token = create_token()
+        {token, _add} = hook_token(token, a + b, :hooks_add, &IO.inspect({:add, &1}))
+        {token, mult} = hook_token(token, a * b, :hooks_mult, &IO.inspect({:mult, &1}))
+        attach_token(token, mult)
+      end
+
+  Tokens are deprecated and will be removed in a future release.
+  Prefer `hook/2-3` on values that are part of the return when possible.
+
   """
   def hook(expr, name, function) when Kernel.and(is_atom(name), is_function(function, 1)),
-    do: Nx.hook(expr, name, function)
+    do: unguarded_hook(expr, name, function)
+
+  defp unguarded_hook(expr, name, function) do
+    {token, result} = Nx.Defn.Expr.add_hook(Nx.Defn.Token.new(), expr, name, function)
+    Nx.Defn.Expr.attach_token(token, result)
+  end
+
+  @doc """
+  Shortcut for `hook_token/4`.
+  """
+  @deprecated "Use hook/2-3 instead. Will be removed in a future release."
+  def hook_token(token, expr, name_or_function)
+
+  def hook_token(%Nx.Defn.Token{} = token, expr, name) when is_atom(name),
+    do: Nx.Defn.Expr.add_hook(token, expr, name, nil)
+
+  def hook_token(%Nx.Defn.Token{} = token, expr, function) when is_function(function, 1),
+    do: Nx.Defn.Expr.add_hook(token, expr, random_hook_name(), function)
+
+  @doc """
+  Defines a hook with an existing token. See `hook/3`.
+  """
+  @deprecated "Use hook/2-3 instead. Will be removed in a future release."
+  def hook_token(%Nx.Defn.Token{} = token, expr, name, function)
+      when Kernel.and(is_atom(name), is_function(function, 1)),
+      do: Nx.Defn.Expr.add_hook(token, expr, name, function)
+
+  defp random_hook_name(), do: :"hook_#{System.unique_integer([:positive])}"
+
+  @doc """
+  Creates a token for hooks. See `hook/3`.
+
+  Deprecated. Tokens will be removed in a future release.
+  """
+  @deprecated "Use hook/2-3 instead. Will be removed in a future release."
+  def create_token do
+    Nx.Defn.Token.new()
+  end
+
+  @doc """
+  Attaches a token to an expression. See `hook/3`.
+
+  Deprecated. Tokens will be removed in a future release.
+  """
+  @deprecated "Use hook/2-3 instead. Will be removed in a future release."
+  def attach_token(%Nx.Defn.Token{} = token, expr) do
+    Nx.Defn.Expr.attach_token(token, expr)
+  end
 
   @doc """
   Asserts the keyword list has the given keys.
