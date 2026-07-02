@@ -58,7 +58,22 @@ defmodule Torchx.MixProject do
       main: "Torchx",
       source_url_pattern: "#{@source_url}/blob/v#{@version}/torchx/%{path}#L%{line}",
       extras: [
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        "guides/backend_documentation/index.md": [
+          filename: "backend_documentation",
+          title: "Backend documentation"
+        ],
+        "guides/backend_documentation/nx.md": [
+          filename: "backend_documentation-nx",
+          title: "Nx (Torchx)"
+        ],
+        "guides/backend_documentation/nx_lin_alg.md": [
+          filename: "backend_documentation-nx_lin_alg",
+          title: "Nx.LinAlg (Torchx)"
+        ]
+      ],
+      groups_for_extras: [
+        "Backend documentation": ~r"^guides/backend_documentation/"
       ]
     ]
   end
@@ -68,7 +83,7 @@ defmodule Torchx.MixProject do
       maintainers: ["Paulo Valente", "José Valim"],
       licenses: ["Apache-2.0"],
       links: %{"GitHub" => @source_url},
-      files: ["lib", "mix.exs", "README.md", "LICENSE", "CHANGELOG.md", "c_src", "CMakeLists.txt"]
+      files: ["lib", "mix.exs", "README.md", "LICENSE", "CHANGELOG.md", "guides", "c_src", "CMakeLists.txt"]
     ]
   end
 

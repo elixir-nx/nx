@@ -74,7 +74,11 @@ defmodule Nx.MixProject do
         "guides/advanced/aggregation.livemd",
         "guides/advanced/automatic_differentiation.livemd",
         "guides/advanced/complex_fft.livemd",
-        "guides/exercises/exercises-1-20.livemd"
+        "guides/exercises/exercises-1-20.livemd",
+        "guides/backend_documentation/convention.md": [
+          filename: "backend_documentation-convention",
+          title: "Backend documentation convention"
+        ]
       ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
       groups_for_docs: [
@@ -132,6 +136,7 @@ defmodule Nx.MixProject do
       groups_for_extras: [
         "Getting Started": ~r"^guides/getting_started/",
         Cheatsheets: ~r"^guides/cheatsheets/",
+        "Backend documentation": ~r"^guides/backend_documentation/",
         Exercises: ~r"^guides/exercises/",
         Advanced: ~r"^guides/advanced/"
       ]

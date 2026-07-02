@@ -157,6 +157,14 @@ defmodule Torchx do
   PyTorch implements a variety of devices, which can be seen below.
 
   #{@valid_devices_md_list}
+
+  ## Backend documentation
+
+  Per-operation implementation notes for Nx linear algebra are documented in
+  [Nx.LinAlg](backend_documentation-nx_lin_alg.html). Top-level `Nx` blocks and
+  transfers are documented in [Nx](backend_documentation-nx.html). See the
+  [backend documentation convention](https://hexdocs.pm/nx/backend_documentation-convention.html)
+  in the Nx package.
   """
   use Torchx.Macro
   alias Torchx.NIF

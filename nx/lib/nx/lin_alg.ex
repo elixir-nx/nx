@@ -136,6 +136,11 @@ defmodule Nx.LinAlg do
           ]
         ]
       >
+
+  ## Backend notes
+
+  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx_lin_alg.html#cholesky-1) and
+  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx_lin_alg.html#cholesky-1).
   """
   def cholesky(tensor) do
     %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
@@ -584,6 +589,11 @@ defmodule Nx.LinAlg do
       iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :other)
       ** (ArgumentError) invalid value for :transform_a option, expected :none, :transpose, or :conjugate, got: :other
 
+
+  ## Backend notes
+
+  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx_lin_alg.html#triangular_solve-3) and
+  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx_lin_alg.html#triangular_solve-3).
   """
   def triangular_solve(a, b, opts \\ []) do
     opts = keyword!(opts, lower: true, left_side: true, transform_a: :none)
@@ -697,6 +707,11 @@ defmodule Nx.LinAlg do
 
       iex> Nx.LinAlg.solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4]))
       ** (ArgumentError) `a` tensor has incompatible dimensions, expected a square matrix or a batch of square matrices, got: {3, 4}
+
+  ## Backend notes
+
+  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx_lin_alg.html#solve-2) and
+  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx_lin_alg.html#solve-2).
   """
   # IMPORTANT: This function cannot be a defn because
   # optional needs to work on the actual backend.
@@ -1123,6 +1138,11 @@ defmodule Nx.LinAlg do
       iex> t = Nx.tensor([[-3, 2, 1], [0, 1, 1], [0, 0, -1]])
       iex> Nx.LinAlg.qr(t, mode: :error_test)
       ** (ArgumentError) invalid :mode received. Expected one of [:reduced, :complete], received: :error_test
+
+  ## Backend notes
+
+  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx_lin_alg.html#qr-2) and
+  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx_lin_alg.html#qr-2).
   """
   def qr(tensor, opts \\ []) do
     opts = keyword!(opts, mode: :reduced, eps: 1.0e-10)
@@ -1383,6 +1403,11 @@ defmodule Nx.LinAlg do
 
       iex> Nx.LinAlg.eigh(Nx.tensor([[1, 2, 3], [4, 5, 6]]))
       ** (ArgumentError) tensor must be a square matrix or a batch of square matrices, got shape: {2, 3}
+
+  ## Backend notes
+
+  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx_lin_alg.html#eigh-2) and
+  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx_lin_alg.html#eigh-2).
   """
   def eigh(tensor, opts \\ []) do
     opts = keyword!(opts, max_iter: 1_000, eps: 1.0e-4)
@@ -1506,6 +1531,11 @@ defmodule Nx.LinAlg do
           [0.0, 0.0, 1.0]
         ]
       >
+
+  ## Backend notes
+
+  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx_lin_alg.html#svd-2) and
+  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx_lin_alg.html#svd-2).
   """
   def svd(tensor, opts \\ []) do
     opts = keyword!(opts, max_iter: 100, full_matrices?: true)
@@ -1736,6 +1766,11 @@ defmodule Nx.LinAlg do
 
       iex> Nx.LinAlg.lu(Nx.tensor([[1, 1, 1, 1], [-1, 4, 4, -1], [4, -2, 2, 0]]))
       ** (ArgumentError) tensor must be a square matrix or a batch of square matrices, got shape: {3, 4}
+
+  ## Backend notes
+
+  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx_lin_alg.html#lu-1) and
+  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx_lin_alg.html#lu-1).
   """
   def lu(tensor) do
     %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
@@ -1985,6 +2020,11 @@ defmodule Nx.LinAlg do
         -0.0-6.0i
       >
 
+
+  ## Backend notes
+
+  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx_lin_alg.html#determinant-1) and
+  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx_lin_alg.html#determinant-1).
   """
   # IMPORTANT: This function cannot be a defn because
   # optional needs to work on the actual backend.

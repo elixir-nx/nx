@@ -70,7 +70,8 @@ defmodule EXLA.MixProject do
 
   defp deps do
     [
-      {:nx, path: "../nx"},
+      {:nx, "~> 0.12.0"},
+      # {:nx, path: "../nx"},
       {:telemetry, "~> 0.4.0 or ~> 1.0"},
       {:xla, "~> 0.10.0", runtime: false},
       {:fine, "~> 0.1", runtime: false},
@@ -87,9 +88,24 @@ defmodule EXLA.MixProject do
       source_url_pattern: "#{@source_url}/blob/v#{@version}/exla/%{path}#L%{line}",
       extras: [
         "guides/rotating-image.livemd",
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        "guides/backend_documentation/index.md": [
+          filename: "backend_documentation",
+          title: "Backend documentation"
+        ],
+        "guides/backend_documentation/nx.md": [
+          filename: "backend_documentation-nx",
+          title: "Nx (EXLA)"
+        ],
+        "guides/backend_documentation/nx_lin_alg.md": [
+          filename: "backend_documentation-nx_lin_alg",
+          title: "Nx.LinAlg (EXLA)"
+        ]
       ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
+      groups_for_extras: [
+        "Backend documentation": ~r"^guides/backend_documentation/"
+      ],
       groups_for_modules: [
         # EXLA,
         # EXLA.Backend,
