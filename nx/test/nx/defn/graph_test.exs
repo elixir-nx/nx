@@ -1,6 +1,7 @@
 defmodule Nx.Defn.GraphTest.RuntimeCallback do
   @moduledoc false
   def add_pair({a, b}, _opts), do: Nx.add(a, b)
+  def cast_f32(t, _opts), do: Nx.as_type(t, :f32)
 end
 
 defmodule Nx.Defn.GraphTest do
@@ -1050,6 +1051,72 @@ defmodule Nx.Defn.GraphTest do
       assert Enum.all?(referenced_indices, &(&1 < length(rc_stage.arguments)))
 
       assert Graph.run(stages, [a, b], compiler: Nx.Defn.Evaluator) == expected
+    end
+
+    test "split :before does not hoist a runtime_call's out_template as a stage parameter" do
+      callback = &Nx.Defn.GraphTest.RuntimeCallback.cast_f32/2
+
+      fun = fn qw ->
+        # `qw` is the sole tensor operand and a bare parameter, so the
+        # `out_template` built by `Nx.template/3` is the only other
+        # `%Nx.Tensor{}` in the runtime_call's args -- it must not be
+        # mistaken for a real graph node to hoist.
+        r = Nx.runtime_call(Nx.template({4}, :f32), qw, [], callback)
+        Nx.add(r, 1)
+      end
+
+      qw = Nx.tensor([1, 2, 3, 4], type: :u8)
+
+      expected = Nx.Defn.jit(fun, compiler: Nx.Defn.Evaluator).(qw)
+      expr = Nx.Defn.debug_expr(fun).(qw)
+
+      stages =
+        Graph.split(expr, fn
+          %T{data: %Expr{op: :runtime_call}} -> :before
+          _ -> :none
+        end)
+
+      rc_stage =
+        Enum.find(stages, fn stage ->
+          stage.expr |> wrap_outputs() |> Enum.any?(&contains_op?(&1, :runtime_call))
+        end)
+
+      assert rc_stage
+
+      # The stage's parameter count must match what its expression actually
+      # references -- out_template must not have been hoisted as a spurious
+      # extra parameter.
+      referenced_indices =
+        rc_stage.expr
+        |> wrap_outputs()
+        |> Enum.flat_map(&collect_param_indices(&1, []))
+        |> Enum.uniq()
+
+      assert Enum.all?(referenced_indices, &(&1 < length(rc_stage.arguments)))
+
+      assert Graph.run(stages, [qw], compiler: Nx.Defn.Evaluator) == expected
+    end
+
+    test "split :both does not hoist a runtime_call's out_template as an intermediate computation" do
+      callback = &Nx.Defn.GraphTest.RuntimeCallback.cast_f32/2
+
+      fun = fn qw ->
+        r = Nx.runtime_call(Nx.template({4}, :f32), qw, [], callback)
+        Nx.add(r, 1)
+      end
+
+      qw = Nx.tensor([1, 2, 3, 4], type: :u8)
+
+      expected = Nx.Defn.jit(fun, compiler: Nx.Defn.Evaluator).(qw)
+      expr = Nx.Defn.debug_expr(fun).(qw)
+
+      stages =
+        Graph.split(expr, fn
+          %T{data: %Expr{op: :runtime_call}} -> :both
+          _ -> :none
+        end)
+
+      assert Graph.run(stages, [qw], compiler: Nx.Defn.Evaluator) == expected
     end
 
     test "run/3 returns a non-tuple (map) container as the final output" do
