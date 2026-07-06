@@ -60,16 +60,13 @@ defmodule Torchx.MixProject do
       extras: [
         "CHANGELOG.md",
         "guides/backend_documentation/index.md": [
-          filename: "backend_documentation",
-          title: "Backend documentation"
+          filename: "backend_documentation"
         ],
         "guides/backend_documentation/nx.md": [
-          filename: "backend_documentation-nx",
-          title: "Nx (Torchx)"
+          filename: "backend_documentation-nx"
         ],
         "guides/backend_documentation/nx_lin_alg.md": [
-          filename: "backend_documentation-nx_lin_alg",
-          title: "Nx.LinAlg (Torchx)"
+          filename: "backend_documentation-nx_lin_alg"
         ]
       ],
       groups_for_extras: [

@@ -27,7 +27,7 @@ defmodule Torchx.Backend do
        and nan becomes zero. `Torchx` behaviour is type dependent with no clear
        rule across types.
 
-  Per-operation implementation notes are documented in the
+  Backend-specific behaviour, options, and limitations are documented in the
   [Backend documentation](backend_documentation.html) guides — see the
   [backend documentation convention](https://hexdocs.pm/nx/backend_documentation-convention.html)
   in the Nx package.

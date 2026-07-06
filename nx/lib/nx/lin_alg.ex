@@ -139,8 +139,7 @@ defmodule Nx.LinAlg do
 
   ## Backend notes
 
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx_lin_alg.html#cholesky-1) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx_lin_alg.html#cholesky-1).
+  See [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx_lin_alg.html#cholesky-1).
   """
   def cholesky(tensor) do
     %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
@@ -592,8 +591,7 @@ defmodule Nx.LinAlg do
 
   ## Backend notes
 
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx_lin_alg.html#triangular_solve-3) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx_lin_alg.html#triangular_solve-3).
+  See [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx_lin_alg.html#triangular_solve-3).
   """
   def triangular_solve(a, b, opts \\ []) do
     opts = keyword!(opts, lower: true, left_side: true, transform_a: :none)
@@ -710,8 +708,7 @@ defmodule Nx.LinAlg do
 
   ## Backend notes
 
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx_lin_alg.html#solve-2) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx_lin_alg.html#solve-2).
+  See [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx_lin_alg.html#solve-2).
   """
   # IMPORTANT: This function cannot be a defn because
   # optional needs to work on the actual backend.
@@ -1769,8 +1766,7 @@ defmodule Nx.LinAlg do
 
   ## Backend notes
 
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx_lin_alg.html#lu-1) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx_lin_alg.html#lu-1).
+  See [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx_lin_alg.html#lu-1).
   """
   def lu(tensor) do
     %T{vectorized_axes: vectorized_axes} = tensor = Nx.to_tensor(tensor)
@@ -2023,8 +2019,7 @@ defmodule Nx.LinAlg do
 
   ## Backend notes
 
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx_lin_alg.html#determinant-1) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx_lin_alg.html#determinant-1).
+  See [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx_lin_alg.html#determinant-1).
   """
   # IMPORTANT: This function cannot be a defn because
   # optional needs to work on the actual backend.

@@ -90,16 +90,13 @@ defmodule EXLA.MixProject do
         "guides/rotating-image.livemd",
         "CHANGELOG.md",
         "guides/backend_documentation/index.md": [
-          filename: "backend_documentation",
-          title: "Backend documentation"
+          filename: "backend_documentation"
         ],
         "guides/backend_documentation/nx.md": [
-          filename: "backend_documentation-nx",
-          title: "Nx (EXLA)"
+          filename: "backend_documentation-nx"
         ],
         "guides/backend_documentation/nx_lin_alg.md": [
-          filename: "backend_documentation-nx_lin_alg",
-          title: "Nx.LinAlg (EXLA)"
+          filename: "backend_documentation-nx_lin_alg"
         ]
       ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"],

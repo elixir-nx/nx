@@ -76,8 +76,7 @@ defmodule Nx.MixProject do
         "guides/advanced/complex_fft.livemd",
         "guides/exercises/exercises-1-20.livemd",
         "guides/backend_documentation/convention.md": [
-          filename: "backend_documentation-convention",
-          title: "Backend documentation convention"
+          filename: "backend_documentation-convention"
         ]
       ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"],

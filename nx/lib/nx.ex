@@ -41,7 +41,8 @@ defmodule Nx do
 
   Backend-specific notes for extensible operations (`Nx.block/4`, transfers, and
   related APIs) are documented in the [backend documentation convention](backend_documentation-convention.html)
-  guide and in each backend's **Backend documentation** pages on HexDocs (for example
+  guide and in each backend's **Backend documentation** pages on HexDocs when a
+  backend has divergent behaviour or backend-specific options (for example
   [EXLA](https://hexdocs.pm/exla/backend_documentation.html) and
   [Torchx](https://hexdocs.pm/torchx/backend_documentation.html)).
 
@@ -1622,11 +1623,6 @@ defmodule Nx do
 
       iex> Nx.take_diagonal(Nx.iota({3, 3}), offset: -4)
       ** (ArgumentError) absolute value of offset must be less than length of axis 0 when negative, got: -4
-
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#take-3) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#take-3).
   """
   @doc type: :creation
   def take_diagonal(tensor, opts \\ []) do
@@ -2533,10 +2529,6 @@ defmodule Nx do
         [3, 1]
       >
 
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#to_batched-3) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#to_batched-3).
   """
   @doc type: :conversion
   def to_batched(tensor, batch_size, opts \\ [])
@@ -5082,10 +5074,6 @@ defmodule Nx do
 
   Note: This function cannot be used in `defn`.
 
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#backend_deallocate-1) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#backend_deallocate-1).
   """
   @doc type: :backend
   def backend_deallocate(tensor_or_container) do
@@ -7261,10 +7249,6 @@ defmodule Nx do
       >
 
 
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#logical_not-1) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#logical_not-1).
   """
   @doc type: :element
   def logical_not(tensor) do
@@ -8735,8 +8719,7 @@ defmodule Nx do
 
   ## Backend notes
 
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#phase-1) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#phase-1).
+  See [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#phase-1).
   """
   @doc type: :element
   def phase(tensor) do
@@ -9324,10 +9307,6 @@ defmodule Nx do
         ]
       >
 
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#all_close-3) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#all_close-3).
   """
   @doc type: :aggregation
   def all_close(a, b, opts \\ []) do
@@ -11733,10 +11712,6 @@ defmodule Nx do
         ]
       >
 
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#cumulative_sum-2) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#cumulative_sum-2).
   """
   @doc type: :cumulative
   def cumulative_sum(tensor, opts \\ []),
@@ -11814,10 +11789,6 @@ defmodule Nx do
         ]
       >
 
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#cumulative_product-2) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#cumulative_product-2).
   """
   @doc type: :cumulative
   def cumulative_product(tensor, opts \\ []),
@@ -11895,10 +11866,6 @@ defmodule Nx do
         ]
       >
 
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#cumulative_min-2) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#cumulative_min-2).
   """
   @doc type: :cumulative
   def cumulative_min(tensor, opts \\ []),
@@ -11976,10 +11943,6 @@ defmodule Nx do
         ]
       >
 
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#cumulative_max-2) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#cumulative_max-2).
   """
   @doc type: :cumulative
   def cumulative_max(tensor, opts \\ []),
@@ -14912,11 +14875,6 @@ defmodule Nx do
       iex> idx = Nx.tensor([[2.0], [1.0], [2.0]], type: :f32)
       iex> Nx.take_along_axis(tensor, idx, axis: 1)
       ** (ArgumentError) indices must be an integer tensor, got {:f, 32}
-
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#take_along_axis-3) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#take_along_axis-3).
   """
   @doc type: :indexed
   def take_along_axis(tensor, indices, opts \\ []) when is_list(opts) do
@@ -15745,10 +15703,6 @@ defmodule Nx do
       ** (ArgumentError) top_k input must have at least rank 1
 
 
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#top_k-2) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#top_k-2).
   """
   @doc type: :ndim
   def top_k(tensor, opts \\ []) do
@@ -16987,8 +16941,7 @@ defmodule Nx do
 
   ## Backend notes
 
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#fft2-2) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#fft2-2).
+  See [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#fft2-2).
   """
   @doc type: :ndim
   def fft2(tensor, opts \\ []), do: call_fft2(tensor, opts, :fft2)
@@ -17147,11 +17100,6 @@ defmodule Nx do
 
       iex> Nx.ifft2(Nx.tensor([1, 1]), length: :invalid)
       ** (ArgumentError) expected a tensor with rank > 1, got tensor with rank 1
-
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#ifft2-2) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#ifft2-2).
   """
   @doc type: :ndim
   def ifft2(tensor, opts \\ []), do: call_fft2(tensor, opts, :ifft2)
@@ -17326,11 +17274,6 @@ defmodule Nx do
 
       iex> Nx.rfft(Nx.tensor([1.0, 1.0]), length: :invalid)
       ** (ArgumentError) expected an integer or :power_of_two as length, got: :invalid
-
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#rfft-2) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#rfft-2).
   """
   @doc type: :ndim
   def rfft(tensor, opts \\ []) do
@@ -17452,11 +17395,6 @@ defmodule Nx do
 
       iex> Nx.irfft(Nx.tensor([1.0, 1.0]), length: :invalid)
       ** (ArgumentError) expected a positive integer as length, got: :invalid
-
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#irfft-2) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#irfft-2).
   """
   @doc type: :ndim
   def irfft(tensor, opts \\ []) do

@@ -82,9 +82,9 @@ defmodule EXLA do
   your block tag struct; see `EXLA.CustomCall` for the `call/4` contract,
   including returning `:skip` to fall back to the block's default Elixir callback.
 
-  Per-operation lowering notes for Nx functions are documented in the
-  [Backend documentation](backend_documentation.html) guides (for example
-  [Nx](backend_documentation-nx.html) and
+  Backend-specific behaviour, options, and limitations for Nx functions are
+  documented in the [Backend documentation](backend_documentation.html) guides
+  (for example [Nx](backend_documentation-nx.html) and
   [Nx.LinAlg](backend_documentation-nx_lin_alg.html)). See also the
   [backend documentation convention](https://hexdocs.pm/nx/backend_documentation-convention.html)
   in the Nx package.

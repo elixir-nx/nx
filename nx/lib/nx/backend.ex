@@ -30,8 +30,9 @@ defmodule Nx.Backend do
   across backends.
 
   Backends may publish backend documentation guides that mirror the Nx API and
-  describe implementation specifics — see the
-  [backend documentation convention](backend_documentation-convention.html) guide.
+  describe divergent behaviour, backend-specific options, and limitations — see
+  the [backend documentation convention](backend_documentation-convention.html)
+  guide.
   """
 
   @type t :: %{__struct__: atom()}
