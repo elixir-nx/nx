@@ -314,7 +314,8 @@ defmodule Nx.Defn do
 
     * `:compiler` - the compiler for the JIT compilation
 
-    * `:hooks` - a map of hooks to execute. See `Nx.Defn.Kernel.hook/3`
+    * `:io_calls` - a map of callbacks to override named io_calls. See `Nx.Defn.Kernel.io_call/3`.
+      The legacy `:hooks` option is also accepted.
 
   """
   def compile(fun, template_args, opts \\ [])
@@ -399,7 +400,8 @@ defmodule Nx.Defn do
 
     * `:compiler` - the compiler for the JIT compilation
 
-    * `:hooks` - a map of hooks to execute. See `Nx.Defn.Kernel.hook/3`
+    * `:io_calls` - a map of callbacks to override named io_calls. See `Nx.Defn.Kernel.io_call/3`.
+      The legacy `:hooks` option is also accepted.
 
     * `:on_conflict` - what to do if a JIT compilation is already in place.
       It may be `:raise` (the default), `:force` (forces a new JIT compilation),
@@ -462,7 +464,8 @@ defmodule Nx.Defn do
 
   ## Options
 
-    * `:hooks` - a map of hooks to execute. See `Nx.Defn.Kernel.hook/3`
+    * `:io_calls` - a map of callbacks to override named io_calls. See `Nx.Defn.Kernel.io_call/3`.
+      The legacy `:hooks` option is also accepted.
 
   """
   def debug_expr(fun, opts \\ []) when is_function(fun) and is_list(opts) do
@@ -488,11 +491,18 @@ defmodule Nx.Defn do
   defp prepare_options(opts) do
     opts = Keyword.merge(default_options(), opts)
 
-    if not is_map(Keyword.get(opts, :hooks, %{})) do
-      raise ArgumentError, ":hooks option must be a map"
+    io_calls =
+      opts
+      |> Keyword.get(:io_calls, %{})
+      |> then(&Map.merge(Keyword.get(opts, :hooks, %{}), &1))
+
+    if not is_map(io_calls) do
+      raise ArgumentError, ":io_calls option must be a map"
     end
 
     opts
+    |> Keyword.put(:io_calls, io_calls)
+    |> Keyword.delete(:hooks)
   end
 
   defp wrap(fun, callback) do

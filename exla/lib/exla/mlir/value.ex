@@ -696,6 +696,11 @@ defmodule EXLA.MLIR.Value do
     op(func, "stablehlo.create_token", [], result_types) |> one!()
   end
 
+  def after_all([%Value{function: func} | _] = tokens) do
+    result_types = [type_token()]
+    op(func, "stablehlo.after_all", tokens, result_types) |> one!()
+  end
+
   @doc false
   def host_callback(
         [%Value{} = callback_pid | leaf_operands],

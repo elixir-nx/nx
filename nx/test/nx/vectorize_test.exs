@@ -639,7 +639,7 @@ defmodule Nx.VectorizeTest do
     end
 
     deftransformp send_value(val, opts \\ []) do
-      Nx.Defn.Kernel.hook(val, &send(self(), {&1, opts}))
+      Nx.Defn.Kernel.io_call(val, &send(self(), {&1, opts}))
     end
 
     test "only executes selected branches" do

@@ -10,9 +10,9 @@ defmodule EXLA.Defn.Outfeed do
   alias EXLA.MLIR.Function
   alias EXLA.MLIR.Value
 
-  defstruct user_hooks: %{},
-            default_hooks: %{},
-            used_hooks: [],
+  defstruct user_io_calls: %{},
+            default_io_calls: %{},
+            used_io_call_names: [],
             infeed_flags: %{},
             callbacks: %{},
             token: nil,
@@ -21,9 +21,9 @@ defmodule EXLA.Defn.Outfeed do
   ## Functional API
 
   @doc """
-  Computes used inputs by depth and used hooks.
+  Computes used inputs by depth and used io_calls.
   """
-  def used_inputs_and_hooks(expr, force_inputs, lazy_transfers) do
+  def used_inputs_and_io_calls(expr, force_inputs, lazy_transfers) do
     if lazy_transfers not in [:always, :never, :opt_in] do
       raise ArgumentError,
             ":lazy_transfers must be either :always or :never, got: #{inspect(lazy_transfers)}"
@@ -32,14 +32,14 @@ defmodule EXLA.Defn.Outfeed do
     lazy? = lazy_transfers == :always
     inputs = Map.from_keys(force_inputs, nil)
 
-    {_, used_inputs, used_hooks} =
-      Composite.reduce(expr, {%{}, inputs, %{}}, &used_inputs_and_hooks(&1, &2, 0, lazy?))
+    {_, used_inputs, used_io_calls} =
+      Composite.reduce(expr, {%{}, inputs, %{}}, &used_inputs_and_io_calls(&1, &2, 0, lazy?))
 
-    {used_inputs, used_hooks}
+    {used_inputs, used_io_calls}
   end
 
-  defp used_inputs_and_hooks(%T{data: %Expr{id: id} = expr} = t, acc, depth, lazy?) do
-    {seen, inputs, hooks} = acc
+  defp used_inputs_and_io_calls(%T{data: %Expr{id: id} = expr} = t, acc, depth, lazy?) do
+    {seen, inputs, io_calls} = acc
 
     case seen do
       %{^id => true} ->
@@ -49,11 +49,11 @@ defmodule EXLA.Defn.Outfeed do
         depth = depth + 1
         seen = Map.put(seen, id, true)
         inputs = used_inputs(expr, inputs, depth, lazy?)
-        hooks = used_hooks(expr, hooks)
-        acc = {seen, inputs, hooks}
+        io_calls = used_io_calls(expr, io_calls)
+        acc = {seen, inputs, io_calls}
 
         t
-        |> Tree.apply_args(acc, &{&1, used_inputs_and_hooks(&1, &2, depth, lazy?)})
+        |> Tree.apply_args(acc, &{&1, used_inputs_and_io_calls(&1, &2, depth, lazy?)})
         |> elem(1)
     end
   end
@@ -71,15 +71,15 @@ defmodule EXLA.Defn.Outfeed do
   defp used_inputs(_, inputs, _depth, _lazy?),
     do: inputs
 
-  defp used_hooks(%Expr{op: :hook, args: [_, _, spec, _, _]}, hooks) do
+  defp used_io_calls(%Expr{op: :io_call, args: [_, _, spec, _, _]}, io_calls) do
     case spec do
-      {:named, name, callback} -> Map.put(hooks, name, callback)
-      {:fn, _} -> hooks
+      {:named, name, callback} -> Map.put(io_calls, name, callback)
+      {:fn, _} -> io_calls
     end
   end
 
-  defp used_hooks(_, hooks),
-    do: hooks
+  defp used_io_calls(_, io_calls),
+    do: io_calls
 
   ## Struct API
 
@@ -96,24 +96,24 @@ defmodule EXLA.Defn.Outfeed do
   @doc """
   An outfeed struct to track the need for outfeeds during compilation.
   """
-  def new(user_hooks, default_hooks)
-      when is_map(user_hooks) and is_map(default_hooks) do
-    # Hooks with default callbacks or user callbacks are part of the cache key
-    used_hooks =
-      Enum.sort(for {k, v} <- default_hooks, v != nil or Map.has_key?(user_hooks, k), do: k)
+  def new(user_io_calls, default_io_calls)
+      when is_map(user_io_calls) and is_map(default_io_calls) do
+    # Io calls with default callbacks or user callbacks are part of the cache key
+    used_io_call_names =
+      Enum.sort(for {k, v} <- default_io_calls, v != nil or Map.has_key?(user_io_calls, k), do: k)
 
-    # We don't store the user hooks yet, because we don't want them to be cached
+    # We don't store the user io_calls yet, because we don't want them to be cached
     %Outfeed{
-      default_hooks: default_hooks,
-      used_hooks: used_hooks
+      default_io_calls: default_io_calls,
+      used_io_call_names: used_io_call_names
     }
   end
 
   @doc """
-  Sets the user hooks for callbacks.
+  Sets the user io_calls to outfeed.
   """
-  def with_user_hooks(%Outfeed{} = outfeed, user_hooks),
-    do: %{outfeed | user_hooks: user_hooks}
+  def with_user_io_calls(%Outfeed{} = outfeed, user_io_calls),
+    do: %{outfeed | user_io_calls: user_io_calls}
 
   @doc """
   Sets the token to outfeed.
@@ -222,14 +222,14 @@ defmodule EXLA.Defn.Outfeed do
 
     %{
       infeed_flags: infeed_flags,
-      default_hooks: default_hooks,
-      user_hooks: user_hooks,
+      default_io_calls: default_io_calls,
+      user_io_calls: user_io_calls,
       callbacks: callbacks
     } =
       outfeed
 
-    hooks = Map.merge(default_hooks, user_hooks)
-    callbacks = resolve_callbacks(callbacks, hooks)
+    io_calls = Map.merge(default_io_calls, user_io_calls)
+    callbacks = resolve_callbacks(callbacks, io_calls)
 
     Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
       init(client, device_id, infeed_flags, infeeds, callbacks, group_leader)
@@ -255,15 +255,7 @@ defmodule EXLA.Defn.Outfeed do
     receive do
       {^ref, <<0::native-unsigned-16>>} ->
         # Outfeed is done, now we wait for the computation to finish
-        loop(
-          client,
-          device_id,
-          ref,
-          typespec,
-          drop_infeed_flags(infeed_flags),
-          infeeds,
-          callbacks
-        )
+        loop(client, device_id, ref, typespec, drop_infeed_flags(infeed_flags), infeeds, callbacks)
 
       {^ref, <<flag::native-unsigned-16>>} ->
         case Map.fetch!(infeed_flags, flag) do
@@ -297,18 +289,18 @@ defmodule EXLA.Defn.Outfeed do
     Map.drop(infeed_flags, keys)
   end
 
-  defp resolve_callbacks(callbacks, hooks) do
+  defp resolve_callbacks(callbacks, io_calls) do
     Map.new(callbacks, fn {id, {invoke, out_template, arg_template, opts}} ->
-      {id, {resolve_invoke(invoke, hooks), out_template, arg_template, opts}}
+      {id, {resolve_invoke(invoke, io_calls), out_template, arg_template, opts}}
     end)
   end
 
-  defp resolve_invoke(fun, _hooks) when is_function(fun), do: fun
+  defp resolve_invoke(fun, _io_calls) when is_function(fun), do: fun
 
-  defp resolve_invoke({:fn, fun}, _hooks), do: {:fn, fun}
+  defp resolve_invoke({:fn, fun}, _io_calls), do: {:fn, fun}
 
-  defp resolve_invoke({:named, name, callback}, hooks) do
-    case hooks[name] || callback do
+  defp resolve_invoke({:named, name, callback}, io_calls) do
+    case io_calls[name] || callback do
       nil -> {:named, name, nil}
       fun -> {:fn, fun}
     end

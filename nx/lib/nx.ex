@@ -2221,6 +2221,71 @@ defmodule Nx do
   end
 
   @doc """
+  Invokes a side-effect callback from within `defn`, passing data through unchanged.
+
+  Unlike `runtime_call/4`, `io_call/2` does not compute a new value in the callback.
+  Its purpose is to execute side effects (logging, sending messages, etc.) and
+  returns the original data unchanged:
+
+      x = Nx.io_call(x, &MyMod.log/1)
+
+  Named `io_call`s can be overridden at JIT time via the `:io_calls` option, which
+  maps each name to a side-effect callback:
+
+      Nx.Defn.jit(fun, io_calls: %{my_io_call: &MyMod.log/1})
+
+  ## Examples
+
+      iex> defmodule IoCallExample do
+      ...>   def log(t), do: t
+      ...> end
+      iex> x = Nx.tensor([1, 2, 3])
+      iex> x = Nx.io_call(x, &IoCallExample.log/1)
+      iex> inspect(x)
+      "#Nx.Tensor<\\n  s32[3]\\n  [1, 2, 3]\\n>"
+
+  """
+  @doc type: :backend
+  def io_call(tensor_or_container, callback) when is_function(callback, 1) do
+    io_call_impl(tensor_or_container, {:fn, callback})
+  end
+
+  @doc type: :backend
+  def io_call(tensor_or_container, name) when is_atom(name) do
+    io_call_impl(tensor_or_container, {:named, name, nil})
+  end
+
+  @doc type: :backend
+  def io_call(tensor_or_container, name, callback)
+      when is_atom(name) and (is_function(callback, 1) or is_nil(callback)) do
+    io_call_impl(tensor_or_container, {:named, name, callback})
+  end
+
+  defp io_call_impl(tensor_or_container, callback_spec) do
+    tensors = Nx.Defn.Composite.flatten_list([tensor_or_container])
+    backend = Nx.Shared.list_impl!(tensors)
+
+    if backend == Nx.Defn.Expr do
+      Nx.Defn.Expr.io_call(tensor_or_container, callback_spec)
+    else
+      run_io_call_eager!(callback_spec, tensor_or_container)
+      tensor_or_container
+    end
+  end
+
+  defp run_io_call_eager!({:fn, fun}, container) when is_function(fun, 1), do: fun.(container)
+
+  defp run_io_call_eager!({:named, name, _}, _container) do
+    raise ArgumentError,
+          "named io_call #{inspect(name)} is only supported inside defn; pass a function callback instead"
+  end
+
+  defp run_io_call_eager!(_spec, _container) do
+    raise ArgumentError,
+          "io_call is only supported inside defn; pass a function callback instead"
+  end
+
+  @doc """
   Invokes an Elixir function from within `defn`.
 
   This function allows integrating arbitrary Elixir code into `defn` graphs.
@@ -3902,20 +3967,6 @@ defmodule Nx do
   `{pad_width_low, pad_width_high, pad_width_interior}`
   for each dimension in the input tensor. The padding
   configuration must be of the same length as the tensor shape.
-
-    - `pad_width_low`: number of leading entries added to the padding axis.
-    - `pad_width_high`: number of trailing entries added to the padding axis.
-    - `pad_width_interior`: number of padding entries inserted between existing elements along the padding axis.
-
-      ```elixir
-      tensor = Nx.tensor([10, 20, 30])
-      Nx.pad(tensor, 0, [{2, 1, 3}])
-      #Nx.Tensor<
-        s32[11]
-        [0, 0, 10, 0, 20, 0, 30, 0, 0, 0]
-      >
-      # └ low ┘  └ interior ┘   └ high ┘
-      ```
 
   Padding widths can be negative. If they are negative,
   the tensor is clipped on either end according to the

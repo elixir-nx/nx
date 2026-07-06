@@ -39,7 +39,7 @@ defmodule Nx.Defn.Expr do
 
     * `while(initial, condition, body)`
 
-    * `hook(data, callback_spec)`
+    * `io_call(data, callback_spec)`
 
     * `runtime_call(out, tensor_or_container, opts, fun)`
 
@@ -458,20 +458,20 @@ defmodule Nx.Defn.Expr do
     |> Enum.reverse()
     |> Enum.reduce(expr, fn %{expr: hooked_expr, name: name, callback: callback}, acc ->
       hooked_expr = to_container_expr(hooked_expr)
-      inner_spec = hook_callback_spec(name, callback)
-      hook(acc, {:token_hook, hooked_expr, inner_spec})
+      inner_spec = io_call_callback_spec(name, callback)
+      io_call(acc, {:token_hook, hooked_expr, inner_spec})
     end)
   end
 
-  defp hook_callback_spec(name, nil) when is_atom(name), do: {:named, name, nil}
+  defp io_call_callback_spec(name, nil) when is_atom(name), do: {:named, name, nil}
 
-  defp hook_callback_spec(name, callback) when is_atom(name) and is_function(callback, 1),
+  defp io_call_callback_spec(name, callback) when is_atom(name) and is_function(callback, 1),
     do: {:named, name, callback}
 
-  defp hook_callback_spec(_name, callback) when is_function(callback, 1), do: {:fn, callback}
+  defp io_call_callback_spec(_name, callback) when is_function(callback, 1), do: {:fn, callback}
 
   @doc false
-  def hook(tensor_or_container, callback_spec) do
+  def io_call(tensor_or_container, callback_spec) do
     tensor_expr =
       Composite.traverse(tensor_or_container, fn
         %T{} = t -> to_expr(t)
@@ -492,19 +492,19 @@ defmodule Nx.Defn.Expr do
       end
 
     root =
-      expr(root_type, context, :hook, [
+      expr(root_type, context, :io_call, [
         tensor_expr,
         callback_spec,
         user_template,
         ref
       ])
 
-    hook_data_from_root(root, user_template, context)
+    io_call_data_from_root(root, user_template, context)
   end
 
-  defp hook_data_from_root(root, %T{}, _context), do: root
+  defp io_call_data_from_root(root, %T{}, _context), do: root
 
-  defp hook_data_from_root(root, user_template, context) do
+  defp io_call_data_from_root(root, user_template, context) do
     {container_expr, _} =
       Composite.traverse(user_template, {0, root}, fn
         %T{} = template, {i, root} ->
@@ -1797,7 +1797,7 @@ defmodule Nx.Defn.Expr do
     {var_name, store_line(state, :parameters, parameter, type_shape)}
   end
 
-  defp cached_recur_inspect(:hook, args, type_shape, state) do
+  defp cached_recur_inspect(:io_call, args, type_shape, state) do
     [data, callback_spec, _template, _ref] = args
     {data, state} = recur_inspect(data, state)
     var_name = var_name(state)
@@ -1807,22 +1807,22 @@ defmodule Nx.Defn.Expr do
         {:token_hook, hooked_expr, inner_spec} ->
           {hooked_expr, state} = recur_inspect(hooked_expr, state)
 
-          hook_io =
+          io_call_io =
             case inner_spec do
               {:named, name, _} ->
-                IO.iodata_to_binary(["hook ", Atom.to_string(name), ": ", hooked_expr])
+                IO.iodata_to_binary(["io_call ", Atom.to_string(name), ": ", hooked_expr])
 
               {:fn, fun} ->
-                IO.iodata_to_binary(["hook ", hooked_expr, ", ", inspect(fun)])
+                IO.iodata_to_binary(["io_call ", hooked_expr, ", ", inspect(fun)])
             end
 
-          {IO.iodata_to_binary([var_name, " = ", hook_io, "; ", data]), state}
+          {IO.iodata_to_binary([var_name, " = ", io_call_io, "; ", data]), state}
 
         {:named, name, _} ->
-          {IO.iodata_to_binary([var_name, " = hook ", Atom.to_string(name), ": ", data]), state}
+          {IO.iodata_to_binary([var_name, " = io_call ", Atom.to_string(name), ": ", data]), state}
 
         {:fn, fun} ->
-          {IO.iodata_to_binary([var_name, " = hook ", data, ", ", inspect(fun)]), state}
+          {IO.iodata_to_binary([var_name, " = io_call ", data, ", ", inspect(fun)]), state}
       end
 
     {var_name, store_line(state, :exprs, expr, type_shape)}

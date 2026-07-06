@@ -16,7 +16,7 @@ defmodule DistributedServings do
   def add_five_round_about(parent, opts) do
     serving =
       Nx.Serving.jit(&add_five_round_about/1)
-      |> Nx.Serving.streaming(hooks: [:double, :plus_ten])
+      |> Nx.Serving.streaming(io_calls: [:double, :plus_ten])
       |> Nx.Serving.distributed_postprocessing(fn output ->
         Stream.transform(output, :ok, fn data, :ok -> {[{data, node()}], :ok} end)
       end)
@@ -28,11 +28,11 @@ defmodule DistributedServings do
   defnp add_five_round_about(batch) do
     batch
     |> Nx.multiply(2)
-    |> hook(:double)
+    |> io_call(:double)
     |> Nx.add(10)
-    |> hook(:plus_ten)
+    |> io_call(:plus_ten)
     |> Nx.divide(2)
-    |> hook(:to_be_ignored)
+    |> io_call(:to_be_ignored)
   end
 
   defp wait_for_parent(parent) do

@@ -20,15 +20,15 @@ defmodule Nx.Defn.TreeTest do
     factorial
   end
 
-  defn with_hook(a, b), do: hook(a + b, :example)
+  defn with_hook(a, b), do: io_call(a + b, :example)
 
   defn hooked_factorial(a, b) do
-    {hook(factorial(with_hook(a, b)), :another), b}
+    {io_call(factorial(with_hook(a, b)), :another), b}
   end
 
   defn duplicate_hook_names(a, b) do
-    ha = hook(a, :same)
-    hb = hook(b, :same)
+    ha = io_call(a, :same)
+    hb = io_call(b, :same)
     ha + hb
   end
 
