@@ -872,10 +872,11 @@ defmodule EXLA.Defn do
        )
        when platform in [:host, :cuda] do
     {reverse_arg_values, reverse_typespecs, cache, num_aliased} =
-      Composite.reduce(tensor_expr, {[], [], cache, 0}, fn %T{} = expr, {acc, typespecs, cache, num_aliased} ->
+      Composite.reduce(tensor_expr, {[], [], cache, 0}, fn %T{} = expr,
+                                                           {acc, typespecs, cache, num_aliased} ->
         {value, cache} = recur_operator(expr, state, cache) |> unwrap_single_tensor!()
         {[value | acc], [Value.get_typespec(value) | typespecs], cache, num_aliased + 1}
-end)
+      end)
 
     arg_values = Enum.reverse(reverse_arg_values)
     leaf_typespecs = Enum.reverse(reverse_typespecs)
