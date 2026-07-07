@@ -887,8 +887,6 @@ end)
       raise "internal bug: hook callback pid operand is missing"
     end
 
-    num_aliased = length(leaf_typespecs)
-
     aliased_outputs =
       Value.host_callback([callback_pid_value | arg_values], leaf_typespecs, id, num_aliased)
 

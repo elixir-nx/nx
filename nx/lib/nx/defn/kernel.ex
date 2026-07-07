@@ -1342,7 +1342,7 @@ defmodule Nx.Defn.Kernel do
         end
       end
 
-  Note an hook can only access the variables passed as arguments
+  Note a hook can only access the variables passed as arguments
   to the hook. It cannot access any other variable defined in
   `defn` outside of the hook.
 
@@ -1441,13 +1441,7 @@ defmodule Nx.Defn.Kernel do
     do: unguarded_hook(expr, name, function)
 
   defp unguarded_hook(expr, name, function) do
-    spec =
-      case function do
-        nil -> {:named, name, nil}
-        fun -> {:named, name, fun}
-      end
-
-    Nx.Defn.Expr.hook(expr, spec)
+    Nx.Defn.Expr.hook(expr, {:named, name, function})
   end
 
   @doc """
