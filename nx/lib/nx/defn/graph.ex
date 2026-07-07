@@ -503,7 +503,7 @@ defmodule Nx.Defn.Graph do
 
           {arg, {tensor_args, out_position, state}}
 
-        %T{} = expr, {tensor_args, out_position, state} ->
+        %T{data: %Expr{}} = expr, {tensor_args, out_position, state} ->
           arg = Expr.parameter(expr, map_size(state.args))
 
           state = %{
@@ -514,6 +514,12 @@ defmodule Nx.Defn.Graph do
 
           {arg, {[expr | tensor_args], out_position + 1, state}}
 
+        # A bare, non-Expr-backed %Nx.Tensor{} (e.g. a `Nx.template/2` value
+        # riding in an op's args, as `:runtime_call`'s `out_template` does) is
+        # not a real graph node to hoist as a stage boundary parameter --
+        # `Expr.parameter/2` requires `data: %Expr{}` and would raise
+        # (FunctionClauseError) otherwise. Leave it untouched, like any other
+        # non-tensor arg.
         non_tensor_arg, acc ->
           {non_tensor_arg, acc}
       end)
@@ -528,10 +534,15 @@ defmodule Nx.Defn.Graph do
           {wrapped_expr, new_expr}
 
         {[], _, _} ->
-          # No intermediate computations - create a parameter for this split operation
-          # The current expression will be computed in the next stage
+          # No intermediate computations to hoist ahead of this node (e.g. its
+          # only operands are bare parameters/non-tensor values) - the stage
+          # boundary computes the node itself, not a placeholder. `param` is
+          # only the reference other stages use to consume this stage's
+          # output; embedding `param` (instead of `new_expr`) as the stage's
+          # own expression would make the stage self-referential (it would
+          # require its own not-yet-computed output as an input).
           param = Expr.parameter(new_expr, map_size(state.args))
-          {{param}, param}
+          {{new_expr}, param}
 
         _ ->
           # There are intermediate computations - only include those in the current stage
@@ -566,9 +577,10 @@ defmodule Nx.Defn.Graph do
           state
 
         {[], _, _} ->
-          # Add parameter mapping and node replacement for the split operation
-          # Extract the parameter from the tuple
-          param = elem(stage_expr, 0)
+          # Add parameter mapping and node replacement for the split operation.
+          # `result_expr` (not `stage_expr`, which now holds the node itself)
+          # is the synthetic parameter representing this stage's output.
+          param = result_expr
 
           %{
             state
@@ -690,7 +702,10 @@ defmodule Nx.Defn.Graph do
     tensor_args =
       Enum.reduce(args, [], fn
         %T{data: %Expr{op: :parameter}}, acc -> acc
-        %T{} = tensor_expr, acc -> [tensor_expr | acc]
+        # Mirrors split_before/3's `%T{data: %Expr{}}` guard: a bare,
+        # non-Expr-backed %Nx.Tensor{} (e.g. :runtime_call's out_template)
+        # is not a real intermediate computation.
+        %T{data: %Expr{}} = tensor_expr, acc -> [tensor_expr | acc]
         _, acc -> acc
       end)
 
@@ -919,6 +934,44 @@ defmodule Nx.Defn.Graph do
         # `Nx.Defn.Tree.apply_args/4`'s `:runtime_call` clause).
         {tensor_expr, acc} = composite_rewrite_subtree(tensor_expr, state, acc)
         {put_in(expr.data.args, [tensor_expr, callback, out, opts]), acc}
+    end
+  end
+
+  defp do_rewrite_subtree(
+         %T{
+           data: %Expr{
+             op: :io_call,
+             id: id,
+             args: [tensor_expr, callback_spec, template, ref]
+           }
+         } = expr,
+         state,
+         acc
+       ) do
+    case state.nodes_to_replace do
+      %{^id => res} ->
+        {res, put_in(acc.used_args[id], res)}
+
+      _ ->
+        # Each io_call's payload lives in the callback spec (e.g.
+        # `{:token_hook, hooked_expr, inner_spec}`) -- the generic clause's list
+        # handling silently skips it, so a payload that depends on a
+        # stage-boundary-hoisted value would keep its stale, pre-remap parameter
+        # reference. Traverse it here (mirrors `Nx.Defn.Tree.apply_args/4`'s
+        # `:io_call` clause).
+        {tensor_expr, acc} = composite_rewrite_subtree(tensor_expr, state, acc)
+
+        {callback_spec, acc} =
+          case callback_spec do
+            {:token_hook, hooked_expr, inner_spec} ->
+              {hooked_expr, acc} = composite_rewrite_subtree(hooked_expr, state, acc)
+              {{:token_hook, hooked_expr, inner_spec}, acc}
+
+            other ->
+              {other, acc}
+          end
+
+        {put_in(expr.data.args, [tensor_expr, callback_spec, template, ref]), acc}
     end
   end
 
