@@ -42,9 +42,7 @@ defmodule Nx do
   Backend-specific notes for extensible operations (`Nx.block/4`, transfers, and
   related APIs) are documented in the [backend documentation convention](backend_documentation-convention.html)
   guide and in each backend's **Backend documentation** pages on HexDocs when a
-  backend has divergent behaviour or backend-specific options (for example
-  [EXLA](https://hexdocs.pm/exla/backend_documentation.html) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation.html)).
+  backend has divergent behaviour or backend-specific option.
 
 
   Continue reading this documentation for an overview of creating,

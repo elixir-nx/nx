@@ -13,12 +13,3 @@ the [backend documentation convention](https://hexdocs.pm/nx/backend_documentati
 
 Implementation code lives in `EXLA.Defn`, `EXLA.CustomCall`, and related modules.
 
-## Example
-
-```elixir
-iex> Nx.take(Nx.tensor([10, 20, 30]), Nx.tensor([0, 2]))
-#Nx.Tensor<
-  s32[2]
-  [10, 30]
->
-```

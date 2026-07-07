@@ -1,12 +1,5 @@
 # Nx.LinAlg (EXLA)
 
-```elixir
-iex> a = Nx.tensor([[4.0, 2.0], [2.0, 3.0]])
-iex> l = Nx.LinAlg.cholesky(a)
-iex> Nx.shape(l)
-{2, 2}
-```
-
 EXLA-specific notes for `Nx.LinAlg` where behaviour diverges from the portable
 Nx API or from other backends.
 

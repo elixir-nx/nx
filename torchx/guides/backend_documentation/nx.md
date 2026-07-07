@@ -1,13 +1,5 @@
 # Nx (Torchx)
 
-```elixir
-iex> Nx.take(Nx.tensor([10, 20, 30]), Nx.tensor([0, 2]))
-#Nx.Tensor<
-  s32[2]
-  [10, 30]
->
-```
-
 Torchx-specific notes for top-level `Nx` operations where behaviour diverges from
 the portable Nx API or from other backends.
 
