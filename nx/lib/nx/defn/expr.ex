@@ -1819,7 +1819,8 @@ defmodule Nx.Defn.Expr do
           {IO.iodata_to_binary([var_name, " = ", io_call_io, "; ", data]), state}
 
         {:named, name, _} ->
-          {IO.iodata_to_binary([var_name, " = io_call ", Atom.to_string(name), ": ", data]), state}
+          {IO.iodata_to_binary([var_name, " = io_call ", Atom.to_string(name), ": ", data]),
+           state}
 
         {:fn, fun} ->
           {IO.iodata_to_binary([var_name, " = io_call ", data, ", ", inspect(fun)]), state}

@@ -398,7 +398,12 @@ defmodule Nx.Defn.Evaluator do
     {apply(mod, op, args), caches}
   end
 
-  defp run_io_call_side_effect({:token_hook, hooked_expr, inner_spec}, _tensor_value, state, caches) do
+  defp run_io_call_side_effect(
+         {:token_hook, hooked_expr, inner_spec},
+         _tensor_value,
+         state,
+         caches
+       ) do
     {hooked_value, caches} = composite_eval(hooked_expr, state, caches)
 
     case resolve_io_call(inner_spec, state.io_calls) do
@@ -464,5 +469,4 @@ defmodule Nx.Defn.Evaluator do
 
   defp resolve_io_call({:fn, fun}, _io_calls), do: fun
   defp resolve_io_call({:named, name, callback}, io_calls), do: io_calls[name] || callback
-
 end
