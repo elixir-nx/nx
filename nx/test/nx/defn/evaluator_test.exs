@@ -447,6 +447,13 @@ defmodule Nx.Defn.EvaluatorTest do
       assert tensor == Nx.tensor(2)
       assert_received {:a, tensor}
       assert tensor == Nx.tensor(1)
+
+      hooks = %{b: &send_to_self({:custom, &1})}
+      Nx.Defn.jit(&side_effect_nested_hook_with_default/2, hooks: hooks).(1, 2)
+      assert_received {:custom, tensor}
+      assert tensor == Nx.tensor(2)
+
+      refute_received _
     end
 
     defn hook_upto10(x) do
@@ -677,7 +684,7 @@ defmodule Nx.Defn.EvaluatorTest do
       t = Nx.iota({2, 3}, vectorized_axes: [a: 1], type: :s32)
 
       message = """
-      test/nx/defn/evaluator_test.exs:646: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
+      test/nx/defn/evaluator_test.exs:653: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
 
       {\e[32m
        <<<<< Body (do-block) <<<<<
@@ -709,7 +716,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       error =
         """
-        test/nx/defn/evaluator_test.exs:646: condition must be a scalar tensor, got: #Nx.Tensor<
+        test/nx/defn/evaluator_test.exs:653: condition must be a scalar tensor, got: #Nx.Tensor<
           vectorized[x: 1]
           u8[1]
         \s\s
