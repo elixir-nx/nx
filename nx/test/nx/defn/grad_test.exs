@@ -4882,6 +4882,17 @@ defmodule Nx.Defn.GradTest do
     Nx.sum(result)
   end
 
+  defn vectorized_abs_cond(x) do
+    cond do
+      Nx.greater(Nx.sum(x), 0.0) -> Nx.multiply(x, 2.0)
+      true -> Nx.multiply(x, -2.0)
+    end
+  end
+
+  defn vectorized_abs_select_unary(x) do
+    Nx.sum(Nx.select(Nx.greater(x, 0.0), x, -x))
+  end
+
   describe "vectorization" do
     @vec_atol 1.0e-4
 
@@ -5291,6 +5302,78 @@ defmodule Nx.Defn.GradTest do
         {evals, evecs} = Nx.LinAlg.eigh(t)
         Nx.add(Nx.sum(evals), Nx.sum(evecs))
       end)
+    end
+
+    test "vectorized grad through Nx.LinAlg.cholesky" do
+      x =
+        Nx.tensor([
+          [[4.0, 2.0], [2.0, 5.0]],
+          [[9.0, 3.0], [3.0, 5.0]],
+          [[16.0, 4.0], [4.0, 8.0]]
+        ])
+        |> Nx.vectorize(:batch)
+
+      check_vectorized_grad(x, fn t -> Nx.sum(Nx.LinAlg.cholesky(t)) end)
+    end
+
+    test "vectorized grad through Nx.LinAlg.triangular_solve with captured a" do
+      a = Nx.tensor([[1.0, 0.0], [2.0, 3.0]])
+
+      b =
+        Nx.tensor([
+          [4.0, 5.0],
+          [2.0, 3.0],
+          [1.0, 1.0]
+        ])
+        |> Nx.vectorize(:batch)
+
+      check_vectorized_grad(b, fn b -> Nx.sum(Nx.LinAlg.triangular_solve(a, b)) end)
+    end
+
+    test "vectorized grad through Nx.select (abs via greater)" do
+      x =
+        Nx.tensor([
+          [2.0, 3.0],
+          [-5.0, -6.0],
+          [1.0, 1.0]
+        ])
+        |> Nx.vectorize(:batch)
+
+      check_vectorized_grad(x, fn x ->
+        Nx.sum(Nx.select(Nx.greater(x, 0.0), x, Nx.negate(x)))
+      end)
+    end
+
+    test "vectorized grad through Nx.select (abs via greater, unary minus in defn)" do
+      x =
+        Nx.tensor([
+          [2.0, 3.0],
+          [-5.0, -6.0],
+          [1.0, 1.0]
+        ])
+        |> Nx.vectorize(:batch)
+
+      check_vectorized_grad(x, &vectorized_abs_select_unary/1)
+    end
+
+    test "vectorized grad through Nx.cond" do
+      x =
+        Nx.tensor([
+          [2.0, 3.0],
+          [-5.0, -6.0],
+          [1.0, 1.0]
+        ])
+        |> Nx.vectorize(:batch)
+
+      check_vectorized_grad(x, &vectorized_abs_cond/1)
+    end
+
+    test "grad/2 raises on Kernel unary minus in anonymous functions" do
+      x = Nx.tensor([1.0, 2.0]) |> Nx.vectorize(:batch)
+
+      assert_raise ArgumentError, ~r/not tensor-aware/, fn ->
+        Nx.Defn.grad(x, fn t -> Nx.sum(-t) end)
+      end
     end
 
     test "three different vectorized axes" do
