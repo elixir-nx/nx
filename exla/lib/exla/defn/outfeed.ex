@@ -71,8 +71,12 @@ defmodule EXLA.Defn.Outfeed do
   defp used_inputs(_, inputs, _depth, _lazy?),
     do: inputs
 
-  defp used_hooks(%Expr{op: :token, args: [token]}, hooks),
-    do: Enum.reduce(token.hooks, hooks, &Map.put(&2, &1.name, &1.callback))
+  defp used_hooks(%Expr{op: :hook, args: [_, _, spec, _, _]}, hooks) do
+    case spec do
+      {:named, name, callback} -> Map.put(hooks, name, callback)
+      {:fn, _} -> hooks
+    end
+  end
 
   defp used_hooks(_, hooks),
     do: hooks
@@ -446,10 +450,6 @@ defmodule EXLA.Defn.Outfeed do
         "template #{inspect(right)}, got: #{inspect(left)}"
 
     raise ArgumentError.exception(msg)
-  end
-
-  defp encode_callback_reply({:error, {:undefined_hook, message}}) do
-    raise ArgumentError.exception(message)
   end
 
   defp encode_callback_reply({:error, {:decode_failed, exception}}) do

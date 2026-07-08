@@ -68,25 +68,25 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
-  describe "tokens" do
-    defn grad_token(t), do: value_and_grad(t, fn t -> hook(Nx.pow(t, 2), :grad) end)
+  describe "hooks" do
+    defn grad_hook(t), do: value_and_grad(t, fn t -> hook(Nx.pow(t, 2), :grad) end)
 
-    test "computes grad with token" do
+    test "computes grad with hook" do
       parent = self()
 
-      fun = Nx.Defn.jit(&grad_token/1, hooks: %{grad: &send(parent, {:hook, &1})})
+      fun = Nx.Defn.jit(&grad_hook/1, hooks: %{grad: &send(parent, {:hook, &1})})
       assert fun.(Nx.tensor(3)) == {Nx.tensor(9), Nx.tensor(6.0)}
 
       assert_receive {:hook, tensor}
       assert tensor == Nx.tensor(9)
     end
 
-    defn token_grad(t), do: hook(grad(t, &Nx.pow(&1, 2)), :grad)
+    defn hook_grad(t), do: hook(grad(t, &Nx.pow(&1, 2)), :grad)
 
-    test "computes token with grad" do
+    test "computes hook with grad" do
       parent = self()
 
-      fun = Nx.Defn.jit(&token_grad/1, hooks: %{grad: &send(parent, {:hook, &1})})
+      fun = Nx.Defn.jit(&hook_grad/1, hooks: %{grad: &send(parent, {:hook, &1})})
       assert fun.(Nx.tensor(3)) == Nx.tensor(6.0)
 
       assert_receive {:hook, tensor}
