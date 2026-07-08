@@ -27,29 +27,29 @@ defmodule Nx.Defn.Grad do
       rescue
         _e in ArithmeticError ->
           reraise ArgumentError,
-                 """
-                 Nx.Defn.grad/2 failed because the gradient function uses operators \
-                 that are not tensor-aware (such as unary minus `-x` or `0 - x`).
+                  """
+                  Nx.Defn.grad/2 failed because the gradient function uses operators \
+                  that are not tensor-aware (such as unary minus `-x` or `0 - x`).
 
-                 Use `Nx.negate/1`, `Nx.subtract/2`, or define the gradient function \
-                 inside `defn` (or use the `grad/2` macro with a `do` block when \
-                 `import Nx.Defn`) so `Nx.Defn.Kernel` operators are expanded.
+                  Use `Nx.negate/1`, `Nx.subtract/2`, or define the gradient function \
+                  inside `defn` (or use the `grad/2` macro with a `do` block when \
+                  `import Nx.Defn`) so `Nx.Defn.Kernel` operators are expanded.
 
-                 For example:
+                  For example:
 
-                     defn loss_grad(x) do
-                       grad(x, fn x -> Nx.sum(Nx.select(Nx.greater(x, 0), x, -x)) end)
-                     end
+                      defn loss_grad(x) do
+                        grad(x, fn x -> Nx.sum(Nx.select(Nx.greater(x, 0), x, -x)) end)
+                      end
 
-                 Or, at the call site:
+                  Or, at the call site:
 
-                     import Nx.Defn
+                      import Nx.Defn
 
-                     grad x do
-                       Nx.sum(Nx.select(Nx.greater(x, 0), x, -x))
-                     end
-                 """,
-                 __STACKTRACE__
+                      grad x do
+                        Nx.sum(Nx.select(Nx.greater(x, 0), x, -x))
+                      end
+                  """,
+                  __STACKTRACE__
 
         e in Nx.Defn.IncompatibleBackendsError ->
           if e.backend1 == Nx.Defn.Expr or e.backend2 == Nx.Defn.Expr do
@@ -268,6 +268,7 @@ defmodule Nx.Defn.Grad do
 
     res = sum_grad(Map.get(grads, id, []))
     res = normalize_vectorized_shape(res)
+
     res =
       if res.vectorized_axes == [] and arg.vectorized_axes != [] do
         squeeze_to_shape(res, Nx.devectorize(arg, keep_names: false).shape)
@@ -497,7 +498,11 @@ defmodule Nx.Defn.Grad do
           end)
 
         {graded, _} =
-          Enum.map_reduce(to_grad_list, {nodes, grads}, &to_grad(&1, to_grad_ids, parents, &2, output_vectorized_axes))
+          Enum.map_reduce(
+            to_grad_list,
+            {nodes, grads},
+            &to_grad(&1, to_grad_ids, parents, &2, output_vectorized_axes)
+          )
 
         {head, graded}
       end)
