@@ -11,20 +11,7 @@ defmodule Nx.Defn.TreeTest do
     :ok
   end
 
-  defn factorial(x) do
-    {factorial, _} =
-      while {factorial = 1.0, x}, Nx.greater(x, 1) do
-        {factorial * x, x - 1}
-      end
-
-    factorial
-  end
-
   defn with_hook(a, b), do: hook(a + b, :example)
-
-  defn hooked_factorial(a, b) do
-    {hook(factorial(with_hook(a, b)), :another), b}
-  end
 
   defn duplicate_hook_names(a, b) do
     ha = hook(a, :same)
