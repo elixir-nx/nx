@@ -92,6 +92,22 @@ defmodule Nx.Defn.TreeTest do
                {_, :parameter}
              ] = inside_both_cond(bool, a, b) |> Tree.scope_ids() |> Enum.sort_by(&elem(&1, 1))
     end
+
+    test "treats hooks with the same name as distinct nodes" do
+      a = Expr.parameter(:root, {:u, 64}, {}, 0)
+      b = Expr.parameter(:root, {:u, 64}, {}, 1)
+
+      assert [
+               {_, :add},
+               {_, :hook},
+               {_, :hook},
+               {_, :parameter},
+               {_, :parameter}
+             ] = tuples = duplicate_hook_names(a, b) |> Tree.scope_ids() |> Enum.sort_by(&elem(&1, 1))
+
+      ids = Enum.map(tuples, &elem(&1, 0))
+      assert length(ids) == length(Enum.uniq(ids))
+    end
   end
 
   describe "apply_args" do
