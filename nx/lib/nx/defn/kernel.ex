@@ -1434,7 +1434,7 @@ defmodule Nx.Defn.Kernel do
       end
 
   Tokens are deprecated and will be removed in a future release.
-  Prefer `hook/2-3` on values that are part of the return when possible.
+  Prefer `hook/2` or `hook/3` on values that are part of the return when possible.
 
   """
   def hook(expr, name, function) when Kernel.and(is_atom(name), is_function(function, 1)),
@@ -1447,7 +1447,7 @@ defmodule Nx.Defn.Kernel do
   @doc """
   Shortcut for `hook_token/4`.
   """
-  @deprecated "Use hook/2-3 instead. Will be removed in a future release."
+  @deprecated "Use hook/2 or hook/3 instead. Will be removed in a future release."
   def hook_token(token, expr, name_or_function)
 
   def hook_token(%Nx.Defn.Token{} = token, expr, name) when is_atom(name),
@@ -1459,7 +1459,7 @@ defmodule Nx.Defn.Kernel do
   @doc """
   Defines a hook with an existing token. See `hook/3`.
   """
-  @deprecated "Use hook/2-3 instead. Will be removed in a future release."
+  @deprecated "Use hook/2 or hook/3 instead. Will be removed in a future release."
   def hook_token(%Nx.Defn.Token{} = token, expr, name, function)
       when Kernel.and(is_atom(name), is_function(function, 1)),
       do: Nx.Defn.Expr.add_hook(token, expr, name, function)
@@ -1471,7 +1471,7 @@ defmodule Nx.Defn.Kernel do
 
   Deprecated. Tokens will be removed in a future release.
   """
-  @deprecated "Use hook/2-3 instead. Will be removed in a future release."
+  @deprecated "Use hook/2 or hook/3 instead. Will be removed in a future release."
   def create_token do
     Nx.Defn.Token.new()
   end
@@ -1481,7 +1481,7 @@ defmodule Nx.Defn.Kernel do
 
   Deprecated. Tokens will be removed in a future release.
   """
-  @deprecated "Use hook/2-3 instead. Will be removed in a future release."
+  @deprecated "Use hook/2 or hook/3 instead. Will be removed in a future release."
   def attach_token(%Nx.Defn.Token{} = token, expr) do
     Nx.Defn.Expr.attach_token(token, expr)
   end

@@ -2,7 +2,7 @@ defmodule Nx.Defn.Token do
   @moduledoc """
   A `defn` token used by hooks.
 
-  Deprecated. Use `hook/2-3` instead. Will be removed in a future release.
+  Deprecated. Use `hook/2` or `hook/3` instead. Will be removed in a future release.
 
   ## Documentation for compilers
 
