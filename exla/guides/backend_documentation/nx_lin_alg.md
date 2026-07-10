@@ -21,15 +21,18 @@ complex inputs and unsupported types
 
 ### Options
 
-* `:mode` — honoured by whichever implementation is selected (`:reduced` or
+* `:mode` — honored by whichever implementation is selected (`:reduced` or
 `:complete`)
 * `:eps` — used by the default callback only; ignored by the native custom call
 
 ### Numerical notes
 
 Native and default implementations may differ slightly in orthogonality of `q`
-and triangular structure of `r` within floating-point tolerance. Reconstruction
-`q · r` should match the input within reasonable tolerances for the dtype.
+and triangular structure of `r` within floating-point tolerance.
+For example, for an eigenpair `(lambda, v)`, `(-lambda, -v)` is
+an equally valid eigenpair that would lead to radically different
+`q` and `r` matrices. Reconstruction of `q · r` should match the
+input within reasonable tolerances for the dtype.
 
 ## eigh/2
 
@@ -44,7 +47,7 @@ unsupported types
 
 ### Options
 
-* `:max_iter` and `:eps` — honoured by the default callback; ignored by the
+* `:max_iter` and `:eps` — honored by the default callback; ignored by the
 native custom call
 
 ### Numerical notes
@@ -59,8 +62,8 @@ Singular value decomposition (`%Nx.Block.LinAlg.SVD{}`).
 
 ### Options
 
-* `:max_iter` — honoured (default iterative algorithm in Nx)
-* `:full_matrices?` — honoured
+* `:max_iter` — honored (default iterative algorithm in Nx)
+* `:full_matrices?` — honored
 
 ### Numerical notes
 

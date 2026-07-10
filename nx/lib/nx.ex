@@ -2277,11 +2277,6 @@ defmodule Nx do
   Inside `defn`, this builds an expression node that is supported by compilers.
   Outside of `defn` or in backends without special support, it executes `fun`
   directly and validates that the result matches the provided template.
-
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#runtime_call-4) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#runtime_call-4).
   """
   @doc type: :backend
   def runtime_call(output, tensor_or_container, opts \\ [], fun) when is_function(fun, 2) do
@@ -4991,12 +4986,6 @@ defmodule Nx do
           [4, 5, 6]
         ]
       >
-
-
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#backend_copy-2) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#backend_copy-2).
   """
   @doc type: :backend
   def backend_copy(tensor_or_container, backend \\ Nx.BinaryBackend) do
@@ -5046,12 +5035,6 @@ defmodule Nx do
   Transfer the device tensor back to an Elixir tensor:
 
       tensor = Nx.backend_transfer(device_tensor)
-
-
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#backend_transfer-2) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#backend_transfer-2).
   """
   @doc type: :backend
   def backend_transfer(tensor_or_container, backend \\ Nx.BinaryBackend) do
@@ -8714,10 +8697,6 @@ defmodule Nx do
          f32[2]
          [1.1071488, 2.6779451]
        >
-
-  ## Backend notes
-
-  See [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#phase-1).
   """
   @doc type: :element
   def phase(tensor) do
@@ -16936,10 +16915,6 @@ defmodule Nx do
 
       iex> Nx.fft2(Nx.tensor([1, 1]), length: :invalid)
       ** (ArgumentError) expected a tensor with rank > 1, got tensor with rank 1
-
-  ## Backend notes
-
-  See [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#fft2-2).
   """
   @doc type: :ndim
   def fft2(tensor, opts \\ []), do: call_fft2(tensor, opts, :fft2)
@@ -17670,11 +17645,6 @@ defmodule Nx do
       #=>     [10, 20, 30]
       #=>   ]
       #=> >
-
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#from_pointer-5) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#from_pointer-5).
   """
   @doc type: :creation
   def from_pointer(backend, pointer, type, shape, opts \\ [])
@@ -17720,11 +17690,6 @@ defmodule Nx do
       t = Nx.s32([1, 2, 3])
       Nx.to_pointer(t, mode: :ipc)
       #=> %Nx.Pointer{kind: :ipc, address: nil, data_size: 32, handle: "some-ipc-handle"}
-
-  ## Backend notes
-
-  See [EXLA](https://hexdocs.pm/exla/backend_documentation-nx.html#to_pointer-2) and
-  [Torchx](https://hexdocs.pm/torchx/backend_documentation-nx.html#to_pointer-2).
   """
   @doc type: :creation
   def to_pointer(tensor, opts \\ []) do

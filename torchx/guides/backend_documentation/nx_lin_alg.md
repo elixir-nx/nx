@@ -54,8 +54,12 @@ copied back to MPS.
 
 ### Numerical notes
 
-`q` and `r` are not guaranteed to match other backends bit-for-bit. Verify
-via reconstruction `q · r ≈ input`.
+Results may differ slightly in orthogonality of `q` and triangular structure
+of `r` within floating-point tolerance.
+For example, for an eigenpair `(lambda, v)`, `(-lambda, -v)` is
+an equally valid eigenpair that would lead to radically different
+`q` and `r` matrices. Reconstruction of `q · r` should match the
+input within reasonable tolerances for the dtype.
 
 ## eigh/2
 
@@ -67,13 +71,14 @@ On **MPS**, the default Nx callback is used.
 
 ### Options
 
-* `:max_iter` and `:eps` — honoured only by the default Nx callback (MPS
+* `:max_iter` and `:eps` — honored only by the default Nx callback (MPS
 path); ignored by the LibTorch kernel
 
 ### Numerical notes
 
-Eigenvectors are not unique. Prefer comparing reconstructions over direct
-eigenvector equality.
+Eigenvectors are not unique (sign and degenerate subspaces). Compare results
+using reconstruction `v · diag(λ) · vᵀ` rather than direct eigenvector equality
+across backends.
 
 ## svd/2
 
@@ -91,12 +96,13 @@ on Torchx.
 
 ### Options
 
-* `:full_matrices?` — honoured by LibTorch
+* `:full_matrices?` — honored by LibTorch
 * `:max_iter` — ignored (LibTorch uses its own algorithm; the default Nx
 iterative implementation is not used on the native path)
 
 ### Numerical notes
 
+SVD is iterative; results may vary across devices and precision settings.
 Singular values are the most stable quantity to compare across backends.
 
 ## lu/1
@@ -126,7 +132,7 @@ transferred back to MPS.
 
 ### Options
 
-* `:lower` — honoured (`upper` flag inverted for LibTorch)
+* `:lower` — honored (`upper` flag inverted for LibTorch)
 * `:transform_a` — `:none` and `:transpose` are supported
 * `:left_side` — **only `true` is supported**; `left_side: false` raises
 `ArgumentError`
