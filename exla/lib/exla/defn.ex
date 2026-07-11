@@ -867,10 +867,11 @@ defmodule EXLA.Defn do
          cache
        )
        when platform in [:host, :cuda] do
-    {reverse_arg_values, reverse_typespecs, cache} =
-      Composite.reduce(tensor_expr, {[], [], cache}, fn %T{} = expr, {acc, typespecs, cache} ->
+    {reverse_arg_values, reverse_typespecs, cache, num_aliased} =
+      Composite.reduce(tensor_expr, {[], [], cache, 0}, fn %T{} = expr,
+                                                           {acc, typespecs, cache, num_aliased} ->
         {value, cache} = recur_operator(expr, state, cache) |> unwrap_single_tensor!()
-        {[value | acc], [Value.get_typespec(value) | typespecs], cache}
+        {[value | acc], [Value.get_typespec(value) | typespecs], cache, num_aliased + 1}
       end)
 
     arg_values = Enum.reverse(reverse_arg_values)
@@ -882,8 +883,6 @@ defmodule EXLA.Defn do
     unless callback_pid_value do
       raise "internal bug: io_call callback pid operand is missing"
     end
-
-    num_aliased = length(leaf_typespecs)
 
     aliased_outputs =
       Value.host_callback([callback_pid_value | arg_values], leaf_typespecs, id, num_aliased)
