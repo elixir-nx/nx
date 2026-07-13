@@ -1221,7 +1221,6 @@ defmodule Nx.Defn.Grad do
     vectorized_axes = batch_vectorized_axes(b_input, batch_count)
 
     a = revectorize_batch_axes(a_input, vectorized_axes)
-    _b = revectorize_batch_axes(b_input, vectorized_axes)
     x_input = revectorize_batch_axes(x_input, vectorized_axes)
     g = revectorize_batch_axes(g, vectorized_axes)
 
@@ -1669,15 +1668,41 @@ defmodule Nx.Defn.Grad do
 
   defp revectorize_batch_axes(%T{shape: shape} = tensor, vectorized_axes) do
     batch_count = length(vectorized_axes)
-    {batch_sizes, rest_shape} = shape |> Tuple.to_list() |> Enum.split(batch_count)
     expected_sizes = Enum.map(vectorized_axes, &elem(&1, 1))
+    shape_l = Tuple.to_list(shape)
 
-    if batch_sizes == expected_sizes do
-      Nx.revectorize(tensor, vectorized_axes, target_shape: List.to_tuple(rest_shape))
-    else
+    # Captured non-vectorized operands (e.g. `a` when only `b` is vectorized) do not
+    # carry a batch prefix — leave them alone. If a leading prefix is present and
+    # broadcast-compatible but not equal, fail loudly instead of silently skipping.
+    if length(shape_l) < batch_count do
       tensor
+    else
+      {batch_sizes, rest_shape} = Enum.split(shape_l, batch_count)
+
+      cond do
+        batch_sizes == expected_sizes ->
+          Nx.revectorize(tensor, vectorized_axes, target_shape: List.to_tuple(rest_shape))
+
+        batch_axes_broadcastable?(batch_sizes, expected_sizes) ->
+          raise ArgumentError,
+                "cannot revectorize batch axes for grad: leading shape " <>
+                  "#{inspect(List.to_tuple(batch_sizes))} is broadcastable to " <>
+                  "#{inspect(List.to_tuple(expected_sizes))} but not equal; " <>
+                  "got tensor shape #{inspect(shape)}"
+
+        true ->
+          tensor
+      end
     end
   end
+
+  defp batch_axes_broadcastable?(batch_sizes, expected_sizes)
+       when length(batch_sizes) == length(expected_sizes) do
+    Enum.zip(batch_sizes, expected_sizes)
+    |> Enum.all?(fn {size, expected} -> size == 1 or size == expected end)
+  end
+
+  defp batch_axes_broadcastable?(_, _), do: false
 
   defp reduce_g(x, opts, g) do
     axes = opts[:axes]
