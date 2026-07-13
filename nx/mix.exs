@@ -127,7 +127,6 @@ defmodule Nx.MixProject do
           Nx.Defn.Evaluator,
           Nx.Defn.Expr,
           Nx.Defn.Graph,
-          Nx.Defn.Token,
           Nx.Defn.Tree
         ],
         Blocks: ~r/^Nx\.Block\./

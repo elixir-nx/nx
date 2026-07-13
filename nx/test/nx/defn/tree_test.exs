@@ -11,28 +11,12 @@ defmodule Nx.Defn.TreeTest do
     :ok
   end
 
-  defn factorial(x) do
-    {factorial, _} =
-      while {factorial = 1.0, x}, Nx.greater(x, 1) do
-        {factorial * x, x - 1}
-      end
-
-    factorial
-  end
-
   defn with_hook(a, b), do: hook(a + b, :example)
 
-  defn hooked_factorial(a, b) do
-    {hook(factorial(with_hook(a, b)), :another), b}
-  end
-
-  describe "has_hooks?" do
-    test "returns true if there are hooks" do
-      refute Tree.has_hooks?(factorial(10), %{})
-      refute Tree.has_hooks?(hooked_factorial(1, 2), %{})
-      assert Tree.has_hooks?(hooked_factorial(1, 2), %{example: & &1})
-      assert Tree.has_hooks?(hooked_factorial(1, 2), %{another: & &1})
-    end
+  defn duplicate_hook_names(a, b) do
+    ha = hook(a, :same)
+    hb = hook(b, :same)
+    ha + hb
   end
 
   describe "scope_ids" do
@@ -94,6 +78,24 @@ defmodule Nx.Defn.TreeTest do
                {_, :parameter},
                {_, :parameter}
              ] = inside_both_cond(bool, a, b) |> Tree.scope_ids() |> Enum.sort_by(&elem(&1, 1))
+    end
+
+    test "treats hooks with the same name as distinct nodes" do
+      a = Expr.parameter(:root, {:u, 64}, {}, 0)
+      b = Expr.parameter(:root, {:u, 64}, {}, 1)
+
+      assert [
+               {_, :add},
+               {_, :hook},
+               {_, :hook},
+               {_, :parameter},
+               {_, :parameter}
+             ] =
+               tuples =
+               duplicate_hook_names(a, b) |> Tree.scope_ids() |> Enum.sort_by(&elem(&1, 1))
+
+      ids = Enum.map(tuples, &elem(&1, 0))
+      assert length(ids) == length(Enum.uniq(ids))
     end
   end
 
