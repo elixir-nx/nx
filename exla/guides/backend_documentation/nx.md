@@ -1,92 +1,61 @@
 # Nx (EXLA)
 
-EXLA-specific notes for top-level `Nx` operations where behaviour diverges from
+EXLA-specific notes for top-level `Nx` operations where behavior diverges from
 the portable Nx API or from other backends.
 
 Linear algebra is documented separately in [Nx.LinAlg](backend_documentation-nx_lin_alg.html).
 
-## runtime_call/4
+## `Nx.runtime_call/4`
 
-Runtime Elixir callback from `defn` (`runtime_call` expression).
+This function allows running Elixir code within `defn` code. Outside of a
+`defn`, it executes the callback directly — it does not compile the code.
 
-### Platforms
+Currently supported only for host and CUDA backends. Raises for ROCm/TPU
+devices.
 
-* **Host / CUDA** — supported via a device-side callback bridged through
-`EXLA.MLIR.Value.runtime_call/3`
-* **ROCm / TPU** — raises with a message to use `:host` or `:cuda`
+> #### Avoid device deadlocks {: .warning}
+>
+> The tensors given to the callback are allocated in the binary backend. You
+> must be careful to not use the same device the `defn` itself is running on,
+> as that will lead to a deadlock.
 
-### Outside `defn`
+## `Nx.backend_copy/2`
 
-Executes the callback directly on the input backend without compilation.
+Copies an EXLA tensor to another backend or device. Use the `:client` and
+`:device_id` options when the destination is `EXLA.Backend` to choose which
+EXLA client and device receive the data.
 
-### Warnings
+Copying to a non-EXLA backend materializes the tensor on that backend.
 
-Avoid `Nx.backend_transfer/2` on callback tensors inside the function when
-using `Nx.Defn.Evaluator`. Avoid running other Nx computations on the same GPU
-device from within the callback (deadlock risk).
+## `Nx.backend_transfer/2`
 
-## backend_copy/2
+Like `Nx.backend_copy/2`, but deallocates the source tensor when the
+destination is a different backend or device. Transferring to the same EXLA
+client and device is a no-op.
 
-Copy tensor data to another backend (`EXLA.Backend.backend_copy/3`).
+Accepts the same `:client` and `:device_id` options as `Nx.backend_copy/2`.
 
-### Behaviour
+## `Nx.to_pointer/2`
 
-Copying to `EXLA.Backend` on the same client and device returns the tensor
-unchanged. Cross-device copies use `EXLA.DeviceBuffer.copy_to_device/3`.
-Copying out reads device memory via `EXLA.DeviceBuffer.read/1` and delegates
-to the target backend's `from_binary/3`.
+Exports an EXLA tensor's device memory as an `Nx.Pointer` for interop with
+other native code.
 
-### Options
+Supported on **host** and **CUDA** only. Raises for ROCm, TPU, or tensors that
+are not allocated on a device.
 
-* `:client`, `:device_id` — select the EXLA client and device
+Modes:
 
-## backend_transfer/2
+  * `:local` — a local address on host or CUDA
+  * `:ipc` — a shareable handle (shared memory on host, CUDA IPC on CUDA)
 
-Transfer tensor data to another backend (`EXLA.Backend.backend_transfer/3`).
+The `:permissions` option sets the octal file mode for host IPC shared memory
+(default `0o400`).
 
-### Behaviour
+## `Nx.from_pointer/5`
 
-Same as `backend_copy/2` followed by deallocation of the source device buffer
-when leaving `EXLA.Backend`.
+Imports device memory from an `Nx.Pointer` into an `EXLA.Backend` tensor on
+**host** or **CUDA**. Raises for ROCm or TPU.
 
-### Options
-
-* `:client`, `:device_id` — select the EXLA client and device
-
-## to_pointer/2
-
-Export device memory as a pointer (`EXLA.Backend.to_pointer/2`).
-
-### Modes
-
-* `:local` — supported on **host** and **CUDA** clients; returns a local
-address integer
-* `:ipc` — supported on **host** (`shm_open` handle) and **CUDA** (IPC
-handle plus device id)
-
-### Options
-
-* `:permissions` — octal file mode for host IPC shared memory (default
-`0o400`)
-
-### Limitations
-
-Not supported for ROCm, TPU, or non-device buffers.
-
-## from_pointer/5
-
-Import device memory from a pointer (`EXLA.Backend.from_pointer/5`).
-
-### Behaviour
-
-Creates an `EXLA.DeviceBuffer` from a local address or IPC handle on **host**
-or **CUDA** clients. Pointer `data_size` must match the tensor byte size.
-
-### Options
-
-* `:client`, `:device_id` — destination device
-* `:names` — tensor names for the result template
-
-### Limitations
-
-Not supported for ROCm or TPU.
+The pointer's `data_size` must match the byte size of the result tensor. Use
+`:client` and `:device_id` to select the destination device, and `:names` to
+set tensor axis names on the result template.
