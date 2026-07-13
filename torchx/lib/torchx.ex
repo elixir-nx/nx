@@ -403,6 +403,18 @@ defmodule Torchx do
   def shape({dev, ref}) when is_tensor(dev, ref), do: NIF.shape(ref) |> unwrap!()
   def nbytes({dev, ref}) when is_tensor(dev, ref), do: NIF.nbytes(ref) |> unwrap!()
 
+  @doc """
+  Returns `{ptr, shape, type, {device_type, device_index}, keepalive_ref}` for
+  the tensor's own storage, without copying -- unlike `to_blob/1`, which
+  always copies through CPU memory.
+
+  `ptr` is only valid for as long as `keepalive_ref` (a NIF reference) is kept
+  alive by the caller. If the tensor wasn't already contiguous, `keepalive_ref`
+  refers to a newly allocated contiguous copy rather than the original tensor
+  -- `ptr` points into that copy's storage, not the original's.
+  """
+  def data_ptr({dev, ref}) when is_tensor(dev, ref), do: NIF.data_ptr(ref) |> unwrap!()
+
   ## Nx
 
   @doc """

@@ -30,4 +30,5 @@ defmodule Torchx.NIF do
   def scalar_type(_tensor), do: :erlang.nif_error(:undef)
   def shape(_tensor), do: :erlang.nif_error(:undef)
   def nbytes(_tensor), do: :erlang.nif_error(:undef)
+  def data_ptr(_tensor), do: :erlang.nif_error(:undef)
 end

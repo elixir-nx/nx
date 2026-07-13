@@ -80,6 +80,12 @@ tuple_to_device(const std::tuple<int64_t, int64_t> &device_tuple) {
       static_cast<torch::DeviceIndex>(std::get<1>(device_tuple)));
 }
 
+// Helper for torch::Device to device tuple (device_type, device_index)
+std::tuple<int64_t, int64_t> device_to_tuple(const torch::Device &device) {
+  return std::make_tuple(static_cast<int64_t>(device.type()),
+                          static_cast<int64_t>(device.index()));
+}
+
 // Helper to count elements in a shape
 uint64_t elem_count(const std::vector<int64_t> &shape) {
   return std::accumulate(shape.begin(), shape.end(), 1ULL, std::multiplies<>{});
@@ -235,6 +241,53 @@ fine::Ok<int64_t> nbytes(ErlNifEnv *env,
 }
 
 FINE_NIF(nbytes, 0);
+
+// ============================================================================
+// Zero-copy device pointer access
+// ============================================================================
+//
+// Unlike to_blob (which always copies through CPU memory to avoid a
+// use-after-free), this hands out a raw pointer to the tensor's own storage
+// without copying -- intended for handing a GPU-resident tensor directly to
+// another native library (e.g. onnxruntime via Ortex) without a
+// device->host->device round trip.
+//
+// Safety contract: the returned resource (5th tuple element) MUST be kept
+// alive by the caller for as long as the pointer is in use. If the tensor
+// wasn't already contiguous, a new contiguous tensor is allocated and that
+// resource -- not the original -- is what must be kept alive; the pointer
+// points into *that* tensor's storage.
+fine::Ok<std::tuple<uint64_t, std::vector<int64_t>, fine::Atom,
+                     std::tuple<int64_t, int64_t>,
+                     fine::ResourcePtr<TorchTensor>>>
+data_ptr(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor_res) {
+  auto &t = get_tensor(tensor_res);
+
+  bool was_contiguous = t.is_contiguous();
+  torch::Tensor contiguous = was_contiguous ? t : t.contiguous();
+  fine::ResourcePtr<TorchTensor> keepalive =
+      was_contiguous ? tensor_res
+                     : fine::make_resource<TorchTensor>(contiguous);
+
+  void *ptr = contiguous.data_ptr();
+  auto device = torch::device_of(contiguous).value();
+
+  const std::string *type_name = type2string(contiguous.scalar_type());
+  if (type_name == nullptr) {
+    throw std::runtime_error("Could not determine tensor type.");
+  }
+
+  std::vector<int64_t> shape_vec;
+  for (int64_t dim = 0; dim < contiguous.dim(); dim++) {
+    shape_vec.push_back(contiguous.size(dim));
+  }
+
+  return fine::Ok(std::make_tuple(
+      reinterpret_cast<uint64_t>(ptr), shape_vec, fine::Atom(*type_name),
+      device_to_tuple(device), keepalive));
+}
+
+FINE_NIF(data_ptr, 0);
 
 // ============================================================================
 // Tensor Shape Operations

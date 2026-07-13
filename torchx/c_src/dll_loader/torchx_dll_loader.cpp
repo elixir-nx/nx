@@ -48,9 +48,16 @@ NIF(add_dll_directory) {
   auto pos = dll_path.find_last_of(L'\\');
   auto priv_dir = dll_path.substr(0, pos);
 
-  std::wstringstream torch_dir_ss;
-  torch_dir_ss << priv_dir << L"\\libtorch";
-  std::wstring torch_dir = torch_dir_ss.str();
+  std::wstring torch_dir;
+  WCHAR env_dll_path[65536];
+  if (GetEnvironmentVariableW(L"TORCHX_DLL_PATH", env_dll_path, _countof(env_dll_path)) > 0) {
+    torch_dir = env_dll_path;
+  } else {
+    std::wstringstream torch_dir_ss;
+    torch_dir_ss << priv_dir << L"\\libtorch";
+    torch_dir = torch_dir_ss.str();
+  }
+  
   PCWSTR directory_pcwstr = torch_dir.c_str();
 
   WCHAR path_buffer[65536];
