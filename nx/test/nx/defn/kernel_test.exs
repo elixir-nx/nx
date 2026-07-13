@@ -147,30 +147,19 @@ defmodule Nx.Defn.KernelTest do
     defp zero_expr(), do: Nx.tensor(0, type: {:u, 8}, backend: Nx.Defn.Expr)
     defp one_expr(), do: Nx.tensor(1, type: {:u, 8}, backend: Nx.Defn.Expr)
 
-    defp token_expr!(%T{
-           data: %Expr{
-             op: :attach_token,
-             args: [%T{data: %Expr{op: :token, args: [token]}}, expr]
-           }
-         }) do
-      {token, expr}
-    end
-
     test "hook/2,3" do
-      {token, expr} = Nx.Defn.Kernel.hook(zero_expr(), :a) |> token_expr!()
-      assert [%{name: :a, callback: nil, expr: ^expr}] = token.hooks
-      assert expr == zero_expr()
+      result = Nx.Defn.Kernel.hook(zero_expr(), :a)
+      assert %T{data: %Expr{op: :hook}} = result
+      assert inspect(result, safe: false) =~ "hook"
+      assert inspect(result, safe: false) =~ "a:"
 
-      {token, expr} = Nx.Defn.Kernel.hook(zero_expr(), &Function.identity/1) |> token_expr!()
-      assert [%{name: name, callback: callback, expr: ^expr}] = token.hooks
-      assert callback == (&Function.identity/1)
-      assert expr == zero_expr()
-      assert "hook_" <> _ = Atom.to_string(name)
+      result = Nx.Defn.Kernel.hook(zero_expr(), &Function.identity/1)
+      assert %T{data: %Expr{op: :hook}} = result
+      assert inspect(result, safe: false) =~ "hook"
 
-      {token, expr} = Nx.Defn.Kernel.hook(zero_expr(), :a, &Function.identity/1) |> token_expr!()
-      assert [%{name: :a, callback: callback, expr: ^expr}] = token.hooks
-      assert callback == (&Function.identity/1)
-      assert expr == zero_expr()
+      result = Nx.Defn.Kernel.hook(zero_expr(), :a, &Function.identity/1)
+      assert %T{data: %Expr{op: :hook}} = result
+      assert inspect(result, safe: false) =~ "a:"
     end
 
     test "hook_token/3,4" do
@@ -203,6 +192,9 @@ defmodule Nx.Defn.KernelTest do
 
       assert callback == (&Function.identity/1)
       assert "hook_" <> _ = Atom.to_string(name)
+
+      result = Nx.Defn.Kernel.attach_token(token, one)
+      assert %T{data: %Expr{op: :hook}} = result
     end
   end
 

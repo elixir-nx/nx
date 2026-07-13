@@ -39,7 +39,7 @@ defmodule Nx.Defn.Expr do
 
     * `while(initial, condition, body)`
 
-    * `attach_token(token(%Nx.Defn.Token{}), expr)`
+    * `hook(data, callback_spec)`
 
     * `runtime_call(out, tensor_or_container, opts, fun)`
 
@@ -449,28 +449,80 @@ defmodule Nx.Defn.Expr do
   def id(), do: make_ref()
 
   @doc false
-  def add_hook(token, expr, name, function) do
+  def add_hook(%Nx.Defn.Token{} = token, expr, name, function)
+      when is_atom(name) and (is_function(function) or is_nil(function)) do
     expr = to_container_expr(expr)
     token = Nx.Defn.Token.add_hook(token, expr, name, function)
     {token, expr}
   end
 
   @doc false
-  def attach_token(%T{data: %{op: :token}} = token, expr) do
-    Composite.traverse(expr, fn tensor ->
-      expr = to_expr(tensor)
-      expr(expr, expr.data.context, :attach_token, [token, expr])
+  def attach_token(%Nx.Defn.Token{hooks: []}, expr), do: to_container_expr(expr)
+
+  def attach_token(%Nx.Defn.Token{hooks: hooks}, expr) do
+    expr = to_container_expr(expr)
+
+    hooks
+    |> Enum.reverse()
+    |> Enum.reduce(expr, fn %{expr: hooked_expr, name: name, callback: callback}, acc ->
+      hooked_expr = to_container_expr(hooked_expr)
+      inner_spec = hook_callback_spec(name, callback)
+      hook(acc, {:token_hook, hooked_expr, inner_spec})
     end)
   end
 
-  def attach_token(%Nx.Defn.Token{} = token, expr) do
-    # We first create an expression to store the token
-    # so we have a shared ID to avoid multiple traversals.
-    # The size of the tuple is not used, but the amount of
-    # hooks is a good indicator.
-    size = length(token.hooks)
-    token = expr(%T{shape: {}, type: {:tuple, size}, names: []}, nil, :token, [token])
-    attach_token(token, expr)
+  defp hook_callback_spec(name, nil) when is_atom(name), do: {:named, name, nil}
+
+  defp hook_callback_spec(name, callback) when is_atom(name) and is_function(callback, 1),
+    do: {:named, name, callback}
+
+  defp hook_callback_spec(_name, callback) when is_function(callback, 1), do: {:fn, callback}
+
+  @doc false
+  def hook(tensor_or_container, callback_spec) do
+    tensor_expr =
+      Composite.traverse(tensor_or_container, fn
+        %T{} = t -> to_expr(t)
+        other -> other
+      end)
+
+    [%T{data: %Expr{context: context}} | _] =
+      Composite.flatten_list([tensor_expr])
+
+    ref = make_ref()
+    user_template = Nx.to_template(tensor_or_container)
+    leaf_count = Composite.reduce(user_template, 0, fn _, acc -> acc + 1 end)
+
+    root_type =
+      case user_template do
+        %T{} = template -> template
+        _ -> tuple_out(leaf_count)
+      end
+
+    root =
+      expr(root_type, context, :hook, [
+        tensor_expr,
+        callback_spec,
+        user_template,
+        ref
+      ])
+
+    hook_data_from_root(root, user_template, context)
+  end
+
+  defp hook_data_from_root(root, %T{}, _context), do: root
+
+  defp hook_data_from_root(root, user_template, context) do
+    {container_expr, _} =
+      Composite.traverse(user_template, {0, root}, fn
+        %T{} = template, {i, root} ->
+          {expr(template, context, :elem, [root, i]), {i + 1, root}}
+
+        other, acc ->
+          {other, acc}
+      end)
+
+    container_expr
   end
 
   @doc false
@@ -1753,18 +1805,42 @@ defmodule Nx.Defn.Expr do
     {var_name, store_line(state, :parameters, parameter, type_shape)}
   end
 
+  defp cached_recur_inspect(:hook, args, type_shape, state) do
+    [data, callback_spec, _template, _ref] = args
+    {data, state} = recur_inspect(data, state)
+    var_name = var_name(state)
+
+    {expr, state} =
+      case callback_spec do
+        {:token_hook, hooked_expr, inner_spec} ->
+          {hooked_expr, state} = recur_inspect(hooked_expr, state)
+
+          hook_io =
+            case inner_spec do
+              {:named, name, _} ->
+                IO.iodata_to_binary(["hook ", Atom.to_string(name), ": ", hooked_expr])
+
+              {:fn, fun} ->
+                IO.iodata_to_binary(["hook ", hooked_expr, ", ", inspect(fun)])
+            end
+
+          {IO.iodata_to_binary([var_name, " = ", hook_io, "; ", data]), state}
+
+        {:named, name, _} ->
+          {IO.iodata_to_binary([var_name, " = hook ", Atom.to_string(name), ": ", data]), state}
+
+        {:fn, fun} ->
+          {IO.iodata_to_binary([var_name, " = hook ", data, ", ", inspect(fun)]), state}
+      end
+
+    {var_name, store_line(state, :exprs, expr, type_shape)}
+  end
+
   defp cached_recur_inspect(op, args, type_shape, state) do
     {args, state} = traverse_args(op, args, state)
     var_name = var_name(state)
     expr = IO.iodata_to_binary(["#{var_name} = #{op} " | Enum.intersperse(args, ", ")])
     {var_name, store_line(state, :exprs, expr, type_shape)}
-  end
-
-  defp traverse_args(:token, [%Nx.Defn.Token{hooks: hooks}], state) do
-    Enum.map_reduce(hooks, state, fn %{name: name, expr: expr}, state ->
-      {expr, state} = recur_inspect(expr, state)
-      {[Macro.inspect_atom(:key, name), " ", expr], state}
-    end)
   end
 
   defp traverse_args(:cond, [clauses, other], state) do
