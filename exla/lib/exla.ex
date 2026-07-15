@@ -126,13 +126,13 @@ defmodule EXLA do
   Each client configuration accepts the following options:
 
     * `:platform` - the platform the client runs on. It can be
-      `:host` (CPU), `:cuda`, `:rocm`, `:tpu`, or `:c_api` (an
+      `:host` (CPU), `:cuda`, `:rocm`, `:tpu`, or `:pjrt_plugin` (an
       externally loaded PJRT plugin, see below). Defaults to `:host`.
 
-    * `:device_type` - required for the `:c_api` platform. The device
+    * `:device_type` - required for the `:pjrt_plugin` platform. The device
       type string the PJRT plugin registers under (for example `"tt"`).
 
-    * `:plugin_path` - required for the `:c_api` platform. The path to
+    * `:plugin_path` - required for the `:pjrt_plugin` platform. The path to
       the PJRT plugin shared library to load (for example the tt-xla
       `pjrt_plugin_tt.so`).
 
@@ -146,14 +146,14 @@ defmodule EXLA do
     * `:memory_fraction` - how much memory of a GPU device to
       allocate. Defaults to `0.9`.
 
-  ### External PJRT plugins (`:c_api`)
+  ### External PJRT plugins (`:pjrt_plugin`)
 
   Besides the built-in platforms, EXLA can target any hardware that ships
   a PJRT C-API plugin (a shared library) by loading it at runtime. Use the
-  `:c_api` platform together with `:device_type` and `:plugin_path`:
+  `:pjrt_plugin` platform together with `:device_type` and `:plugin_path`:
 
       config :exla, :clients,
-        tt: [platform: :c_api, device_type: "tt", plugin_path: "/path/to/pjrt_plugin_tt.so"]
+        tt: [platform: :pjrt_plugin, device_type: "tt", plugin_path: "/path/to/pjrt_plugin_tt.so"]
 
   The plugin is loaded via its `GetPjrtApi` entrypoint and registered under
   `:device_type`. Any environment the plugin itself requires (for example a

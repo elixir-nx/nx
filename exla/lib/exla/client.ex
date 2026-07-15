@@ -185,12 +185,12 @@ defmodule EXLA.Client do
         :tpu ->
           EXLA.NIF.get_tpu_client()
 
-        :c_api ->
+        :pjrt_plugin ->
           device_type =
             case Keyword.get(options, :device_type) do
               nil ->
                 raise ArgumentError,
-                      "the :c_api platform requires a :device_type, the PJRT plugin device " <>
+                      "the :pjrt_plugin platform requires a :device_type, the PJRT plugin device " <>
                         "type to register and look up (for example \"tt\")"
 
               device_type ->
@@ -200,7 +200,7 @@ defmodule EXLA.Client do
           plugin_path =
             Keyword.get(options, :plugin_path) ||
               raise ArgumentError,
-                    "the :c_api platform requires a :plugin_path pointing at the PJRT plugin " <>
+                    "the :pjrt_plugin platform requires a :plugin_path pointing at the PJRT plugin " <>
                       "shared library (for example the tt-xla pjrt_plugin_tt.so)"
 
           :ok = EXLA.NIF.load_pjrt_plugin(device_type, plugin_path)
