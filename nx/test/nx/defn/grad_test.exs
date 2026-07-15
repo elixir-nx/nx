@@ -3320,6 +3320,17 @@ defmodule Nx.Defn.GradTest do
                Nx.tensor(1.0)
     end
 
+    defn grad_clip_x_and_lower_lim(t, lim),
+      do: grad({t, lim}, fn {t, lim} -> Nx.sum(Nx.clip(t, lim, 10)) end)
+
+    test "partials sum to the directional derivative at a lower-limit tie" do
+      # With x[0] == lim, moving both together (x[0] = lim = t) gives
+      # f = t + 5, so the tied element's contributions must sum to exactly 1:
+      # granting the gradient to both the operand and the limit would emit 2
+      {dx, dlim} = grad_clip_x_and_lower_lim(Nx.tensor([0.0, 5.0]), Nx.tensor(0.0))
+      assert Nx.add(dx[0], dlim) == Nx.tensor(1.0)
+    end
+
     test "computes gradient wrt to lower lim" do
       assert grad_sum_clip_wrt_to_lower_lim(Nx.iota({5}), 2.5) == Nx.tensor(3.0)
     end
