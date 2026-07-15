@@ -4769,32 +4769,6 @@ defmodule Nx.Defn.GradTest do
         triangular_solve_grad_wrt_b(a, b, transform_a: :none, left_side: false, lower: false)
       )
     end
-
-    test "computes grad for batched tensor wrt a and b" do
-      a =
-        Nx.tensor([
-          [[1.0, 1.0, 1.0], [0.0, 1.0, 1.0], [0.0, 0.0, 1.0]],
-          [[2.0, 1.0, 0.0], [0.0, 1.0, 1.0], [0.0, 0.0, 3.0]]
-        ])
-
-      b = Nx.tensor([[[4.0], [3.0], [2.0]], [[1.0], [2.0], [6.0]]])
-
-      assert_all_close(
-        triangular_solve_grad_wrt_a(a, b, lower: false),
-        Nx.stack([
-          triangular_solve_grad_wrt_a(a[0], b[0], lower: false),
-          triangular_solve_grad_wrt_a(a[1], b[1], lower: false)
-        ])
-      )
-
-      assert_all_close(
-        triangular_solve_grad_wrt_b(a, b, lower: false),
-        Nx.stack([
-          triangular_solve_grad_wrt_b(a[0], b[0], lower: false),
-          triangular_solve_grad_wrt_b(a[1], b[1], lower: false)
-        ])
-      )
-    end
   end
 
   describe "not implemented" do
