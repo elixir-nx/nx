@@ -507,7 +507,7 @@ defmodule Nx.Defn.Grad do
 
     # w.r.t operand. Elements exactly at the boundaries pass the gradient
     # through to the operand (matching clip_by_value/clamp in other
-    # frameworks).
+    # frameworks); the limits only receive gradient when strictly exceeded.
     w_operand =
       Nx.select(
         Nx.bitwise_and(Nx.greater_equal(operand, min), Nx.less_equal(operand, max)),
