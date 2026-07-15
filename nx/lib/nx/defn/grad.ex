@@ -1107,25 +1107,25 @@ defmodule Nx.Defn.Grad do
     a =
       case opts[:transform_a] do
         :none -> a_input
-        :transpose -> Nx.transpose(a_input)
+        :transpose -> transpose_matrix(a_input)
         :conjugate -> Nx.conjugate(a_input)
       end
 
     a_inv_hermitian = Nx.LinAlg.invert(Nx.LinAlg.adjoint(a))
+    batch_axes = linalg_batch_axes(a_inv_hermitian)
 
-    x =
-      case {Nx.shape(x_input), opts[:left_side]} do
-        {{n}, true} -> Nx.reshape(x_input, {n, 1})
-        {{n}, false} -> Nx.reshape(x_input, {1, n})
-        _ -> x_input
+    # When b is a (possibly batched) vector, its rank is one less than a's.
+    # Add a unit axis so the backward math below can treat it as a matrix;
+    # the axis is removed from db at the end.
+    b_rank_correction_axis =
+      cond do
+        Nx.rank(x_input) != Nx.rank(a_input) - 1 -> nil
+        opts[:left_side] -> -1
+        true -> -2
       end
 
-    g =
-      case {Nx.shape(g), opts[:left_side]} do
-        {{n}, true} -> Nx.reshape(g, {n, 1})
-        {{n}, false} -> Nx.reshape(g, {1, n})
-        _ -> g
-      end
+    x = if b_rank_correction_axis, do: Nx.new_axis(x_input, b_rank_correction_axis), else: x_input
+    g = if b_rank_correction_axis, do: Nx.new_axis(g, b_rank_correction_axis), else: g
 
     {da, db} =
       if opts[:left_side] do
@@ -1139,23 +1139,38 @@ defmodule Nx.Defn.Grad do
         # which means that:
         # A_bar = inv(A^H).X_bar.X^H
         # B_bar = inv(A^H).X_bar
-        da = a_inv_hermitian |> Nx.dot(g |> Nx.dot(Nx.LinAlg.adjoint(x))) |> Nx.negate()
-        db = Nx.dot(a_inv_hermitian, g)
+        da =
+          a_inv_hermitian
+          |> Nx.dot(
+            [-1],
+            batch_axes,
+            Nx.dot(g, [-1], batch_axes, Nx.LinAlg.adjoint(x), [-2], batch_axes),
+            [-2],
+            batch_axes
+          )
+          |> Nx.negate()
+
+        db = Nx.dot(a_inv_hermitian, [-1], batch_axes, g, [-2], batch_axes)
         {da, db}
       else
         # X.A = B -> X = B.inv(A)
         # taking a similar approach to the branch above, we get
         # A_bar = -X^H.X_bar.inv(A^H)
         # B_bar = X_bar.inv(A^H)
-        da = x |> Nx.LinAlg.adjoint() |> Nx.dot(g) |> Nx.dot(a_inv_hermitian) |> Nx.negate()
-        db = Nx.dot(g, a_inv_hermitian)
+        da =
+          Nx.LinAlg.adjoint(x)
+          |> Nx.dot([-1], batch_axes, g, [-2], batch_axes)
+          |> Nx.dot([-1], batch_axes, a_inv_hermitian, [-2], batch_axes)
+          |> Nx.negate()
+
+        db = Nx.dot(g, [-1], batch_axes, a_inv_hermitian, [-2], batch_axes)
         {da, db}
       end
 
     da =
       case opts[:transform_a] do
         :none -> da
-        :transpose -> Nx.transpose(da)
+        :transpose -> transpose_matrix(da)
         :conjugate -> Nx.conjugate(da)
       end
 
@@ -1166,11 +1181,7 @@ defmodule Nx.Defn.Grad do
         Nx.triu(da)
       end
 
-    db =
-      case Nx.shape(x_input) do
-        {n} -> Nx.reshape(db, {n})
-        _ -> db
-      end
+    db = if b_rank_correction_axis, do: Nx.squeeze(db, axes: [b_rank_correction_axis]), else: db
 
     [{a_input, da}, {b, db}]
   end
@@ -1543,6 +1554,13 @@ defmodule Nx.Defn.Grad do
 
   defp up_to(i, n) when i < n, do: [i | up_to(i + 1, n)]
   defp up_to(_, _), do: []
+
+  defp linalg_batch_axes(t), do: Enum.to_list(0..(Nx.rank(t) - 3)//1)
+
+  defp transpose_matrix(t) do
+    rank = Nx.rank(t)
+    Nx.transpose(t, axes: Enum.to_list(0..(rank - 3)//1) ++ [rank - 1, rank - 2])
+  end
 
   defp argsort(list), do: list |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
 

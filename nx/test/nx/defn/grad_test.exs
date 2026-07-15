@@ -3,6 +3,7 @@ defmodule Nx.Defn.GradTest do
 
   import Nx.Defn
   import Nx.Helpers
+  import Nx.Testing, only: [assert_equal: 2]
   import Nx, only: :sigils
 
   @iters 1..25
@@ -2436,6 +2437,16 @@ defmodule Nx.Defn.GradTest do
         ]
       )
     end
+
+    test "computes grad for batched tensor" do
+      t =
+        Nx.tensor([
+          [[1.0, 2.0], [1.0, -1.0]],
+          [[3.0, 1.0], [2.0, 4.0]]
+        ])
+
+      assert_equal(lu_grad(t), Nx.stack([lu_grad(t[0]), lu_grad(t[1])]))
+    end
   end
 
   describe "svd" do
@@ -2558,6 +2569,49 @@ defmodule Nx.Defn.GradTest do
           [0.9508, 69.7985, -524.3346],
           [-1.2254, 3.1769, -0.0230]
         ])
+      )
+    end
+
+    test "computes grad for batched tensor" do
+      t =
+        Nx.tensor([
+          [[1.0, 2.0, 3.0], [0.0, 4.0, 5.0], [0.0, 0.0, -6.0]],
+          [[2.0, 0.0, 1.0], [1.0, 3.0, 0.0], [0.0, 1.0, 4.0]]
+        ])
+
+      assert_equal(invert_grad(t), Nx.stack([invert_grad(t[0]), invert_grad(t[1])]))
+    end
+  end
+
+  describe "determinant" do
+    defn determinant_grad(t) do
+      grad(t, fn tensor ->
+        tensor
+        |> Nx.LinAlg.determinant()
+        |> Nx.sum()
+      end)
+    end
+
+    test "computes grad for batched tensor" do
+      t =
+        Nx.tensor([
+          [
+            [5.0, 1.0, 2.0, 3.0],
+            [4.0, 10.0, 6.0, 7.0],
+            [8.0, 9.0, 15.0, 11.0],
+            [12.0, 13.0, 14.0, 20.0]
+          ],
+          [
+            [2.0, 0.0, 1.0, 0.0],
+            [1.0, 3.0, 0.0, 1.0],
+            [0.0, 1.0, 4.0, 0.0],
+            [1.0, 0.0, 0.0, 5.0]
+          ]
+        ])
+
+      assert_equal(
+        determinant_grad(t),
+        Nx.stack([determinant_grad(t[0]), determinant_grad(t[1])])
       )
     end
   end
@@ -4714,6 +4768,102 @@ defmodule Nx.Defn.GradTest do
           lower: false
         ),
         triangular_solve_grad_wrt_b(a, b, transform_a: :none, left_side: false, lower: false)
+      )
+    end
+
+    test "computes grad for batched tensor with matrix b" do
+      a =
+        Nx.tensor([
+          [[1.0, 1.0, 1.0], [0.0, 1.0, 1.0], [0.0, 0.0, 1.0]],
+          [[2.0, 1.0, 0.0], [0.0, 1.0, 1.0], [0.0, 0.0, 3.0]]
+        ])
+
+      b = Nx.tensor([[[4.0], [3.0], [2.0]], [[1.0], [2.0], [6.0]]])
+
+      assert_equal(
+        triangular_solve_grad_wrt_a(a, b, lower: false),
+        Nx.stack([
+          triangular_solve_grad_wrt_a(a[0], b[0], lower: false),
+          triangular_solve_grad_wrt_a(a[1], b[1], lower: false)
+        ])
+      )
+
+      assert_equal(
+        triangular_solve_grad_wrt_b(a, b, lower: false),
+        Nx.stack([
+          triangular_solve_grad_wrt_b(a[0], b[0], lower: false),
+          triangular_solve_grad_wrt_b(a[1], b[1], lower: false)
+        ])
+      )
+    end
+
+    test "computes grad for batched tensor with vector b" do
+      a =
+        Nx.tensor([
+          [[4.0, 0.0], [2.0, 5.0]],
+          [[9.0, 0.0], [3.0, 10.0]]
+        ])
+
+      b = Nx.tensor([[1.0, 1.0], [1.0, 1.0]])
+
+      assert_equal(
+        triangular_solve_grad_wrt_a(a, b),
+        Nx.stack([
+          triangular_solve_grad_wrt_a(a[0], b[0]),
+          triangular_solve_grad_wrt_a(a[1], b[1])
+        ])
+      )
+
+      assert_equal(
+        triangular_solve_grad_wrt_b(a, b),
+        Nx.stack([
+          triangular_solve_grad_wrt_b(a[0], b[0]),
+          triangular_solve_grad_wrt_b(a[1], b[1])
+        ])
+      )
+    end
+
+    test "computes grad for batched tensor with vector b, left_side: false" do
+      a =
+        Nx.tensor([
+          [[2.0, 1.0], [0.0, 4.0]],
+          [[3.0, 2.0], [0.0, 1.0]]
+        ])
+
+      b = Nx.tensor([[1.0, 2.0], [3.0, 1.0]])
+
+      assert_equal(
+        triangular_solve_grad_wrt_a(a, b, left_side: false, lower: false),
+        Nx.stack([
+          triangular_solve_grad_wrt_a(a[0], b[0], left_side: false, lower: false),
+          triangular_solve_grad_wrt_a(a[1], b[1], left_side: false, lower: false)
+        ])
+      )
+
+      assert_equal(
+        triangular_solve_grad_wrt_b(a, b, left_side: false, lower: false),
+        Nx.stack([
+          triangular_solve_grad_wrt_b(a[0], b[0], left_side: false, lower: false),
+          triangular_solve_grad_wrt_b(a[1], b[1], left_side: false, lower: false)
+        ])
+      )
+    end
+
+    test "computes grad for batched tensor with transform_a: :transpose" do
+      a =
+        Nx.tensor([
+          [[4.0, 0.0], [2.0, 5.0]],
+          [[9.0, 0.0], [3.0, 10.0]]
+        ])
+
+      b = Nx.tensor([[1.0, 1.0], [1.0, 1.0]])
+
+      assert_equal(
+        triangular_solve_grad_wrt_a(a, b, transform_a: :transpose),
+        Nx.stack([
+          triangular_solve_grad_wrt_a(a[0], b[0], transform_a: :transpose),
+          triangular_solve_grad_wrt_a(a[1], b[1], transform_a: :transpose)
+        ])
       )
     end
   end
