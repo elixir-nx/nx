@@ -516,10 +516,15 @@ defmodule Nx.Defn.Grad do
     # w.r.t max
     w_max = Nx.select(Nx.less(max, operand), Nx.broadcast(g, operand), 0.0)
 
+    # NOTE: w_* already carry g via the selects above — multiplying by g
+    # again squared the upstream gradient (g² is invisible when g == 1,
+    # which is why sum-based tests passed while mean-based gradients came
+    # out 1/n too small with scrambled signs; found via exphil BCE-clamp
+    # training collapse, 2026-07-14).
     [
-      {operand, Nx.multiply(g, w_operand)},
-      {min, Nx.sum(Nx.multiply(g, w_min))},
-      {max, Nx.sum(Nx.multiply(g, w_max))}
+      {operand, w_operand},
+      {min, Nx.sum(w_min)},
+      {max, Nx.sum(w_max)}
     ]
   end
 
