@@ -159,10 +159,10 @@ defmodule Nx.LinAlg.LU do
     u_h = Nx.LinAlg.adjoint(u)
     l_h = Nx.LinAlg.adjoint(l)
     p_t = Nx.LinAlg.adjoint(p)
-    ba = batch_axes(u)
+    batch_axes = batch_axes(u)
 
-    lh_dl = Nx.dot(l_h, [-1], ba, dl, [-2], ba)
-    du_uh = Nx.dot(du, [-1], ba, u_h, [-2], ba)
+    lh_dl = Nx.dot(l_h, [-1], batch_axes, dl, [-2], batch_axes)
+    du_uh = Nx.dot(du, [-1], batch_axes, u_h, [-2], batch_axes)
 
     lt_inv = Nx.LinAlg.invert(l_h)
     ut_inv = Nx.LinAlg.invert(u_h)
@@ -171,9 +171,9 @@ defmodule Nx.LinAlg.LU do
 
     da =
       p_t
-      |> Nx.dot([-1], ba, lt_inv, [-2], ba)
-      |> Nx.dot([-1], ba, df, [-2], ba)
-      |> Nx.dot([-1], ba, ut_inv, [-2], ba)
+      |> Nx.dot([-1], batch_axes, lt_inv, [-2], batch_axes)
+      |> Nx.dot([-1], batch_axes, df, [-2], batch_axes)
+      |> Nx.dot([-1], batch_axes, ut_inv, [-2], batch_axes)
 
     [da]
   end

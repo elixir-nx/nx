@@ -1112,7 +1112,7 @@ defmodule Nx.Defn.Grad do
       end
 
     a_inv_hermitian = Nx.LinAlg.invert(Nx.LinAlg.adjoint(a))
-    ba = linalg_batch_axes(a_inv_hermitian)
+    batch_axes = linalg_batch_axes(a_inv_hermitian)
 
     x =
       case {Nx.shape(x_input), opts[:left_side]} do
@@ -1140,18 +1140,31 @@ defmodule Nx.Defn.Grad do
         # which means that:
         # A_bar = inv(A^H).X_bar.X^H
         # B_bar = inv(A^H).X_bar
-        gx = Nx.dot(g, [-1], ba, Nx.LinAlg.adjoint(x), [-2], ba)
-        da = a_inv_hermitian |> Nx.dot([-1], ba, gx, [-2], ba) |> Nx.negate()
-        db = Nx.dot(a_inv_hermitian, [-1], ba, g, [-2], ba)
+        da =
+          a_inv_hermitian
+          |> Nx.dot(
+            [-1],
+            batch_axes,
+            Nx.dot(g, [-1], batch_axes, Nx.LinAlg.adjoint(x), [-2], batch_axes),
+            [-2],
+            batch_axes
+          )
+          |> Nx.negate()
+
+        db = Nx.dot(a_inv_hermitian, [-1], batch_axes, g, [-2], batch_axes)
         {da, db}
       else
         # X.A = B -> X = B.inv(A)
         # taking a similar approach to the branch above, we get
         # A_bar = -X^H.X_bar.inv(A^H)
         # B_bar = X_bar.inv(A^H)
-        xg = Nx.dot(Nx.LinAlg.adjoint(x), [-1], ba, g, [-2], ba)
-        da = xg |> Nx.dot([-1], ba, a_inv_hermitian, [-2], ba) |> Nx.negate()
-        db = Nx.dot(g, [-1], ba, a_inv_hermitian, [-2], ba)
+        da =
+          Nx.LinAlg.adjoint(x)
+          |> Nx.dot([-1], batch_axes, g, [-2], batch_axes)
+          |> Nx.dot([-1], batch_axes, a_inv_hermitian, [-2], batch_axes)
+          |> Nx.negate()
+
+        db = Nx.dot(g, [-1], batch_axes, a_inv_hermitian, [-2], batch_axes)
         {da, db}
       end
 
