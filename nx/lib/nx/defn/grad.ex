@@ -1117,15 +1117,15 @@ defmodule Nx.Defn.Grad do
     # When b is a (possibly batched) vector, its rank is one less than a's.
     # Add a unit axis so the backward math below can treat it as a matrix;
     # the axis is removed from db at the end.
-    vector_axis =
+    b_rank_correction_axis =
       cond do
         Nx.rank(x_input) != Nx.rank(a_input) - 1 -> nil
         opts[:left_side] -> -1
         true -> -2
       end
 
-    x = if vector_axis, do: Nx.new_axis(x_input, vector_axis), else: x_input
-    g = if vector_axis, do: Nx.new_axis(g, vector_axis), else: g
+    x = if b_rank_correction_axis, do: Nx.new_axis(x_input, b_rank_correction_axis), else: x_input
+    g = if b_rank_correction_axis, do: Nx.new_axis(g, b_rank_correction_axis), else: g
 
     {da, db} =
       if opts[:left_side] do
@@ -1181,7 +1181,7 @@ defmodule Nx.Defn.Grad do
         Nx.triu(da)
       end
 
-    db = if vector_axis, do: Nx.squeeze(db, axes: [vector_axis]), else: db
+    db = if b_rank_correction_axis, do: Nx.squeeze(db, axes: [b_rank_correction_axis]), else: db
 
     [{a_input, da}, {b, db}]
   end

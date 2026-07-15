@@ -3,6 +3,7 @@ defmodule Nx.Defn.GradTest do
 
   import Nx.Defn
   import Nx.Helpers
+  import Nx.Testing, only: [assert_equal: 2]
   import Nx, only: :sigils
 
   @iters 1..25
@@ -2444,7 +2445,7 @@ defmodule Nx.Defn.GradTest do
           [[3.0, 1.0], [2.0, 4.0]]
         ])
 
-      assert_all_close(lu_grad(t), Nx.stack([lu_grad(t[0]), lu_grad(t[1])]))
+      assert_equal(lu_grad(t), Nx.stack([lu_grad(t[0]), lu_grad(t[1])]))
     end
   end
 
@@ -2578,7 +2579,7 @@ defmodule Nx.Defn.GradTest do
           [[2.0, 0.0, 1.0], [1.0, 3.0, 0.0], [0.0, 1.0, 4.0]]
         ])
 
-      assert_all_close(invert_grad(t), Nx.stack([invert_grad(t[0]), invert_grad(t[1])]))
+      assert_equal(invert_grad(t), Nx.stack([invert_grad(t[0]), invert_grad(t[1])]))
     end
   end
 
@@ -2608,7 +2609,7 @@ defmodule Nx.Defn.GradTest do
           ]
         ])
 
-      assert_all_close(
+      assert_equal(
         determinant_grad(t),
         Nx.stack([determinant_grad(t[0]), determinant_grad(t[1])])
       )
@@ -4779,7 +4780,7 @@ defmodule Nx.Defn.GradTest do
 
       b = Nx.tensor([[[4.0], [3.0], [2.0]], [[1.0], [2.0], [6.0]]])
 
-      assert_all_close(
+      assert_equal(
         triangular_solve_grad_wrt_a(a, b, lower: false),
         Nx.stack([
           triangular_solve_grad_wrt_a(a[0], b[0], lower: false),
@@ -4787,7 +4788,7 @@ defmodule Nx.Defn.GradTest do
         ])
       )
 
-      assert_all_close(
+      assert_equal(
         triangular_solve_grad_wrt_b(a, b, lower: false),
         Nx.stack([
           triangular_solve_grad_wrt_b(a[0], b[0], lower: false),
@@ -4805,7 +4806,7 @@ defmodule Nx.Defn.GradTest do
 
       b = Nx.tensor([[1.0, 1.0], [1.0, 1.0]])
 
-      assert_all_close(
+      assert_equal(
         triangular_solve_grad_wrt_a(a, b),
         Nx.stack([
           triangular_solve_grad_wrt_a(a[0], b[0]),
@@ -4813,7 +4814,7 @@ defmodule Nx.Defn.GradTest do
         ])
       )
 
-      assert_all_close(
+      assert_equal(
         triangular_solve_grad_wrt_b(a, b),
         Nx.stack([
           triangular_solve_grad_wrt_b(a[0], b[0]),
@@ -4831,7 +4832,7 @@ defmodule Nx.Defn.GradTest do
 
       b = Nx.tensor([[1.0, 2.0], [3.0, 1.0]])
 
-      assert_all_close(
+      assert_equal(
         triangular_solve_grad_wrt_a(a, b, left_side: false, lower: false),
         Nx.stack([
           triangular_solve_grad_wrt_a(a[0], b[0], left_side: false, lower: false),
@@ -4839,7 +4840,7 @@ defmodule Nx.Defn.GradTest do
         ])
       )
 
-      assert_all_close(
+      assert_equal(
         triangular_solve_grad_wrt_b(a, b, left_side: false, lower: false),
         Nx.stack([
           triangular_solve_grad_wrt_b(a[0], b[0], left_side: false, lower: false),
@@ -4857,7 +4858,7 @@ defmodule Nx.Defn.GradTest do
 
       b = Nx.tensor([[1.0, 1.0], [1.0, 1.0]])
 
-      assert_all_close(
+      assert_equal(
         triangular_solve_grad_wrt_a(a, b, transform_a: :transpose),
         Nx.stack([
           triangular_solve_grad_wrt_a(a[0], b[0], transform_a: :transpose),
