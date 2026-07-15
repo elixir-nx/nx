@@ -339,14 +339,10 @@ defmodule Nx.Defn.Grad do
 
   defp normalize_vectorized_shape(%T{shape: shape, names: names, vectorized_axes: vec_axes} = t) do
     vec_count = length(vec_axes)
+    {leading, rest} = shape |> Tuple.to_list() |> Enum.split(vec_count)
 
-    if tuple_size(shape) >= vec_count and
-         Enum.take(Tuple.to_list(shape), vec_count) == Enum.map(vec_axes, &elem(&1, 1)) do
-      %{
-        t
-        | shape: shape |> Tuple.to_list() |> Enum.drop(vec_count) |> List.to_tuple(),
-          names: Enum.drop(names, vec_count)
-      }
+    if leading == Enum.map(vec_axes, &elem(&1, 1)) do
+      %{t | shape: List.to_tuple(rest), names: Enum.drop(names, vec_count)}
     else
       t
     end
@@ -1659,8 +1655,8 @@ defmodule Nx.Defn.Grad do
   defp batch_vectorized_axes(_tensor, 0), do: []
 
   defp batch_vectorized_axes(%T{shape: shape, names: names}, batch_count) do
-    {batch_sizes, _} = shape |> Tuple.to_list() |> Enum.split(batch_count)
-    {batch_names, _} = Enum.split(names, batch_count)
+    batch_sizes = shape |> Tuple.to_list() |> Enum.take(batch_count)
+    batch_names = Enum.take(names, batch_count)
     Enum.zip(batch_names, batch_sizes)
   end
 
@@ -1674,7 +1670,7 @@ defmodule Nx.Defn.Grad do
     # Captured non-vectorized operands (e.g. `a` when only `b` is vectorized) do not
     # carry a batch prefix — leave them alone. If a leading prefix is present and
     # broadcast-compatible but not equal, fail loudly instead of silently skipping.
-    if length(shape_l) < batch_count do
+    if tuple_size(shape) < batch_count do
       tensor
     else
       {batch_sizes, rest_shape} = Enum.split(shape_l, batch_count)
