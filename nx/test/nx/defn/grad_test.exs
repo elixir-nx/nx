@@ -3307,8 +3307,17 @@ defmodule Nx.Defn.GradTest do
     defn grad_sum_clip_wrt_to_upper_lim(t, lim), do: grad(lim, &Nx.sum(Nx.clip(t, -10, &1)))
 
     test "computes gradient with sum" do
+      # 1.0 and 4.0 sit exactly on the [1, 4] clip boundaries: the gradient
+      # passes through to the operand there
       assert grad_sum_clip(Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])) ==
-               Nx.tensor([[0.0, 1.0, 1.0], [0.0, 0.0, 0.0]])
+               Nx.tensor([[1.0, 1.0, 1.0], [1.0, 0.0, 0.0]])
+    end
+
+    test "at an exact boundary, the limit receives no gradient" do
+      # x == lim contributes to the operand's gradient, not the limit's;
+      # only the element strictly below counts here
+      assert grad_sum_clip_wrt_to_lower_lim(Nx.tensor([0.0, 5.0, -3.0]), 0.0) ==
+               Nx.tensor(1.0)
     end
 
     test "computes gradient wrt to lower lim" do
