@@ -3318,6 +3318,106 @@ defmodule Nx.Defn.GradTest do
     test "computes gradient wrt to upper lim" do
       assert grad_sum_clip_wrt_to_upper_lim(Nx.iota({5}), 2.5) == Nx.tensor(2.0)
     end
+
+    # The tests below differentiate through mean-based composite expressions,
+    # where the gradient arriving at the clip node is not 1. Sum-based tests
+    # alone cannot detect gradient-scaling bugs in the clip rule: with g == 1,
+    # g² == g (the rule used to backprop g² instead of g). Expectations are
+    # analytic, and the min∘max variant pins that both clamp spellings
+    # produce identical gradients.
+
+    defn grad_mean_clip(t), do: grad(t, &Nx.mean(Nx.clip(&1, -60.0, 60.0)))
+
+    defn grad_mean_clip_mult(t, u),
+      do: grad(t, &Nx.mean(Nx.multiply(Nx.clip(&1, -60.0, 60.0), u)))
+
+    defn grad_mean_max_clip(t), do: grad(t, &Nx.mean(Nx.max(Nx.clip(&1, -60.0, 60.0), 0)))
+
+    defn grad_mean_softplus_neg_abs_clip(t) do
+      grad(t, fn t ->
+        c = Nx.clip(t, -60.0, 60.0)
+        Nx.mean(Nx.log(Nx.add(1.0, Nx.exp(Nx.negate(Nx.abs(c))))))
+      end)
+    end
+
+    # Stable-form binary cross-entropy: mean(max(x, 0) - x*t + log(1 + exp(-|x|)))
+    defnp stable_bce(x, t) do
+      x
+      |> Nx.max(0)
+      |> Nx.subtract(Nx.multiply(x, t))
+      |> Nx.add(Nx.log(Nx.add(1.0, Nx.exp(Nx.negate(Nx.abs(x))))))
+      |> Nx.mean()
+    end
+
+    defn grad_bce_clip(t, targets),
+      do: grad(t, &stable_bce(Nx.clip(&1, -60.0, 60.0), targets))
+
+    defn grad_bce_min_max(t, targets),
+      do: grad(t, &stable_bce(Nx.min(Nx.max(&1, -60.0), 60.0), targets))
+
+    # Mixed in-range and out-of-range points for the [-60, 60] clamp;
+    # the mask marks the in-range ones (which should receive gradient)
+    defp clip_logits, do: Nx.tensor([-2.0, 0.5, 3.0, -70.0, 65.0, 1.0, -1.0, 0.25])
+    defp clip_inside_mask, do: Nx.tensor([1.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0, 1.0])
+    defp clip_targets, do: Nx.tensor([0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0])
+
+    test "computes gradient through mean" do
+      n = Nx.size(clip_logits())
+      expected = Nx.divide(clip_inside_mask(), n)
+      assert_all_close(grad_mean_clip(clip_logits()), expected, atol: 1.0e-6)
+    end
+
+    test "computes gradient through mean of product" do
+      n = Nx.size(clip_logits())
+      t = clip_targets()
+      expected = t |> Nx.multiply(clip_inside_mask()) |> Nx.divide(n)
+      assert_all_close(grad_mean_clip_mult(clip_logits(), t), expected, atol: 1.0e-6)
+    end
+
+    test "computes gradient through mean of max with a constant" do
+      n = Nx.size(clip_logits())
+      step = Nx.clip(clip_logits(), -60.0, 60.0) |> Nx.greater(0) |> Nx.as_type(:f32)
+      expected = step |> Nx.multiply(clip_inside_mask()) |> Nx.divide(n)
+      assert_all_close(grad_mean_max_clip(clip_logits()), expected, atol: 1.0e-6)
+    end
+
+    test "computes gradient through mean of log1p(exp(-|clip(x)|))" do
+      n = Nx.size(clip_logits())
+      c = Nx.clip(clip_logits(), -60.0, 60.0)
+      # d/dc log(1 + exp(-|c|)) = -sign(c) * exp(-|c|) / (1 + exp(-|c|))
+      e = Nx.exp(Nx.negate(Nx.abs(c)))
+
+      expected =
+        Nx.negate(Nx.sign(c))
+        |> Nx.multiply(Nx.divide(e, Nx.add(1.0, e)))
+        |> Nx.multiply(clip_inside_mask())
+        |> Nx.divide(n)
+
+      assert_all_close(grad_mean_softplus_neg_abs_clip(clip_logits()), expected, atol: 1.0e-6)
+    end
+
+    # Analytic d/dx mean(stable_bce(clamp(x), t)) = (sigmoid(clamp(x)) - t)/n,
+    # masked to zero outside the clamp
+    defp expected_bce_clip_grad do
+      n = Nx.size(clip_logits())
+      c = Nx.clip(clip_logits(), -60.0, 60.0)
+      sigmoid = Nx.divide(1.0, Nx.add(1.0, Nx.exp(Nx.negate(c))))
+
+      sigmoid
+      |> Nx.subtract(clip_targets())
+      |> Nx.multiply(clip_inside_mask())
+      |> Nx.divide(n)
+    end
+
+    test "computes gradient of clip inside stable-form BCE" do
+      grad = grad_bce_clip(clip_logits(), clip_targets())
+      assert_all_close(grad, expected_bce_clip_grad(), atol: 1.0e-5)
+    end
+
+    test "min∘max clamp inside stable-form BCE gives the same gradient" do
+      grad = grad_bce_min_max(clip_logits(), clip_targets())
+      assert_all_close(grad, expected_bce_clip_grad(), atol: 1.0e-5)
+    end
   end
 
   describe "reduce_max rule" do
