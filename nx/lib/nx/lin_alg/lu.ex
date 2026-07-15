@@ -159,16 +159,27 @@ defmodule Nx.LinAlg.LU do
     u_h = Nx.LinAlg.adjoint(u)
     l_h = Nx.LinAlg.adjoint(l)
     p_t = Nx.LinAlg.adjoint(p)
+    ba = batch_axes(u)
 
-    lh_dl = Nx.dot(l_h, dl)
-    du_uh = Nx.dot(du, u_h)
+    lh_dl = Nx.dot(l_h, [-1], ba, dl, [-2], ba)
+    du_uh = Nx.dot(du, [-1], ba, u_h, [-2], ba)
 
     lt_inv = Nx.LinAlg.invert(l_h)
     ut_inv = Nx.LinAlg.invert(u_h)
 
     df = lh_dl |> Nx.tril(k: -1) |> Nx.add(Nx.triu(du_uh))
-    da = p_t |> Nx.dot(lt_inv) |> Nx.dot(df) |> Nx.dot(ut_inv)
+
+    da =
+      p_t
+      |> Nx.dot([-1], ba, lt_inv, [-2], ba)
+      |> Nx.dot([-1], ba, df, [-2], ba)
+      |> Nx.dot([-1], ba, ut_inv, [-2], ba)
 
     [da]
+  end
+
+  deftransformp batch_axes(t) do
+    rank = tuple_size(t.shape)
+    Enum.to_list(0..(rank - 3)//1)
   end
 end

@@ -866,8 +866,20 @@ defmodule Nx.LinAlg do
     custom_grad(ans, [tensor], fn g ->
       # As defined in https://juliadiff.org/ChainRulesCore.jl/stable/maths/arrays.html#Matrix-inversion-2
       ans_h = adjoint(ans)
-      [ans_h |> Nx.negate() |> Nx.dot(g) |> Nx.dot(ans_h)]
+      ba = batch_axes(ans_h)
+
+      [
+        ans_h
+        |> Nx.negate()
+        |> Nx.dot([-1], ba, g, [-2], ba)
+        |> Nx.dot([-1], ba, ans_h, [-2], ba)
+      ]
     end)
+  end
+
+  deftransformp batch_axes(t) do
+    rank = tuple_size(t.shape)
+    Enum.to_list(0..(rank - 3)//1)
   end
 
   defnp invert_tensor(tensor) do
