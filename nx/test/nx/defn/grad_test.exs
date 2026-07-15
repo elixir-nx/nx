@@ -3320,11 +3320,10 @@ defmodule Nx.Defn.GradTest do
     end
 
     # The tests below differentiate through mean-based composite expressions,
-    # where the gradient arriving at the clip node is not 1. Sum-based tests
-    # alone cannot detect gradient-scaling bugs in the clip rule: with g == 1,
-    # g² == g (the rule used to backprop g² instead of g). Expectations are
-    # analytic, and the min∘max variant pins that both clamp spellings
-    # produce identical gradients.
+    # where the gradient arriving at the clip node is not 1, so they catch
+    # gradient-scaling bugs that sum-based tests cannot (any scaling of g is
+    # invisible when g == 1). Expectations are analytic, and the min∘max
+    # variant pins that both clamp spellings produce identical gradients.
 
     defn grad_mean_clip(t), do: grad(t, &Nx.mean(Nx.clip(&1, -60.0, 60.0)))
 
