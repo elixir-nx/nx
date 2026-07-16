@@ -583,7 +583,6 @@ defmodule Nx.LinAlg do
       iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: :f64)
       iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :other)
       ** (ArgumentError) invalid value for :transform_a option, expected :none, :transpose, or :conjugate, got: :other
-
   """
   def triangular_solve(a, b, opts \\ []) do
     opts = keyword!(opts, lower: true, left_side: true, transform_a: :none)
@@ -1996,7 +1995,6 @@ defmodule Nx.LinAlg do
         c64
         -0.0-6.0i
       >
-
   """
   # IMPORTANT: This function cannot be a defn because
   # optional needs to work on the actual backend.
