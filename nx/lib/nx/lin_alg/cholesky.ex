@@ -76,8 +76,27 @@ defmodule Nx.LinAlg.Cholesky do
   end
 
   defn cholesky_grad(l, _input, g) do
-    num = g |> Nx.tril() |> Nx.dot([-2], l, [-2]) |> batch_transpose()
-    den = Nx.eye(Nx.shape(l)) |> Nx.add(1)
+    matrix_shape = {Nx.axis_size(l, -2), Nx.axis_size(l, -1)}
+
+    num =
+      case Nx.rank(l) do
+        n when n <= 2 ->
+          g |> Nx.tril() |> Nx.dot([-2], l, [-2]) |> batch_transpose()
+
+        _ ->
+          ba = batch_axes(l)
+          g |> Nx.tril() |> Nx.dot([-2], ba, l, [-2], ba) |> batch_transpose()
+      end
+
+    den =
+      case Nx.rank(l) do
+        n when n <= 2 ->
+          Nx.eye(matrix_shape) |> Nx.add(1)
+
+        _ ->
+          Nx.eye(matrix_shape) |> Nx.add(1) |> Nx.broadcast(Nx.shape(l))
+      end
+
     phi_tril = num |> Nx.divide(den) |> Nx.tril()
 
     bm = Nx.LinAlg.triangular_solve(l, phi_tril, transform_a: :transpose)
@@ -105,6 +124,16 @@ defmodule Nx.LinAlg.Cholesky do
     else
       axes = Enum.to_list(0..(rank - 3)) ++ [rank - 1, rank - 2]
       Nx.transpose(t, axes: axes)
+    end
+  end
+
+  deftransformp batch_axes(t) do
+    rank = tuple_size(t.shape)
+
+    if rank <= 2 do
+      []
+    else
+      Enum.to_list(0..(rank - 3)//1)
     end
   end
 

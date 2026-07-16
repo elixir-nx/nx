@@ -539,6 +539,11 @@ defmodule Nx.Defn do
 
   `var_or_vars` can be any `Nx.Container` with one or multiple
   tensors.
+
+  When used outside of `defn`, unary minus (`-x`) and other `Kernel`
+  operators are not available inside anonymous functions passed to
+  `grad/2`. Use `Nx.negate/1` and other `Nx` functions, or define
+  the gradient inside `defn` so `Nx.Defn.Kernel` operators apply.
   """
   def grad(var_or_vars, fun) when is_function(fun, 1) do
     jit_apply(
