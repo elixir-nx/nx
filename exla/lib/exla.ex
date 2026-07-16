@@ -82,6 +82,13 @@ defmodule EXLA do
   your block tag struct; see `EXLA.CustomCall` for the `call/4` contract,
   including returning `:skip` to fall back to the block's default Elixir callback.
 
+  Backend-specific behaviour, options, and limitations for Nx functions are
+  documented in the [Backend documentation](backend_documentation.html) guides
+  (for example [Nx](backend_documentation-nx.html) and
+  [Nx.LinAlg](backend_documentation-nx_lin_alg.html)). See also the
+  [backend documentation convention](https://hexdocs.pm/nx/backend_documentation-convention.html)
+  in the Nx package.
+
   ## Clients
 
   The `EXLA` library uses a client for compiling and executing code.
@@ -126,7 +133,15 @@ defmodule EXLA do
   Each client configuration accepts the following options:
 
     * `:platform` - the platform the client runs on. It can be
-      `:host` (CPU), `:cuda`, `:rocm`, or `:tpu`. Defaults to `:host`.
+      `:host` (CPU), `:cuda`, `:rocm`, `:tpu`, or `:pjrt_plugin` (an
+      externally loaded PJRT plugin, see below). Defaults to `:host`.
+
+    * `:device_type` - required for the `:pjrt_plugin` platform. The device
+      type string the PJRT plugin registers under (for example `"tt"`).
+
+    * `:plugin_path` - required for the `:pjrt_plugin` platform. The path to
+      the PJRT plugin shared library to load (for example the tt-xla
+      `pjrt_plugin_tt.so`).
 
     * `:default_device_id` - the default device ID to run on.
       For example, if you have two GPUs, you can choose a different
@@ -137,6 +152,20 @@ defmodule EXLA do
 
     * `:memory_fraction` - how much memory of a GPU device to
       allocate. Defaults to `0.9`.
+
+  ### External PJRT plugins (`:pjrt_plugin`)
+
+  Besides the built-in platforms, EXLA can target any hardware that ships
+  a PJRT C-API plugin (a shared library) by loading it at runtime. Use the
+  `:pjrt_plugin` platform together with `:device_type` and `:plugin_path`:
+
+      config :exla, :clients,
+        tt: [platform: :pjrt_plugin, device_type: "tt", plugin_path: "/path/to/pjrt_plugin_tt.so"]
+
+  The plugin is loaded via its `GetPjrtApi` entrypoint and registered under
+  `:device_type`. Any environment the plugin itself requires (for example a
+  vendor runtime root directory) must be set in the OS environment before the
+  VM starts; EXLA does not manage it.
 
   ### Memory preallocation
 

@@ -583,7 +583,6 @@ defmodule Nx.LinAlg do
       iex> a = Nx.tensor([[1, 0, 0], [1, 1, 0], [1, 1, 1]], type: :f64)
       iex> Nx.LinAlg.triangular_solve(a, Nx.tensor([1, 2, 1]), transform_a: :other)
       ** (ArgumentError) invalid value for :transform_a option, expected :none, :transpose, or :conjugate, got: :other
-
   """
   def triangular_solve(a, b, opts \\ []) do
     opts = keyword!(opts, lower: true, left_side: true, transform_a: :none)
@@ -866,8 +865,20 @@ defmodule Nx.LinAlg do
     custom_grad(ans, [tensor], fn g ->
       # As defined in https://juliadiff.org/ChainRulesCore.jl/stable/maths/arrays.html#Matrix-inversion-2
       ans_h = adjoint(ans)
-      [ans_h |> Nx.negate() |> Nx.dot(g) |> Nx.dot(ans_h)]
+      batch_axes = batch_axes(ans_h)
+
+      [
+        ans_h
+        |> Nx.negate()
+        |> Nx.dot([-1], batch_axes, g, [-2], batch_axes)
+        |> Nx.dot([-1], batch_axes, ans_h, [-2], batch_axes)
+      ]
     end)
+  end
+
+  deftransformp batch_axes(t) do
+    rank = tuple_size(t.shape)
+    Enum.to_list(0..(rank - 3)//1)
   end
 
   defnp invert_tensor(tensor) do
@@ -1984,7 +1995,6 @@ defmodule Nx.LinAlg do
         c64
         -0.0-6.0i
       >
-
   """
   # IMPORTANT: This function cannot be a defn because
   # optional needs to work on the actual backend.

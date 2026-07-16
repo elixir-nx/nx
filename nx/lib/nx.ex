@@ -39,6 +39,12 @@ defmodule Nx do
 
     * `Nx.Constants` declares many constants commonly used in numerical code
 
+  Backend-specific notes for extensible operations (`Nx.block/4`, transfers, and
+  related APIs) are documented in the [backend documentation convention](backend_documentation-convention.html)
+  guide and in each backend's **Backend documentation** pages on HexDocs when a
+  backend has divergent behaviour or backend-specific option.
+
+
   Continue reading this documentation for an overview of creating,
   broadcasting, and accessing/slicing Nx tensors.
 
@@ -2515,6 +2521,7 @@ defmodule Nx do
         s32
         [3, 1]
       >
+
   """
   @doc type: :conversion
   def to_batched(tensor, batch_size, opts \\ [])
@@ -4979,7 +4986,6 @@ defmodule Nx do
           [4, 5, 6]
         ]
       >
-
   """
   @doc type: :backend
   def backend_copy(tensor_or_container, backend \\ Nx.BinaryBackend) do
@@ -5029,7 +5035,6 @@ defmodule Nx do
   Transfer the device tensor back to an Elixir tensor:
 
       tensor = Nx.backend_transfer(device_tensor)
-
   """
   @doc type: :backend
   def backend_transfer(tensor_or_container, backend \\ Nx.BinaryBackend) do
@@ -5049,6 +5054,7 @@ defmodule Nx do
   It returns either `:ok` or `:already_deallocated`.
 
   Note: This function cannot be used in `defn`.
+
   """
   @doc type: :backend
   def backend_deallocate(tensor_or_container) do
@@ -7223,6 +7229,7 @@ defmodule Nx do
         [0, 1, 0]
       >
 
+
   """
   @doc type: :element
   def logical_not(tensor) do
@@ -9276,6 +9283,7 @@ defmodule Nx do
           [0, 0]
         ]
       >
+
   """
   @doc type: :aggregation
   def all_close(a, b, opts \\ []) do
@@ -11680,6 +11688,7 @@ defmodule Nx do
           [2, 3, 6]
         ]
       >
+
   """
   @doc type: :cumulative
   def cumulative_sum(tensor, opts \\ []),
@@ -11756,6 +11765,7 @@ defmodule Nx do
           [2, 2, 6]
         ]
       >
+
   """
   @doc type: :cumulative
   def cumulative_product(tensor, opts \\ []),
@@ -11832,6 +11842,7 @@ defmodule Nx do
           [2, 1, 1]
         ]
       >
+
   """
   @doc type: :cumulative
   def cumulative_min(tensor, opts \\ []),
@@ -11908,6 +11919,7 @@ defmodule Nx do
           [2, 2, 3]
         ]
       >
+
   """
   @doc type: :cumulative
   def cumulative_max(tensor, opts \\ []),
@@ -15666,6 +15678,7 @@ defmodule Nx do
       iex> a = Nx.tensor(1)
       iex> Nx.top_k(a, k: 1)
       ** (ArgumentError) top_k input must have at least rank 1
+
 
   """
   @doc type: :ndim

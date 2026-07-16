@@ -626,10 +626,12 @@ defmodule Nx.Defn.Grad do
         0.0
       )
 
-    # w.r.t operand
+    # w.r.t operand. Elements exactly at the boundaries pass the gradient
+    # through to the operand (matching clip_by_value/clamp in other
+    # frameworks); the limits only receive gradient when strictly exceeded.
     w_operand =
       Nx.select(
-        Nx.bitwise_and(Nx.greater(operand, min), Nx.less(operand, max)),
+        Nx.bitwise_and(Nx.greater_equal(operand, min), Nx.less_equal(operand, max)),
         g,
         0.0
       )
@@ -638,9 +640,9 @@ defmodule Nx.Defn.Grad do
     w_max = Nx.select(Nx.less(max, operand), Nx.broadcast(g, operand), 0.0)
 
     [
-      {operand, Nx.multiply(g, w_operand)},
-      {min, Nx.sum(Nx.multiply(g, w_min))},
-      {max, Nx.sum(Nx.multiply(g, w_max))}
+      {operand, w_operand},
+      {min, Nx.sum(w_min)},
+      {max, Nx.sum(w_max)}
     ]
   end
 
@@ -1217,8 +1219,18 @@ defmodule Nx.Defn.Grad do
     vectorized_axes = batch_vectorized_axes(b_input, batch_count)
 
     a = revectorize_batch_axes(a_input, vectorized_axes)
-    x_input = revectorize_batch_axes(x_input, vectorized_axes)
+    x = revectorize_batch_axes(x_input, vectorized_axes)
     g = revectorize_batch_axes(g, vectorized_axes)
+
+    # When b is a (possibly batched) vector, its rank is one less than a's.
+    # Add a unit axis so the backward math below can treat it as a matrix;
+    # the axis is removed from db at the end.
+    b_rank_correction_axis =
+      cond do
+        Nx.rank(x) != Nx.rank(a) - 1 -> nil
+        opts[:left_side] -> -1
+        true -> -2
+      end
 
     # We can model the triangular solve function as X = triangular_solve(a, b)
     # where the function itself depends on the options passed.
@@ -1234,25 +1246,15 @@ defmodule Nx.Defn.Grad do
     a =
       case opts[:transform_a] do
         :none -> a
-        :transpose -> Nx.transpose(a)
+        :transpose -> transpose_matrix(a)
         :conjugate -> Nx.conjugate(a)
       end
 
     a_inv_hermitian = Nx.LinAlg.invert(Nx.LinAlg.adjoint(a))
+    batch_axes = linalg_batch_axes(a_inv_hermitian)
 
-    x =
-      case {Nx.shape(x_input), opts[:left_side]} do
-        {{n}, true} -> Nx.reshape(x_input, {n, 1})
-        {{n}, false} -> Nx.reshape(x_input, {1, n})
-        _ -> x_input
-      end
-
-    g =
-      case {Nx.shape(g), opts[:left_side]} do
-        {{n}, true} -> Nx.reshape(g, {n, 1})
-        {{n}, false} -> Nx.reshape(g, {1, n})
-        _ -> g
-      end
+    x = if b_rank_correction_axis, do: Nx.new_axis(x, b_rank_correction_axis), else: x
+    g = if b_rank_correction_axis, do: Nx.new_axis(g, b_rank_correction_axis), else: g
 
     {da, db} =
       if opts[:left_side] do
@@ -1266,23 +1268,38 @@ defmodule Nx.Defn.Grad do
         # which means that:
         # A_bar = inv(A^H).X_bar.X^H
         # B_bar = inv(A^H).X_bar
-        da = a_inv_hermitian |> Nx.dot(g |> Nx.dot(Nx.LinAlg.adjoint(x))) |> Nx.negate()
-        db = Nx.dot(a_inv_hermitian, g)
+        da =
+          a_inv_hermitian
+          |> Nx.dot(
+            [-1],
+            batch_axes,
+            Nx.dot(g, [-1], batch_axes, Nx.LinAlg.adjoint(x), [-2], batch_axes),
+            [-2],
+            batch_axes
+          )
+          |> Nx.negate()
+
+        db = Nx.dot(a_inv_hermitian, [-1], batch_axes, g, [-2], batch_axes)
         {da, db}
       else
         # X.A = B -> X = B.inv(A)
         # taking a similar approach to the branch above, we get
         # A_bar = -X^H.X_bar.inv(A^H)
         # B_bar = X_bar.inv(A^H)
-        da = x |> Nx.LinAlg.adjoint() |> Nx.dot(g) |> Nx.dot(a_inv_hermitian) |> Nx.negate()
-        db = Nx.dot(g, a_inv_hermitian)
+        da =
+          Nx.LinAlg.adjoint(x)
+          |> Nx.dot([-1], batch_axes, g, [-2], batch_axes)
+          |> Nx.dot([-1], batch_axes, a_inv_hermitian, [-2], batch_axes)
+          |> Nx.negate()
+
+        db = Nx.dot(g, [-1], batch_axes, a_inv_hermitian, [-2], batch_axes)
         {da, db}
       end
 
     da =
       case opts[:transform_a] do
         :none -> da
-        :transpose -> Nx.transpose(da)
+        :transpose -> transpose_matrix(da)
         :conjugate -> Nx.conjugate(da)
       end
 
@@ -1293,11 +1310,7 @@ defmodule Nx.Defn.Grad do
         Nx.triu(da)
       end
 
-    db =
-      case Nx.shape(x_input) do
-        {n} -> Nx.reshape(db, {n})
-        _ -> db
-      end
+    db = if b_rank_correction_axis, do: Nx.squeeze(db, axes: [b_rank_correction_axis]), else: db
 
     da = Nx.devectorize(da, keep_names: false)
     db = Nx.devectorize(db, keep_names: false)
@@ -1721,6 +1734,13 @@ defmodule Nx.Defn.Grad do
 
   defp up_to(i, n) when i < n, do: [i | up_to(i + 1, n)]
   defp up_to(_, _), do: []
+
+  defp linalg_batch_axes(t), do: Enum.to_list(0..(Nx.rank(t) - 3)//1)
+
+  defp transpose_matrix(t) do
+    rank = Nx.rank(t)
+    Nx.transpose(t, axes: Enum.to_list(0..(rank - 3)//1) ++ [rank - 1, rank - 2])
+  end
 
   defp argsort(list), do: list |> Enum.with_index() |> Enum.sort() |> Enum.map(&elem(&1, 1))
 

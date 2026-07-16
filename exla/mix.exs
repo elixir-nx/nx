@@ -87,9 +87,21 @@ defmodule EXLA.MixProject do
       source_url_pattern: "#{@source_url}/blob/v#{@version}/exla/%{path}#L%{line}",
       extras: [
         "guides/rotating-image.livemd",
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        "guides/backend_documentation/index.md": [
+          filename: "backend_documentation"
+        ],
+        "guides/backend_documentation/nx.md": [
+          filename: "backend_documentation-nx"
+        ],
+        "guides/backend_documentation/nx_lin_alg.md": [
+          filename: "backend_documentation-nx_lin_alg"
+        ]
       ],
       skip_undefined_reference_warnings_on: ["CHANGELOG.md"],
+      groups_for_extras: [
+        "Backend documentation": ~r"^guides/backend_documentation/"
+      ],
       groups_for_modules: [
         # EXLA,
         # EXLA.Backend,
