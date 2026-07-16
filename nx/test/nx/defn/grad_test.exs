@@ -3343,31 +3343,28 @@ defmodule Nx.Defn.GradTest do
     defn grad_mean_clip(t), do: grad(t, &Nx.mean(Nx.clip(&1, -60.0, 60.0)))
 
     defn grad_mean_clip_mult(t, u),
-      do: grad(t, &Nx.mean(Nx.multiply(Nx.clip(&1, -60.0, 60.0), u)))
+      do: grad(t, &Nx.mean(Nx.clip(&1, -60.0, 60.0) * u))
 
     defn grad_mean_max_clip(t), do: grad(t, &Nx.mean(Nx.max(Nx.clip(&1, -60.0, 60.0), 0)))
 
     defn grad_mean_softplus_neg_abs_clip(t) do
       grad(t, fn t ->
         c = Nx.clip(t, -60.0, 60.0)
-        Nx.mean(Nx.log(Nx.add(1.0, Nx.exp(Nx.negate(Nx.abs(c))))))
+        Nx.mean(Nx.log(1 + Nx.exp(-Nx.abs(c))))
       end)
     end
 
     # Stable-form binary cross-entropy: mean(max(x, 0) - x*t + log(1 + exp(-|x|)))
-    defnp stable_bce(x, t) do
-      x
-      |> Nx.max(0)
-      |> Nx.subtract(Nx.multiply(x, t))
-      |> Nx.add(Nx.log(Nx.add(1.0, Nx.exp(Nx.negate(Nx.abs(x))))))
-      |> Nx.mean()
+    defnp stable_binary_cross_entropy(x, t) do
+      y = Nx.max(x, 0) - x * t + Nx.log(1 + Nx.exp(-Nx.abs(x)))
+      Nx.mean(y)
     end
 
     defn grad_bce_clip(t, targets),
-      do: grad(t, &stable_bce(Nx.clip(&1, -60.0, 60.0), targets))
+      do: grad(t, &stable_binary_cross_entropy(Nx.clip(&1, -60.0, 60.0), targets))
 
     defn grad_bce_min_max(t, targets),
-      do: grad(t, &stable_bce(Nx.min(Nx.max(&1, -60.0), 60.0), targets))
+      do: grad(t, &stable_binary_cross_entropy(Nx.min(Nx.max(&1, -60.0), 60.0), targets))
 
     # Mixed in-range and out-of-range points for the [-60, 60] clamp;
     # the mask marks the in-range ones (which should receive gradient)
