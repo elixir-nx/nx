@@ -505,10 +505,12 @@ defmodule Nx.Defn.Grad do
         0.0
       )
 
-    # w.r.t operand
+    # w.r.t operand. Elements exactly at the boundaries pass the gradient
+    # through to the operand (matching clip_by_value/clamp in other
+    # frameworks); the limits only receive gradient when strictly exceeded.
     w_operand =
       Nx.select(
-        Nx.bitwise_and(Nx.greater(operand, min), Nx.less(operand, max)),
+        Nx.bitwise_and(Nx.greater_equal(operand, min), Nx.less_equal(operand, max)),
         g,
         0.0
       )
@@ -517,9 +519,9 @@ defmodule Nx.Defn.Grad do
     w_max = Nx.select(Nx.less(max, operand), Nx.broadcast(g, operand), 0.0)
 
     [
-      {operand, Nx.multiply(g, w_operand)},
-      {min, Nx.sum(Nx.multiply(g, w_min))},
-      {max, Nx.sum(Nx.multiply(g, w_max))}
+      {operand, w_operand},
+      {min, Nx.sum(w_min)},
+      {max, Nx.sum(w_max)}
     ]
   end
 
