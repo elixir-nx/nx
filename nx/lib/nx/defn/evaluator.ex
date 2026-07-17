@@ -44,10 +44,9 @@ defmodule Nx.Defn.Evaluator do
 
   @impl true
   def __compile__(_key, vars, fun, opts) do
-    io_calls =
-      opts
-      |> Keyword.get(:io_calls, %{})
-      |> then(&Map.merge(Keyword.get(opts, :hooks, %{}), &1))
+    io_calls = Keyword.get(opts, :io_calls, %{})
+    hooks = Keyword.get(opts, :hooks, %{})
+    io_calls = Map.merge(hooks, io_calls)
 
     gc? = Keyword.get(opts, :garbage_collect, false)
     {expr, output, cache} = precompile(fun, vars, io_calls)
