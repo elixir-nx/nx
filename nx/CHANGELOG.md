@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.13.0 (2026-07-17)
+
+### Enhancements
+
+  * [Nx] Add `Nx.pad_outer/3` with `:cyclic`, `:mirror`, `:replicate`, and `:reflect` padding modes
+  * [Nx.Defn] Simplify hooks so they no longer require token plumbing
+  * [Nx.Testing] Improve assertions for vectorized tensors
+  * [Nx] Add backend documentation convention and guides
+
+### Bug fixes
+
+  * [Nx.Defn] Fix vectorized `grad/2` for ops that cross the devectorization boundary
+  * [Nx.Defn] Fix `Nx.clip` gradient applying the upstream gradient twice
+  * [Nx.LinAlg] Fix batched gradients for `lu`, `invert`, `triangular_solve`, and `determinant`
+  * [Nx.Defn.Graph] Keep nested scopes hermetic when splitting expressions
+  * [Nx.Defn.Graph] Do not hoist non-expr tensor arguments
+  * [Nx.Defn] Raise a clearer error when calling `grad` with closure-captured tensors
+
+### Deprecations
+
+  * [Nx.Defn] Deprecate token-based hooks (`create_token/0`, `hook_token/3`, `hook_token/4`, `attach_token/2`, and `Nx.Defn.Token`); use `hook/2` or `hook/3` instead
+  * [Nx] Deprecate `Nx.reflect/2` in favor of `Nx.pad_outer/3`
+
 ## v0.12.1 (2026-05-15)
 
 ### Enhancements
