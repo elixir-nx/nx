@@ -513,6 +513,9 @@ defmodule EXLA.Defn do
         |> Nx.Defn.Composite.flatten_list()
         |> Enum.map(&{&1.type, &1.shape})
 
+      # Normalize the env by replacing %Nx.Tensor{} values with {type, shape}
+      # so the counter key is stable for same-shaped tensors but distinguishes
+      # closures that capture different non-tensor metadata (e.g. different block ops).
       normalized_env = normalize_env(env)
 
       count = EXLA.Defn.LockedCache.count({mod, idx, args_key, out_key, normalized_env})
@@ -545,11 +548,13 @@ defmodule EXLA.Defn do
 
   defp normalize_env_value(v), do: v
 
+  # Tail-recursive improper list map that handles both proper and improper lists.
   defp map_improper_list([h | t], fun, acc) when is_list(t) do
     map_improper_list(t, fun, [fun.(h) | acc])
   end
 
   defp map_improper_list([h | t], fun, acc) do
+    # t is not a list: improper tail
     result = [fun.(h) | fun.(t)]
     :lists.reverse(acc, result)
   end
