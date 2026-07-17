@@ -199,8 +199,8 @@ defmodule Nx.Defn.Grad do
     acc
   end
 
-  defp parents_args(:hook, t, id, acc) do
-    reduce_args(:hook, t, acc, fn arg, {parents, nodes} ->
+  defp parents_args(:io_call, t, id, acc) do
+    reduce_args(:io_call, t, acc, fn arg, {parents, nodes} ->
       if arg.data.op in @constants do
         {parents, nodes}
       else
@@ -257,7 +257,7 @@ defmodule Nx.Defn.Grad do
   defp reduce_args(:gather, %{data: %{args: [arg | _]}}, acc, fun),
     do: fun.(arg, acc)
 
-  defp reduce_args(:hook, %{data: %{args: [tensor_expr | _]}}, acc, fun),
+  defp reduce_args(:io_call, %{data: %{args: [tensor_expr | _]}}, acc, fun),
     do: Composite.reduce(tensor_expr, acc, fun)
 
   defp reduce_args(:while, %{data: %{args: [initial | _]}}, acc, fun),
@@ -1181,15 +1181,28 @@ defmodule Nx.Defn.Grad do
     [{x, Nx.multiply(g, gs)}]
   end
 
-  defp grad(:hook, [tensor_expr, _, _, _], _ans, g, _batch_count) do
-    gs = List.wrap(g)
+  defp grad(
+         :io_call,
+         [tensor_expr, _callback_spec, _template, _ref],
+         _ans,
+         g,
+         _batch_count
+       ) do
+    leaf_count = Composite.reduce(tensor_expr, 0, fn _, count -> count + 1 end)
 
-    {pairs, _} =
+    gs =
+      cond do
+        is_list(g) and length(g) == leaf_count -> g
+        is_tuple(g) and tuple_size(g) == leaf_count -> Tuple.to_list(g)
+        true -> List.wrap(g)
+      end
+
+    {pairs, []} =
       Composite.reduce(tensor_expr, {[], gs}, fn child, {pairs, [grad | gs]} ->
         {[{child, grad} | pairs], gs}
       end)
 
-    pairs
+    Enum.reverse(pairs)
   end
 
   defp grad(:conjugate, [%{type: {type, _}} = t], _ans, g, _batch_count) do

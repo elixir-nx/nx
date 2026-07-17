@@ -418,12 +418,12 @@ defmodule Nx.Defn.ExprTest do
     end
 
     defn sub_add_mult(a, b) do
-      add = hook(a + b, :add, &IO.inspect({:add, &1}))
-      mult = hook(a * b, :mult, &IO.inspect({:mult, &1}))
+      add = io_call(a + b, :add, &IO.inspect({:add, &1}))
+      mult = io_call(a * b, :mult, &IO.inspect({:mult, &1}))
       add - mult
     end
 
-    test "with hooks" do
+    test "with io_calls" do
       result = sub_add_mult(Nx.template({}, {:f, 32}), Nx.template({}, {:f, 32}))
 
       assert inspect(result, safe: false) == """
@@ -431,13 +431,13 @@ defmodule Nx.Defn.ExprTest do
                f32
              \s\s
                Nx.Defn.Expr
-               parameter a:0       f32
-               parameter b:1       f32
-               c = add a, b        f32
-               d = hook add: c     f32
-               e = multiply a, b   f32
-               f = hook mult: e    f32
-               g = subtract d, f   f32
+               parameter a:0         f32
+               parameter b:1         f32
+               c = add a, b          f32
+               d = io_call add: c    f32
+               e = multiply a, b     f32
+               f = io_call mult: e   f32
+               g = subtract d, f     f32
              >\
              """
     end
@@ -456,15 +456,15 @@ defmodule Nx.Defn.ExprTest do
                f32
              \s\s
                Nx.Defn.Expr
-               parameter a:0      f32
-               parameter b:1      f32
-               c = add a, b       f32
-               d = hook b: b; c   f32
+               parameter a:0         f32
+               parameter b:1         f32
+               c = add a, b          f32
+               d = io_call b: b; c   f32
              >\
              """
     end
 
-    defn add_sub_mult_no_tokens(a, b, c, d) do
+    defn add_sub_mult_no_io_call(a, b, c, d) do
       a
       |> Nx.add(b)
       |> Nx.subtract(c)
@@ -474,7 +474,7 @@ defmodule Nx.Defn.ExprTest do
     test "with limit option" do
       t = Nx.template({}, :f32)
 
-      result = add_sub_mult_no_tokens(t, t, t, t)
+      result = add_sub_mult_no_io_call(t, t, t, t)
 
       full_expr = """
       #Nx.Tensor<
