@@ -442,28 +442,6 @@ defmodule Nx.Defn.ExprTest do
              """
     end
 
-    defn token_hook_add(a, b) do
-      token = create_token()
-      {token, _} = hook_token(token, b, :b)
-      attach_token(token, a + b)
-    end
-
-    test "with token hooks" do
-      result = token_hook_add(Nx.template({}, {:f, 32}), Nx.template({}, {:f, 32}))
-
-      assert inspect(result, safe: false) == """
-             #Nx.Tensor<
-               f32
-             \s\s
-               Nx.Defn.Expr
-               parameter a:0         f32
-               parameter b:1         f32
-               c = add a, b          f32
-               d = io_call b: b; c   f32
-             >\
-             """
-    end
-
     defn add_sub_mult_no_io_call(a, b, c, d) do
       a
       |> Nx.add(b)

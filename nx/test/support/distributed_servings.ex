@@ -16,7 +16,7 @@ defmodule DistributedServings do
   def add_five_round_about(parent, opts) do
     serving =
       Nx.Serving.jit(&add_five_round_about/1)
-      |> Nx.Serving.streaming(io_calls: [:double, :plus_ten])
+      |> Nx.Serving.streaming(hooks: [:double, :plus_ten])
       |> Nx.Serving.distributed_postprocessing(fn output ->
         Stream.transform(output, :ok, fn data, :ok -> {[{data, node()}], :ok} end)
       end)

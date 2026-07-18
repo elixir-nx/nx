@@ -953,24 +953,7 @@ defmodule Nx.Defn.Graph do
         {res, put_in(acc.used_args[id], res)}
 
       _ ->
-        # Each io_call's payload lives in the callback spec (e.g.
-        # `{:token_hook, hooked_expr, inner_spec}`) -- the generic clause's list
-        # handling silently skips it, so a payload that depends on a
-        # stage-boundary-hoisted value would keep its stale, pre-remap parameter
-        # reference. Traverse it here (mirrors `Nx.Defn.Tree.apply_args/4`'s
-        # `:io_call` clause).
         {tensor_expr, acc} = composite_rewrite_subtree(tensor_expr, state, acc)
-
-        {callback_spec, acc} =
-          case callback_spec do
-            {:token_hook, hooked_expr, inner_spec} ->
-              {hooked_expr, acc} = composite_rewrite_subtree(hooked_expr, state, acc)
-              {{:token_hook, hooked_expr, inner_spec}, acc}
-
-            other ->
-              {other, acc}
-          end
-
         {put_in(expr.data.args, [tensor_expr, callback_spec, template, ref]), acc}
     end
   end

@@ -347,46 +347,10 @@ defmodule Nx.Defn.EvaluatorTest do
       assert_received {:default, tensor}
       assert tensor == Nx.tensor(3)
 
-      fun = Nx.Defn.jit(&basic_hook/2, io_calls: %{example: &send_to_self({:custom, &1})})
+      fun = Nx.Defn.jit(&basic_hook/2, hooks: %{example: &send_to_self({:custom, &1})})
       assert fun.(1, 2) == Nx.tensor(3)
 
       assert_received {:custom, tensor}
-      assert tensor == Nx.tensor(3)
-    end
-
-    # Deprecated create_token/hook_token/attach_token path (Expr.add_hook) + :hooks option.
-    defn legacy_token_hook(a, b) do
-      token = create_token()
-      {token, sum} = hook_token(token, a + b, :example, &send_to_self({:default, &1}))
-      attach_token(token, sum)
-    end
-
-    test "legacy :hooks option with hook_token/add_hook" do
-      assert legacy_token_hook(1, 2) == Nx.tensor(3)
-      assert_received {:default, tensor}
-      assert tensor == Nx.tensor(3)
-
-      # Public API: Nx.Defn.prepare_options merges :hooks into :io_calls
-      fun = Nx.Defn.jit(&legacy_token_hook/2, io_calls: %{example: &send_to_self({:custom, &1})})
-      assert fun.(1, 2) == Nx.tensor(3)
-
-      assert_received {:custom, tensor}
-      assert tensor == Nx.tensor(3)
-
-      # Compiler path: :hooks still reaches Evaluator.__compile__
-      {compiled_fun, params, _templates, flatten} =
-        Nx.Defn.Compiler.to_lazy_params(&legacy_token_hook/2, [1, 2])
-
-      assert [result] =
-               Nx.Defn.Compiler.__jit__(
-                 compiled_fun,
-                 params,
-                 [flatten],
-                 io_calls: %{example: &send_to_self({:evaluator_hooks, &1})}
-               )
-
-      assert result == Nx.tensor(3)
-      assert_received {:evaluator_hooks, tensor}
       assert tensor == Nx.tensor(3)
     end
 
@@ -401,7 +365,7 @@ defmodule Nx.Defn.EvaluatorTest do
       assert_received {:default, tuple}
       assert tuple == {Nx.tensor(1), Nx.tensor(2)}
 
-      fun = Nx.Defn.jit(&container_hook/2, io_calls: %{example: &send_to_self({:custom, &1})})
+      fun = Nx.Defn.jit(&container_hook/2, hooks: %{example: &send_to_self({:custom, &1})})
       assert fun.(1, 2) == {Nx.tensor(1), Nx.tensor(2)}
 
       assert_received {:custom, tuple}
@@ -422,7 +386,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       io_calls = %{a: &send_to_self({:a, &1})}
 
-      Nx.Defn.jit(&side_effect_io_calls/2, io_calls: io_calls).(1, 2)
+      Nx.Defn.jit(&side_effect_io_calls/2, hooks: io_calls).(1, 2)
 
       assert_received {:a, tensor}
       assert tensor == Nx.tensor(1)
@@ -430,7 +394,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       io_calls = %{b: &send_to_self({:b, &1})}
 
-      Nx.Defn.jit(&side_effect_io_calls/2, io_calls: io_calls).(1, 2)
+      Nx.Defn.jit(&side_effect_io_calls/2, hooks: io_calls).(1, 2)
 
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
@@ -438,7 +402,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       drain_mailbox()
       io_calls = %{a: &send_to_self({:a, &1}), b: &send_to_self({:b, &1})}
-      Nx.Defn.jit(&side_effect_io_calls/2, io_calls: io_calls).(1, 2)
+      Nx.Defn.jit(&side_effect_io_calls/2, hooks: io_calls).(1, 2)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       assert_received {:a, tensor}
@@ -459,7 +423,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       io_calls = %{a: &send_to_self({:a, &1})}
 
-      Nx.Defn.jit(&side_effect_nested_io_calls/2, io_calls: io_calls).(1, 2)
+      Nx.Defn.jit(&side_effect_nested_io_calls/2, hooks: io_calls).(1, 2)
 
       assert_received {:a, tensor}
       assert tensor == Nx.tensor(1)
@@ -467,7 +431,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       io_calls = %{b: &send_to_self({:b, &1})}
 
-      Nx.Defn.jit(&side_effect_nested_io_calls/2, io_calls: io_calls).(1, 2)
+      Nx.Defn.jit(&side_effect_nested_io_calls/2, hooks: io_calls).(1, 2)
 
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
@@ -475,7 +439,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       drain_mailbox()
       io_calls = %{a: &send_to_self({:a, &1}), b: &send_to_self({:b, &1})}
-      Nx.Defn.jit(&side_effect_nested_io_calls/2, io_calls: io_calls).(1, 2)
+      Nx.Defn.jit(&side_effect_nested_io_calls/2, hooks: io_calls).(1, 2)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       assert_received {:a, tensor}
@@ -500,7 +464,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       drain_mailbox()
       io_calls = %{a: &send_to_self({:a, &1})}
-      Nx.Defn.jit(&side_effect_nested_hook_with_default/2, io_calls: io_calls).(1, 2)
+      Nx.Defn.jit(&side_effect_nested_hook_with_default/2, hooks: io_calls).(1, 2)
       assert_received {:b, tensor}
       assert tensor == Nx.tensor(2)
       assert_received {:a, tensor}
@@ -510,7 +474,7 @@ defmodule Nx.Defn.EvaluatorTest do
       drain_mailbox()
       io_calls = %{b: &send_to_self({:custom, &1})}
 
-      Nx.Defn.jit(&side_effect_nested_hook_with_default/2, io_calls: io_calls).(1, 2)
+      Nx.Defn.jit(&side_effect_nested_hook_with_default/2, hooks: io_calls).(1, 2)
 
       assert_received {:custom, tensor}
       assert tensor == Nx.tensor(2)
@@ -528,7 +492,7 @@ defmodule Nx.Defn.EvaluatorTest do
       assert hook_upto10(5) == Nx.tensor(10)
       refute_received _
 
-      assert Nx.Defn.jit(&hook_upto10/1, io_calls: %{while: &send_to_self({:while, &1})}).(5) ==
+      assert Nx.Defn.jit(&hook_upto10/1, hooks: %{while: &send_to_self({:while, &1})}).(5) ==
                Nx.tensor(10)
 
       assert_received {:while, tensor}
@@ -746,7 +710,7 @@ defmodule Nx.Defn.EvaluatorTest do
       t = Nx.iota({2, 3}, vectorized_axes: [a: 1], type: :s32)
 
       message = """
-      test/nx/defn/evaluator_test.exs:715: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
+      test/nx/defn/evaluator_test.exs:679: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
 
       {\e[32m
        <<<<< Body (do-block) <<<<<
@@ -778,7 +742,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       error =
         """
-        test/nx/defn/evaluator_test.exs:715: condition must be a scalar tensor, got: #Nx.Tensor<
+        test/nx/defn/evaluator_test.exs:679: condition must be a scalar tensor, got: #Nx.Tensor<
           vectorized[x: 1]
           u8[1]
         \s\s

@@ -2235,10 +2235,10 @@ defmodule Nx do
 
       x = Nx.io_call(x, &MyMod.log/1)
 
-  Named `io_call`s can be overridden at JIT time via the `:io_calls` option, which
+  Named `io_call`s can be overridden at JIT time via the `:hooks` option, which
   maps each name to a side-effect callback:
 
-      Nx.Defn.jit(fun, io_calls: %{my_io_call: &MyMod.log/1})
+      Nx.Defn.jit(fun, hooks: %{my_io_call: &MyMod.log/1})
 
   ## Examples
 
