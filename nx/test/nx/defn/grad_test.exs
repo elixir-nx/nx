@@ -2525,6 +2525,23 @@ defmodule Nx.Defn.GradTest do
         ])
       )
     end
+
+    defn svd_sum_grad(t) do
+      grad(t, fn tensor ->
+        {u, s, vt} = Nx.LinAlg.svd(tensor)
+        Nx.sum(u) + Nx.sum(s) + Nx.sum(vt)
+      end)
+    end
+
+    test "computes grad for batched tensor" do
+      t =
+        Nx.tensor([
+          [[3.0, 0.0], [1.0, 2.0]],
+          [[4.0, 1.0], [2.0, 3.0]]
+        ])
+
+      assert_equal(svd_sum_grad(t), Nx.stack([svd_sum_grad(t[0]), svd_sum_grad(t[1])]))
+    end
   end
 
   describe "invert" do

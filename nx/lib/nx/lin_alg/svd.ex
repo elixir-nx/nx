@@ -317,8 +317,10 @@ defmodule Nx.LinAlg.SVD do
   end
 
   defnp svd_grad({u, s_input, vt}, input, {du, ds, dvt}) do
-    {k} = Nx.shape(s_input)
-    {m, n} = Nx.shape(input)
+    m = Nx.axis_size(input, -2)
+    n = Nx.axis_size(input, -1)
+    k = Nx.axis_size(s_input, -1)
+    ba = batch_axes(input)
 
     if m < n do
       raise "grad for Nx.LinAlg.svd/2 not implemented for the wide matrix case"
@@ -328,49 +330,120 @@ defmodule Nx.LinAlg.SVD do
       if m == n do
         u
       else
-        u[[0..(m - 1), 0..(k - 1)]]
+        slice_last_matrix(u, m, k)
       end
 
     du =
       if m == n do
         du
       else
-        du[[0..(m - 1), 0..(k - 1)]]
+        slice_last_matrix(du, m, k)
       end
 
     # https://j-towns.github.io/papers/svd-derivative.pdf
 
-    eye_k = Nx.eye(k)
-    eye_m = Nx.eye(m)
-    eye_n = Nx.eye(n)
+    eye_k = eye_from_vector(s_input)
+    eye_m = eye_from_matrix(input, m)
+    eye_n = eye_from_matrix(input, n)
 
     s_sq = s_input ** 2
-    sub = -(Nx.new_axis(s_sq, 1) - s_sq) + eye_k
+    sub = -(Nx.new_axis(s_sq, -1) - Nx.new_axis(s_sq, -2)) + eye_k
     f = Nx.select(eye_k, 0, 1 / sub)
 
-    s = Nx.make_diagonal(s_input)
-    s_inv = Nx.make_diagonal(1 / s_input)
+    s = Nx.new_axis(s_input, -1) * eye_k
+    s_inv = Nx.new_axis(1 / s_input, -1) * eye_k
+    ds_matrix = eye_k * Nx.new_axis(ds, -2)
 
-    ut_du = Nx.dot(Nx.LinAlg.adjoint(u), du) - Nx.dot(Nx.LinAlg.adjoint(du), u)
+    ut_du =
+      Nx.dot(Nx.LinAlg.adjoint(u), [-1], ba, du, [-2], ba) -
+        Nx.dot(Nx.LinAlg.adjoint(du), [-1], ba, u, [-2], ba)
 
-    first_component_du = u |> Nx.dot(f * ut_du) |> Nx.dot(s)
+    first_component_du =
+      u
+      |> Nx.dot([-1], ba, f * ut_du, [-2], ba)
+      |> Nx.dot([-1], ba, s, [-2], ba)
 
-    second_component_du = (eye_m - Nx.dot(u, Nx.LinAlg.adjoint(u))) |> Nx.dot(du) |> Nx.dot(s_inv)
+    second_component_du =
+      (eye_m - Nx.dot(u, [-1], ba, Nx.LinAlg.adjoint(u), [-2], ba))
+      |> Nx.dot([-1], ba, du, [-2], ba)
+      |> Nx.dot([-1], ba, s_inv, [-2], ba)
 
-    du_component = Nx.dot(first_component_du + second_component_du, vt)
+    du_component =
+      Nx.dot(first_component_du + second_component_du, [-1], ba, vt, [-2], ba)
 
-    ds_component = u |> Nx.dot(eye_k * ds) |> Nx.dot(vt)
+    ds_component =
+      u
+      |> Nx.dot([-1], ba, ds_matrix, [-2], ba)
+      |> Nx.dot([-1], ba, vt, [-2], ba)
 
     first_dvt_component =
-      (Nx.dot(vt, Nx.LinAlg.adjoint(dvt)) - Nx.dot(dvt, Nx.LinAlg.adjoint(vt))) * f
+      (Nx.dot(vt, [-1], ba, Nx.LinAlg.adjoint(dvt), [-2], ba) -
+         Nx.dot(dvt, [-1], ba, Nx.LinAlg.adjoint(vt), [-2], ba)) * f
 
-    first_dvt_component = s |> Nx.dot(first_dvt_component) |> Nx.dot(vt)
+    first_dvt_component =
+      s
+      |> Nx.dot([-1], ba, first_dvt_component, [-2], ba)
+      |> Nx.dot([-1], ba, vt, [-2], ba)
 
     second_dvt_component =
-      s_inv |> Nx.dot(dvt) |> Nx.dot(eye_n - Nx.dot(Nx.LinAlg.adjoint(vt), vt))
+      s_inv
+      |> Nx.dot([-1], ba, dvt, [-2], ba)
+      |> Nx.dot(
+        [-1],
+        ba,
+        eye_n - Nx.dot(Nx.LinAlg.adjoint(vt), [-1], ba, vt, [-2], ba),
+        [-2],
+        ba
+      )
 
-    dvt_component = Nx.dot(u, first_dvt_component + second_dvt_component)
+    dvt_component =
+      Nx.dot(u, [-1], ba, first_dvt_component + second_dvt_component, [-2], ba)
 
     [du_component + ds_component + dvt_component]
+  end
+
+  deftransformp batch_axes(t) do
+    rank = tuple_size(t.shape)
+    Enum.to_list(0..(rank - 3)//1)
+  end
+
+  deftransformp eye_from_vector(t) do
+    shape = Nx.shape(t)
+    k = elem(shape, tuple_size(shape) - 1)
+    batch = shape |> Tuple.delete_at(tuple_size(shape) - 1) |> Tuple.to_list()
+    Nx.eye(List.to_tuple(batch ++ [k, k]))
+  end
+
+  deftransformp eye_from_matrix(t, size) do
+    shape = Nx.shape(t)
+    rank = tuple_size(shape)
+
+    batch =
+      shape
+      |> Tuple.delete_at(rank - 1)
+      |> Tuple.delete_at(rank - 2)
+      |> Tuple.to_list()
+
+    Nx.eye(List.to_tuple(batch ++ [size, size]))
+  end
+
+  deftransformp slice_last_matrix(t, rows, cols) do
+    shape = Nx.shape(t)
+    rank = tuple_size(shape)
+    starts = List.duplicate(0, rank)
+
+    lengths =
+      shape
+      |> Tuple.to_list()
+      |> Enum.with_index()
+      |> Enum.map(fn {dim, i} ->
+        cond do
+          i == rank - 2 -> rows
+          i == rank - 1 -> cols
+          true -> dim
+        end
+      end)
+
+    Nx.slice(t, starts, lengths)
   end
 end
