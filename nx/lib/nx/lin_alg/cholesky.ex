@@ -59,20 +59,12 @@ defmodule Nx.LinAlg.Cholesky do
   defnp approximate_zeros(matrix, eps), do: Nx.select(Nx.abs(matrix) <= eps, 0, matrix)
 
   defnp dot_with_dynamic_slice(left, left_start, left_end, right, right_start, right_end) do
-    lhs = zero_out_dynamic_slice(left, left_start, left_end)
-    rhs = zero_out_dynamic_slice(right, right_start, right_end)
+    n = Nx.axis_size(left, 0)
+    idx = Nx.iota({n})
+    left_mask = Nx.logical_and(idx >= left_start, idx < left_end)
+    right_mask = Nx.logical_and(idx >= right_start, idx < right_end)
 
-    Nx.dot(lhs, rhs)
-  end
-
-  defnp zero_out_dynamic_slice(t, start_idx, end_idx) do
-    # assumes t has rank 1
-    zero_out_selector = Nx.logical_or(Nx.iota(t.shape) < start_idx, Nx.iota(t.shape) >= end_idx)
-
-    Nx.take(
-      Nx.select(zero_out_selector, 0, t),
-      Nx.argsort(zero_out_selector, direction: :asc, stable: true)
-    )
+    Nx.dot(Nx.select(left_mask, left, 0), Nx.select(right_mask, right, 0))
   end
 
   defn cholesky_grad(l, _input, g) do
