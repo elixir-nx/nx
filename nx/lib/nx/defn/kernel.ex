@@ -1394,13 +1394,13 @@ defmodule Nx.Defn.Kernel do
 
   Now you can pass the io_call as argument as follows:
 
-      io_calls = %{
+      hooks = %{
         my_app_add: fn tensor ->
           IO.inspect {:add, tensor}
         end
       }
 
-      fun = Nx.Defn.jit(&IoCalls.add_and_mult/2, io_calls: io_calls)
+      fun = Nx.Defn.jit(&IoCalls.add_and_mult/2, hooks: hooks)
       fun.(Nx.tensor(2), Nx.tensor(3))
 
   > **Important!** We recommend to prefix your io_call names
@@ -1421,21 +1421,6 @@ defmodule Nx.Defn.Kernel do
   If an io_call with the same name is given to `Nx.Defn.jit/2`,
   then it will override the default callback.
 
-  ## Io calls and tokens
-
-  If the values you want to observe are not part of the return value,
-  you can use tokens to enforce ordering:
-
-      defn add_and_mult(a, b) do
-        token = create_token()
-        {token, _add} = hook_token(token, a + b, :io_calls_add, &IO.inspect({:add, &1}))
-        {token, mult} = hook_token(token, a * b, :io_calls_mult, &IO.inspect({:mult, &1}))
-        attach_token(token, mult)
-      end
-
-  Tokens are deprecated and will be removed in a future release.
-  Prefer `io_call/2` or `io_call/3` on values that are part of the return when possible.
-
   """
   def io_call(expr, name, function) when Kernel.and(is_atom(name), is_function(function, 1)),
     do: Nx.io_call(expr, name, function)
@@ -1452,48 +1437,6 @@ defmodule Nx.Defn.Kernel do
   @deprecated "Use io_call/3 instead."
   def hook(expr, name, function) when Kernel.and(is_atom(name), is_function(function, 1)),
     do: io_call(expr, name, function)
-
-  @doc """
-  Shortcut for `hook_token/4`.
-  """
-  @deprecated "Use io_call/2 or io_call/3 instead. Will be removed in a future release."
-  def hook_token(token, expr, name_or_function)
-
-  def hook_token(%Nx.Defn.Token{} = token, expr, name) when is_atom(name),
-    do: Nx.Defn.Expr.add_hook(token, expr, name, nil)
-
-  def hook_token(%Nx.Defn.Token{} = token, expr, function) when is_function(function, 1),
-    do: Nx.Defn.Expr.add_hook(token, expr, random_io_call_name(), function)
-
-  @doc """
-  Defines an io_call with an existing token. See `io_call/3`.
-  """
-  @deprecated "Use io_call/2 or io_call/3 instead. Will be removed in a future release."
-  def hook_token(%Nx.Defn.Token{} = token, expr, name, function)
-      when Kernel.and(is_atom(name), is_function(function, 1)),
-      do: Nx.Defn.Expr.add_hook(token, expr, name, function)
-
-  defp random_io_call_name(), do: :"io_call_#{System.unique_integer([:positive])}"
-
-  @doc """
-  Creates a token for io_calls. See `io_call/3`.
-
-  Deprecated. Tokens will be removed in a future release.
-  """
-  @deprecated "Use io_call/2 or io_call/3 instead. Will be removed in a future release."
-  def create_token do
-    Nx.Defn.Token.new()
-  end
-
-  @doc """
-  Attaches a token to an expression. See `io_call/3`.
-
-  Deprecated. Tokens will be removed in a future release.
-  """
-  @deprecated "Use io_call/2 or io_call/3 instead. Will be removed in a future release."
-  def attach_token(%Nx.Defn.Token{} = token, expr) do
-    Nx.Defn.Expr.attach_token(token, expr)
-  end
 
   @doc """
   Asserts the keyword list has the given keys.

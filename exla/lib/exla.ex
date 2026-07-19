@@ -433,8 +433,8 @@ defmodule EXLA do
   @doc """
   Checks if the compilation of function with args is cached.
 
-  Note that io_calls are part of the cache, and
-  therefore they must be included in the options.
+  Note that the `:hooks` option is part of the cache, and
+  therefore it must be included in the options.
 
   ## Examples
 

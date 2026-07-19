@@ -314,7 +314,7 @@ defmodule Nx.Serving do
   streaming configuration. When this is invoked, the `client_postprocessing`
   will receive a stream which you can further manipulate lazily using the
   functions in the `Stream` module. `streaming/2` also allows you to configure
-  io_calls and stream values directly from `Nx.Defn` io_calls. However, when io_call
+  hooks and stream values directly from `Nx.Defn` io_calls. However, when hook
   streaming is enabled, certain capabilities are removed: you cannot stream
   inputs nor have batches larger than the configured `batch_size`.
 
@@ -390,7 +390,7 @@ defmodule Nx.Serving do
           distributed_postprocessing: distributed_postprocessing(),
           process_options: keyword(),
           defn_options: keyword(),
-          streaming: nil | %{io_calls: [atom()]},
+          streaming: nil | %{hooks: [atom()]},
           batch_size: nil | pos_integer()
         }
 
@@ -595,7 +595,7 @@ defmodule Nx.Serving do
 
   ## Options
 
-    * `:io_calls` - a list of io_call names that will become streaming events
+    * `:hooks` - a list of io_call names that will become streaming events
 
   ## Implementation details
 
@@ -613,15 +613,15 @@ defmodule Nx.Serving do
   `Stream.transform/3` to process those events into something
   usable by callers.
 
-  If the `:io_calls` option is given, only a single `:batch` event
+  If the `:hooks` option is given, only a single `:batch` event
   is emitted, at the end, as detailed next.
 
   ### Batch limits
 
-  If you are streaming io_calls, the serving server can no longer break
+  If you are streaming hooks, the serving server can no longer break
   batch and you are unable to push a payload bigger than `:batch_size`.
   For example, imagine you have a `batch_size` of 3 and you push three
-  batches of two elements (AA, BB, and CC). Without io_calls, the batches
+  batches of two elements (AA, BB, and CC). Without hooks, the batches
   will be consumed as:
 
       AAB -> BCC
@@ -636,13 +636,13 @@ defmodule Nx.Serving do
   most common batches.
   """
   def streaming(%Nx.Serving{} = serving, opts \\ []) do
-    io_calls = Keyword.get(opts, :io_calls, Keyword.get(opts, :hooks, []))
+    hooks = Keyword.get(opts, :hooks, [])
 
     if serving.streaming do
       raise ArgumentError, "serving is already marked as streaming"
     end
 
-    %{serving | streaming: %{io_calls: io_calls}}
+    %{serving | streaming: %{hooks: hooks}}
   end
 
   @doc """
@@ -721,10 +721,10 @@ defmodule Nx.Serving do
   defp run_streaming(nil, defn_options, _batch_or_stream, _limit),
     do: {nil, defn_options}
 
-  defp run_streaming(%{io_calls: []}, defn_options, _batch_or_stream, _limit),
+  defp run_streaming(%{hooks: []}, defn_options, _batch_or_stream, _limit),
     do: {run_streaming(), defn_options}
 
-  defp run_streaming(%{io_calls: io_calls}, defn_options, batch_or_stream, limit) do
+  defp run_streaming(%{hooks: hooks}, defn_options, batch_or_stream, limit) do
     size =
       case batch_or_stream do
         %Nx.Batch{size: size} ->
@@ -732,21 +732,21 @@ defmodule Nx.Serving do
             size
           else
             raise ArgumentError,
-                  "batch size (#{size}) cannot exceed Nx.Serving server batch size of #{limit} when streaming io_calls"
+                  "batch size (#{size}) cannot exceed Nx.Serving server batch size of #{limit} when streaming hooks"
           end
 
         _ ->
           raise ArgumentError,
-                "streaming io_calls do not support input streaming, input must be a Nx.Batch"
+                "streaming hooks do not support input streaming, input must be a Nx.Batch"
       end
 
     {pid, ref} = run_streaming()
 
     defn_options =
       defn_options
-      |> update_in([:io_calls], fn acc ->
-        Enum.reduce(io_calls, acc || %{}, fn io_call, acc ->
-          Map.put(acc, io_call, &run_io_call(ref, size, &1, io_call))
+      |> update_in([:hooks], fn acc ->
+        Enum.reduce(hooks, acc || %{}, fn hook, acc ->
+          Map.put(acc, hook, &run_io_call(ref, size, &1, hook))
         end)
       end)
 
@@ -1045,9 +1045,9 @@ defmodule Nx.Serving do
     size_or_unknown =
       case preprocessed do
         %Nx.Batch{size: size} = batch ->
-          if mode == :io_calls and batch.size > limit do
+          if mode == :hooks and batch.size > limit do
             raise ArgumentError,
-                  "batch size (#{batch.size}) cannot exceed Nx.Serving server batch size of #{limit} when streaming io_calls"
+                  "batch size (#{batch.size}) cannot exceed Nx.Serving server batch size of #{limit} when streaming hooks"
           end
 
           validate_batch_key!(batch, batch_keys)
@@ -1055,9 +1055,9 @@ defmodule Nx.Serving do
           size
 
         stream ->
-          if mode == :io_calls do
+          if mode == :hooks do
             raise ArgumentError,
-                  "streaming io_calls do not support input streaming, input must be a Nx.Batch"
+                  "streaming hooks do not support input streaming, input must be a Nx.Batch"
           end
 
           spawn_link(fn ->
@@ -1318,7 +1318,7 @@ defmodule Nx.Serving do
     Process.flag(:trap_exit, true)
     partitions_opts = serving_partitions(serving, partitions?)
     partitions_count = length(partitions_opts)
-    {mode, partitions_opts, io_calls_table} = serving_streaming(serving, partitions_opts)
+    {mode, partitions_opts, hooks_table} = serving_streaming(serving, partitions_opts)
     partitions_opts = Enum.map(partitions_opts, &Keyword.put(&1, :batch_keys, batch_keys))
     {:ok, module_state} = handle_init(serving.module, :process, serving.arg, partitions_opts)
 
@@ -1353,7 +1353,7 @@ defmodule Nx.Serving do
       tasks: [],
       pending_batches: Map.from_keys(batch_keys, @empty_queue),
       task_supervisor: task_supervisor,
-      io_calls_table: io_calls_table
+      hooks_table: hooks_table
     }
 
     {:ok, state}
@@ -1383,24 +1383,24 @@ defmodule Nx.Serving do
     {:execute, partitions, nil}
   end
 
-  defp serving_streaming(%Nx.Serving{streaming: %{io_calls: []}}, partitions) do
+  defp serving_streaming(%Nx.Serving{streaming: %{hooks: []}}, partitions) do
     {:batches, partitions, nil}
   end
 
-  defp serving_streaming(%Nx.Serving{streaming: %{io_calls: io_calls}}, partitions) do
+  defp serving_streaming(%Nx.Serving{streaming: %{hooks: hooks}}, partitions) do
     ets = :ets.new(__MODULE__, [:public, :set, read_concurrency: true])
 
     partitions =
       Enum.with_index(partitions, fn defn_options, index ->
         defn_options
-        |> update_in([:io_calls], fn acc ->
-          Enum.reduce(io_calls, acc || %{}, fn io_call, acc ->
-            Map.put(acc, io_call, &server_io_call(ets, index, io_call, &1))
+        |> update_in([:hooks], fn acc ->
+          Enum.reduce(hooks, acc || %{}, fn hook, acc ->
+            Map.put(acc, hook, &server_io_call(ets, index, hook, &1))
           end)
         end)
       end)
 
-    {:io_calls, partitions, ets}
+    {:hooks, partitions, ets}
   end
 
   defp server_io_call(ets, index, io_call, result) do
@@ -1429,8 +1429,8 @@ defmodule Nx.Serving do
           |> server_stack(key, refs, batch, :skip_timer)
           |> server_execute(key)
 
-        # We go over the limit, but if using io_calls, we can't split.
-        batch.size + count > limit and state.io_calls_table != nil ->
+        # We go over the limit, but if using hooks, we can't split.
+        batch.size + count > limit and state.hooks_table != nil ->
           state
           |> server_execute(key)
           |> server_stack(key, refs, batch, :set_timer)
@@ -1612,13 +1612,13 @@ defmodule Nx.Serving do
             {batch_refs, Map.put(pending_batches, key, queue)}
         end
 
-      %{module: module, module_state: module_state, io_calls_table: io_calls_table} = state
+      %{module: module, module_state: module_state, hooks_table: hooks_table} = state
       {:execute, function, module_state} = handle_batch(module, batch, partition, module_state)
 
       wrapped_function = fn ->
         :telemetry.span([:nx, :serving, :execute], %{module: module}, fn ->
-          if io_calls_table do
-            :ets.insert(io_calls_table, {partition, ref_sizes})
+          if hooks_table do
+            :ets.insert(hooks_table, {partition, ref_sizes})
           end
 
           {output, metadata} = function.()
