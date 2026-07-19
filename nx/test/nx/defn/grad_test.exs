@@ -2279,6 +2279,63 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "eigh" do
+    defn eigh_evals_grad(t) do
+      grad(t, fn x ->
+        {evals, _} = Nx.LinAlg.eigh(x)
+        Nx.sum(evals)
+      end)
+    end
+
+    defn eigh_sum_grad(t) do
+      grad(t, fn x ->
+        {evals, evecs} = Nx.LinAlg.eigh(x)
+        Nx.sum(evals) + Nx.sum(evecs)
+      end)
+    end
+
+    test "computes grad of eigenvalue sum as identity" do
+      t = Nx.tensor([[4.0, 2.0], [2.0, 5.0]], type: :f32)
+      assert_all_close(eigh_evals_grad(t), Nx.eye(2, type: :f32))
+    end
+
+    test "computes grad of eigenvalue sum as identity for f64" do
+      t = Nx.tensor([[4.0, 2.0], [2.0, 5.0]], type: :f64)
+      assert_all_close(eigh_evals_grad(t), Nx.eye(2, type: :f64))
+    end
+
+    test "computes grad for batched tensor" do
+      t =
+        Nx.tensor([
+          [[4.0, 2.0], [2.0, 5.0]],
+          [[9.0, 3.0], [3.0, 10.0]]
+        ])
+
+      assert_equal(
+        eigh_evals_grad(t),
+        Nx.stack([eigh_evals_grad(t[0]), eigh_evals_grad(t[1])])
+      )
+
+      assert_equal(eigh_sum_grad(t), Nx.stack([eigh_sum_grad(t[0]), eigh_sum_grad(t[1])]))
+    end
+
+    test "computes grad for batched f64 tensor" do
+      t =
+        Nx.tensor(
+          [
+            [[4.0, 2.0], [2.0, 5.0]],
+            [[9.0, 3.0], [3.0, 10.0]]
+          ],
+          type: :f64
+        )
+
+      assert_equal(
+        eigh_evals_grad(t),
+        Nx.stack([eigh_evals_grad(t[0]), eigh_evals_grad(t[1])])
+      )
+    end
+  end
+
   describe "cholesky" do
     defn cholesky_grad(t) do
       grad(t, fn x -> x |> Nx.LinAlg.cholesky() |> Nx.sum() end)
@@ -5603,7 +5660,7 @@ defmodule Nx.Defn.GradTest do
       end)
     end
 
-    test "vectorized grad through Nx.LinAlg.eigh (autograd via defn)" do
+    test "vectorized grad through Nx.LinAlg.eigh (custom grad)" do
       x =
         Nx.tensor([
           [[2.0, 1.0], [1.0, 3.0]],
