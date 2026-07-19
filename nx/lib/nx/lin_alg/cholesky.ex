@@ -38,10 +38,10 @@ defmodule Nx.LinAlg.Cholesky do
               if i == j do
                 row = l[i]
 
-                sum = dot_with_dynamic_slice(row, 0, j, conjugate_if_complex(row), 0, j)
+                sum = dot_zero_out_tail(row, conjugate_if_complex(row), j)
                 Nx.sqrt(a[[i, i]] - sum)
               else
-                sum = dot_with_dynamic_slice(l[i], 0, j, conjugate_if_complex(l[j]), 0, j)
+                sum = dot_zero_out_tail(l[i], conjugate_if_complex(l[j]), j)
 
                 (a[[i, j]] - sum) / (l[[j, j]] + eps)
               end
@@ -58,21 +58,15 @@ defmodule Nx.LinAlg.Cholesky do
 
   defnp approximate_zeros(matrix, eps), do: Nx.select(Nx.abs(matrix) <= eps, 0, matrix)
 
-  defnp dot_with_dynamic_slice(left, left_start, left_end, right, right_start, right_end) do
-    lhs = zero_out_dynamic_slice(left, left_start, left_end)
-    rhs = zero_out_dynamic_slice(right, right_start, right_end)
+  defnp dot_zero_out_tail(left, right, valid_length) do
+    n = Nx.axis_size(left, 0)
+    idx = Nx.iota({n})
+    mask = idx < valid_length
 
-    Nx.dot(lhs, rhs)
-  end
-
-  defnp zero_out_dynamic_slice(t, start_idx, end_idx) do
-    # assumes t has rank 1
-    zero_out_selector = Nx.logical_or(Nx.iota(t.shape) < start_idx, Nx.iota(t.shape) >= end_idx)
-
-    Nx.take(
-      Nx.select(zero_out_selector, 0, t),
-      Nx.argsort(zero_out_selector, direction: :asc, stable: true)
-    )
+    # we can just zero-out one of the operands because
+    # we expect both left and right to be finite and valid numbers
+    left_sliced = Nx.select(mask, left, 0)
+    Nx.dot(left_sliced, right)
   end
 
   defn cholesky_grad(l, _input, g) do
