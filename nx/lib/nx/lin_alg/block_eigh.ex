@@ -25,8 +25,9 @@ defmodule Nx.LinAlg.BlockEigh do
 
   # Reverse-mode for A = Q diag(Λ) Qᴴ with distinct eigenvalues.
   # See https://people.maths.ox.ac.uk/gilesm/files/NA-08-01.pdf
+  # Implementation verified against Jax
   defnp eigh_grad({eigenvals, eigenvecs}, _input, {g_vals, g_vecs}) do
-    ba = batch_axes(eigenvecs)
+    batch_axes = batch_axes(eigenvecs)
     eye = eye_from_matrix(eigenvecs)
     g_vals = broadcast_grad(g_vals, eigenvals)
     g_vecs = broadcast_grad(g_vecs, eigenvecs)
@@ -36,12 +37,12 @@ defmodule Nx.LinAlg.BlockEigh do
 
     mid =
       Nx.new_axis(g_vals, -1) * eye +
-        f * Nx.dot(Nx.LinAlg.adjoint(eigenvecs), [-1], ba, g_vecs, [-2], ba)
+        f * Nx.dot(Nx.LinAlg.adjoint(eigenvecs), [-1], batch_axes, g_vecs, [-2], batch_axes)
 
     grad =
       eigenvecs
-      |> Nx.dot([-1], ba, mid, [-2], ba)
-      |> Nx.dot([-1], ba, Nx.LinAlg.adjoint(eigenvecs), [-2], ba)
+      |> Nx.dot([-1], batch_axes, mid, [-2], batch_axes)
+      |> Nx.dot([-1], batch_axes, Nx.LinAlg.adjoint(eigenvecs), [-2], batch_axes)
 
     # Symmetrize: A is Hermitian/symmetric
     [(grad + Nx.LinAlg.adjoint(grad)) / 2]
