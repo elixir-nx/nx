@@ -2323,6 +2323,16 @@ defmodule Nx.Defn.GradTest do
       assert exp_cholesky_grad(t) ==
                Nx.tensor([[-0.5299541, -0.88652998], [3.59515929, 6.550619]])
     end
+
+    test "computes grad for batched tensor" do
+      t =
+        Nx.tensor([
+          [[4.0, 2.0], [2.0, 5.0]],
+          [[9.0, 3.0], [3.0, 10.0]]
+        ])
+
+      assert_equal(cholesky_grad(t), Nx.stack([cholesky_grad(t[0]), cholesky_grad(t[1])]))
+    end
   end
 
   describe "qr" do
@@ -2378,6 +2388,16 @@ defmodule Nx.Defn.GradTest do
           4.98145 5.87086i
         ]
       )
+    end
+
+    test "computes grad for batched tensor" do
+      t =
+        Nx.tensor([
+          [[1.0, 2.0], [1.0, -1.0]],
+          [[3.0, 1.0], [2.0, 4.0]]
+        ])
+
+      assert_equal(qr_grad(t), Nx.stack([qr_grad(t[0]), qr_grad(t[1])]))
     end
   end
 
@@ -4614,6 +4634,21 @@ defmodule Nx.Defn.GradTest do
           [-1.0, -3.0, -3.0],
           [0.0, 0.0, 0.0]
         ])
+      )
+    end
+
+    test "computes grad for batched tensor with vector b" do
+      a =
+        Nx.tensor([
+          [[4.0, 1.0, 0.0], [1.0, 5.0, 0.0], [0.0, 0.0, 6.0]],
+          [[9.0, 1.0, 0.0], [1.0, 10.0, 0.0], [0.0, 0.0, 11.0]]
+        ])
+
+      b = Nx.tensor([[1.0, 1.0, 1.0], [1.0, 1.0, 1.0]])
+
+      assert_equal(
+        solve_grad_wrt_a(a, b),
+        Nx.stack([solve_grad_wrt_a(a[0], b[0]), solve_grad_wrt_a(a[1], b[1])])
       )
     end
   end
