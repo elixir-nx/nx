@@ -234,7 +234,7 @@ defmodule EXLA.Defn do
          run_options,
          is_sharded?
        )
-       when Outfeed.will_outfeed(outfeed) or Outfeed.has_runtime_calls(outfeed) do
+       when Outfeed.has_infeed_flags(outfeed) or Outfeed.has_callbacks(outfeed) do
     if is_sharded? do
       raise ArgumentError, "outfeed is not supported for sharded execution yet"
     end
@@ -320,6 +320,7 @@ defmodule EXLA.Defn do
        ) do
     {cache, options} = Keyword.pop(options, :cache, true)
     {hooks, options} = Keyword.pop(options, :hooks, %{})
+
     {debug?, options} = Keyword.pop(options, :debug, false)
     {lazy_transfers, options} = Keyword.pop(options, :lazy_transfers, :opt_in)
     {donate_argnums, options} = Keyword.pop(options, :donate_argnums, [])
@@ -376,12 +377,15 @@ defmodule EXLA.Defn do
           {{cache_fun, cache_fun}, Keyword.delete(options, EXLA)}
         end
 
-      {eval_time, {expr, {ref, outputs, {used_inputs, defined_hooks}}}} =
+      {eval_time, {expr, {ref, outputs, {used_inputs, defined_io_calls}}}} =
         :timer.tc(fn ->
           expr_cache_fun.({key, args_key, lazy_transfers}, fn ->
             expr = fun.(vars)
-            inputs_and_hooks = Outfeed.used_inputs_and_hooks(expr, used_inputs, lazy_transfers)
-            {expr, {make_ref(), Nx.to_template(expr), inputs_and_hooks}}
+
+            inputs_and_io_calls =
+              Outfeed.used_inputs_and_io_calls(expr, used_inputs, lazy_transfers)
+
+            {expr, {make_ref(), Nx.to_template(expr), inputs_and_io_calls}}
           end)
         end)
 
@@ -393,8 +397,8 @@ defmodule EXLA.Defn do
         )
       end
 
-      outfeed = Outfeed.new(hooks, defined_hooks)
-      comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
+      outfeed = Outfeed.new(hooks, defined_io_calls)
+      comp_key = {ref, client.name, outfeed.used_io_call_names, lazy_transfers, options}
 
       {comp_time, {evaled, {xla_time, executable, inputs_and_typespecs, outfeed}}} =
         :timer.tc(fn ->
@@ -446,10 +450,11 @@ defmodule EXLA.Defn do
                 Function.set_arg_aliasing(builder, arg_index, output_index)
               end
 
-              # Only create the token when we know it will actually be
-              # used, that is: streaming, lazy transfers or hooks
+              # Only create the token when it will actually be used, that is:
+              # streaming (infeed/outfeed) or lazy transfers
+
               outfeed =
-                if reverse_infeeds != [] or hooks != %{} or defined_hooks != %{} do
+                if reverse_infeeds != [] do
                   outfeed
                   |> Outfeed.with_token(Value.create_token(builder))
                   |> Outfeed.add_infeeds(builder, reverse_infeeds)
@@ -510,30 +515,74 @@ defmodule EXLA.Defn do
         :telemetry.execute([:exla, :compilation], measurements, %{key: key})
       end
 
-      if evaled && cache, do: check_recompilation(key, args_key)
+      if evaled && cache, do: check_recompilation(key, args_key, outputs)
 
-      outfeed = Outfeed.with_user_hooks(outfeed, hooks)
+      outfeed = Outfeed.with_user_io_calls(outfeed, hooks)
+
       {executable, {used_inputs, outputs, outfeed, inputs_and_typespecs}}
     end)
   end
 
-  @recompilation_threshold 10
+  defp check_recompilation(key, args_key, outputs) do
+    threshold = Application.get_env(:exla, :check_recompilation, :infinity)
 
-  defp check_recompilation(key, args_key) do
-    {:module, mod} = :erlang.fun_info(key, :module)
-    {:new_index, idx} = :erlang.fun_info(key, :new_index)
-    count = EXLA.Defn.LockedCache.count({mod, idx, args_key})
+    if is_integer(threshold) do
+      {:module, mod} = :erlang.fun_info(key, :module)
+      {:new_index, idx} = :erlang.fun_info(key, :new_index)
+      {:env, env} = :erlang.fun_info(key, :env)
 
-    if count == @recompilation_threshold do
-      Logger.warning(
-        "EXLA has compiled #{inspect(key)} #{count} times with the same input " <>
-          "shapes. This typically means tensor values are being captured inside a " <>
-          "closure passed to defn, jit, or value_and_grad. Each distinct captured " <>
-          "value forces a full recompilation. Pass changing tensors as explicit " <>
-          "function arguments instead."
-      )
+      out_key =
+        [outputs]
+        |> Nx.Defn.Composite.flatten_list()
+        |> Enum.map(&{&1.type, &1.shape})
+
+      # Normalize the env by replacing %Nx.Tensor{} values with {type, shape}
+      # so the counter key is stable for same-shaped tensors but distinguishes
+      # closures that capture different non-tensor metadata (e.g. different block ops).
+      normalized_env = normalize_env(env)
+
+      count = EXLA.Defn.LockedCache.count({mod, idx, args_key, out_key, normalized_env})
+
+      if count == threshold do
+        Logger.warning(
+          "EXLA has compiled #{inspect(key)} #{count} times with the same input " <>
+            "shapes. This typically means tensor values are being captured inside a " <>
+            "closure passed to defn, jit, or value_and_grad. Each distinct captured " <>
+            "value forces a full recompilation. Pass changing tensors as explicit " <>
+            "function arguments instead."
+        )
+      end
     end
   end
+
+  defp normalize_env(env) when is_list(env), do: Enum.map(env, &normalize_env_value/1)
+
+  defp normalize_env_value(%Nx.Tensor{type: type, shape: shape}), do: {type, shape}
+
+  defp normalize_env_value(v) when is_list(v) do
+    map_improper_list(v, &normalize_env_value/1, [])
+  end
+
+  defp normalize_env_value(v) when is_tuple(v),
+    do: v |> Tuple.to_list() |> Enum.map(&normalize_env_value/1) |> List.to_tuple()
+
+  defp normalize_env_value(v) when is_map(v) and not is_struct(v),
+    do: Map.new(v, fn {k, val} -> {normalize_env_value(k), normalize_env_value(val)} end)
+
+  defp normalize_env_value(v), do: v
+
+  # Tail-recursive improper list map that handles both proper and improper lists.
+  defp map_improper_list([h | t], fun, acc) when is_list(t) do
+    map_improper_list(t, fun, [fun.(h) | acc])
+  end
+
+  defp map_improper_list([h | t], fun, acc) do
+    # t is not a list: improper tail
+    result = [fun.(h) | fun.(t)]
+    :lists.reverse(acc, result)
+  end
+
+  defp map_improper_list([], _fun, acc), do: :lists.reverse(acc)
 
   defp us_to_ms(time), do: Float.round(time / 1000, 1)
 
@@ -882,47 +931,62 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-         :runtime_call,
-         %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template, opts]}} = expr,
-         %{client: %EXLA.Client{platform: :host}, callback_pid_value: callback_pid_value} =
+         :io_call,
+         %T{
+           data: %Expr{
+             id: id,
+             args: [tensor_expr, callback_spec, _template, _ref]
+           }
+         } = io_call_expr,
+         %{client: %EXLA.Client{platform: platform}, callback_pid_value: callback_pid_value} =
            state,
          cache
-       ) do
-    # Flatten the tensor_or_container expression into its tensor leaves so we
-    # can compile each as an independent operand to the host callback.
-    tensor_exprs = Composite.flatten_list([tensor_expr])
-
-    {arg_values, cache} =
-      Enum.map_reduce(tensor_exprs, cache, fn arg, cache ->
-        recur_operator(arg, state, cache) |> unwrap_single_tensor!()
+       )
+       when platform in [:host, :cuda] do
+    {reverse_arg_values, reverse_typespecs, cache, num_aliased} =
+      Composite.reduce(tensor_expr, {[], [], cache, 0}, fn %T{} = expr,
+                                                           {acc, typespecs, cache, num_aliased} ->
+        {value, cache} = recur_operator(expr, state, cache) |> unwrap_single_tensor!()
+        {[value | acc], [Value.get_typespec(value) | typespecs], cache, num_aliased + 1}
       end)
 
-    # Build a template container for the tensor_or_container argument so the
-    # callback server can reconstruct the full structure from a flat list of
-    # decoded tensors.
+    arg_values = Enum.reverse(reverse_arg_values)
+    leaf_typespecs = Enum.reverse(reverse_typespecs)
     arg_template = Nx.to_template(tensor_expr)
 
-    cache = add_runtime_callback(cache, {id, fun, out_template, arg_template, opts})
-
-    typespecs = container_to_typespecs(out_template)
+    cache = add_callback(cache, {id, callback_spec, nil, arg_template})
 
     unless callback_pid_value do
-      raise "internal bug: runtime_call callback pid operand is missing"
+      raise "internal bug: io_call callback pid operand is missing"
     end
 
-    results =
-      Value.runtime_call([callback_pid_value | arg_values], typespecs, id)
+    aliased_outputs =
+      Value.host_callback([callback_pid_value | arg_values], leaf_typespecs, id, num_aliased)
 
-    {wrap_tuple_result(results, expr), cache}
+    {wrap_tuple_result(aliased_outputs, io_call_expr), cache}
+  end
+
+  defp cached_recur_operator(
+         :io_call,
+         _expr,
+         %{client: %EXLA.Client{platform: platform}},
+         _cache
+       ) do
+    raise """
+    Nx.io_call/3 is currently only supported for EXLA CPU (platform: :host) and CUDA (platform: :cuda),
+    but the active EXLA client is configured for platform #{inspect(platform)}.
+    Please run on the :host or :cuda client or wait for future segmentation-based support.
+    """
   end
 
   defp cached_recur_operator(
          :runtime_call,
          %T{data: %Expr{id: id, args: [tensor_expr, fun, out_template, opts]}} = expr,
-         %{client: %EXLA.Client{platform: :cuda}, callback_pid_value: callback_pid_value} =
+         %{client: %EXLA.Client{platform: platform}, callback_pid_value: callback_pid_value} =
            state,
          cache
-       ) do
+       )
+       when platform in [:host, :cuda] do
     tensor_exprs = Composite.flatten_list([tensor_expr])
 
     {arg_values, cache} =
@@ -931,17 +995,15 @@ defmodule EXLA.Defn do
       end)
 
     arg_template = Nx.to_template(tensor_expr)
-
-    cache = add_runtime_callback(cache, {id, fun, out_template, arg_template, opts})
-
     typespecs = container_to_typespecs(out_template)
+
+    cache = add_callback(cache, {id, fun, out_template, arg_template, opts})
 
     unless callback_pid_value do
       raise "internal bug: runtime_call callback pid operand is missing"
     end
 
-    results =
-      Value.runtime_call([callback_pid_value | arg_values], typespecs, id)
+    results = Value.runtime_call([callback_pid_value | arg_values], typespecs, id)
 
     {wrap_tuple_result(results, expr), cache}
   end
@@ -988,30 +1050,6 @@ defmodule EXLA.Defn do
       )
 
     {[p, l, u], cache}
-  end
-
-  defp cached_recur_operator(:attach_token, %T{data: %Expr{args: [token, expr]}}, state, cache) do
-    {op, cache} = recur_operator(expr, state, cache)
-    {_, cache} = recur_operator(token, state, cache)
-    {op, cache}
-  end
-
-  defp cached_recur_operator(:token, %T{data: %Expr{args: [token]}}, state, cache) do
-    builder = state.builder
-
-    cache =
-      List.foldr(token.hooks, cache, fn %{name: name, expr: expr}, cache ->
-        # First traverse the child because if it has hooks,
-        # we need to handle them first
-        {tuple, cache} = recur_flatten(expr, state, cache)
-
-        cache
-        |> get_outfeed()
-        |> Outfeed.maybe_add_function_hook(builder, tuple, name, expr)
-        |> then(&put_outfeed(cache, &1))
-      end)
-
-    {[], cache}
   end
 
   defp cached_recur_operator(op, expr, state, cache) do
@@ -1840,7 +1878,7 @@ defmodule EXLA.Defn do
     )
   end
 
-  ## Cache and hook helpers helpers
+  ## Cache and io_call helpers
 
   defp no_token_cache(),
     do: %{__MODULE__ => Outfeed.empty()}
@@ -1863,10 +1901,10 @@ defmodule EXLA.Defn do
 
   defp put_outfeed(cache, outfeed), do: %{cache | __MODULE__ => outfeed}
 
-  defp add_runtime_callback(cache, runtime_callback) do
+  defp add_callback(cache, callback) do
     cache
     |> get_outfeed()
-    |> Outfeed.add_runtime_callback(runtime_callback)
+    |> Outfeed.add_callback(callback)
     |> then(&put_outfeed(cache, &1))
   end
 

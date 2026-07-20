@@ -2,7 +2,7 @@ defmodule Torchx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.12.0"
+  @version "0.13.0"
 
   @libtorch_compilers [:torchx, :cmake]
 
@@ -46,8 +46,8 @@ defmodule Torchx.MixProject do
 
   defp deps do
     [
-      {:nx, "~> 0.12.0"},
-      # {:nx, path: "../nx"},
+      # {:nx, "~> 0.13.0"},
+      {:nx, path: "../nx"},
       {:fine, "~> 0.1.0", runtime: false},
       {:ex_doc, "~> 0.29", only: :docs}
     ]
@@ -58,7 +58,19 @@ defmodule Torchx.MixProject do
       main: "Torchx",
       source_url_pattern: "#{@source_url}/blob/v#{@version}/torchx/%{path}#L%{line}",
       extras: [
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        "guides/backend_documentation/index.md": [
+          filename: "backend_documentation"
+        ],
+        "guides/backend_documentation/nx.md": [
+          filename: "backend_documentation-nx"
+        ],
+        "guides/backend_documentation/nx_lin_alg.md": [
+          filename: "backend_documentation-nx_lin_alg"
+        ]
+      ],
+      groups_for_extras: [
+        "Backend documentation": ~r"^guides/backend_documentation/"
       ]
     ]
   end
@@ -68,7 +80,16 @@ defmodule Torchx.MixProject do
       maintainers: ["Paulo Valente", "José Valim"],
       licenses: ["Apache-2.0"],
       links: %{"GitHub" => @source_url},
-      files: ["lib", "mix.exs", "README.md", "LICENSE", "CHANGELOG.md", "c_src", "CMakeLists.txt"]
+      files: [
+        "lib",
+        "mix.exs",
+        "README.md",
+        "LICENSE",
+        "CHANGELOG.md",
+        "guides",
+        "c_src",
+        "CMakeLists.txt"
+      ]
     ]
   end
 

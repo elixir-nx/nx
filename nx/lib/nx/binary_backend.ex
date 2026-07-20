@@ -527,13 +527,11 @@ defmodule Nx.BinaryBackend do
         right_batch_item_bits = right_batch_item_length * right_size
 
         <<_::bitstring-size(^left_offset_bits),
-          left_batch_item_binary::bitstring-size(^left_batch_item_bits),
-          _::bitstring>> =
+          left_batch_item_binary::bitstring-size(^left_batch_item_bits), _::bitstring>> =
           left_binary
 
         <<_::bitstring-size(^right_offset_bits),
-          right_batch_item_binary::bitstring-size(^right_batch_item_bits),
-          _::bitstring>> =
+          right_batch_item_binary::bitstring-size(^right_batch_item_bits), _::bitstring>> =
           right_binary
 
         bin_dot(
@@ -691,26 +689,24 @@ defmodule Nx.BinaryBackend do
   end
 
   defp element_wise_bin_op(%{shape: shape, type: type} = out, left, right, fun) do
-    %T{type: {_, left_size} = left_type} = left
-    %T{type: {_, right_size} = right_type} = right
+    %T{type: left_type} = left
+    %T{type: right_type} = right
 
-    count = Nx.size(shape)
     left_data = broadcast_data(left, shape)
     right_data = broadcast_data(right, shape)
 
     data =
       match_types [left_type, right_type, type] do
-        for i <- 0..(count - 1), into: <<>> do
-          left_consumed = i * left_size
-          <<_::size(^left_consumed)-bitstring, match!(x, 0), _::bitstring>> = left_data
-          x = read!(x, 0)
+        {data, _} =
+          for <<match!(x, 0) <- left_data>>, reduce: {<<>>, right_data} do
+            {acc, <<match!(y, 1), right_rest::bitstring>>} ->
+              x_val = read!(x, 0)
+              y_val = read!(y, 1)
+              result = <<write!(fun.(type, x_val, y_val), 2)>>
+              {<<acc::bitstring, result::binary>>, right_rest}
+          end
 
-          right_consumed = i * right_size
-          <<_::size(^right_consumed)-bitstring, match!(y, 1), _::bitstring>> = right_data
-          y = read!(y, 1)
-
-          <<write!(fun.(type, x, y), 2)>>
-        end
+        data
       end
 
     from_binary(out, data)
@@ -1781,8 +1777,7 @@ defmodule Nx.BinaryBackend do
             before_slice_size = current - previous
 
             <<before_offset::bitstring-size(^before_slice_size),
-              current_bitstring::bitstring-size(^target_chunk),
-              to_traverse::bitstring>> =
+              current_bitstring::bitstring-size(^target_chunk), to_traverse::bitstring>> =
               to_traverse
 
             updated_elements =
@@ -2089,7 +2084,7 @@ defmodule Nx.BinaryBackend do
                 %Complex{re: re} ->
                   number_to_binary(trunc(re), output_type)
 
-                _ when is_number(x) ->
+                x when is_number(x) ->
                   number_to_binary(trunc(x), output_type)
 
                 :nan ->
@@ -2135,7 +2130,7 @@ defmodule Nx.BinaryBackend do
               {_, :nan} -> false
               {:infinity, _} -> true
               {_, :infinity} -> false
-              {a, b} -> a >= b
+              {a, b} when is_number(a) and is_number(b) -> a >= b
             end
           end
 
@@ -2149,7 +2144,7 @@ defmodule Nx.BinaryBackend do
               {_, :nan} -> true
               {:infinity, _} -> false
               {_, :infinity} -> true
-              {a, b} -> a <= b
+              {a, b} when is_number(a) and is_number(b) -> a <= b
             end
           end
       end

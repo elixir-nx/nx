@@ -185,6 +185,27 @@ defmodule EXLA.Client do
         :tpu ->
           EXLA.NIF.get_tpu_client()
 
+        :pjrt_plugin ->
+          device_type =
+            case Keyword.get(options, :device_type) do
+              nil ->
+                raise ArgumentError,
+                      "the :pjrt_plugin platform requires a :device_type, the PJRT plugin device " <>
+                        "type to register and look up (for example \"tt\")"
+
+              device_type ->
+                to_string(device_type)
+            end
+
+          plugin_path =
+            Keyword.get(options, :plugin_path) ||
+              raise ArgumentError,
+                    "the :pjrt_plugin platform requires a :plugin_path pointing at the PJRT plugin " <>
+                      "shared library (for example the tt-xla pjrt_plugin_tt.so)"
+
+          :ok = EXLA.NIF.load_pjrt_plugin(device_type, plugin_path)
+          EXLA.NIF.get_c_api_client(device_type)
+
         _ ->
           raise ArgumentError, "unknown EXLA platform: #{inspect(platform)}"
       end

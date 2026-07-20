@@ -159,16 +159,28 @@ defmodule Nx.LinAlg.LU do
     u_h = Nx.LinAlg.adjoint(u)
     l_h = Nx.LinAlg.adjoint(l)
     p_t = Nx.LinAlg.adjoint(p)
+    batch_axes = batch_axes(u)
 
-    lh_dl = Nx.dot(l_h, dl)
-    du_uh = Nx.dot(du, u_h)
+    lh_dl = Nx.dot(l_h, [-1], batch_axes, dl, [-2], batch_axes)
+    du_uh = Nx.dot(du, [-1], batch_axes, u_h, [-2], batch_axes)
 
-    lt_inv = Nx.LinAlg.invert(l_h)
-    ut_inv = Nx.LinAlg.invert(u_h)
+    eye = Nx.eye(Nx.shape(l_h), type: Nx.type(l_h))
+    lt_inv = Nx.LinAlg.triangular_solve(l_h, eye, lower: false)
+    ut_inv = Nx.LinAlg.triangular_solve(u_h, eye, lower: true)
 
     df = lh_dl |> Nx.tril(k: -1) |> Nx.add(Nx.triu(du_uh))
-    da = p_t |> Nx.dot(lt_inv) |> Nx.dot(df) |> Nx.dot(ut_inv)
+
+    da =
+      p_t
+      |> Nx.dot([-1], batch_axes, lt_inv, [-2], batch_axes)
+      |> Nx.dot([-1], batch_axes, df, [-2], batch_axes)
+      |> Nx.dot([-1], batch_axes, ut_inv, [-2], batch_axes)
 
     [da]
+  end
+
+  deftransformp batch_axes(t) do
+    rank = tuple_size(t.shape)
+    Enum.to_list(0..(rank - 3)//1)
   end
 end

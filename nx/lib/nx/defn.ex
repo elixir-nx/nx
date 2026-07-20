@@ -314,7 +314,7 @@ defmodule Nx.Defn do
 
     * `:compiler` - the compiler for the JIT compilation
 
-    * `:hooks` - a map of hooks to execute. See `Nx.Defn.Kernel.hook/3`
+    * `:hooks` - a map of callbacks to override named io_calls. See `Nx.Defn.Kernel.io_call/3`.
 
   """
   def compile(fun, template_args, opts \\ [])
@@ -399,7 +399,7 @@ defmodule Nx.Defn do
 
     * `:compiler` - the compiler for the JIT compilation
 
-    * `:hooks` - a map of hooks to execute. See `Nx.Defn.Kernel.hook/3`
+    * `:hooks` - a map of callbacks to override named io_calls. See `Nx.Defn.Kernel.io_call/3`.
 
     * `:on_conflict` - what to do if a JIT compilation is already in place.
       It may be `:raise` (the default), `:force` (forces a new JIT compilation),
@@ -462,7 +462,7 @@ defmodule Nx.Defn do
 
   ## Options
 
-    * `:hooks` - a map of hooks to execute. See `Nx.Defn.Kernel.hook/3`
+    * `:hooks` - a map of callbacks to override named io_calls. See `Nx.Defn.Kernel.io_call/3`.
 
   """
   def debug_expr(fun, opts \\ []) when is_function(fun) and is_list(opts) do
@@ -488,11 +488,13 @@ defmodule Nx.Defn do
   defp prepare_options(opts) do
     opts = Keyword.merge(default_options(), opts)
 
-    if not is_map(Keyword.get(opts, :hooks, %{})) do
+    hooks = Keyword.get(opts, :hooks, %{})
+
+    if not is_map(hooks) do
       raise ArgumentError, ":hooks option must be a map"
     end
 
-    opts
+    Keyword.put(opts, :hooks, hooks)
   end
 
   defp wrap(fun, callback) do
@@ -539,6 +541,11 @@ defmodule Nx.Defn do
 
   `var_or_vars` can be any `Nx.Container` with one or multiple
   tensors.
+
+  When used outside of `defn`, unary minus (`-x`) and other `Kernel`
+  operators are not available inside anonymous functions passed to
+  `grad/2`. Use `Nx.negate/1` and other `Nx` functions, or define
+  the gradient inside `defn` so `Nx.Defn.Kernel` operators apply.
   """
   def grad(var_or_vars, fun) when is_function(fun, 1) do
     jit_apply(

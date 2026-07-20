@@ -59,9 +59,15 @@ defmodule Nx.LinAlg.QR do
       while {{q = base_h, r = Nx.as_type(a, type)}, {column_iota}}, i <- 0..max_i//1 do
         x = r[[.., i]]
         x = Nx.select(column_iota < i, 0, x)
-        h = householder_reflector(x, i, eps)
-        r = Nx.dot(h, r)
-        q = Nx.dot(q, h)
+        {v, scale} = householder_reflector(x, i, eps)
+
+        # v is always a 1D tensor, so we don't have to worry about transposing
+        # which is why conjugate_if_complex is in place.
+        vh_r = Nx.dot(conjugate_if_complex(v), r)
+        r = r - scale * Nx.dot(Nx.new_axis(v, 1), Nx.new_axis(vh_r, 0))
+
+        q_v = Nx.dot(q, v)
+        q = q - scale * Nx.outer(q_v, v)
         {{q, r}, {column_iota}}
       end
 
@@ -69,6 +75,13 @@ defmodule Nx.LinAlg.QR do
     r = approximate_zeros(r, eps)
 
     output_mode_handling(q, r, m_in, n_in, k, wide_mode, mode)
+  end
+
+  defnp conjugate_if_complex(x) do
+    case Nx.type(x) do
+      {:c, _} -> Nx.conjugate(x)
+      _ -> x
+    end
   end
 
   deftransformp output_mode_handling(q, r, m_in, n_in, k, wide_mode, mode) do
@@ -104,58 +117,60 @@ defmodule Nx.LinAlg.QR do
   end
 
   defn householder_reflector(x, i, eps) do
-    # x is a {n} tensor
     {norm_x, norm_x_sq} = norm(x)
 
     x_i = x[i]
 
     norm_sq_1on = norm_x_sq - Nx.abs(x_i) ** 2
 
-    {v, scale} =
-      case Nx.type(x) do
-        {:c, _} ->
-          phase = Nx.phase(x_i)
-          arg = Nx.complex(0, phase)
-          alpha = Nx.exp(arg) * norm_x
-          u = Nx.indexed_add(x, Nx.new_axis(i, 0), alpha)
-          {n_u, _} = norm(u)
-          v = u / n_u
-          {v, 2}
+    case Nx.type(x) do
+      {:c, _} ->
+        phase = Nx.phase(x_i)
+        arg = Nx.complex(0, phase)
+        alpha = Nx.exp(arg) * norm_x
+        u = Nx.indexed_add(x, Nx.new_axis(i, 0), alpha)
+        {n_u, n_u_sq} = norm(u)
+        norm_selector = Nx.real(n_u_sq) < eps
+        {u / Nx.select(norm_selector, 1, n_u), Nx.select(norm_selector, 0, 2)}
 
-        _type ->
-          v_0 = Nx.select(x_i <= 0, x_i - norm_x, -norm_sq_1on / (x_i + norm_x))
+      _type ->
+        v_0 = Nx.select(x_i <= 0, x_i - norm_x, -norm_sq_1on / (x_i + norm_x))
 
-          norm_selector = norm_sq_1on < eps
+        norm_selector = norm_sq_1on < eps
 
-          replace_value =
-            Nx.select(norm_selector, Nx.tensor([1], type: x.type), Nx.reshape(v_0, {1}))
+        replace_value =
+          Nx.select(norm_selector, Nx.tensor([1], type: x.type), Nx.reshape(v_0, {1}))
 
-          v = Nx.put_slice(x, [i], replace_value)
-          v = v / Nx.select(norm_selector, 1, v_0)
-          {_, n_v_sq} = norm(v)
-          scale_den = Nx.select(norm_selector, 1, n_v_sq)
-          scale = Nx.select(norm_selector, 0, 2 / scale_den)
-          {v, scale}
-      end
-
-    selector = Nx.iota({Nx.size(x)}) |> Nx.greater_equal(i) |> then(&Nx.outer(&1, &1))
-
-    eye = Nx.eye(Nx.size(x))
-    Nx.select(selector, eye - scale * Nx.outer(v, v), eye)
+        v = Nx.put_slice(x, [i], replace_value)
+        v = v / Nx.select(norm_selector, 1, v_0)
+        {_, n_v_sq} = norm(v)
+        scale_den = Nx.select(norm_selector, 1, n_v_sq)
+        scale = Nx.select(norm_selector, 0, 2 / scale_den)
+        {v, scale}
+    end
   end
 
   defn qr_grad({q, r}, {dq, dr}) do
     # Definition taken from https://arxiv.org/pdf/2009.10071.pdf
     # Equation (3)
     r_inv = Nx.LinAlg.invert(r)
+    ba = batch_axes(r)
 
-    m = Nx.dot(r, Nx.LinAlg.adjoint(dr)) |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(dq), q))
+    m =
+      Nx.dot(r, [-1], ba, Nx.LinAlg.adjoint(dr), [-2], ba)
+      |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(dq), [-1], ba, q, [-2], ba))
 
     # copyltu
     m_ltu = Nx.tril(m) |> Nx.add(m |> Nx.tril(k: -1) |> Nx.LinAlg.adjoint())
 
-    da = dq |> Nx.add(Nx.dot(q, m_ltu)) |> Nx.dot(Nx.LinAlg.adjoint(r_inv))
+    q_m = Nx.dot(q, [-1], ba, m_ltu, [-2], ba)
+    da = Nx.dot(Nx.add(dq, q_m), [-1], ba, Nx.LinAlg.adjoint(r_inv), [-2], ba)
 
     [da]
+  end
+
+  deftransformp batch_axes(t) do
+    rank = tuple_size(t.shape)
+    Enum.to_list(0..(rank - 3)//1)
   end
 end

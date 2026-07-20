@@ -8,6 +8,10 @@ defmodule Nx.Defn.Evaluator do
 
   The following options are specific to this compiler:
 
+    * `:hooks` - a map of callbacks to override named `io_call` side effects.
+      This allows overriding named `io_call`s at JIT time without recompiling the
+      graph.
+
     * `:garbage_collect` - when true, garbage collects
       after evaluating each node
 
@@ -41,6 +45,7 @@ defmodule Nx.Defn.Evaluator do
   @impl true
   def __compile__(_key, vars, fun, opts) do
     hooks = Keyword.get(opts, :hooks, %{})
+
     gc? = Keyword.get(opts, :garbage_collect, false)
     {expr, output, cache} = precompile(fun, vars, hooks)
 
@@ -188,29 +193,10 @@ defmodule Nx.Defn.Evaluator do
     {[clauses_cache, last_cache, Map.keys(all_ids)], cache}
   end
 
-  defp compute_cache(:token, %{data: %Expr{args: [token]}}, state, cache) do
-    hooks = state.hooks
-
-    {exprs_hooks, cache} =
-      Enum.flat_map_reduce(token.hooks, cache, fn
-        %{callback: callback, expr: expr, name: name}, cache ->
-          hook_fun = hooks[name] || callback
-
-          cond do
-            hook_fun ->
-              {expr, cache} = composite_compute_cache(expr, state, cache)
-              {[{expr, hook_fun}], cache}
-
-            Tree.has_hooks?(expr, hooks) ->
-              {expr, cache} = composite_compute_cache(expr, state, cache)
-              {[{expr, nil}], cache}
-
-            true ->
-              {[], cache}
-          end
-      end)
-
-    {[exprs_hooks], cache}
+  defp compute_cache(:io_call, %{data: %Expr{args: args}}, state, cache) do
+    [tensor_expr, callback_spec, template, ref] = args
+    {_, cache} = composite_compute_cache(tensor_expr, state, cache)
+    {[tensor_expr, callback_spec, template, ref], cache}
   end
 
   defp compute_cache(_op, tensor, state, cache) do
@@ -294,9 +280,23 @@ defmodule Nx.Defn.Evaluator do
     {elem(tuple, i), caches}
   end
 
-  defp eval_apply(:attach_token, [token, expr], _ans, state, caches) do
-    {_, caches} = eval(token, state, caches)
-    eval(expr, state, caches)
+  defp eval_apply(:io_call, [tensor_expr, callback_spec, out_template, _ref], _ans, state, caches) do
+    {tensor_value, caches} = composite_eval(tensor_expr, state, caches)
+    caches = run_io_call_side_effect(callback_spec, tensor_value, state, caches)
+
+    result =
+      case out_template do
+        %Nx.Tensor{} ->
+          tensor_value
+
+        _ ->
+          tensor_value
+          |> List.wrap()
+          |> Composite.flatten_list()
+          |> List.to_tuple()
+      end
+
+    {result, caches}
   end
 
   defp eval_apply(:fun, [length, expr, expr_cache], _ans, state, caches) do
@@ -330,17 +330,6 @@ defmodule Nx.Defn.Evaluator do
   defp eval_apply(:while, [initial, pred, block, while_cache], _ans, state, caches) do
     {initial, caches} = composite_eval(initial, state, caches)
     {while(initial, pred, block, state, [while_cache]), caches}
-  end
-
-  defp eval_apply(:token, [exprs_hooks], _ans, state, caches) do
-    caches =
-      List.foldr(exprs_hooks, caches, fn {expr, hook_fun}, caches ->
-        {res, caches} = composite_eval(expr, state, caches)
-        hook_fun && hook_fun.(res)
-        caches
-      end)
-
-    {{}, caches}
   end
 
   defp eval_apply(:block, [struct, in_args, expr, callback], ans, state, caches) do
@@ -398,6 +387,15 @@ defmodule Nx.Defn.Evaluator do
     {apply(mod, op, args), caches}
   end
 
+  defp run_io_call_side_effect(callback_spec, tensor_value, state, caches) do
+    case resolve_io_call(callback_spec, state.hooks) do
+      nil -> :ok
+      fun -> fun.(tensor_value)
+    end
+
+    caches
+  end
+
   ## Control flow helpers
 
   defp while(acc, condition, block, state, caches) do
@@ -441,4 +439,7 @@ defmodule Nx.Defn.Evaluator do
   defp composite_to_params(other, acc) do
     [fn -> other end | acc]
   end
+
+  defp resolve_io_call({:fn, fun}, _hooks), do: fun
+  defp resolve_io_call({:named, name, callback}, hooks), do: hooks[name] || callback
 end

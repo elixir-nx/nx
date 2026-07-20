@@ -415,7 +415,7 @@ defmodule Nx.VectorizeTest do
         4 3 4 5 4 3 4
       ] |> Nx.vectorize(:rows)
 
-      assert result == Nx.reflect(input, padding_config: [{3, 1}])
+      assert result == Nx.pad_outer(input, :reflect, [{3, 1}])
     end
   end
 
@@ -639,7 +639,7 @@ defmodule Nx.VectorizeTest do
     end
 
     deftransformp send_value(val, opts \\ []) do
-      Nx.Defn.Kernel.hook(val, &send(self(), {&1, opts}))
+      Nx.Defn.Kernel.io_call(val, &send(self(), {&1, opts}))
     end
 
     test "only executes selected branches" do

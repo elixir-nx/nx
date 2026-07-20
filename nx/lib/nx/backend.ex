@@ -28,6 +28,11 @@ defmodule Nx.Backend do
 
   This module also includes functions that are meant to be shared
   across backends.
+
+  Backends may publish backend documentation guides that mirror the Nx API and
+  describe divergent behaviour, backend-specific options, and limitations — see
+  the [backend documentation convention](backend_documentation-convention.html)
+  guide.
   """
 
   @type t :: %{__struct__: atom()}
