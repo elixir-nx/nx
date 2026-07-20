@@ -689,26 +689,24 @@ defmodule Nx.BinaryBackend do
   end
 
   defp element_wise_bin_op(%{shape: shape, type: type} = out, left, right, fun) do
-    %T{type: {_, left_size} = left_type} = left
-    %T{type: {_, right_size} = right_type} = right
+    %T{type: left_type} = left
+    %T{type: right_type} = right
 
-    count = Nx.size(shape)
     left_data = broadcast_data(left, shape)
     right_data = broadcast_data(right, shape)
 
     data =
       match_types [left_type, right_type, type] do
-        for i <- 0..(count - 1), into: <<>> do
-          left_consumed = i * left_size
-          <<_::size(^left_consumed)-bitstring, match!(x, 0), _::bitstring>> = left_data
-          x = read!(x, 0)
+        {data, _} =
+          for <<match!(x, 0) <- left_data>>, reduce: {<<>>, right_data} do
+            {acc, <<match!(y, 1), right_rest::bitstring>>} ->
+              x_val = read!(x, 0)
+              y_val = read!(y, 1)
+              result = <<write!(fun.(type, x_val, y_val), 2)>>
+              {<<acc::bitstring, result::binary>>, right_rest}
+          end
 
-          right_consumed = i * right_size
-          <<_::size(^right_consumed)-bitstring, match!(y, 1), _::bitstring>> = right_data
-          y = read!(y, 1)
-
-          <<write!(fun.(type, x, y), 2)>>
-        end
+        data
       end
 
     from_binary(out, data)
