@@ -126,6 +126,7 @@ defmodule EXLA.Defn.DonationTest do
         DeviceBuffer.read(xb2)
       end
     end
+
     test "Nx.Defn.donate/1 donates only the marked leaves" do
       a = on_device([1, 2])
       b = on_device([3, 4])

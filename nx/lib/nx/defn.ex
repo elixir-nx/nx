@@ -323,7 +323,10 @@ defmodule Nx.Defn do
   def compile(fun, template_args, opts \\ [])
       when is_function(fun) and is_list(template_args) and is_list(opts) do
     opts = prepare_options(opts)
-    {fun, params, templates, _flatten, donated} = Nx.Defn.Compiler.to_lazy_params(fun, template_args, opts)
+
+    {fun, params, templates, _flatten, donated} =
+      Nx.Defn.Compiler.to_lazy_params(fun, template_args, opts)
+
     opts = put_donated_params(opts, donated)
     compiled_fun = Nx.Defn.Compiler.__compile__(fun, params, opts)
 
