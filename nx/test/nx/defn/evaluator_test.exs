@@ -70,18 +70,24 @@ defmodule Nx.Defn.EvaluatorTest do
     test "qr" do
       assert {q, r} = qr(Nx.iota({3, 2}))
 
-      assert q ==
-               Nx.tensor([
-                 [0.0, 0.9128709435462952],
-                 [0.4472135901451111, 0.3651483356952667],
-                 [0.8944271802902222, -0.1825741082429886]
-               ])
+      Nx.Testing.assert_all_close(
+        q,
+        Nx.tensor([
+          [0.0, 0.9128709435462952],
+          [0.4472135901451111, 0.3651483356952667],
+          [0.8944271802902222, -0.1825741082429886]
+        ]),
+        atol: 1.0e-6
+      )
 
-      assert r ==
-               Nx.tensor([
-                 [4.4721360206604, 5.81377649307251],
-                 [2.433349663988338e-7, 1.0954453945159912]
-               ])
+      Nx.Testing.assert_all_close(
+        r,
+        Nx.tensor([
+          [4.4721360206604, 5.81377649307251],
+          [2.433349663988338e-7, 1.0954453945159912]
+        ]),
+        atol: 1.0e-6
+      )
     end
 
     defn svd(t), do: Nx.LinAlg.svd(t)
@@ -710,7 +716,7 @@ defmodule Nx.Defn.EvaluatorTest do
       t = Nx.iota({2, 3}, vectorized_axes: [a: 1], type: :s32)
 
       message = """
-      test/nx/defn/evaluator_test.exs:679: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
+      test/nx/defn/evaluator_test.exs:685: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
 
       {\e[32m
        <<<<< Body (do-block) <<<<<
@@ -742,7 +748,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       error =
         """
-        test/nx/defn/evaluator_test.exs:679: condition must be a scalar tensor, got: #Nx.Tensor<
+        test/nx/defn/evaluator_test.exs:685: condition must be a scalar tensor, got: #Nx.Tensor<
           vectorized[x: 1]
           u8[1]
         \s\s

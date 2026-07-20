@@ -769,13 +769,15 @@ defmodule Nx.LinAlgTest do
 
       assert_all_close(t, u |> Nx.dot(s_matrix) |> Nx.dot(v), atol: 1.0e-2, rtol: 1.0e-2)
 
+      # Only the first `rank` columns of U are uniquely determined
+      # (columns corresponding to zero singular values span the null space)
       assert_all_close(
-        u,
+        Nx.slice(u, [0, 0], [4, 2]),
         Nx.tensor([
-          [0.141, -0.825, -0.001, 0.019],
-          [0.344, -0.426, 0.00200, 0.382],
-          [0.547, -0.028, 0.0, -0.822],
-          [0.75, 0.370, -0.001, 0.421]
+          [0.141, -0.825],
+          [0.344, -0.426],
+          [0.547, -0.028],
+          [0.75, 0.371]
         ]),
         atol: 1.0e-3,
         rtol: 1.0e-3
