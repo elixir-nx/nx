@@ -1311,7 +1311,15 @@ defmodule Nx.Defn.Grad do
         :conjugate -> Nx.conjugate(a)
       end
 
-    a_inv_hermitian = Nx.LinAlg.invert(Nx.LinAlg.adjoint(a))
+    # a is triangular after transform_a; invert(A^H) via triangular_solve.
+    # :transpose already flipped triangle once; adjoint flips once more.
+    a_h = Nx.LinAlg.adjoint(a)
+
+    a_h_lower =
+      if opts[:transform_a] == :transpose, do: opts[:lower], else: not opts[:lower]
+
+    eye = Nx.eye(Nx.shape(a_h), type: Nx.type(a_h))
+    a_inv_hermitian = Nx.LinAlg.triangular_solve(a_h, eye, lower: a_h_lower)
     batch_axes = linalg_batch_axes(a_inv_hermitian)
 
     x = if b_rank_correction_axis, do: Nx.new_axis(x, b_rank_correction_axis), else: x
