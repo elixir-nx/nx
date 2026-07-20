@@ -629,10 +629,10 @@ defmodule Nx.BinaryBackend do
             {acc, <<match!(x, 1), true_rest::bitstring>>,
              <<match!(y, 2), false_rest::bitstring>>} ->
               result =
-                if read!(p, 0) == 0 do
-                  read!(y, 2)
-                else
+                if as_boolean(read!(p, 0)) do
                   read!(x, 1)
+                else
+                  read!(y, 2)
                 end
 
               {<<acc::bitstring, number_to_binary(result, type)::bitstring>>, true_rest,
@@ -1177,51 +1177,34 @@ defmodule Nx.BinaryBackend do
             |> weighted_traverse(batch, input_size, offset)
             |> :erlang.list_to_bitstring()
 
-          # The receptive field size of each binary in bytes
+          # The receptive field size of each channel binary in bits
           input_field_size = Nx.size(filter_shape) * input_size
           filter_field_size = Nx.size(filter_shape) * kernel_size
 
-          # For each channel in both filter and input...
-          # The output from a single filter being applied over a window
-          # of the input tensor is the sum of the element-wise products
-          values =
-            for i <- 0..(num_input_channels - 1) do
-              current_input_pos = i * input_field_size
-              current_filter_pos = i * filter_field_size
-              <<_::size(^current_input_pos)-bitstring, input_receptive_field::bitstring>> = window
+          # For each channel in both filter and input, zip-reduce element-wise
+          # products. Cursor-advance fixed-size channel chunks (no i*size scans).
+          {sum, _} =
+            for <<input_receptive_field::size(^input_field_size)-bitstring <- window>>,
+                reduce: {0, filter} do
+              {acc,
+               <<filter_receptive_field::size(^filter_field_size)-bitstring,
+                 filter_rest::bitstring>>} ->
+                channel_sum =
+                  match_types [input_type, kernel_type] do
+                    {channel_sum, _} =
+                      for <<match!(x, 0) <- input_receptive_field>>,
+                          reduce: {0, filter_receptive_field} do
+                        {sum_acc, <<match!(y, 1), y_rest::bitstring>>} ->
+                          {sum_acc + read!(x, 0) * read!(y, 1), y_rest}
+                      end
 
-              <<_::size(^current_filter_pos)-bitstring, filter_receptive_field::bitstring>> =
-                filter
-
-              for j <- 0..(Nx.size(filter_shape) - 1) do
-                x =
-                  match_types [input_type] do
-                    left_consumed = j * input_size
-
-                    <<_::size(^left_consumed)-bitstring, match!(x, 0), _::bitstring>> =
-                      input_receptive_field
-
-                    read!(x, 0)
+                    channel_sum
                   end
 
-                y =
-                  match_types [kernel_type] do
-                    right_consumed = j * kernel_size
-
-                    <<_::size(^right_consumed)-bitstring, match!(y, 0), _::bitstring>> =
-                      filter_receptive_field
-
-                    read!(y, 0)
-                  end
-
-                x * y
-              end
+                {acc + channel_sum, filter_rest}
             end
 
-          values
-          |> List.flatten()
-          |> Enum.reduce(&+/2)
-          |> number_to_binary(output_type)
+          number_to_binary(sum, output_type)
         end
       end
 
@@ -1597,8 +1580,8 @@ defmodule Nx.BinaryBackend do
     %T{type: {_, source_size} = source_type} = source
     source_data = to_binary(source)
 
-    output_windows =
-      for {anchor, i} <- Enum.with_index(input_anchors) do
+    {output_windows, _} =
+      Enum.map_reduce(input_anchors, source_data, fn anchor, source_rest ->
         offset = weighted_offset(input_weighted_shape, anchor)
 
         window =
@@ -1629,14 +1612,10 @@ defmodule Nx.BinaryBackend do
         padded_absolute_index = Enum.zip_with(anchor, offset_from_anchor, &+/2)
         absolute_index = Enum.zip_with(padded_absolute_index, low_pads, &-/2)
 
-        source_consumed = i * source_size
-
-        <<_::size(^source_consumed)-bitstring, from_source::size(^source_size)-bitstring,
-          _::bitstring>> = source_data
-
+        <<from_source::size(^source_size)-bitstring, source_rest::bitstring>> = source_rest
         source_value = binary_to_number(from_source, source_type)
-        {source_value, absolute_index}
-      end
+        {{source_value, absolute_index}, source_rest}
+      end)
 
     # Filter out indices that fall in the padding region (outside original tensor bounds)
     output_windows =
