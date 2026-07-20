@@ -3259,7 +3259,8 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "computes gradient for unrelated param loop" do
-      assert grad_while_param(1.0, 2.0) == {Nx.tensor(128.0), Nx.tensor(5461.0)}
+      # t0=1, x=2 runs 7 steps to 128; ∂/∂x (t0·x^n) = n·x^(n-1) = 448
+      assert grad_while_param(1.0, 2.0) == {Nx.tensor(128.0), Nx.tensor(448.0)}
     end
 
     defn grad_while_single_var(t) do
@@ -3307,6 +3308,97 @@ defmodule Nx.Defn.GradTest do
       {value_unroll, grad_unroll} = grad_3x_sin(tensor)
       assert value_while == value_unroll
       assert_all_close(grad_while, grad_unroll)
+    end
+
+    # BUG-1747 — reverse-mode through while must apply body VJPs in reverse
+    # iteration order when ∂body/∂acc depends on the differentiated variable.
+    # Upstream: https://github.com/elixir-nx/nx/issues/1747
+
+    defn square_via_while(x) do
+      {acc, _, _} =
+        while {acc = Nx.tensor(1.0, type: :f32), i = 0, x = x}, Nx.less(i, 2) do
+          {acc * x, i + 1, x}
+        end
+
+      acc
+    end
+
+    defn grad_square_via_while(x), do: grad(x, &square_via_while/1)
+
+    test "computes gradient when body Jacobian depends on x (x^2 via while)" do
+      x = Nx.tensor(0.5, type: :f32)
+      assert_all_close(square_via_while(x), Nx.tensor(0.25, type: :f32))
+      assert_all_close(grad_square_via_while(x), Nx.tensor(1.0, type: :f32))
+    end
+
+    defn power_via_while(x) do
+      {acc, _, _} =
+        while {acc = Nx.tensor(1.0, type: :f32), i = 0, x = x}, Nx.less(i, 3) do
+          {acc * x, i + 1, x}
+        end
+
+      acc
+    end
+
+    defn grad_power_via_while(x), do: grad(x, &power_via_while/1)
+
+    test "computes gradient for x^n via while" do
+      x = Nx.tensor(0.5, type: :f32)
+      assert_all_close(grad_power_via_while(x), Nx.tensor(0.75, type: :f32))
+    end
+
+    defn product_shifted_via_while(x) do
+      {acc, _, _} =
+        while {acc = Nx.tensor(1.0, type: :f32), i = 0, x = x}, Nx.less(i, 2) do
+          {acc * (x - 2), i + 1, x}
+        end
+
+      acc
+    end
+
+    defn grad_product_shifted_via_while(x), do: grad(x, &product_shifted_via_while/1)
+
+    test "computes gradient with sign-flipping multiplicative body" do
+      x = Nx.tensor(0.5, type: :f32)
+      assert_all_close(grad_product_shifted_via_while(x), Nx.tensor(-3.0, type: :f32))
+    end
+
+    defn sum_via_while(x) do
+      {acc, _, _} =
+        while {acc = Nx.tensor(0.0, type: :f32), i = 0, x = x}, Nx.less(i, 3) do
+          {Nx.add(acc, x), i + 1, x}
+        end
+
+      acc
+    end
+
+    defn grad_sum_via_while(x), do: grad(x, &sum_via_while/1)
+
+    test "computes gradient for additive while body" do
+      x = Nx.tensor(0.5, type: :f32)
+      assert_all_close(grad_sum_via_while(x), Nx.tensor(3.0, type: :f32))
+    end
+
+    defn power_via_generator(x) do
+      {acc, _} =
+        while {acc = Nx.tensor(1.0, type: :f32), x = x}, _ <- 0..2 do
+          {acc * x, x}
+        end
+
+      acc
+    end
+
+    defn power_via_generator_unroll(x) do
+      x * x * x
+    end
+
+    defn grad_power_via_generator(x), do: grad(x, &power_via_generator/1)
+    defn grad_power_via_generator_unroll(x), do: grad(x, &power_via_generator_unroll/1)
+
+    test "computes gradient for multiplicative generator while" do
+      x = Nx.tensor(0.5, type: :f32)
+      assert_all_close(power_via_generator(x), power_via_generator_unroll(x))
+      assert_all_close(grad_power_via_generator(x), grad_power_via_generator_unroll(x))
     end
   end
 
