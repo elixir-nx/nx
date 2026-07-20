@@ -343,8 +343,6 @@ defmodule Nx.LinAlg.SVD do
     # https://j-towns.github.io/papers/svd-derivative.pdf
 
     eye_k = eye_from_vector(s_input)
-    eye_m = eye_from_matrix(input, m)
-    eye_n = eye_from_matrix(input, n)
 
     s_sq = s_input ** 2
     sub = -(Nx.new_axis(s_sq, -1) - Nx.new_axis(s_sq, -2)) + eye_k
@@ -354,18 +352,18 @@ defmodule Nx.LinAlg.SVD do
     s_inv = Nx.new_axis(1 / s_input, -1) * eye_k
     ds_matrix = eye_k * Nx.new_axis(ds, -2)
 
-    ut_du =
-      Nx.dot(Nx.LinAlg.adjoint(u), [-1], batch_axes, du, [-2], batch_axes) -
-        Nx.dot(Nx.LinAlg.adjoint(du), [-1], batch_axes, u, [-2], batch_axes)
+    ut_du = Nx.dot(Nx.LinAlg.adjoint(u), [-1], batch_axes, du, [-2], batch_axes)
+
+    ut_du_du_ut = ut_du - Nx.dot(Nx.LinAlg.adjoint(du), [-1], batch_axes, u, [-2], batch_axes)
 
     first_component_du =
       u
-      |> Nx.dot([-1], batch_axes, f * ut_du, [-2], batch_axes)
+      |> Nx.dot([-1], batch_axes, f * ut_du_du_ut, [-2], batch_axes)
       |> Nx.dot([-1], batch_axes, s, [-2], batch_axes)
 
+    # (I - U Uᴴ) du = du - U (Uᴴ du) — avoid materializing eye_m
     second_component_du =
-      (eye_m - Nx.dot(u, [-1], batch_axes, Nx.LinAlg.adjoint(u), [-2], batch_axes))
-      |> Nx.dot([-1], batch_axes, du, [-2], batch_axes)
+      (du - Nx.dot(u, [-1], batch_axes, ut_du, [-2], batch_axes))
       |> Nx.dot([-1], batch_axes, s_inv, [-2], batch_axes)
 
     du_component =
@@ -385,16 +383,19 @@ defmodule Nx.LinAlg.SVD do
       |> Nx.dot([-1], batch_axes, first_dvt_component, [-2], batch_axes)
       |> Nx.dot([-1], batch_axes, vt, [-2], batch_axes)
 
+    # X (I - V Vᴴ) = X - (X V) Vᴴ — avoid materializing eye_n (V = vtᴴ)
+    dvt_s_inv = Nx.dot(s_inv, [-1], batch_axes, dvt, [-2], batch_axes)
+
     second_dvt_component =
-      s_inv
-      |> Nx.dot([-1], batch_axes, dvt, [-2], batch_axes)
-      |> Nx.dot(
-        [-1],
-        batch_axes,
-        eye_n - Nx.dot(Nx.LinAlg.adjoint(vt), [-1], batch_axes, vt, [-2], batch_axes),
-        [-2],
-        batch_axes
-      )
+      dvt_s_inv -
+        Nx.dot(
+          Nx.dot(dvt_s_inv, [-1], batch_axes, Nx.LinAlg.adjoint(vt), [-2], batch_axes),
+          [-1],
+          batch_axes,
+          vt,
+          [-2],
+          batch_axes
+        )
 
     dvt_component =
       Nx.dot(u, [-1], batch_axes, first_dvt_component + second_dvt_component, [-2], batch_axes)
@@ -416,23 +417,6 @@ defmodule Nx.LinAlg.SVD do
       batch
       |> Tuple.insert_at(tuple_size(batch), k)
       |> Tuple.insert_at(tuple_size(batch) + 1, k)
-
-    Nx.eye(eye_shape)
-  end
-
-  deftransformp eye_from_matrix(t, size) do
-    shape = Nx.shape(t)
-    rank = tuple_size(shape)
-
-    batch =
-      shape
-      |> Tuple.delete_at(rank - 1)
-      |> Tuple.delete_at(rank - 2)
-
-    eye_shape =
-      batch
-      |> Tuple.insert_at(tuple_size(batch), size)
-      |> Tuple.insert_at(tuple_size(batch) + 1, size)
 
     Nx.eye(eye_shape)
   end
