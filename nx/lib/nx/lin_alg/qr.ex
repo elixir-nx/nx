@@ -153,7 +153,8 @@ defmodule Nx.LinAlg.QR do
   defn qr_grad({q, r}, {dq, dr}) do
     # Definition taken from https://arxiv.org/pdf/2009.10071.pdf
     # Equation (3)
-    r_inv = Nx.LinAlg.invert(r)
+    eye = Nx.eye(Nx.shape(r), type: Nx.type(r))
+    r_inv = Nx.LinAlg.triangular_solve(r, eye, lower: false)
     ba = batch_axes(r)
 
     m =
