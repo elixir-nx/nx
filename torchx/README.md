@@ -55,6 +55,11 @@ You can also compile LibTorch from scratch, using the official instructions,
 and configure this library to use it by pointing the `LIBTORCH_DIR` environment
 variable to the LibTorch directory.
 
+On Windows, LibTorch DLLs are normally installed under the app's
+`priv/libtorch` directory. To override the runtime DLL search path, set
+`LIBTORCH_DLL_DIR` (or `config :torchx, :libtorch_dll_dir`) before compiling;
+the path is passed into the DLL loader NIF at load time.
+
 ## Usage
 
 The main mechanism to use `Torchx` is by setting it as a backend to your tensors:

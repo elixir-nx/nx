@@ -1,8 +1,6 @@
 #include <stdlib.h>
 #include <cstring>
 #include <string>
-#include <sstream>
-#include <vector>
 #include <erl_nif.h>
 #include <windows.h>
 #include <libloaderapi.h>
@@ -29,32 +27,39 @@ NIF(add_dll_directory) {
   static bool path_updated = false;
   if (path_updated) return ok(env);
 
-  wchar_t dll_path_c[65536];
-  char err_msg[128] = { '\0' };
-  HMODULE hm = NULL;
-  if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCWSTR)&add_dll_directory, &hm) == 0) {
-    int ret = GetLastError();
-    snprintf(err_msg, sizeof(err_msg) - 1, "GetModuleHandle failed, error = %d\r\n", ret);
-    return error(env, err_msg);
+  if (argc != 1) {
+    return enif_make_badarg(env);
   }
 
-  if (GetModuleFileNameW(hm, (LPWSTR)dll_path_c, sizeof(dll_path_c)) == 0) {
-    int ret = GetLastError();
-    snprintf(err_msg, sizeof(err_msg) - 1, "GetModuleFileName failed, error = %d\r\n", ret);
-    return error(env, err_msg);
+  ErlNifBinary path_bin;
+  if (!enif_inspect_binary(env, argv[0], &path_bin) &&
+      !enif_inspect_iolist_as_binary(env, argv[0], &path_bin)) {
+    return error(env, "libtorch DLL directory must be a UTF-8 binary or iodata");
   }
 
-  std::wstring dll_path = dll_path_c;
-  auto pos = dll_path.find_last_of(L'\\');
-  auto priv_dir = dll_path.substr(0, pos);
+  if (path_bin.size == 0) {
+    return error(env, "libtorch DLL directory must not be empty");
+  }
 
-  std::wstringstream torch_dir_ss;
-  torch_dir_ss << priv_dir << L"\\libtorch";
-  std::wstring torch_dir = torch_dir_ss.str();
+  int wide_len = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+                                     reinterpret_cast<LPCCH>(path_bin.data),
+                                     static_cast<int>(path_bin.size), NULL, 0);
+  if (wide_len <= 0) {
+    return error(env, "libtorch DLL directory is not valid UTF-8");
+  }
+
+  std::wstring torch_dir(static_cast<size_t>(wide_len), L'\0');
+  if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
+                          reinterpret_cast<LPCCH>(path_bin.data),
+                          static_cast<int>(path_bin.size), &torch_dir[0],
+                          wide_len) == 0) {
+    return error(env, "failed to convert libtorch DLL directory to wide string");
+  }
+
   PCWSTR directory_pcwstr = torch_dir.c_str();
 
   WCHAR path_buffer[65536];
-  DWORD path_len = GetEnvironmentVariableW(L"PATH", path_buffer, 65536);
+  GetEnvironmentVariableW(L"PATH", path_buffer, 65536);
   WCHAR new_path[65536];
   new_path[0] = L'\0';
   wcscpy_s(new_path, _countof(new_path), (const wchar_t*)path_buffer);
@@ -101,7 +106,7 @@ int load(ErlNifEnv *,void **,ERL_NIF_TERM) {
   }
 
 static ErlNifFunc nif_functions[] = {
-  F(add_dll_directory, 0)
+  F(add_dll_directory, 1)
 };
 
 ERL_NIF_INIT(Elixir.Torchx.NIF.DLLLoader, nif_functions, load, NULL, upgrade, NULL);

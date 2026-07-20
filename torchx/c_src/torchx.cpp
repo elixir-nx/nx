@@ -7,10 +7,18 @@
 #include <ATen/LegacyBatchedTensorImpl.h>
 #endif
 
+#include "ipc.hpp"
+#include "torchx_cuda.hpp"
 #include "torchx_nif_util.h"
+#include <cstring>
 #include <iostream>
 #include <numeric>
 #include <stdexcept>
+#include <variant>
+
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 namespace torchx {
 
@@ -235,6 +243,159 @@ fine::Ok<int64_t> nbytes(ErlNifEnv *env,
 }
 
 FINE_NIF(nbytes, 0);
+
+// ============================================================================
+// Zero-copy device pointer access (Nx.to_pointer / Nx.from_pointer)
+// ============================================================================
+//
+// Modes (mirroring EXLA):
+//   :local     — raw address into the tensor's own storage
+//   :host_ipc  — POSIX shared memory (CPU); original tensor is repointed at shm
+//   :cuda_ipc  — CUDA IPC mem handle
+//
+// Safety: keep the exporting tensor alive while the pointer/handle is in use.
+// Non-contiguous tensors are made contiguous in-place first.
+
+static void ensure_contiguous(torch::Tensor &t) {
+  if (!t.is_contiguous()) {
+    t = t.contiguous();
+  }
+}
+
+static std::vector<int64_t> tensor_sizes(const torch::Tensor &t) {
+  std::vector<int64_t> shape_vec;
+  shape_vec.reserve(t.dim());
+  for (int64_t dim = 0; dim < t.dim(); dim++) {
+    shape_vec.push_back(t.size(dim));
+  }
+  return shape_vec;
+}
+
+fine::Ok<std::variant<std::tuple<fine::Atom, uint64_t, uint64_t>,
+                      std::tuple<fine::Atom, std::string, uint64_t>>>
+to_pointer(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor_res,
+           fine::Atom pointer_kind, int64_t shm_permissions) {
+  auto &t = get_tensor(tensor_res);
+  ensure_contiguous(t);
+
+  uint64_t device_size = static_cast<uint64_t>(t.nbytes());
+  uint64_t ptr = reinterpret_cast<uint64_t>(t.data_ptr());
+
+  if (pointer_kind == "local") {
+    return fine::Ok(std::make_tuple(pointer_kind, ptr, device_size));
+  }
+
+  if (pointer_kind == "host_ipc") {
+#ifdef _WIN32
+    throw std::runtime_error("host IPC is not supported on Windows");
+#else
+    auto handle_name =
+        "torchx:ipc:" + std::to_string(getpid()) + ":" + std::to_string(ptr);
+    auto fd = get_ipc_handle(handle_name.c_str(), device_size,
+                             static_cast<mode_t>(shm_permissions));
+    if (fd == -1) {
+      throw std::runtime_error("unable to get IPC handle");
+    }
+
+    auto ipc_ptr = open_ipc_handle(fd, device_size, /*writable=*/1);
+    if (ipc_ptr == nullptr) {
+      close(fd);
+      throw std::runtime_error("unable to open IPC handle");
+    }
+
+    std::memcpy(ipc_ptr, reinterpret_cast<void *>(ptr), device_size);
+
+    // Repoint the original tensor at the shm mapping so exporter and
+    // importers share the same physical pages (and free the old storage).
+    auto shape_vec = tensor_sizes(t);
+    auto dtype = t.scalar_type();
+    auto deleter = [fd, device_size, handle_name](void *p) {
+      close_ipc_handle(fd, p, handle_name.c_str(), device_size);
+    };
+    t = torch::from_blob(ipc_ptr, vec_to_array_ref(shape_vec), deleter,
+                         torch::TensorOptions().dtype(dtype).device(torch::kCPU));
+
+    return fine::Ok(std::make_tuple(pointer_kind, handle_name, device_size));
+#endif
+  }
+
+  if (pointer_kind == "cuda_ipc") {
+    auto maybe_handle = get_cuda_ipc_handle(ptr);
+    if (!maybe_handle) {
+      throw std::runtime_error("unable to get cuda IPC handle");
+    }
+    return fine::Ok(
+        std::make_tuple(pointer_kind, maybe_handle.value(), device_size));
+  }
+
+  throw std::invalid_argument("unexpected pointer type");
+}
+
+FINE_NIF(to_pointer, 0);
+
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+from_pointer(ErlNifEnv *env, fine::Atom pointer_kind, fine::Term pointer_data,
+             std::vector<int64_t> shape, fine::Atom type_atom,
+             std::tuple<int64_t, int64_t> device_tuple) {
+  auto type = string2type(type_atom.to_string());
+  auto device = tuple_to_device(device_tuple);
+  auto options = torch::TensorOptions().dtype(type).device(device);
+
+  if (pointer_kind == "local") {
+    auto address = fine::decode<uint64_t>(env, pointer_data);
+    void *ptr = reinterpret_cast<void *>(address);
+    auto tensor = torch::from_blob(ptr, vec_to_array_ref(shape),
+                                   /*deleter=*/[](void *) {}, options);
+    return tensor_ok(tensor);
+  }
+
+  if (pointer_kind == "host_ipc") {
+#ifdef _WIN32
+    throw std::runtime_error("host IPC is not supported on Windows");
+#else
+    auto memname = fine::decode<std::string>(env, pointer_data);
+    auto device_size = elem_count(shape) * dtype_sizes[type_atom.to_string()];
+    int writable = 0;
+    auto fd = open_existing_ipc_handle(memname.c_str(), &writable);
+    if (fd == -1) {
+      throw std::runtime_error("unable to get fd for IPC handle");
+    }
+    void *ptr = open_ipc_handle(fd, device_size, writable);
+    if (ptr == nullptr) {
+      close(fd);
+      throw std::runtime_error("unable to get pointer for IPC handle");
+    }
+    auto deleter = [fd, device_size](void *p) {
+      close_imported_ipc_handle(fd, p, device_size);
+    };
+    auto tensor =
+        torch::from_blob(ptr, vec_to_array_ref(shape), deleter, options);
+    return tensor_ok(tensor);
+#endif
+  }
+
+  if (pointer_kind == "cuda_ipc") {
+    auto handle_bin = fine::decode<ErlNifBinary>(env, pointer_data);
+    int device_id = static_cast<int>(std::get<1>(device_tuple));
+    if (device_id < 0) {
+      device_id = 0;
+    }
+    auto maybe_pointer = get_pointer_for_ipc_handle(
+        handle_bin.data, handle_bin.size, device_id);
+    if (!maybe_pointer) {
+      throw std::runtime_error("unable to get pointer for IPC handle");
+    }
+    void *ptr = maybe_pointer.value();
+    auto deleter = [](void *p) { close_cuda_ipc_handle(p); };
+    auto tensor =
+        torch::from_blob(ptr, vec_to_array_ref(shape), deleter, options);
+    return tensor_ok(tensor);
+  }
+
+  throw std::invalid_argument("unexpected pointer type");
+}
+
+REGISTER_TENSOR_NIF(from_pointer);
 
 // ============================================================================
 // Tensor Shape Operations
