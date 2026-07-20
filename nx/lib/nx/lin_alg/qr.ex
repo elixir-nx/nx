@@ -59,9 +59,13 @@ defmodule Nx.LinAlg.QR do
       while {{q = base_h, r = Nx.as_type(a, type)}, {column_iota}}, i <- 0..max_i//1 do
         x = r[[.., i]]
         x = Nx.select(column_iota < i, 0, x)
-        h = householder_reflector(x, i, eps)
-        r = Nx.dot(h, r)
-        q = Nx.dot(q, h)
+        {v, scale} = householder_reflector(x, i, eps)
+
+        vh_r = Nx.dot(Nx.LinAlg.adjoint(v), r)
+        r = r - scale * Nx.dot(Nx.new_axis(v, 1), Nx.new_axis(vh_r, 0))
+
+        q_v = Nx.dot(q, [1], v, [0])
+        q = q - scale * Nx.outer(q_v, v)
         {{q, r}, {column_iota}}
       end
 
@@ -104,44 +108,37 @@ defmodule Nx.LinAlg.QR do
   end
 
   defn householder_reflector(x, i, eps) do
-    # x is a {n} tensor
     {norm_x, norm_x_sq} = norm(x)
 
     x_i = x[i]
 
     norm_sq_1on = norm_x_sq - Nx.abs(x_i) ** 2
 
-    {v, scale} =
-      case Nx.type(x) do
-        {:c, _} ->
-          phase = Nx.phase(x_i)
-          arg = Nx.complex(0, phase)
-          alpha = Nx.exp(arg) * norm_x
-          u = Nx.indexed_add(x, Nx.new_axis(i, 0), alpha)
-          {n_u, _} = norm(u)
-          v = u / n_u
-          {v, 2}
+    case Nx.type(x) do
+      {:c, _} ->
+        phase = Nx.phase(x_i)
+        arg = Nx.complex(0, phase)
+        alpha = Nx.exp(arg) * norm_x
+        u = Nx.indexed_add(x, Nx.new_axis(i, 0), alpha)
+        {n_u, n_u_sq} = norm(u)
+        norm_selector = Nx.less(Nx.real(n_u_sq), 1.0e-30)
+        {u / Nx.select(norm_selector, 1, n_u), Nx.select(norm_selector, 0, 2)}
 
-        _type ->
-          v_0 = Nx.select(x_i <= 0, x_i - norm_x, -norm_sq_1on / (x_i + norm_x))
+      _type ->
+        v_0 = Nx.select(x_i <= 0, x_i - norm_x, -norm_sq_1on / (x_i + norm_x))
 
-          norm_selector = norm_sq_1on < eps
+        norm_selector = norm_sq_1on < eps
 
-          replace_value =
-            Nx.select(norm_selector, Nx.tensor([1], type: x.type), Nx.reshape(v_0, {1}))
+        replace_value =
+          Nx.select(norm_selector, Nx.tensor([1], type: x.type), Nx.reshape(v_0, {1}))
 
-          v = Nx.put_slice(x, [i], replace_value)
-          v = v / Nx.select(norm_selector, 1, v_0)
-          {_, n_v_sq} = norm(v)
-          scale_den = Nx.select(norm_selector, 1, n_v_sq)
-          scale = Nx.select(norm_selector, 0, 2 / scale_den)
-          {v, scale}
-      end
-
-    selector = Nx.iota({Nx.size(x)}) |> Nx.greater_equal(i) |> then(&Nx.outer(&1, &1))
-
-    eye = Nx.eye(Nx.size(x))
-    Nx.select(selector, eye - scale * Nx.outer(v, v), eye)
+        v = Nx.put_slice(x, [i], replace_value)
+        v = v / Nx.select(norm_selector, 1, v_0)
+        {_, n_v_sq} = norm(v)
+        scale_den = Nx.select(norm_selector, 1, n_v_sq)
+        scale = Nx.select(norm_selector, 0, 2 / scale_den)
+        {v, scale}
+    end
   end
 
   defn qr_grad({q, r}, {dq, dr}) do
