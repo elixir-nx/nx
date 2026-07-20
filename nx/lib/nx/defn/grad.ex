@@ -433,10 +433,12 @@ defmodule Nx.Defn.Grad do
     context = hd(flatten_initial).data.context
     arg_context = condition.data.context
     gs = Enum.zip_with(gs, flatten_initial, &Nx.broadcast/2)
+    n_args = length(flatten_initial)
 
     # Convert all gradients into while parameters.
-    {grad_args, _} =
-      Enum.map_reduce(gs, length(gs), fn g, pos ->
+    # Positions: arg is 0..n_args-1; grad_args continue from n_args.
+    {grad_args, pos_after_grads} =
+      Enum.map_reduce(gs, n_args, fn g, pos ->
         {Expr.parameter(g, arg_context, pos), pos + 1}
       end)
 
@@ -455,14 +457,51 @@ defmodule Nx.Defn.Grad do
       |> Composite.flatten_list()
       |> Enum.map_reduce({nodes, while_grads}, &to_grad(&1, {arg, %{}, 0}, parents, &2, []))
 
-    # And finally build a new while.
-    {_, while_gs} =
+    # Reverse-mode through while must apply body VJPs from last iteration to first.
+    # We rematerialize each intermediate state from `initial` (O(n²) time, O(1)
+    # extra memory) so the graph stays EXLA-compatible without a dynamic stack.
+    zero = Expr.tensor(0)
+    index_arg = Expr.parameter(zero, arg_context, n_args)
+
+    {_, n} =
       Expr.while(
-        {initial, List.to_tuple(gs)},
+        {initial, zero},
         context,
-        {arg, List.to_tuple(grad_args)},
+        {arg, index_arg},
         condition,
-        {body, List.to_tuple(grad_body)}
+        {body, Nx.add(index_arg, 1)}
+      )
+
+    # Carry: {s, g, k, j, s0}. Keep {arg, grad_args} at the front so existing
+    # parameter positions stay valid; append {k, j, s0} with fresh parameters.
+    k_arg = Expr.parameter(n, arg_context, pos_after_grads)
+    j_arg = Expr.parameter(zero, arg_context, pos_after_grads + 1)
+
+    {s0_arg, _} =
+      Composite.traverse(initial, pos_after_grads + 2, fn t, pos ->
+        {Expr.parameter(t, arg_context, pos), pos + 1}
+      end)
+
+    remat? = Nx.less(j_arg, Nx.subtract(k_arg, 1))
+    grad_args_tuple = List.to_tuple(grad_args)
+    grad_body_tuple = List.to_tuple(grad_body)
+
+    reverse_body =
+      {
+        select_composite(remat?, body, s0_arg),
+        select_composite(remat?, grad_args_tuple, grad_body_tuple),
+        Nx.select(remat?, k_arg, Nx.subtract(k_arg, 1)),
+        Nx.select(remat?, Nx.add(j_arg, 1), zero),
+        s0_arg
+      }
+
+    {_s, while_gs, _k, _j, _s0} =
+      Expr.while(
+        {initial, List.to_tuple(gs), n, zero, initial},
+        context,
+        {arg, grad_args_tuple, k_arg, j_arg, s0_arg},
+        Nx.greater(k_arg, 0),
+        reverse_body
       )
 
     # Now set the computed gradients for each input.
@@ -579,6 +618,15 @@ defmodule Nx.Defn.Grad do
       g = clear_axis_names(g)
       Map.update(grads, child.data.id, [g], &[g | &1])
     end)
+  end
+
+  defp select_composite(pred, left, right) do
+    {selected, []} =
+      Composite.traverse(left, Composite.flatten_list([right]), fn l, [r | rest] ->
+        {Nx.select(pred, l, r), rest}
+      end)
+
+    selected
   end
 
   ## Gradients
