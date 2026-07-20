@@ -613,39 +613,33 @@ defmodule Nx.BinaryBackend do
   end
 
   def select(%{shape: shape, type: type} = out, pred, on_true, on_false) do
-    %T{type: {_, pred_size} = pred_type} = pred
-    %T{type: {_, left_size} = left_type} = on_true
-    %T{type: {_, right_size} = right_type} = on_false
+    %T{type: pred_type} = pred
+    %T{type: left_type} = on_true
+    %T{type: right_type} = on_false
 
     pred_data = to_binary(pred)
     on_true_data = broadcast_data(on_true, shape)
     on_false_data = broadcast_data(on_false, shape)
 
     data =
-      for i <- 0..(Nx.size(shape) - 1), into: <<>> do
-        pred =
-          match_types [pred_type] do
-            consumed = i * pred_size
-            <<_::size(^consumed)-bitstring, match!(pred, 0), _::bitstring>> = pred_data
-            read!(pred, 0)
+      match_types [pred_type, left_type, right_type] do
+        {data, _, _} =
+          for <<match!(p, 0) <- pred_data>>,
+              reduce: {<<>>, on_true_data, on_false_data} do
+            {acc, <<match!(x, 1), true_rest::bitstring>>,
+             <<match!(y, 2), false_rest::bitstring>>} ->
+              result =
+                if read!(p, 0) == 0 do
+                  read!(y, 2)
+                else
+                  read!(x, 1)
+                end
+
+              {<<acc::bitstring, number_to_binary(result, type)::bitstring>>, true_rest,
+               false_rest}
           end
 
-        result =
-          if pred == 0 do
-            match_types [right_type] do
-              consumed = i * right_size
-              <<_::size(^consumed)-bitstring, match!(x, 0), _::bitstring>> = on_false_data
-              read!(x, 0)
-            end
-          else
-            match_types [left_type] do
-              consumed = i * left_size
-              <<_::size(^consumed)-bitstring, match!(x, 0), _::bitstring>> = on_true_data
-              read!(x, 0)
-            end
-          end
-
-        number_to_binary(result, type)
+        data
       end
 
     from_binary(out, data)
