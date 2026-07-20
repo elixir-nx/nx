@@ -24,7 +24,7 @@ You can find planned enhancements and features in the issues tracker. If you nee
 
 For Python developers, `Nx` packages features from [`Numpy`](https://numpy.org/), [`JAX`](https://github.com/google/jax), [HuggingFace Pipelines](https://huggingface.co/docs/transformers/main_classes/pipelines), and TorchServing/TensorServing, but packaged into a single unified library and developer experience.
 
-See [the Nx organization on GitHub](https://github.com/elixir-nx) to learn about other Numerical Elixir projects.
+See [the Nx organization on GitHub](https://github.com/elixir-nx) to learn about other Numerical Elixir projects. For signal processing and general (non-batched N-D) convolution, see [`NxSignal`](https://github.com/elixir-nx/nx_signal).
 
 ## Community
 
