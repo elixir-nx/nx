@@ -316,11 +316,15 @@ defmodule Nx.Defn do
 
     * `:hooks` - a map of callbacks to override named io_calls. See `Nx.Defn.Kernel.io_call/3`.
 
+    * `:donate_argnums` - a list of positional argument indices whose buffers
+      may be donated to the compiled executable. See `jit/2`.
+
   """
   def compile(fun, template_args, opts \\ [])
       when is_function(fun) and is_list(template_args) and is_list(opts) do
-    {fun, params, templates, _flatten} = Nx.Defn.Compiler.to_lazy_params(fun, template_args)
     opts = prepare_options(opts)
+    {fun, params, templates, _flatten, donated} = Nx.Defn.Compiler.to_lazy_params(fun, template_args, opts)
+    opts = put_donated_params(opts, donated)
     compiled_fun = Nx.Defn.Compiler.__compile__(fun, params, opts)
 
     wrap(fun, fn args ->
@@ -406,6 +410,25 @@ defmodule Nx.Defn do
       or `:reuse` (reuses the exiting JIT compilation). It is not recommended
       to set the `:compiler` option when reusing.
 
+    * `:donate_argnums` - a list of positional argument indices whose buffers
+      may be donated to the compiled executable. Modeled after
+      [JAX buffer donation](https://docs.jax.dev/en/latest/buffer_donation.html).
+
+      Donation is a replacement for in-place updates at the JIT boundary: if a
+      large parameter map is always replaced by the returned parameter map, mark
+      that argument so the compiler can reuse its device memory for a matching
+      output instead of holding roughly 2× the memory:
+
+          step = Nx.Defn.jit(&update/2, compiler: EXLA, donate_argnums: [0])
+          params = step.(params, batch)  # previous `params` buffers are now invalid
+
+      If a positional argument is a composite (tuple, map, struct), all of its
+      tensor leaves are donated. Compilers alias each donated leaf with a
+      same-shape/dtype output; EXLA raises if no such output exists. Donated
+      input buffers must not be used after the call. You can also mark values
+      with `donate/1` instead of (or in addition to) this option. Compilers that
+      do not implement donation treat this as a no-op.
+
   """
   def jit(fun, opts \\ []) when is_function(fun) and is_list(opts) do
     wrap(fun, &jit_apply(fun, &1, opts))
@@ -448,10 +471,37 @@ defmodule Nx.Defn do
 
   defp do_jit_apply(fun, args, opts) do
     opts = prepare_options(opts)
-    {fun, params, _templates, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args)
+    {fun, params, _templates, flatten, donated} = Nx.Defn.Compiler.to_lazy_params(fun, args, opts)
+    opts = put_donated_params(opts, donated)
     [res] = Nx.Defn.Compiler.__jit__(fun, params, [flatten], opts)
     res
   end
+
+  @doc """
+  Marks a tensor or container so its buffers may be donated on the next
+  JIT/compile invocation.
+
+  Donation tells supporting compilers (such as EXLA) that the caller will not
+  use these inputs after the function returns, so their device memory may back
+  same-shape/dtype outputs. This is the value-level counterpart to
+  `:donate_argnums` — useful when only part of a container should be donated:
+
+      step = Nx.Defn.jit(&update/2, compiler: EXLA)
+      %{params: params, metrics: metrics} =
+        step.(%{params: Nx.Defn.donate(params), metrics: metrics}, batch)
+
+  Nesting is supported: wrapping a map donates all tensor leaves inside it.
+  `donate/1` is idempotent. Compilers without donation support ignore the mark.
+
+  For `compile/3`, donation is fixed from the templates and options at compile
+  time. Wrapping arguments with `donate/1` only when *invoking* a previously
+  compiled function has no effect — pass `:donate_argnums` (or wrap the
+  templates) to `compile/3` instead.
+
+  See also `:donate_argnums` in `jit/2`.
+  """
+  def donate(%Nx.Defn.Donated{} = donated), do: donated
+  def donate(value), do: %Nx.Defn.Donated{value: value}
 
   @doc """
   Wraps an anonymous function to return its underlying defn expression.
@@ -480,7 +530,8 @@ defmodule Nx.Defn do
   """
   def debug_expr_apply(fun, args, opts \\ []) when is_function(fun) and is_list(args) do
     opts = opts |> prepare_options() |> Keyword.put(:compiler, Nx.Defn.Debug)
-    {fun, params, _templates, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args)
+    {fun, params, _templates, flatten, donated} = Nx.Defn.Compiler.to_lazy_params(fun, args, opts)
+    opts = put_donated_params(opts, donated)
     [res] = Nx.Defn.Compiler.__jit__(fun, params, [flatten], opts)
     res
   end
@@ -494,8 +545,15 @@ defmodule Nx.Defn do
       raise ArgumentError, ":hooks option must be a map"
     end
 
-    Keyword.put(opts, :hooks, hooks)
+    opts = Keyword.put(opts, :hooks, hooks)
+
+    # :donate_argnums is validated when building params in
+    # Nx.Defn.Compiler.to_lazy_params/3 (needs the argument count).
+    opts
   end
+
+  defp put_donated_params(opts, []), do: Keyword.delete(opts, :donated_params)
+  defp put_donated_params(opts, donated), do: Keyword.put(opts, :donated_params, donated)
 
   defp wrap(fun, callback) do
     {:arity, arity} = Function.info(fun, :arity)
@@ -883,7 +941,11 @@ defmodule Nx.Defn do
 
   defp do_shard_jit_apply(fun, mesh, args_list, opts) do
     opts = prepare_options(opts)
-    {fun, params, _templates, args_list} = Nx.Defn.Compiler.to_lazy_params_sharded(fun, args_list)
+
+    {fun, params, _templates, args_list, donated} =
+      Nx.Defn.Compiler.to_lazy_params_sharded(fun, args_list, opts)
+
+    opts = put_donated_params(opts, donated)
     Nx.Defn.Compiler.__shard_jit__(fun, mesh, params, args_list, opts)
   end
 

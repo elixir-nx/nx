@@ -868,52 +868,86 @@ defmodule Nx.Defn.Compiler do
   end
 
   @doc false
-  def to_lazy_params_sharded(fun, args_list) do
+  def to_lazy_params_sharded(fun, args_list, opts \\ []) do
     # Multiple args lists (for sharding): [[args1], [args2], [args3]]
-    # Returns: {fun, params, templates, [flatten1, flatten2, flatten3]}
+    # Returns: {fun, params, templates, [flatten1, flatten2, flatten3], donated_params}
     # Each flatten is kept separate - we do NOT concatenate them
     [first_args | rest_args] = args_list
-    {fun, params, templates, first_flatten} = to_lazy_params(fun, first_args)
+    {fun, params, templates, first_flatten, donated} = to_lazy_params(fun, first_args, opts)
 
     # Build flattens for remaining args lists
     # Each flatten remains separate: [[lazy1, lazy2], [lazy3, lazy4], ...]
     rest_flattens =
       Enum.map(rest_args, fn args ->
-        {_, _, _, flatten} = to_lazy_params(fun, args)
+        {_, _, _, flatten, _} = to_lazy_params(fun, args, opts)
         flatten
       end)
 
-    {fun, params, templates, [first_flatten | rest_flattens]}
+    {fun, params, templates, [first_flatten | rest_flattens], donated}
   end
 
   @doc false
-  def to_lazy_params(fun, args) do
-    {params, cache, {templates, funs, _}} =
-      Enum.reduce(args, {[], [], {[], [], 0}}, fn
-        arg, {params, cache, acc}
+  def to_lazy_params(fun, args, opts \\ []) do
+    donate_argnums = donate_argnums_from_opts!(opts, length(args))
+
+    {params, cache, {templates, funs, _, donated}} =
+      args
+      |> Enum.with_index()
+      |> Enum.reduce({[], [], {[], [], 0, MapSet.new()}}, fn
+        {arg, _argnum}, {params, cache, acc}
         when is_list(arg)
         when is_function(arg)
         when is_tuple(arg) and is_function(elem(arg, 0)) ->
           {params, [arg | cache], acc}
 
-        container, {params, cache, acc} ->
+        {container, argnum}, {params, cache, acc} ->
+          donating_arg? = MapSet.member?(donate_argnums, argnum)
+
           {param, acc} =
             Nx.LazyContainer.traverse(container, acc, fn
-              template, fun, {acc_templates, acc_funs, i} ->
-                acc = {[template | acc_templates], [fun | acc_funs], i + 1}
+              template, fun, {acc_templates, acc_funs, i, donated} ->
+                donated =
+                  if donating_arg? or Nx.Defn.Donated.donating?() do
+                    MapSet.put(donated, i)
+                  else
+                    donated
+                  end
+
+                acc = {[template | acc_templates], [fun | acc_funs], i + 1, donated}
                 {Nx.Defn.Expr.parameter(template, :root, i), acc}
             end)
 
           {[param | params], [nil | cache], acc}
       end)
 
+    donated = donated |> MapSet.to_list() |> Enum.sort()
+
     if Enum.all?(cache, &is_nil/1) do
-      {fun, Enum.reverse(params), Enum.reverse(templates), Enum.reverse(funs)}
+      {fun, Enum.reverse(params), Enum.reverse(templates), Enum.reverse(funs), donated}
     else
       cache = Enum.reverse(cache)
       fun = fun(length(params), &apply(fun, merge_cache(cache, &1)))
-      {fun, Enum.reverse(params), Enum.reverse(templates), Enum.reverse(funs)}
+      {fun, Enum.reverse(params), Enum.reverse(templates), Enum.reverse(funs), donated}
     end
+  end
+
+  defp donate_argnums_from_opts!(opts, num_args) do
+    argnums = Keyword.get(opts, :donate_argnums, [])
+
+    unless is_list(argnums) and Enum.all?(argnums, &(is_integer(&1) and &1 >= 0)) do
+      raise ArgumentError,
+            ":donate_argnums must be a list of non-negative integers, got: #{inspect(argnums)}"
+    end
+
+    argnums = Enum.uniq(argnums)
+
+    if Enum.any?(argnums, &(&1 >= num_args)) do
+      raise ArgumentError,
+            ":donate_argnums entries must be in the range [0, #{num_args}), got: " <>
+              inspect(argnums)
+    end
+
+    MapSet.new(argnums)
   end
 
   defp merge_cache([nil | cache], [head | tail]), do: [head | merge_cache(cache, tail)]

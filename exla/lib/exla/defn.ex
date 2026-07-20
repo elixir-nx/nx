@@ -324,13 +324,30 @@ defmodule EXLA.Defn do
     {debug?, options} = Keyword.pop(options, :debug, false)
     {lazy_transfers, options} = Keyword.pop(options, :lazy_transfers, :opt_in)
     {donate_argnums, options} = Keyword.pop(options, :donate_argnums, [])
-    donate_argnums = validate_donate_argnums!(donate_argnums, length(vars))
+    {donated_params, options} = Keyword.pop(options, :donated_params, [])
 
-    # Put the normalized list back so it lands in disk_key and comp_key.
+    donated_leaf_set =
+      cond do
+        donated_params != [] ->
+          MapSet.new(donated_params)
+
+        donate_argnums != [] ->
+          donate_argnums = validate_donate_argnums!(donate_argnums, length(vars))
+          build_donated_leaf_set(vars, donate_argnums)
+
+        true ->
+          MapSet.new()
+      end
+
+    # Keep a stable representation in options so it lands in disk_key and comp_key.
     options =
-      if donate_argnums == [],
-        do: options,
-        else: Keyword.put(options, :donate_argnums, donate_argnums)
+      if MapSet.size(donated_leaf_set) == 0 do
+        options
+      else
+        options
+        |> Keyword.put(:donated_params, donated_leaf_set |> MapSet.to_list() |> Enum.sort())
+        |> Keyword.delete(:donate_argnums)
+      end
 
     {client_name, options} = Keyword.pop_lazy(options, :client, &EXLA.Client.default_name/0)
     client = EXLA.Client.fetch!(client_name)
@@ -342,12 +359,10 @@ defmodule EXLA.Defn do
             "input sharding configuration provided but no device mesh was provided"
     end
 
-    if donate_argnums != [] and mesh != nil do
+    if MapSet.size(donated_leaf_set) > 0 and mesh != nil do
       raise ArgumentError,
-            "buffer donation via :donate_argnums is not currently supported with sharded execution"
+            "buffer donation is not currently supported with sharded execution"
     end
-
-    donated_leaf_set = build_donated_leaf_set(vars, donate_argnums)
 
     {args_key, reverse_args_identifiers} =
       Enum.map_reduce(vars, [], fn var, acc ->
@@ -666,7 +681,7 @@ defmodule EXLA.Defn do
 
             :error ->
               raise ArgumentError,
-                    "argument marked for donation via :donate_argnums is not used by the " <>
+                    "argument marked for donation is not used by the " <>
                       "computation; only used inputs can be donated"
           end
         end)

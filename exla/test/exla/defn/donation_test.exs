@@ -126,5 +126,34 @@ defmodule EXLA.Defn.DonationTest do
         DeviceBuffer.read(xb2)
       end
     end
+    test "Nx.Defn.donate/1 donates only the marked leaves" do
+      a = on_device([1, 2])
+      b = on_device([3, 4])
+      %EXLA.Backend{buffer: %DeviceBuffer{} = ab} = a.data
+      %EXLA.Backend{buffer: %DeviceBuffer{} = bb} = b.data
+
+      fun = EXLA.jit(fn %{x: x, y: y} -> %{x: Nx.add(x, 1), y: Nx.multiply(y, 2)} end)
+      %{x: x, y: y} = fun.(%{x: Nx.Defn.donate(a), y: b})
+
+      assert Nx.to_flat_list(x) == [2, 3]
+      assert Nx.to_flat_list(y) == [6, 8]
+
+      assert_raise RuntimeError, ~r"called on deleted or donated buffer", fn ->
+        DeviceBuffer.read(ab)
+      end
+
+      assert byte_size(DeviceBuffer.read(bb)) > 0
+    end
+
+    test "raises when donation is combined with sharded execution" do
+      mesh = %Nx.Mesh{name: "mesh", shape: {1}}
+
+      assert_raise ArgumentError, ~r"not currently supported with sharded execution", fn ->
+        EXLA.shard_jit(&Nx.add(&1, 1), mesh,
+          donate_argnums: [0],
+          input_shardings: [%{}]
+        ).([[on_device([1, 2, 3])]])
+      end
+    end
   end
 end

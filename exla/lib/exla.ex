@@ -303,22 +303,10 @@ defmodule EXLA do
       this if the input tensors are allocated on host and the computation is
       running on GPU/TPU with a limited amount of memory**
 
-    * `:donate_argnums` - a list of positional argument indices whose buffers
-      should be donated to the executable. Modeled after JAX's `donate_argnums`:
-      at compile time, each donated input is aliased with a same-shape/dtype
-      output, so XLA can reclaim the input's device memory to back the output
-      instead of allocating fresh storage. Once the jitted function returns,
-      the donated input buffers are consumed — subsequent operations on the
-      originating `EXLA.DeviceBuffer` (or the `Nx.Tensor` wrapping it) raise
-      with `"called on deleted or donated buffer"`. This is the standard way
-      to write memory-efficient training loops:
-
-          step = EXLA.jit(&update/2, donate_argnums: [0])
-          params = step.(params, batch)  # old `params` buffer is now invalid
-
-      If a positional argument is a composite (tuple, map, struct), all leaves
-      within it are donated. Each donated input must have a same-shape/dtype
-      output to alias into, or compilation raises. Not supported with sharded
+    * `:donate_argnums` - see `Nx.Defn.jit/2`. Donates every tensor leaf of the
+      given positional arguments so XLA can reuse their device memory for
+      same-shape/dtype outputs (buffer donation). Prefer `Nx.Defn.donate/1` when
+      only part of a container should be donated. Not supported with sharded
       execution.
 
   """
