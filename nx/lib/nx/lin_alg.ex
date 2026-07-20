@@ -328,7 +328,7 @@ defmodule Nx.LinAlg do
   defp norm_frobenius(%{shape: {_, _}} = t, opts), do: norm_integer(t, 2, opts)
 
   defp norm_nuclear(%{shape: {_, _}} = t) do
-    {_u, s, _v} = svd(t)
+    {_u, s, _v} = svd(t, full_matrices?: false)
     Nx.sum(s)
   end
 
@@ -373,7 +373,7 @@ defmodule Nx.LinAlg do
   end
 
   defp norm_integer(%{shape: {_, _}} = t, -2, opts) do
-    {_u, s, _v} = Nx.LinAlg.svd(t)
+    {_u, s, _v} = svd(t, full_matrices?: false)
     Nx.reduce_min(s, opts)
   end
 
@@ -2182,7 +2182,7 @@ defmodule Nx.LinAlg do
     max_dim = if row_dim > col_dim, do: row_dim, else: col_dim
 
     # Calculate max singular value
-    {_u, s, _v} = Nx.LinAlg.svd(a)
+    {_u, s, _v} = Nx.LinAlg.svd(a, full_matrices?: false)
 
     s_max = Nx.reduce_max(s)
 
