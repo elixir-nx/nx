@@ -6,6 +6,9 @@ defmodule EXLA.Defn.RecompilationWarningTest do
   setup do
     # Clear any recompilation counters from previous tests
     :ets.match_delete(EXLA.Defn.LockedCache, {{:counter, {:_, :_, :_}}, :_})
+    prev = Application.get_env(:exla, :check_recompilation, :infinity)
+    Application.put_env(:exla, :check_recompilation, 10)
+    on_exit(fn -> Application.put_env(:exla, :check_recompilation, prev) end)
     :ok
   end
 

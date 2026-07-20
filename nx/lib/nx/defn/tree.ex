@@ -8,37 +8,6 @@ defmodule Nx.Defn.Tree do
   alias Nx.Tensor, as: T
 
   @doc """
-  Check if the given tree has any of the given hooks in it.
-  """
-  def has_hooks?(tree, hooks) do
-    Composite.reduce(tree, %{}, &detect_hook(&1, &2, hooks))
-    false
-  catch
-    :side_effect -> true
-  end
-
-  defp detect_hook(%T{data: %Expr{op: :token, args: [token]}} = t, cache, hooks) do
-    if Enum.any?(token.hooks, &(hooks[&1.name] || &1.callback)) do
-      throw(:side_effect)
-    else
-      fallback_detect_hook(t, cache, hooks)
-    end
-  end
-
-  defp detect_hook(t, cache, hooks), do: fallback_detect_hook(t, cache, hooks)
-
-  defp fallback_detect_hook(%T{data: %Expr{id: id}} = t, cache, hooks) do
-    case cache do
-      %{^id => _} ->
-        cache
-
-      %{} ->
-        {_, cache} = apply_args(t, cache, &{&1, detect_hook(&1, &2, hooks)})
-        Map.put(cache, id, true)
-    end
-  end
-
-  @doc """
   Gets all IDs of all elements in the same scope.
 
   `while`'s condition and body, `fun`'s body and similar are
@@ -192,22 +161,18 @@ defmodule Nx.Defn.Tree do
     {[struct, in_args, expr, callback], acc}
   end
 
+  def apply_args(%T{data: %Expr{op: :io_call, args: args}}, _type, acc, fun) do
+    [tensor_expr, callback_spec, template, ref] = args
+    {tensor_expr, acc} = Composite.traverse(tensor_expr, acc, fun)
+    {[tensor_expr, callback_spec, template, ref], acc}
+  end
+
   def apply_args(%T{data: %Expr{op: :runtime_call, args: args}}, _type, acc, fun) do
     [tensor_expr, callback, out_template, opts] = args
 
     {tensor_expr, acc} = Composite.traverse(tensor_expr, acc, fun)
 
     {[tensor_expr, callback, out_template, opts], acc}
-  end
-
-  def apply_args(%T{data: %Expr{op: :token, args: [token]}}, _type, acc, fun) do
-    {hooks, acc} =
-      Enum.map_reduce(token.hooks, acc, fn %{expr: expr} = token, acc ->
-        {expr, acc} = Composite.traverse(expr, acc, fun)
-        {%{token | expr: expr}, acc}
-      end)
-
-    {[%{token | hooks: hooks}], acc}
   end
 
   def apply_args(%T{data: %Expr{op: op, args: [list | args]}}, _type, acc, fun)

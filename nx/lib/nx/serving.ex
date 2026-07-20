@@ -7,7 +7,7 @@ defmodule Nx.Serving do
   or timeout is reached.
 
   More specifically, servings are a mechanism to apply a computation on a
-  `Nx.Batch`, with hooks for preprocessing input from and postprocessing
+  `Nx.Batch`, with callbacks for preprocessing input from and postprocessing
   output for the client. Thus we can think of an instance of `t:Nx.Serving.t/0`
   (a serving) as something that encapsulates batches of Nx computations.
 
@@ -56,7 +56,7 @@ defmodule Nx.Serving do
 
   When defining a `Nx.Serving`, we can also customize how the data is
   batched by using the `client_preprocessing` as well as the result by
-  using `client_postprocessing` hooks. Let's give it another try,
+  using `client_postprocessing` callbacks. Let's give it another try,
   this time using `jit/2` to create the serving, which automatically
   wraps the given function in `Nx.Defn.jit/2` for us:
 
@@ -314,7 +314,7 @@ defmodule Nx.Serving do
   streaming configuration. When this is invoked, the `client_postprocessing`
   will receive a stream which you can further manipulate lazily using the
   functions in the `Stream` module. `streaming/2` also allows you to configure
-  hooks and stream values directly from `Nx.Defn` hooks. However, when hook
+  hooks and stream values directly from `Nx.Defn` io_calls. However, when hook
   streaming is enabled, certain capabilities are removed: you cannot stream
   inputs nor have batches larger than the configured `batch_size`.
 
@@ -591,21 +591,21 @@ defmodule Nx.Serving do
   process that calls `run/2` or `batched_run/2`.
 
   Batches will be streamed as they arrive. You may also opt-in
-  to stream `Nx.Defn` hooks.
+  to stream `Nx.Defn` io_calls.
 
   ## Options
 
-    * `:hooks` - a list of hook names that will become streaming events
+    * `:hooks` - a list of io_call names that will become streaming events
 
   ## Implementation details
 
   ### Client postprocessing
 
   Once streaming is enabled, the client postprocessing callback
-  will receive a stream which will emit events for each hook
+  will receive a stream which will emit events for each io_call
   in the shape of:
 
-      {hook_name, term()}
+      {io_call_name, term()}
 
   The stream will also receive events in the shape of
   `{:batch, output, metadata}` as batches are processed by the
@@ -743,9 +743,10 @@ defmodule Nx.Serving do
     {pid, ref} = run_streaming()
 
     defn_options =
-      update_in(defn_options[:hooks], fn acc ->
+      defn_options
+      |> update_in([:hooks], fn acc ->
         Enum.reduce(hooks, acc || %{}, fn hook, acc ->
-          Map.put(acc, hook, &run_hook(ref, size, &1, hook))
+          Map.put(acc, hook, &run_io_call(ref, size, &1, hook))
         end)
       end)
 
@@ -773,8 +774,8 @@ defmodule Nx.Serving do
     {pid, Process.monitor(pid, alias: :demonitor)}
   end
 
-  defp run_hook(ref, size, result, hook) do
-    send(ref, {ref, {:hook, {0, size, result, hook}}})
+  defp run_io_call(ref, size, result, io_call) do
+    send(ref, {ref, {:io_call, {0, size, result, io_call}}})
   end
 
   defp run_batch_or_stream(%Nx.Batch{size: size} = batch, limit)
@@ -1227,9 +1228,9 @@ defmodule Nx.Serving do
             :done ->
               {:halt, :done}
 
-            {:hook, {hook_start, hook_size, output, hook}} ->
-              value = remove_maybe_padded(output, hook_start, hook_size)
-              {[{hook, value}], index}
+            {:io_call, {io_call_start, io_call_size, output, io_call}} ->
+              value = remove_maybe_padded(output, io_call_start, io_call_size)
+              {[{io_call, value}], index}
 
             {:batch, {output_start, output_size, output, metadata}} ->
               value = remove_maybe_padded(output, output_start, output_size)
@@ -1276,7 +1277,7 @@ defmodule Nx.Serving do
 
   defp receive_each(ref, size, index) do
     receive do
-      {^ref, {:hook, _} = reply} ->
+      {^ref, {:io_call, _} = reply} ->
         reply
 
       {^ref, {:batch, {_output_start, output_size, _output, _metadata}} = reply} ->
@@ -1391,9 +1392,10 @@ defmodule Nx.Serving do
 
     partitions =
       Enum.with_index(partitions, fn defn_options, index ->
-        update_in(defn_options[:hooks], fn acc ->
+        defn_options
+        |> update_in([:hooks], fn acc ->
           Enum.reduce(hooks, acc || %{}, fn hook, acc ->
-            Map.put(acc, hook, &server_hook(ets, index, hook, &1))
+            Map.put(acc, hook, &server_io_call(ets, index, hook, &1))
           end)
         end)
       end)
@@ -1401,9 +1403,9 @@ defmodule Nx.Serving do
     {:hooks, partitions, ets}
   end
 
-  defp server_hook(ets, index, hook, result) do
+  defp server_io_call(ets, index, io_call, result) do
     for {[ref | _pids], start, size} <- :ets.lookup_element(ets, index, 2) do
-      send(ref, {ref, {:hook, {start, size, result, hook}}})
+      send(ref, {ref, {:io_call, {start, size, result, io_call}}})
     end
   end
 

@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.13.0 (2026-07-17)
+
+### Enhancements
+
+  * Update to latest Nx
+  * Add `:pjrt_plugin` platform for loading external PJRT plugins via `:device_type` and `:plugin_path`
+  * Implement hooks via host callback without outfeed
+  * Add backend documentation guides
+
+### Bug fixes
+
+  * Mitigate false positives on the recompilation check
+
 ## v0.12.0 (2026-05-15)
 
 ### Enhancements

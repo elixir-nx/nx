@@ -5,3 +5,5 @@ import Config
 # true inside Nx.
 config :nx, :verify_grad, true
 config :nx, :verify_binary_size, true
+
+config :logger, :default_formatter, metadata: [:test, :test_module, :file, :line]
