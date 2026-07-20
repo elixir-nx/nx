@@ -61,10 +61,12 @@ defmodule Nx.LinAlg.QR do
         x = Nx.select(column_iota < i, 0, x)
         {v, scale} = householder_reflector(x, i, eps)
 
-        vh_r = Nx.dot(Nx.LinAlg.adjoint(v), r)
+        # v is always a 1D tensor, so we don't have to worry about transposing
+        # which is why conjugate_if_complex is in place.
+        vh_r = Nx.dot(conjugate_if_complex(v), r)
         r = r - scale * Nx.dot(Nx.new_axis(v, 1), Nx.new_axis(vh_r, 0))
 
-        q_v = Nx.dot(q, [1], v, [0])
+        q_v = Nx.dot(q, v)
         q = q - scale * Nx.outer(q_v, v)
         {{q, r}, {column_iota}}
       end
@@ -73,6 +75,13 @@ defmodule Nx.LinAlg.QR do
     r = approximate_zeros(r, eps)
 
     output_mode_handling(q, r, m_in, n_in, k, wide_mode, mode)
+  end
+
+  defnp conjugate_if_complex(x) do
+    case Nx.type(x) do
+      {:c, _} -> Nx.conjugate(x)
+      _ -> x
+    end
   end
 
   deftransformp output_mode_handling(q, r, m_in, n_in, k, wide_mode, mode) do
@@ -121,7 +130,7 @@ defmodule Nx.LinAlg.QR do
         alpha = Nx.exp(arg) * norm_x
         u = Nx.indexed_add(x, Nx.new_axis(i, 0), alpha)
         {n_u, n_u_sq} = norm(u)
-        norm_selector = Nx.less(Nx.real(n_u_sq), 1.0e-30)
+        norm_selector = Nx.real(n_u_sq) < eps
         {u / Nx.select(norm_selector, 1, n_u), Nx.select(norm_selector, 0, 2)}
 
       _type ->
