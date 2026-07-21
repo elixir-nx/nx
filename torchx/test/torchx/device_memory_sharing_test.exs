@@ -164,9 +164,19 @@ defmodule Torchx.DeviceMemorySharingTest do
       Nx.iota({2, 3}, type: :s32, backend: {TB, device: :cpu})
       |> Nx.transpose()
 
-    pointer = Nx.to_pointer(t, mode: :local)
+    assert %Nx.Pointer{kind: :local, address: address} =
+             pointer = Nx.to_pointer(t, mode: :local)
 
-    assert t2 = Nx.from_pointer({TB, device: :cpu}, pointer, t.type, t.shape)
-    assert Nx.to_binary(t) == Nx.to_binary(t2)
+    assert address > 0
+
+    t2 = Nx.from_pointer({TB, device: :cpu}, pointer, t.type, t.shape)
+
+    # Evaluate into bound vars so both tensors stay reachable across the
+    # comparison (from_blob views do not keep the exporter storage alive).
+    exported = Nx.to_flat_list(t)
+    imported = Nx.to_flat_list(t2)
+
+    assert exported == [0, 3, 1, 4, 2, 5]
+    assert imported == exported
   end
 end

@@ -256,12 +256,6 @@ FINE_NIF(nbytes, 0);
 // Safety: keep the exporting tensor alive while the pointer/handle is in use.
 // Non-contiguous tensors are made contiguous in-place first.
 
-static void ensure_contiguous(torch::Tensor &t) {
-  if (!t.is_contiguous()) {
-    t = t.contiguous();
-  }
-}
-
 static std::vector<int64_t> tensor_sizes(const torch::Tensor &t) {
   std::vector<int64_t> shape_vec;
   shape_vec.reserve(t.dim());
@@ -275,9 +269,18 @@ fine::Ok<std::variant<std::tuple<fine::Atom, uint64_t, uint64_t>,
                       std::tuple<fine::Atom, std::string, uint64_t>>>
 to_pointer(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor_res,
            fine::Atom pointer_kind, int64_t shm_permissions) {
-  auto &t = get_tensor(tensor_res);
-  ensure_contiguous(t);
+  // Materialize a contiguous tensor into the BEAM resource before exporting
+  // data_ptr(). from_blob views do not bump the PyTorch storage refcount, so
+  // the resource must own the buffer the pointer refers to. Idempotent for
+  // already-contiguous tensors (contiguous() returns `self`).
+  {
+    auto &t = get_tensor(tensor_res);
+    if (!t.is_contiguous() || t.storage_offset() != 0) {
+      tensor_res->replace(t.contiguous());
+    }
+  }
 
+  auto &t = get_tensor(tensor_res);
   uint64_t device_size = static_cast<uint64_t>(t.nbytes());
   uint64_t ptr = reinterpret_cast<uint64_t>(t.data_ptr());
 
