@@ -3,9 +3,9 @@ defmodule Torchx.DeviceMemorySharingTest do
 
   alias Torchx.Backend, as: TB
 
-  @devices ([:cpu] ++
-              if(Torchx.device_available?(:cuda), do: [{:cuda, 0}], else: []) ++
-              if(Torchx.device_available?(:mps), do: [:mps], else: []))
+  @devices [:cpu] ++
+             if(Torchx.device_available?(:cuda), do: [{:cuda, 0}], else: []) ++
+             if(Torchx.device_available?(:mps), do: [:mps], else: [])
 
   for device <- @devices do
     test "local buffer sharing on #{inspect(device)} works as expected" do
