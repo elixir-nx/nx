@@ -625,9 +625,8 @@ defmodule Nx.BinaryBackend do
       match_types [pred_type, left_type, right_type] do
         {data, _, _} =
           for <<match!(p, 0) <- pred_data>>,
-              reduce: {<<>>, on_true_data, on_false_data} do
-            {acc, <<match!(x, 1), true_rest::bitstring>>,
-             <<match!(y, 2), false_rest::bitstring>>} ->
+            reduce: {<<>>, on_true_data, on_false_data} do
+            {acc, <<match!(x, 1), true_rest::bitstring>>, <<match!(y, 2), false_rest::bitstring>>} ->
               result =
                 if as_boolean(read!(p, 0)) do
                   read!(x, 1)
@@ -1185,7 +1184,7 @@ defmodule Nx.BinaryBackend do
           # products. Cursor-advance fixed-size channel chunks (no i*size scans).
           {sum, _} =
             for <<input_receptive_field::size(^input_field_size)-bitstring <- window>>,
-                reduce: {0, filter} do
+              reduce: {0, filter} do
               {acc,
                <<filter_receptive_field::size(^filter_field_size)-bitstring,
                  filter_rest::bitstring>>} ->
@@ -1193,7 +1192,7 @@ defmodule Nx.BinaryBackend do
                   match_types [input_type, kernel_type] do
                     {channel_sum, _} =
                       for <<match!(x, 0) <- input_receptive_field>>,
-                          reduce: {0, filter_receptive_field} do
+                        reduce: {0, filter_receptive_field} do
                         {sum_acc, <<match!(y, 1), y_rest::bitstring>>} ->
                           {sum_acc + read!(x, 0) * read!(y, 1), y_rest}
                       end
