@@ -822,6 +822,47 @@ defmodule EXLA.Defn do
          %T{
            data: %Expr{
              id: id,
+             args: [tensor_expr, {:token_hook, hooked_expr, inner_spec}, _template, _ref]
+           }
+         } = io_call_expr,
+         %{client: %EXLA.Client{platform: platform}, callback_pid_value: callback_pid_value} =
+           state,
+         cache
+       )
+       when platform in [:host, :cuda] do
+    {reverse_hooked_values, reverse_hooked_typespecs, cache} =
+      Composite.reduce(hooked_expr, {[], [], cache}, fn %T{} = expr, {acc, typespecs, cache} ->
+        {value, cache} = recur_operator(expr, state, cache) |> unwrap_single_tensor!()
+        {[value | acc], [Value.get_typespec(value) | typespecs], cache}
+      end)
+
+    hooked_values = Enum.reverse(reverse_hooked_values)
+    hooked_typespecs = Enum.reverse(reverse_hooked_typespecs)
+    hooked_template = Nx.to_template(hooked_expr)
+
+    cache = add_callback(cache, {id, inner_spec, nil, hooked_template})
+
+    unless callback_pid_value do
+      raise "internal bug: io_call callback pid operand is missing"
+    end
+
+    num_aliased = length(hooked_typespecs)
+
+    Value.host_callback(
+      [callback_pid_value | hooked_values],
+      hooked_typespecs,
+      id,
+      num_aliased
+    )
+
+    recur_io_call_pass(tensor_expr, io_call_expr, state, cache)
+  end
+
+  defp cached_recur_operator(
+         :io_call,
+         %T{
+           data: %Expr{
+             id: id,
              args: [tensor_expr, callback_spec, _template, _ref]
            }
          } = io_call_expr,
@@ -942,6 +983,22 @@ defmodule EXLA.Defn do
   defp cached_recur_operator(op, expr, state, cache) do
     {args, cache} = Tree.apply_args(expr, cache, &recur_operator(&1, state, &2))
     {to_operator(op, args, expr, state), cache}
+  end
+
+  defp recur_io_call_pass(%T{data: %Expr{}} = expr, _io_call_expr, state, cache) do
+    recur_operator(expr, state, cache)
+  end
+
+  defp recur_io_call_pass(composite, io_call_expr, state, cache) do
+    {values, cache} =
+      composite
+      |> List.wrap()
+      |> Composite.flatten_list()
+      |> Enum.map_reduce(cache, fn %T{} = expr, cache ->
+        recur_operator(expr, state, cache) |> unwrap_single_tensor!()
+      end)
+
+    {wrap_tuple_result(values, io_call_expr), cache}
   end
 
   defp cast_custom_call_operands(call_args, :default), do: call_args

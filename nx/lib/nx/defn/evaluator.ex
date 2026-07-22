@@ -195,6 +195,7 @@ defmodule Nx.Defn.Evaluator do
 
   defp compute_cache(:io_call, %{data: %Expr{args: args}}, state, cache) do
     [tensor_expr, callback_spec, template, ref] = args
+    cache = compute_cache_token_io_call(callback_spec, state, cache)
     {_, cache} = composite_compute_cache(tensor_expr, state, cache)
     {[tensor_expr, callback_spec, template, ref], cache}
   end
@@ -202,6 +203,13 @@ defmodule Nx.Defn.Evaluator do
   defp compute_cache(_op, tensor, state, cache) do
     Tree.apply_args(tensor, cache, &compute_cache(&1, state, &2))
   end
+
+  defp compute_cache_token_io_call({:token_hook, hooked_expr, _inner_spec}, state, cache) do
+    {_, cache} = composite_compute_cache(hooked_expr, state, cache)
+    cache
+  end
+
+  defp compute_cache_token_io_call(_callback_spec, _state, cache), do: cache
 
   ## Evaluation
 
@@ -385,6 +393,22 @@ defmodule Nx.Defn.Evaluator do
       end
 
     {apply(mod, op, args), caches}
+  end
+
+  defp run_io_call_side_effect(
+         {:token_hook, hooked_expr, inner_spec},
+         _tensor_value,
+         state,
+         caches
+       ) do
+    {hooked_value, caches} = composite_eval(hooked_expr, state, caches)
+
+    case resolve_io_call(inner_spec, state.hooks) do
+      nil -> :ok
+      fun -> fun.(hooked_value)
+    end
+
+    caches
   end
 
   defp run_io_call_side_effect(callback_spec, tensor_value, state, caches) do

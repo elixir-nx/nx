@@ -360,6 +360,25 @@ defmodule Nx.Defn.EvaluatorTest do
       assert tensor == Nx.tensor(3)
     end
 
+    # Deprecated create_token/hook_token/attach_token path (Expr.add_hook).
+    defn legacy_token_hook(a, b) do
+      token = create_token()
+      {token, sum} = hook_token(token, a + b, :example, &send_to_self({:default, &1}))
+      attach_token(token, sum)
+    end
+
+    test "legacy token hooks with hook_token/attach_token" do
+      assert legacy_token_hook(1, 2) == Nx.tensor(3)
+      assert_received {:default, tensor}
+      assert tensor == Nx.tensor(3)
+
+      fun = Nx.Defn.jit(&legacy_token_hook/2, hooks: %{example: &send_to_self({:custom, &1})})
+      assert fun.(1, 2) == Nx.tensor(3)
+
+      assert_received {:custom, tensor}
+      assert tensor == Nx.tensor(3)
+    end
+
     defn container_hook(a, b), do: io_call({a, b}, :example, &send_to_self({:default, &1}))
 
     test "container io_call with overriddes" do
@@ -716,7 +735,7 @@ defmodule Nx.Defn.EvaluatorTest do
       t = Nx.iota({2, 3}, vectorized_axes: [a: 1], type: :s32)
 
       message = """
-      test/nx/defn/evaluator_test.exs:685: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
+      test/nx/defn/evaluator_test.exs:704: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
 
       {\e[32m
        <<<<< Body (do-block) <<<<<
@@ -748,7 +767,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       error =
         """
-        test/nx/defn/evaluator_test.exs:685: condition must be a scalar tensor, got: #Nx.Tensor<
+        test/nx/defn/evaluator_test.exs:704: condition must be a scalar tensor, got: #Nx.Tensor<
           vectorized[x: 1]
           u8[1]
         \s\s

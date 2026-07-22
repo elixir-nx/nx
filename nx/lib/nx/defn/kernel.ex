@@ -1439,6 +1439,48 @@ defmodule Nx.Defn.Kernel do
     do: io_call(expr, name, function)
 
   @doc """
+  Shortcut for `hook_token/4`.
+  """
+  @deprecated "Use io_call/2 or io_call/3 instead. Will be removed in a future release."
+  def hook_token(token, expr, name_or_function)
+
+  def hook_token(%Nx.Defn.Token{} = token, expr, name) when is_atom(name),
+    do: Nx.Defn.Expr.add_hook(token, expr, name, nil)
+
+  def hook_token(%Nx.Defn.Token{} = token, expr, function) when is_function(function, 1),
+    do: Nx.Defn.Expr.add_hook(token, expr, random_io_call_name(), function)
+
+  @doc """
+  Defines an io_call with an existing token. See `io_call/3`.
+  """
+  @deprecated "Use io_call/2 or io_call/3 instead. Will be removed in a future release."
+  def hook_token(%Nx.Defn.Token{} = token, expr, name, function)
+      when Kernel.and(is_atom(name), is_function(function, 1)),
+      do: Nx.Defn.Expr.add_hook(token, expr, name, function)
+
+  defp random_io_call_name(), do: :"io_call_#{System.unique_integer([:positive])}"
+
+  @doc """
+  Creates a token for io_calls. See `io_call/3`.
+
+  Deprecated. Tokens will be removed in a future release.
+  """
+  @deprecated "Use io_call/2 or io_call/3 instead. Will be removed in a future release."
+  def create_token do
+    Nx.Defn.Token.new()
+  end
+
+  @doc """
+  Attaches a token to an expression. See `io_call/3`.
+
+  Deprecated. Tokens will be removed in a future release.
+  """
+  @deprecated "Use io_call/2 or io_call/3 instead. Will be removed in a future release."
+  def attach_token(%Nx.Defn.Token{} = token, expr) do
+    Nx.Defn.Expr.attach_token(token, expr)
+  end
+
+  @doc """
   Asserts the keyword list has the given keys.
 
   If it succeeds, it returns the given keyword list. Raises

@@ -17,10 +17,11 @@
   * [Nx.Defn.Graph] Keep nested scopes hermetic when splitting expressions
   * [Nx.Defn.Graph] Do not hoist non-expr tensor arguments
   * [Nx.Defn] Raise a clearer error when calling `grad` with closure-captured tensors
+  * [Nx.Defn] Keep deprecated token-based hooks available (`create_token/0`, `hook_token/3`, `hook_token/4`, `attach_token/2`, and `Nx.Defn.Token`)
 
 ### Deprecations
 
-  * [Nx.Defn] Deprecate token-based hooks (`create_token/0`, `hook_token/3`, `hook_token/4`, `attach_token/2`, and `Nx.Defn.Token`); use `hook/2` or `hook/3` instead
+  * [Nx.Defn] Deprecate token-based hooks (`create_token/0`, `hook_token/3`, `hook_token/4`, `attach_token/2`, and `Nx.Defn.Token`); use `io_call/2` or `io_call/3` instead
   * [Nx] Deprecate `Nx.reflect/2` in favor of `Nx.pad_outer/3`
 
 ## v0.12.1 (2026-05-15)
