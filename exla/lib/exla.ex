@@ -303,6 +303,12 @@ defmodule EXLA do
       this if the input tensors are allocated on host and the computation is
       running on GPU/TPU with a limited amount of memory**
 
+    * `:donate_argnums` - see `Nx.Defn.jit/2`. Donates every tensor leaf of the
+      given positional arguments so XLA can reuse their device memory for
+      same-shape/dtype outputs (buffer donation). Prefer `Nx.Defn.donate/1` when
+      only part of a container should be donated. Not supported with sharded
+      execution.
+
   """
   def jit(function, options \\ []) do
     Nx.Defn.jit(function, Keyword.put(options, :compiler, EXLA))

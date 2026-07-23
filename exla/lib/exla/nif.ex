@@ -39,6 +39,8 @@ defmodule EXLA.NIF do
       ),
       do: err!()
 
+  def mlir_set_function_argument_aliasing(_function, _arg_index, _output_index), do: err!()
+
   def mlir_build(_function, _root), do: err!()
 
   def mlir_compile(

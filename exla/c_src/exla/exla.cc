@@ -249,6 +249,20 @@ fine::Ok<> mlir_set_function_argument_attribute(
 
 FINE_NIF(mlir_set_function_argument_attribute, 0);
 
+fine::Ok<> mlir_set_function_argument_aliasing(
+    ErlNifEnv *env, fine::ResourcePtr<MLIRFunction> function, int64_t arg_index,
+    int64_t output_index) {
+  auto context = function->module()->module()->getContext();
+  auto builder = mlir::Builder(context);
+  auto attr = builder.getI32IntegerAttr(static_cast<int32_t>(output_index));
+
+  function->function().setArgAttr(arg_index, "tf.aliasing_output", attr);
+
+  return fine::Ok();
+}
+
+FINE_NIF(mlir_set_function_argument_aliasing, 0);
+
 mlir::Type mlir_get_typespec(ErlNifEnv *env,
                              fine::ResourcePtr<mlir::Value> value) {
   return value->getType();
