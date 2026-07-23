@@ -46,6 +46,35 @@ set_property(TARGET torchx PROPERTY CXX_STANDARD 17)
 
 target_include_directories(torchx PUBLIC $ENV{ERTS_INCLUDE_DIR} $ENV{FINE_INCLUDE_DIR})
 
+# Optional CUDA runtime for cudaIpc* (host IPC is POSIX-only and needs no CUDA).
+find_path(TORCHX_CUDA_INCLUDE_DIR cuda_runtime.h
+  HINTS
+    ENV CUDA_PATH
+    ENV CUDA_HOME
+    /usr/local/cuda
+    /opt/cuda
+  PATH_SUFFIXES include)
+find_library(TORCHX_CUDART_LIBRARY cudart
+  HINTS
+    ENV CUDA_PATH
+    ENV CUDA_HOME
+    /usr/local/cuda
+    /opt/cuda
+  PATH_SUFFIXES lib64 lib/x64 lib)
+if(TORCHX_CUDA_INCLUDE_DIR AND TORCHX_CUDART_LIBRARY)
+  message(STATUS "CUDA runtime found — enabling CUDA IPC")
+  target_compile_definitions(torchx PRIVATE CUDA_ENABLED)
+  target_include_directories(torchx PRIVATE "${TORCHX_CUDA_INCLUDE_DIR}")
+  target_link_libraries(torchx "${TORCHX_CUDART_LIBRARY}")
+else()
+  message(STATUS "CUDA runtime not found — CUDA IPC stubs only")
+endif()
+
+if(UNIX AND NOT APPLE)
+  # shm_open lives in librt on some Linux libcs
+  target_link_libraries(torchx rt)
+endif()
+
 install(
     TARGETS torchx
     DESTINATION "$ENV{PRIV_DIR}"

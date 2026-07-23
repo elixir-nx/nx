@@ -331,6 +331,95 @@ defmodule Torchx.Backend do
     |> to_nx(out)
   end
 
+  @impl true
+  def to_pointer(%T{data: %TB{ref: {device, _} = ref}}, opts \\ []) do
+    opts = Keyword.validate!(opts, mode: :local, permissions: 0o400)
+    permissions = opts[:permissions]
+
+    unless is_integer(permissions) and permissions >= 0 and permissions <= 0o7777 do
+      raise ArgumentError,
+            ":permissions must be an integer in the range 0..0o7777 " <>
+              "(typically an octal literal like 0o400), got: #{inspect(permissions)}"
+    end
+
+    mode =
+      case {opts[:mode], device_kind(device)} do
+        {:local, :cpu} ->
+          :local
+
+        {:local, :cuda} ->
+          :local
+
+        {:local, :mps} ->
+          :local
+
+        {:ipc, :cpu} ->
+          :host_ipc
+
+        {:ipc, :cuda} ->
+          :cuda_ipc
+
+        {mode, name} when mode in [:local, :ipc] ->
+          raise ArgumentError, "Nx.to_pointer/2 is not supported for the #{name} device yet."
+
+        {mode, _} ->
+          raise ArgumentError, "expected one of :local, :ipc, got: #{inspect(mode)}"
+      end
+
+    case Torchx.to_pointer(ref, mode, permissions) do
+      {:local, address, data_size} ->
+        %Nx.Pointer{kind: :local, address: address, data_size: data_size}
+
+      {:host_ipc, handle, data_size} ->
+        %Nx.Pointer{kind: :ipc, handle: handle, data_size: data_size}
+
+      {:cuda_ipc, handle, data_size} ->
+        %Nx.Pointer{
+          kind: :ipc,
+          handle: handle,
+          address: cuda_device_index(device),
+          data_size: data_size
+        }
+    end
+  end
+
+  @impl true
+  def from_pointer(%Nx.Pointer{} = pointer, type, dims, backend_opts, opts) do
+    backend_opts = Keyword.validate!(backend_opts, [:device])
+    opts = Keyword.validate!(opts, [:names])
+
+    template = Nx.template(dims, type, names: opts[:names])
+    device = device_option(backend_opts)
+    torch_type = to_torch_type(type, device)
+    expected_size = torch_byte_size(torch_type, dims)
+
+    {mode, handle} =
+      case {pointer, device_kind(device)} do
+        {%Nx.Pointer{data_size: size}, _} when size != expected_size ->
+          raise ArgumentError,
+                "invalid pointer data_size for shape, expected: #{expected_size}, got: #{size}"
+
+        {%Nx.Pointer{kind: :local, address: address}, kind}
+        when kind in [:cpu, :cuda, :mps] and is_integer(address) and address > 0 ->
+          {:local, address}
+
+        {%Nx.Pointer{kind: :local}, kind} when kind in [:cpu, :cuda, :mps] ->
+          raise ArgumentError, "local Nx.Pointer requires a positive :address"
+
+        {%Nx.Pointer{kind: :ipc, handle: handle}, :cpu} when is_binary(handle) ->
+          {:host_ipc, handle}
+
+        {%Nx.Pointer{kind: :ipc, handle: handle}, :cuda} when is_binary(handle) ->
+          {:cuda_ipc, handle}
+
+        {%Nx.Pointer{kind: kind}, name} when kind in [:local, :ipc] ->
+          raise ArgumentError, "Nx.from_pointer/5 is not supported for the #{name} device yet."
+      end
+
+    Torchx.from_pointer(mode, handle, dims, torch_type, device)
+    |> to_nx(template)
+  end
+
   defp maybe_pad_binary(bin, {:u, size}) when size in [16, 32] do
     double_size = size * 2
     for <<x::native-size(^size) <- bin>>, into: <<>>, do: <<x::native-size(double_size)>>
@@ -1991,6 +2080,28 @@ defmodule Torchx.Backend do
   # Helper to extract device from a torchx tensor reference
   defp device_from_ref({device, _ref}), do: device
 
+  defp device_kind(:cpu), do: :cpu
+  defp device_kind(:mps), do: :mps
+  defp device_kind({:cuda, _index}), do: :cuda
+  defp device_kind({device, _index}) when is_atom(device), do: device
+  defp device_kind(device) when is_atom(device), do: device
+
+  defp cuda_device_index({:cuda, index}) when is_integer(index) and index >= 0, do: index
+  defp cuda_device_index(_), do: 0
+
+  defp torch_byte_size(torch_type, shape) do
+    element_size =
+      case torch_type do
+        t when t in [:byte, :char, :bool, :float8_e5m2, :float8_e4m3fn] -> 1
+        t when t in [:short, :half, :brain] -> 2
+        t when t in [:int, :float] -> 4
+        t when t in [:long, :double, :complex] -> 8
+        :complex_double -> 16
+      end
+
+    Tuple.product(shape) * element_size
+  end
+
   defp to_torch_type({:f, 64}, :mps), do: raise(ArgumentError, "MPS does not support f64")
   defp to_torch_type({:c, 128}, :mps), do: raise(ArgumentError, "MPS does not support c128")
 
@@ -2087,7 +2198,7 @@ defmodule Torchx.Backend do
 
   not_possible =
     [count_leading_zeros: 2, population_count: 2] ++
-      [reduce: 5, window_reduce: 6, from_pointer: 5, to_pointer: 2]
+      [reduce: 5, window_reduce: 6]
 
   for {fun, arity} <- not_possible do
     args = Macro.generate_arguments(arity, __MODULE__)
