@@ -887,9 +887,7 @@ defmodule Nx.Defn.Compiler do
   end
 
   @doc false
-  def to_lazy_params(fun, args, opts \\ []) do
-    donate_argnums = donate_argnums_from_opts!(opts, length(args))
-
+  def to_lazy_params(fun, args, _opts \\ []) do
     {params, cache, {templates, funs, _, donated}} =
       args
       |> Enum.with_index()
@@ -900,19 +898,19 @@ defmodule Nx.Defn.Compiler do
         when is_tuple(arg) and is_function(elem(arg, 0)) ->
           {params, [arg | cache], acc}
 
-        {container, argnum}, {params, cache, acc} ->
-          donating_arg? = MapSet.member?(donate_argnums, argnum)
-
+        {container, _argnum}, {params, cache, acc} ->
           {param, acc} =
             Nx.LazyContainer.traverse(container, acc, fn
               template, fun, {acc_templates, acc_funs, i, donated} ->
                 donated =
-                  if donating_arg? or Nx.Defn.Donated.donating?() do
+                  if template.donatable do
                     MapSet.put(donated, i)
                   else
                     donated
                   end
 
+                # Strip so donatable does not leak through template copies / expr params.
+                template = %{template | donatable: false}
                 acc = {[template | acc_templates], [fun | acc_funs], i + 1, donated}
                 {Nx.Defn.Expr.parameter(template, :root, i), acc}
             end)
@@ -929,25 +927,6 @@ defmodule Nx.Defn.Compiler do
       fun = fun(length(params), &apply(fun, merge_cache(cache, &1)))
       {fun, Enum.reverse(params), Enum.reverse(templates), Enum.reverse(funs), donated}
     end
-  end
-
-  defp donate_argnums_from_opts!(opts, num_args) do
-    argnums = Keyword.get(opts, :donate_argnums, [])
-
-    unless is_list(argnums) and Enum.all?(argnums, &(is_integer(&1) and &1 >= 0)) do
-      raise ArgumentError,
-            ":donate_argnums must be a list of non-negative integers, got: #{inspect(argnums)}"
-    end
-
-    argnums = Enum.uniq(argnums)
-
-    if Enum.any?(argnums, &(&1 >= num_args)) do
-      raise ArgumentError,
-            ":donate_argnums entries must be in the range [0, #{num_args}), got: " <>
-              inspect(argnums)
-    end
-
-    MapSet.new(argnums)
   end
 
   defp merge_cache([nil | cache], [head | tail]), do: [head | merge_cache(cache, tail)]

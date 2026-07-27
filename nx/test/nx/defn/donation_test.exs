@@ -1,17 +1,37 @@
 defmodule Nx.Defn.DonationTest do
   use ExUnit.Case, async: true
 
-  describe "donate/1" do
-    test "is idempotent" do
+  describe "Nx.donate/1" do
+    test "marks a tensor as donatable and is idempotent" do
       t = Nx.tensor([1, 2, 3])
-      donated = Nx.Defn.donate(t)
-      assert %Nx.Defn.Donated{value: ^t} = donated
-      assert Nx.Defn.donate(donated) == donated
+      donated = Nx.donate(t)
+      assert donated.donatable
+      assert Nx.donatable?(donated)
+      assert Nx.donate(donated).donatable
+    end
+
+    test "preserves donatable through to_template/1" do
+      template = Nx.donate(Nx.tensor([1, 2, 3])) |> Nx.to_template()
+      assert template.donatable
+      assert %Nx.TemplateBackend{} = template.data
+    end
+
+    test "marks all leaves of a container" do
+      %{a: a, b: b} = Nx.donate(%{a: Nx.tensor(1), b: Nx.tensor(2)})
+      assert a.donatable
+      assert b.donatable
+    end
+
+    test "does not propagate donatable through eager ops" do
+      donated = Nx.donate(Nx.tensor([1, 2, 3]))
+      refute Nx.add(donated, 1).donatable
+      refute Nx.reshape(donated, {3, 1}).donatable
+      refute Nx.LinAlg.norm(Nx.donate(Nx.tensor([3.0, 4.0]))).donatable
     end
 
     test "unwraps through jit with the evaluator" do
       fun = Nx.Defn.jit(&Nx.add(&1, 1))
-      assert Nx.to_flat_list(fun.(Nx.Defn.donate(Nx.tensor([1, 2, 3])))) == [2, 3, 4]
+      assert Nx.to_flat_list(fun.(Nx.donate(Nx.tensor([1, 2, 3])))) == [2, 3, 4]
     end
 
     test "can donate part of a container" do
@@ -19,7 +39,7 @@ defmodule Nx.Defn.DonationTest do
 
       result =
         fun.(%{
-          a: Nx.Defn.donate(Nx.tensor([1, 2])),
+          a: Nx.donate(Nx.tensor([1, 2])),
           b: Nx.tensor([3, 4])
         })
 
@@ -28,60 +48,32 @@ defmodule Nx.Defn.DonationTest do
     end
   end
 
-  describe "donate_argnums" do
-    test "accepts valid indices with the evaluator" do
-      fun = Nx.Defn.jit(&Nx.add(&1, &2), donate_argnums: [0])
-      assert Nx.to_flat_list(fun.(Nx.tensor([1, 2]), Nx.tensor([3, 4]))) == [4, 6]
-    end
-
-    test "raises on malformed option" do
-      assert_raise ArgumentError, ~r":donate_argnums must be a list", fn ->
-        Nx.Defn.jit_apply(&Nx.add(&1, 1), [Nx.tensor([1])], donate_argnums: :foo)
-      end
-
-      assert_raise ArgumentError, ~r":donate_argnums must be a list", fn ->
-        Nx.Defn.jit_apply(&Nx.add(&1, 1), [Nx.tensor([1])], donate_argnums: [-1])
-      end
-    end
-
-    test "raises when an index is out of range" do
-      assert_raise ArgumentError, ~r":donate_argnums entries must be in the range", fn ->
-        Nx.Defn.jit_apply(&Nx.add(&1, 1), [Nx.tensor([1])], donate_argnums: [5])
-      end
-    end
-
-    test "records donated root parameter indices" do
-      opts = [donate_argnums: [0]]
-      args = [%{w: Nx.tensor([1.0, 2.0]), b: Nx.tensor([0.0])}, Nx.tensor([3.0, 4.0])]
-
-      {_fun, _params, _templates, _flatten, donated} =
-        Nx.Defn.Compiler.to_lazy_params(fn p, _batch -> p end, args, opts)
-
-      # Both leaves of the first argument are donated; batch is not.
-      assert donated == [0, 1]
-    end
-
-    test "donate/1 records only wrapped leaves" do
+  describe "to_lazy_params" do
+    test "records donated root parameter indices from tensor metadata" do
       # Map keys are traversed in sorted order: :b then :w
-      args = [%{w: Nx.Defn.donate(Nx.tensor([1.0])), b: Nx.tensor([0.0])}]
+      args = [%{w: Nx.donate(Nx.tensor([1.0])), b: Nx.tensor([0.0])}]
+
+      {_fun, _params, templates, _flatten, donated} =
+        Nx.Defn.Compiler.to_lazy_params(fn p -> p end, args, [])
+
+      assert donated == [1]
+      # Templates stored for compile matching are stripped.
+      refute Enum.any?(templates, & &1.donatable)
+    end
+
+    test "donates every leaf marked on the container" do
+      args = [%{w: Nx.donate(Nx.tensor([1.0, 2.0])), b: Nx.donate(Nx.tensor([0.0]))}]
 
       {_fun, _params, _templates, _flatten, donated} =
         Nx.Defn.Compiler.to_lazy_params(fn p -> p end, args, [])
 
-      assert donated == [1]
+      assert donated == [0, 1]
     end
 
-    test "unions donate_argnums with donate/1 marks" do
-      # arg0 leaves: :b -> 0, :w -> 1; arg1 leaf -> 2
-      args = [
-        %{w: Nx.tensor([1.0]), b: Nx.Defn.donate(Nx.tensor([0.0]))},
-        Nx.tensor([3.0])
-      ]
-
-      {_fun, _params, _templates, _flatten, donated} =
-        Nx.Defn.Compiler.to_lazy_params(fn p, b -> {p, b} end, args, donate_argnums: [1])
-
-      assert donated == [0, 2]
+    test "compile bakes donation from templates" do
+      template = Nx.donate(Nx.template({3}, {:s, 32}))
+      fun = Nx.Defn.compile(&Nx.add(&1, 1), [template])
+      assert Nx.to_flat_list(fun.(Nx.tensor([1, 2, 3]))) == [2, 3, 4]
     end
   end
 end

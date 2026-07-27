@@ -1590,7 +1590,7 @@ defmodule Nx.Defn.Expr do
     {a1, a2} =
       case t2 do
         %T{data: %Expr{op: ^op, args: [%T{data: %Expr{op: :constant, args: [s2]}}, t3]}} ->
-          nullary_out = %{out | shape: {}, names: []}
+          nullary_out = %{out | shape: {}, names: [], donatable: false}
 
           if s1 do
             {constant(nullary_out, fun.(s1, s2)), t3 |> Nx.broadcast(out.shape)}
@@ -1601,7 +1601,7 @@ defmodule Nx.Defn.Expr do
         %T{} ->
           case t1 do
             %T{data: %Expr{op: ^op, args: [%T{data: %Expr{op: :constant, args: [s1]}}, t3]}} ->
-              nullary_out = %{out | shape: {}, names: []}
+              nullary_out = %{out | shape: {}, names: [], donatable: false}
               {constant(nullary_out, s1), apply(Nx, op, [t2, t3]) |> Nx.broadcast(out.shape)}
 
             %T{} ->
@@ -1619,7 +1619,7 @@ defmodule Nx.Defn.Expr do
     cond do
       c1 && c2 ->
         apply(Nx.BinaryBackend, op, [
-          %{out | shape: {}, names: []},
+          %{out | shape: {}, names: [], donatable: false},
           constant_binary(arg1, c1),
           constant_binary(arg2, c2)
         ])
@@ -1649,7 +1649,7 @@ defmodule Nx.Defn.Expr do
     # downcast to the lower precision type.
 
     if Nx.Type.float?(type) and Nx.Type.float?(out_type) do
-      constant(%{t | type: out_type}, number)
+      constant(%{t | type: out_type, donatable: false}, number)
     else
       t
     end
@@ -1657,7 +1657,10 @@ defmodule Nx.Defn.Expr do
 
   defp unary_expr(out, context, op, arg) do
     if c = maybe_constant(arg) do
-      apply(Nx.BinaryBackend, op, [%{out | shape: {}, names: []}, constant_binary(arg, c)])
+      apply(Nx.BinaryBackend, op, [
+        %{out | shape: {}, names: [], donatable: false},
+        constant_binary(arg, c)
+      ])
       |> Nx.to_number()
       |> then(&constant(out, &1))
     else

@@ -14,6 +14,8 @@ defmodule Nx.Tensor do
     * `:type` - the tensor type
     * `:names` - the tensor names
     * `:vectorized_axes` - a tuple that encodes names and sizes for vectorization
+    * `:donatable` - when `true`, supporting compilers may donate this tensor's
+      buffer at the next JIT/compile boundary (see `Nx.donate/1`)
 
   In general it is discouraged to access those fields directly. Use
   the functions in the `Nx` module instead. Backends have to access those
@@ -27,11 +29,17 @@ defmodule Nx.Tensor do
   @type axes :: [axis]
   @type name :: atom
 
-  @type t :: %Nx.Tensor{data: data, type: type, shape: shape, names: [name]}
-  @type t(data) :: %Nx.Tensor{data: data, type: type, shape: shape, names: [name]}
+  @type t :: %Nx.Tensor{data: data, type: type, shape: shape, names: [name], donatable: boolean}
+  @type t(data) :: %Nx.Tensor{
+          data: data,
+          type: type,
+          shape: shape,
+          names: [name],
+          donatable: boolean
+        }
 
   @enforce_keys [:type, :shape, :names]
-  defstruct [:data, :type, :shape, :names, vectorized_axes: []]
+  defstruct [:data, :type, :shape, :names, vectorized_axes: [], donatable: false]
 
   ## Access
 
@@ -235,6 +243,13 @@ defmodule Nx.Tensor do
           ])
         end
 
+      donatable =
+        if Map.get(tensor, :donatable, false) do
+          concat([line(), "donatable: true"])
+        else
+          empty()
+        end
+
       shape = Nx.Shape.to_algebra(shape, names, open, close)
 
       # Devectorizing helps validate results
@@ -242,9 +257,9 @@ defmodule Nx.Tensor do
 
       inner =
         if data == empty() do
-          concat([line(), vectorized_shape, type, shape, data])
+          concat([line(), vectorized_shape, type, shape, donatable, data])
         else
-          concat([line(), vectorized_shape, type, shape, line(), data])
+          concat([line(), vectorized_shape, type, shape, donatable, line(), data])
         end
 
       force_unfit(

@@ -323,30 +323,20 @@ defmodule EXLA.Defn do
 
     {debug?, options} = Keyword.pop(options, :debug, false)
     {lazy_transfers, options} = Keyword.pop(options, :lazy_transfers, :opt_in)
-    {donate_argnums, options} = Keyword.pop(options, :donate_argnums, [])
     {donated_params, options} = Keyword.pop(options, :donated_params, [])
 
-    donated_leaf_set =
-      cond do
-        donated_params != [] ->
-          MapSet.new(donated_params)
-
-        donate_argnums != [] ->
-          donate_argnums = validate_donate_argnums!(donate_argnums, length(vars))
-          build_donated_leaf_set(vars, donate_argnums)
-
-        true ->
-          MapSet.new()
-      end
+    donated_leaf_set = MapSet.new(donated_params)
 
     # Keep a stable representation in options so it lands in disk_key and comp_key.
     options =
       if MapSet.size(donated_leaf_set) == 0 do
         options
       else
-        options
-        |> Keyword.put(:donated_params, donated_leaf_set |> MapSet.to_list() |> Enum.sort())
-        |> Keyword.delete(:donate_argnums)
+        Keyword.put(
+          options,
+          :donated_params,
+          donated_leaf_set |> MapSet.to_list() |> Enum.sort()
+        )
       end
 
     {client_name, options} = Keyword.pop_lazy(options, :client, &EXLA.Client.default_name/0)
@@ -602,44 +592,6 @@ defmodule EXLA.Defn do
   defp us_to_ms(time), do: Float.round(time / 1000, 1)
 
   ## Buffer donation
-
-  defp validate_donate_argnums!(argnums, num_vars) do
-    unless is_list(argnums) and Enum.all?(argnums, &(is_integer(&1) and &1 >= 0)) do
-      raise ArgumentError,
-            ":donate_argnums must be a list of non-negative integers, got: #{inspect(argnums)}"
-    end
-
-    argnums = argnums |> Enum.uniq() |> Enum.sort()
-
-    if Enum.any?(argnums, &(&1 >= num_vars)) do
-      raise ArgumentError,
-            ":donate_argnums entries must be in the range [0, #{num_vars}), got: " <>
-              inspect(argnums)
-    end
-
-    argnums
-  end
-
-  defp build_donated_leaf_set(_vars, []), do: MapSet.new()
-
-  defp build_donated_leaf_set(vars, donate_argnums) do
-    donate_set = MapSet.new(donate_argnums)
-
-    {_, _, leaves} =
-      Enum.reduce(vars, {0, 0, MapSet.new()}, fn var, {argnum, idx, acc} ->
-        donating? = MapSet.member?(donate_set, argnum)
-
-        {_, {idx, acc}} =
-          Nx.Defn.Composite.traverse(var, {idx, acc}, fn t, {i, acc} ->
-            acc = if donating?, do: MapSet.put(acc, i), else: acc
-            {t, {i + 1, acc}}
-          end)
-
-        {argnum + 1, idx, acc}
-      end)
-
-    leaves
-  end
 
   defp compute_alias_pairs!(donated_leaf_set, user_args_with_leaf_index, out_typespecs) do
     if MapSet.size(donated_leaf_set) == 0 do

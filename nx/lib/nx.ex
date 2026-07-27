@@ -1029,6 +1029,65 @@ defmodule Nx do
   end
 
   @doc """
+  Marks a tensor (or all tensor leaves in a container) as donatable.
+
+  Donatable tensors tell supporting compilers (such as EXLA) that the caller
+  will not use these input buffers after the next JIT/compile invocation, so
+  their device memory may back same-shape/dtype outputs instead of allocating
+  roughly 2× the memory:
+
+      step = Nx.Defn.jit(&update/2, compiler: EXLA)
+      params = step.(Nx.donate(params), batch)
+      # previous `params` device buffers are now invalid
+
+  You can donate only part of a container:
+
+      step.(%{params: Nx.donate(params), metrics: metrics}, batch)
+
+  `donate/1` is idempotent. The mark is stored on `%Nx.Tensor{}` as
+  `donatable: true` and is preserved by `to_template/1`, so `compile/3`
+  templates can bake donation at compile time. Compilers without donation
+  support treat the mark as a no-op.
+
+  For `Nx.Defn.compile/3`, donation is fixed from the templates passed at
+  compile time. Marking live arguments with `donate/1` only when *invoking*
+  a previously compiled function has no effect — pass donatable templates
+  to `compile/3` instead. Conversely, omitting `donate/1` on invoke does
+  not disable donation that was baked from templates.
+
+  Donation is a call-boundary hint: new tensors created by ops are not
+  donatable (the flag does not propagate through transforms). Donated
+  input buffers must not be read after a donating call on compilers that
+  implement donation.
+
+  ## Examples
+
+      iex> t = Nx.donate(Nx.tensor([1, 2, 3]))
+      iex> t.donatable
+      true
+
+      iex> %{a: a, b: b} = Nx.donate(%{a: Nx.tensor(1), b: Nx.tensor(2)})
+      iex> {a.donatable, b.donatable}
+      {true, true}
+
+  """
+  @doc type: :conversion
+  def donate(tensor_or_container) do
+    Nx.Defn.Composite.traverse(tensor_or_container, fn value ->
+      %{to_tensor(value) | donatable: true}
+    end)
+  end
+
+  @doc """
+  Returns `true` if `tensor` is marked as donatable.
+
+  See `donate/1`.
+  """
+  @doc type: :conversion
+  def donatable?(%T{donatable: true}), do: true
+  def donatable?(%T{}), do: false
+
+  @doc """
   Creates a tensor with the given shape which increments
   along the provided axis. You may optionally provide dimension
   names.
@@ -2607,7 +2666,8 @@ defmodule Nx do
 
     new_shape = put_elem(tensor.shape, 0, batch_size)
 
-    result = impl!(tensor).to_batched(%{tensor | shape: new_shape}, tensor, opts)
+    result =
+      impl!(tensor).to_batched(%{tensor | shape: new_shape, donatable: false}, tensor, opts)
 
     case vectorized_axes do
       [] ->
@@ -2821,7 +2881,7 @@ defmodule Nx do
       tensor
     else
       apply_vectorized(tensor, fn tensor ->
-        impl!(tensor).as_type(%{tensor | type: new_type}, tensor)
+        impl!(tensor).as_type(%{tensor | type: new_type, donatable: false}, tensor)
       end)
     end
   end
@@ -2903,7 +2963,7 @@ defmodule Nx do
                 " output type #{inspect(new_type)}"
       end
 
-      impl!(tensor).bitcast(%{tensor | type: new_type}, tensor)
+      impl!(tensor).bitcast(%{tensor | type: new_type, donatable: false}, tensor)
     end)
   end
 
@@ -3013,7 +3073,10 @@ defmodule Nx do
         %{tensor | names: names}
 
       vectorized_axes == [] ->
-        impl!(tensor).reshape(%{tensor | shape: new_shape, names: names}, tensor)
+        impl!(tensor).reshape(
+          %{tensor | shape: new_shape, names: names, donatable: false},
+          tensor
+        )
 
       true ->
         apply_vectorized(tensor, fn tensor, offset ->
@@ -3025,7 +3088,12 @@ defmodule Nx do
             |> List.to_tuple()
 
           impl!(tensor).reshape(
-            %{tensor | shape: new_shape, names: List.duplicate(nil, offset) ++ names},
+            %{
+              tensor
+              | shape: new_shape,
+                names: List.duplicate(nil, offset) ++ names,
+                donatable: false
+            },
             tensor
           )
         end)
@@ -3451,7 +3519,7 @@ defmodule Nx do
   def new_axis(tensor, axis, name \\ nil) when is_integer(axis) do
     apply_vectorized(tensor, fn %{shape: shape, names: names} = tensor, offset ->
       {shape, names, _axis} = Nx.Shape.new_axis(shape, names, axis, name, 1, offset)
-      impl!(tensor).reshape(%{tensor | shape: shape, names: names}, tensor)
+      impl!(tensor).reshape(%{tensor | shape: shape, names: names, donatable: false}, tensor)
     end)
   end
 
@@ -3554,7 +3622,11 @@ defmodule Nx do
       if old_shape == new_shape do
         tensor
       else
-        impl!(tensor).squeeze(%{tensor | shape: new_shape, names: new_names}, tensor, axes)
+        impl!(tensor).squeeze(
+          %{tensor | shape: new_shape, names: new_names, donatable: false},
+          tensor,
+          axes
+        )
       end
     end)
   end
@@ -3944,7 +4016,7 @@ defmodule Nx do
         end
 
       broadcast_names = Nx.Shape.named_axes!(broadcast_names, broadcast_shape)
-      out = %{tensor | names: broadcast_names, shape: broadcast_shape}
+      out = %{tensor | names: broadcast_names, shape: broadcast_shape, donatable: false}
 
       out =
         if tensor.shape == broadcast_shape and is_nil(opts_axes) do
@@ -4197,7 +4269,7 @@ defmodule Nx do
       padding_config = List.duplicate({0, 0, 0}, offset) ++ padding_config
       shape = Nx.Shape.pad(tensor.shape, padding_config)
 
-      out = %{tensor | type: output_type, shape: shape}
+      out = %{tensor | type: output_type, shape: shape, donatable: false}
       impl!(tensor, pad_value).pad(out, tensor, pad_value, padding_config)
     end)
   end
@@ -4370,7 +4442,7 @@ defmodule Nx do
 
       shape = Nx.Shape.pad(tensor.shape, padding_config)
 
-      out = %{tensor | type: output_type, shape: shape}
+      out = %{tensor | type: output_type, shape: shape, donatable: false}
       impl!(tensor, pad_value_or_type).pad(out, tensor, pad_value_or_type, padding_config)
     end)
   end
@@ -5447,7 +5519,7 @@ defmodule Nx do
         Enum.reduce(vectorized_names, names, fn _, names -> [nil | names] end)
       end
 
-    %{tensor | shape: output_shape, names: output_names, vectorized_axes: []}
+    %{tensor | shape: output_shape, names: output_names, vectorized_axes: [], donatable: false}
   end
 
   def devectorize(%T{vectorized_axes: []} = tensor, _), do: tensor
@@ -5978,7 +6050,11 @@ defmodule Nx do
 
     {shape, names} = Nx.Shape.binary_broadcast(left_shape, left_names, right_shape, right_names)
 
-    apply(impl!(left, right), op, [%{left | type: type, shape: shape, names: names}, left, right])
+    apply(impl!(left, right), op, [
+      %{left | type: type, shape: shape, names: names, donatable: false},
+      left,
+      right
+    ])
   end
 
   defp non_complex_element_wise_pred_op(left, right, op) do
@@ -5998,7 +6074,7 @@ defmodule Nx do
        ) do
     {shape, names} = Nx.Shape.binary_broadcast(left_shape, left_names, right_shape, right_names)
 
-    out = %{left | type: {:u, 8}, shape: shape, names: names}
+    out = %{left | type: {:u, 8}, shape: shape, names: names, donatable: false}
     apply(impl!(left, right), op, [out, left, right])
   end
 
@@ -7766,7 +7842,7 @@ defmodule Nx do
         Nx.Shape.broadcast_axes(on_false.shape, output_shape)
       )
 
-    out = %{pred | shape: output_shape, type: output_type, names: output_names}
+    out = %{pred | shape: output_shape, type: output_type, names: output_names, donatable: false}
 
     if vectorized_axes != [] do
       pred =
@@ -7934,7 +8010,7 @@ defmodule Nx do
 
     result =
       impl!(tensor, source).window_scatter_max(
-        %{tensor | type: output_type},
+        %{tensor | type: output_type, donatable: false},
         tensor,
         source,
         init_value,
@@ -8096,7 +8172,7 @@ defmodule Nx do
 
     result =
       impl!(tensor, source).window_scatter_min(
-        %{tensor | type: output_type},
+        %{tensor | type: output_type, donatable: false},
         tensor,
         source,
         init_value,
@@ -8469,7 +8545,13 @@ defmodule Nx do
       end
 
     impl!(target, indices, updates)
-    |> apply(op, [%{target | type: type}, target, indices, updates, [axes: axes]])
+    |> apply(op, [
+      %{target | type: type, donatable: false},
+      target,
+      indices,
+      updates,
+      [axes: axes]
+    ])
     |> vectorize(vectorized_axes)
   end
 
@@ -8546,7 +8628,7 @@ defmodule Nx do
       apply_vectorized(tensor, fn tensor ->
         type = Nx.Type.to_floating(tensor.type)
         unquote(complex_check_block)
-        impl!(tensor).unquote(name)(%{tensor | type: type}, tensor)
+        impl!(tensor).unquote(name)(%{tensor | type: type, donatable: false}, tensor)
       end)
     end
   end
@@ -8580,7 +8662,7 @@ defmodule Nx do
   @doc type: :element
   def is_nan(tensor) do
     apply_vectorized(tensor, fn tensor ->
-      impl!(tensor).is_nan(%{tensor | type: {:u, 8}}, tensor)
+      impl!(tensor).is_nan(%{tensor | type: {:u, 8}, donatable: false}, tensor)
     end)
   end
 
@@ -8613,7 +8695,7 @@ defmodule Nx do
   @doc type: :element
   def is_infinity(tensor) do
     apply_vectorized(tensor, fn tensor ->
-      impl!(tensor).is_infinity(%{tensor | type: {:u, 8}}, tensor)
+      impl!(tensor).is_infinity(%{tensor | type: {:u, 8}, donatable: false}, tensor)
     end)
   end
 
@@ -8699,9 +8781,14 @@ defmodule Nx do
   def abs(tensor) do
     apply_vectorized(tensor, fn tensor ->
       case tensor.type do
-        {:u, _} -> tensor
-        {:c, size} -> impl!(tensor).abs(%{tensor | type: {:f, div(size, 2)}}, tensor)
-        _ -> impl!(tensor).abs(tensor, tensor)
+        {:u, _} ->
+          tensor
+
+        {:c, size} ->
+          impl!(tensor).abs(%{tensor | type: {:f, div(size, 2)}, donatable: false}, tensor)
+
+        _ ->
+          impl!(tensor).abs(tensor, tensor)
       end
     end)
   end
@@ -8734,7 +8821,10 @@ defmodule Nx do
   @doc type: :element
   def conjugate(tensor) do
     apply_vectorized(tensor, fn tensor ->
-      impl!(tensor).conjugate(%{tensor | type: Nx.Type.to_complex(tensor.type)}, tensor)
+      impl!(tensor).conjugate(
+        %{tensor | type: Nx.Type.to_complex(tensor.type), donatable: false},
+        tensor
+      )
     end)
   end
 
@@ -8766,7 +8856,7 @@ defmodule Nx do
   @doc type: :element
   def phase(tensor) do
     apply_vectorized(tensor, fn tensor ->
-      output = %{tensor | type: Nx.Type.to_real(tensor.type)}
+      output = %{tensor | type: Nx.Type.to_real(tensor.type), donatable: false}
 
       block(%Nx.Block.Phase{}, [tensor], output, fn %Nx.Block.Phase{}, t ->
         t
@@ -8812,7 +8902,7 @@ defmodule Nx do
       cond do
         match?({:c, _}, type) ->
           {:c, size} = type
-          impl!(tensor).real(%{tensor | type: {:f, div(size, 2)}}, tensor)
+          impl!(tensor).real(%{tensor | type: {:f, div(size, 2)}, donatable: false}, tensor)
 
         Nx.Type.float?(type) ->
           tensor
@@ -8858,7 +8948,7 @@ defmodule Nx do
     apply_vectorized(tensor, fn tensor ->
       case tensor do
         %{type: {:c, size}} = tensor ->
-          impl!(tensor).imag(%{tensor | type: {:f, div(size, 2)}}, tensor)
+          impl!(tensor).imag(%{tensor | type: {:f, div(size, 2)}, donatable: false}, tensor)
 
         tensor ->
           floating = Nx.Type.to_floating(tensor.type)
@@ -9359,7 +9449,7 @@ defmodule Nx do
     if vectorized_axes != [] do
       vectorized_all_close(a, b, opts)
     else
-      out = %{a | names: [], shape: {}, type: {:u, 8}}
+      out = %{a | names: [], shape: {}, type: {:u, 8}, donatable: false}
 
       block(struct!(Nx.Block.AllClose, opts), [a, b], out, fn %Nx.Block.AllClose{} = o, a, b ->
         vectorized_all_close(a, b,
@@ -10593,7 +10683,7 @@ defmodule Nx do
         Nx.as_type(tensor, type)
       else
         apply(impl!(tensor), op, [
-          %{tensor | type: type, shape: shape, names: names},
+          %{tensor | type: type, shape: shape, names: names, donatable: false},
           tensor,
           [axes: axes, keep_axes: keep_axes]
         ])
@@ -10951,7 +11041,14 @@ defmodule Nx do
             {reshaped_tensor, new_shape, new_names, offset}
         end
 
-      out = %{tensor | type: Nx.Type.normalize!(opts[:type]), shape: shape, names: names}
+      out = %{
+        tensor
+        | type: Nx.Type.normalize!(opts[:type]),
+          shape: shape,
+          names: names,
+          donatable: false
+      }
+
       opts = [tie_break: tie_break, axis: axis, keep_axis: opts[:keep_axis]]
       apply(impl!(tensor), op, [out, tensor, opts])
     end)
@@ -10997,7 +11094,7 @@ defmodule Nx do
       {output_shape, padding_config} =
         Nx.Shape.pool(shape, window_dimensions, strides, padding, dilations)
 
-      out = %{tensor | shape: output_shape}
+      out = %{tensor | shape: output_shape, donatable: false}
       opts = [padding: padding_config, strides: strides, window_dilations: dilations]
       apply(impl!(tensor), op, [out, tensor, window_dimensions, opts])
     end)
@@ -12431,7 +12528,7 @@ defmodule Nx do
       if offset == 0 and axes == [] do
         tensor
       else
-        out = %{tensor | type: type, shape: shape, names: names}
+        out = %{tensor | type: type, shape: shape, names: names, donatable: false}
         impl!(tensor).reduce(out, tensor, acc, [axes: axes, keep_axes: keep_axes], fun)
       end
 
@@ -12567,7 +12664,7 @@ defmodule Nx do
       {output_shape, padding_config} =
         Nx.Shape.pool(tensor.shape, window_dimensions, strides, padding, dilations)
 
-      out = %{tensor | shape: output_shape}
+      out = %{tensor | shape: output_shape, donatable: false}
       opts = [padding: padding_config, strides: strides, window_dilations: dilations]
       impl!(tensor).window_reduce(out, tensor, acc, window_dimensions, opts, fun)
     end)
@@ -13092,7 +13189,7 @@ defmodule Nx do
 
     {output_shape, output_names} = Nx.Shape.dot(s1, c1, names1, b1, s2, c2, names2, b2)
 
-    out = %{t1 | type: output_type, names: output_names, shape: output_shape}
+    out = %{t1 | type: output_type, names: output_names, shape: output_shape, donatable: false}
 
     if offset != 0 do
       offset_axes = count_up(offset, 0)
@@ -13366,7 +13463,12 @@ defmodule Nx do
         tensor
       else
         {shape, names} = Nx.Shape.transpose(shape, axes, names)
-        impl!(tensor).transpose(%{tensor | shape: shape, names: names}, tensor, axes)
+
+        impl!(tensor).transpose(
+          %{tensor | shape: shape, names: names, donatable: false},
+          tensor,
+          axes
+        )
       end
     end)
   end
@@ -13799,7 +13901,7 @@ defmodule Nx do
         output_permutation
       )
 
-    out = %{tensor | type: type, shape: shape, names: names}
+    out = %{tensor | type: type, shape: shape, names: names, donatable: false}
 
     result =
       impl!(tensor, kernel).conv(
@@ -13947,7 +14049,7 @@ defmodule Nx do
 
       Nx.Shared.raise_complex_not_supported(output_type, :clip, 2)
 
-      impl!(tensor).clip(%{tensor | type: output_type}, tensor, min, max)
+      impl!(tensor).clip(%{tensor | type: output_type, donatable: false}, tensor, min, max)
     end)
   end
 
@@ -14237,7 +14339,7 @@ defmodule Nx do
           output_shape
         end
 
-      out = %{tensor | shape: output_shape_devec}
+      out = %{tensor | shape: output_shape_devec, donatable: false}
 
       strides = List.duplicate(1, offset) ++ strides
 
@@ -14474,7 +14576,13 @@ defmodule Nx do
 
     result =
       impl!(tensor).put_slice(
-        %{tensor | shape: output_shape_devec, names: output_names, type: output_type},
+        %{
+          tensor
+          | shape: output_shape_devec,
+            names: output_names,
+            type: output_type,
+            donatable: false
+        },
         tensor,
         start_indices,
         slice
@@ -14755,7 +14863,7 @@ defmodule Nx do
     else
       tensor = devectorize(tensor, keep_names: false)
       indices = devectorize(indices, keep_names: false)
-      out = %{tensor | shape: inner_shape, names: inner_names}
+      out = %{tensor | shape: inner_shape, names: inner_names, donatable: false}
 
       block(struct!(Nx.Block.Take, axis: axis), [tensor, indices], out, fn
         %Nx.Block.Take{}, tensor, indices ->
@@ -14934,7 +15042,7 @@ defmodule Nx do
 
     axis = Nx.Shape.normalize_axis(tensor.shape, opts[:axis], tensor.names, offset)
     shape = Nx.Shape.take_along_axis(tensor.shape, indices.shape, axis)
-    out = %{tensor | shape: shape}
+    out = %{tensor | shape: shape, donatable: false}
 
     result =
       block(
@@ -15150,7 +15258,7 @@ defmodule Nx do
       end
 
     {shape, names} = Nx.Shape.gather(tensor.shape, indices.shape, axes)
-    out = %{tensor | shape: shape, names: names}
+    out = %{tensor | shape: shape, names: names, donatable: false}
     result = impl!(tensor).gather(out, tensor, indices, axes: axes)
     vectorize(result, vectorized_axes)
   end
@@ -15753,8 +15861,15 @@ defmodule Nx do
       %T{shape: shape, names: names} = tensor
       {output_shape, output_names} = Nx.Shape.top_k(shape, names, opts[:k])
 
-      out_values = %{tensor | shape: output_shape, names: output_names}
-      out_indices = %{tensor | shape: output_shape, names: output_names, type: {:s, 32}}
+      out_values = %{tensor | shape: output_shape, names: output_names, donatable: false}
+
+      out_indices = %{
+        tensor
+        | shape: output_shape,
+          names: output_names,
+          type: {:s, 32},
+          donatable: false
+      }
 
       block(
         struct!(Nx.Block.TopK, k: opts[:k]),
@@ -15922,7 +16037,7 @@ defmodule Nx do
       Nx.Shared.raise_complex_not_supported(type, :argsort, 2)
 
       impl!(tensor).argsort(
-        %{tensor | type: Nx.Type.normalize!(opts[:type])},
+        %{tensor | type: Nx.Type.normalize!(opts[:type]), donatable: false},
         tensor,
         axis: axis,
         direction: direction,
@@ -16821,7 +16936,14 @@ defmodule Nx do
         |> Tuple.insert_at(axis, length)
         |> Tuple.delete_at(axis + 1)
 
-      out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
+      out =
+        to_template(%{
+          tensor
+          | shape: output_shape,
+            type: Nx.Type.to_complex(tensor.type),
+            donatable: false
+        })
+
       apply(impl!(tensor), kind, [out, tensor, opts])
     end)
   end
@@ -17200,7 +17322,13 @@ defmodule Nx do
         |> Tuple.insert_at(ax2, l2)
         |> Tuple.delete_at(ax2 + 1)
 
-      out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
+      out =
+        to_template(%{
+          tensor
+          | shape: output_shape,
+            type: Nx.Type.to_complex(tensor.type),
+            donatable: false
+        })
 
       block_struct =
         if kind == :fft2 do
@@ -17351,7 +17479,14 @@ defmodule Nx do
         |> Tuple.insert_at(axis, rfft_length)
         |> Tuple.delete_at(axis + 1)
 
-      out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
+      out =
+        to_template(%{
+          tensor
+          | shape: output_shape,
+            type: Nx.Type.to_complex(tensor.type),
+            donatable: false
+        })
+
       block_struct = struct!(Nx.Block.RFFT, eps: opts[:eps], length: length, axis: axis)
 
       block(block_struct, [tensor], out, fn s, tensor ->
@@ -17461,7 +17596,14 @@ defmodule Nx do
         |> Tuple.insert_at(axis, n)
         |> Tuple.delete_at(axis + 1)
 
-      out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_real(tensor.type)})
+      out =
+        to_template(%{
+          tensor
+          | shape: output_shape,
+            type: Nx.Type.to_real(tensor.type),
+            donatable: false
+        })
+
       block_struct = struct(Nx.Block.IRFFT, eps: opts[:eps], length: n, axis: axis)
 
       block(block_struct, [tensor], out, fn s, tensor ->

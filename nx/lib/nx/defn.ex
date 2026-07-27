@@ -316,8 +316,12 @@ defmodule Nx.Defn do
 
     * `:hooks` - a map of callbacks to override named io_calls. See `Nx.Defn.Kernel.io_call/3`.
 
-    * `:donate_argnums` - a list of positional argument indices whose buffers
-      may be donated to the compiled executable. See `jit/2`.
+  Buffer donation is baked from the templates at compile time: pass
+  `Nx.donate/1` on the templates (or tensors used as templates) that should
+  be donated. Marking live arguments with `Nx.donate/1` only when invoking
+  the compiled function does not enable donation if the template was not
+  donatable; omitting `donate/1` on invoke also does not disable donation
+  already baked from templates. See `Nx.donate/1`.
 
   """
   def compile(fun, template_args, opts \\ [])
@@ -413,24 +417,9 @@ defmodule Nx.Defn do
       or `:reuse` (reuses the exiting JIT compilation). It is not recommended
       to set the `:compiler` option when reusing.
 
-    * `:donate_argnums` - a list of positional argument indices whose buffers
-      may be donated to the compiled executable. Modeled after
-      [JAX buffer donation](https://docs.jax.dev/en/latest/buffer_donation.html).
-
-      Donation is a replacement for in-place updates at the JIT boundary: if a
-      large parameter map is always replaced by the returned parameter map, mark
-      that argument so the compiler can reuse its device memory for a matching
-      output instead of holding roughly 2× the memory:
-
-          step = Nx.Defn.jit(&update/2, compiler: EXLA, donate_argnums: [0])
-          params = step.(params, batch)  # previous `params` buffers are now invalid
-
-      If a positional argument is a composite (tuple, map, struct), all of its
-      tensor leaves are donated. Compilers alias each donated leaf with a
-      same-shape/dtype output; EXLA raises if no such output exists. Donated
-      input buffers must not be used after the call. You can also mark values
-      with `donate/1` instead of (or in addition to) this option. Compilers that
-      do not implement donation treat this as a no-op.
+  Buffer donation is requested by marking tensors with `Nx.donate/1` before
+  calling the JIT function (or by passing donatable templates to `compile/3`).
+  See `Nx.donate/1`.
 
   """
   def jit(fun, opts \\ []) when is_function(fun) and is_list(opts) do
@@ -481,32 +470,6 @@ defmodule Nx.Defn do
   end
 
   @doc """
-  Marks a tensor or container so its buffers may be donated on the next
-  JIT/compile invocation.
-
-  Donation tells supporting compilers (such as EXLA) that the caller will not
-  use these inputs after the function returns, so their device memory may back
-  same-shape/dtype outputs. This is the value-level counterpart to
-  `:donate_argnums` — useful when only part of a container should be donated:
-
-      step = Nx.Defn.jit(&update/2, compiler: EXLA)
-      %{params: params, metrics: metrics} =
-        step.(%{params: Nx.Defn.donate(params), metrics: metrics}, batch)
-
-  Nesting is supported: wrapping a map donates all tensor leaves inside it.
-  `donate/1` is idempotent. Compilers without donation support ignore the mark.
-
-  For `compile/3`, donation is fixed from the templates and options at compile
-  time. Wrapping arguments with `donate/1` only when *invoking* a previously
-  compiled function has no effect — pass `:donate_argnums` (or wrap the
-  templates) to `compile/3` instead.
-
-  See also `:donate_argnums` in `jit/2`.
-  """
-  def donate(%Nx.Defn.Donated{} = donated), do: donated
-  def donate(value), do: %Nx.Defn.Donated{value: value}
-
-  @doc """
   Wraps an anonymous function to return its underlying defn expression.
 
   > #### Warning {: .warning}
@@ -550,8 +513,6 @@ defmodule Nx.Defn do
 
     opts = Keyword.put(opts, :hooks, hooks)
 
-    # :donate_argnums is validated when building params in
-    # Nx.Defn.Compiler.to_lazy_params/3 (needs the argument count).
     opts
   end
 

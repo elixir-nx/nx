@@ -385,7 +385,13 @@ defmodule Nx.Batch do
                   "for first axis, got #{size} and #{acc_size} in #{inspect(container)}"
         end
 
-        template = %{template | shape: Tuple.delete_at(shape, @axis), names: tl(names)}
+        template = %{
+          template
+          | shape: Tuple.delete_at(shape, @axis),
+            names: tl(names),
+            donatable: false
+        }
+
         {template, {size, [fun | acc_funs]}}
       end)
 
@@ -423,7 +429,14 @@ defimpl Nx.LazyContainer, for: Nx.Batch do
     {template, {acc, []}} =
       Nx.Defn.Composite.traverse(template, {acc, funs}, fn template, {acc, [fun | funs]} ->
         %{shape: shape, names: names} = template
-        template = %{template | shape: Tuple.insert_at(shape, 0, total), names: [nil | names]}
+
+        template = %{
+          template
+          | shape: Tuple.insert_at(shape, 0, total),
+            names: [nil | names],
+            donatable: false
+        }
+
         {template, acc} = acc_fun.(template, fun, acc)
         {template, {acc, funs}}
       end)
