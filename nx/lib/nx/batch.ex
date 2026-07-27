@@ -388,8 +388,7 @@ defmodule Nx.Batch do
         template = %{
           template
           | shape: Tuple.delete_at(shape, @axis),
-            names: tl(names),
-            donatable: false
+            names: tl(names)
         }
 
         {template, {size, [fun | acc_funs]}}
@@ -433,8 +432,7 @@ defimpl Nx.LazyContainer, for: Nx.Batch do
         template = %{
           template
           | shape: Tuple.insert_at(shape, 0, total),
-            names: [nil | names],
-            donatable: false
+            names: [nil | names]
         }
 
         {template, acc} = acc_fun.(template, fun, acc)

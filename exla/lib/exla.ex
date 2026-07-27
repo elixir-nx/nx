@@ -303,8 +303,12 @@ defmodule EXLA do
       this if the input tensors are allocated on host and the computation is
       running on GPU/TPU with a limited amount of memory**
 
-  Buffer donation is requested with `Nx.donate/1` on input tensors (or templates
-  for `compile/3`). See `Nx.donate/1`. Not supported with sharded execution.
+  ## Buffer donation
+
+  Mark inputs with `Nx.donate/1` (or pass donatable templates to `compile/3`).
+  `Nx.Defn` turns those marks into `:donated_params` for EXLA, which aliases
+  donated inputs onto matching outputs. Not supported with sharded execution.
+  See `Nx.donate/1`.
 
   """
   def jit(function, options \\ []) do

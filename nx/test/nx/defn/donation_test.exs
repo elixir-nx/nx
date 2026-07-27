@@ -22,13 +22,6 @@ defmodule Nx.Defn.DonationTest do
       assert b.donatable
     end
 
-    test "does not propagate donatable through eager ops" do
-      donated = Nx.donate(Nx.tensor([1, 2, 3]))
-      refute Nx.add(donated, 1).donatable
-      refute Nx.reshape(donated, {3, 1}).donatable
-      refute Nx.LinAlg.norm(Nx.donate(Nx.tensor([3.0, 4.0]))).donatable
-    end
-
     test "unwraps through jit with the evaluator" do
       fun = Nx.Defn.jit(&Nx.add(&1, 1))
       assert Nx.to_flat_list(fun.(Nx.donate(Nx.tensor([1, 2, 3])))) == [2, 3, 4]
@@ -53,12 +46,19 @@ defmodule Nx.Defn.DonationTest do
       # Map keys are traversed in sorted order: :b then :w
       args = [%{w: Nx.donate(Nx.tensor([1.0])), b: Nx.tensor([0.0])}]
 
-      {_fun, _params, templates, _flatten, donated} =
+      {_fun, params, templates, _flatten, donated} =
         Nx.Defn.Compiler.to_lazy_params(fn p -> p end, args, [])
 
       assert donated == [1]
       # Templates stored for compile matching are stripped.
       refute Enum.any?(templates, & &1.donatable)
+      # Expression parameters do not carry the call-boundary mark.
+      refute Enum.any?(params, fn param ->
+               Nx.Defn.Composite.reduce(param, false, fn
+                 %Nx.Tensor{donatable: true}, _ -> true
+                 _, acc -> acc
+               end)
+             end)
     end
 
     test "donates every leaf marked on the container" do
@@ -70,10 +70,14 @@ defmodule Nx.Defn.DonationTest do
       assert donated == [0, 1]
     end
 
-    test "compile bakes donation from templates" do
+    test "compile derives donated_params from donatable templates" do
       template = Nx.donate(Nx.template({3}, {:s, 32}))
-      fun = Nx.Defn.compile(&Nx.add(&1, 1), [template])
-      assert Nx.to_flat_list(fun.(Nx.tensor([1, 2, 3]))) == [2, 3, 4]
+
+      {_fun, _params, templates, _flatten, donated} =
+        Nx.Defn.Compiler.to_lazy_params(&Nx.add(&1, 1), [template], [])
+
+      assert donated == [0]
+      refute hd(templates).donatable
     end
   end
 end

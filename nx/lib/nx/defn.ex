@@ -318,7 +318,8 @@ defmodule Nx.Defn do
 
   Buffer donation is baked from the templates at compile time: pass
   `Nx.donate/1` on the templates (or tensors used as templates) that should
-  be donated. Marking live arguments with `Nx.donate/1` only when invoking
+  be donated. `Nx.Defn` derives `:donated_params` from those marks for
+  compilers. Marking live arguments with `Nx.donate/1` only when invoking
   the compiled function does not enable donation if the template was not
   donatable; omitting `donate/1` on invoke also does not disable donation
   already baked from templates. See `Nx.donate/1`.
@@ -419,7 +420,8 @@ defmodule Nx.Defn do
 
   Buffer donation is requested by marking tensors with `Nx.donate/1` before
   calling the JIT function (or by passing donatable templates to `compile/3`).
-  See `Nx.donate/1`.
+  `Nx.Defn` derives `:donated_params` (donated root leaf indices) for
+  compilers from that mark. See `Nx.donate/1`.
 
   """
   def jit(fun, opts \\ []) when is_function(fun) and is_list(opts) do

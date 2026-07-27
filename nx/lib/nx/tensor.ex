@@ -244,7 +244,7 @@ defmodule Nx.Tensor do
         end
 
       donatable =
-        if Map.get(tensor, :donatable, false) do
+        if tensor.donatable do
           concat([line(), "donatable: true"])
         else
           empty()
