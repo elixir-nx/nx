@@ -323,21 +323,6 @@ defmodule EXLA.Defn do
 
     {debug?, options} = Keyword.pop(options, :debug, false)
     {lazy_transfers, options} = Keyword.pop(options, :lazy_transfers, :opt_in)
-    {donated_params, options} = Keyword.pop(options, :donated_params, [])
-
-    donated_leaf_set = MapSet.new(donated_params)
-
-    # Keep a stable representation in options so it lands in disk_key and comp_key.
-    options =
-      if MapSet.size(donated_leaf_set) == 0 do
-        options
-      else
-        Keyword.put(
-          options,
-          :donated_params,
-          donated_leaf_set |> MapSet.to_list() |> Enum.sort()
-        )
-      end
 
     {client_name, options} = Keyword.pop_lazy(options, :client, &EXLA.Client.default_name/0)
     client = EXLA.Client.fetch!(client_name)
@@ -349,21 +334,30 @@ defmodule EXLA.Defn do
             "input sharding configuration provided but no device mesh was provided"
     end
 
+    {args_key, {reverse_args_identifiers, donated_leaf_set, _idx}} =
+      Enum.map_reduce(vars, {[], MapSet.new(), 0}, fn var, acc ->
+        Nx.Defn.Composite.traverse(var, acc, fn
+          %T{vectorized_axes: vectorized_axes} = t, {acc, acc_donatable, idx} ->
+            %T{type: type, shape: shape, names: names} = Nx.devectorize(t)
+            identifier = {type, shape, names}
+            # Include donatable so donation sets miss the cache for non-donating ones.
+            cache_key = {type, shape, names, vectorized_axes, t.donatable}
+
+            acc_donatable =
+              if t.donatable do
+                MapSet.put(acc_donatable, idx)
+              else
+                acc_donatable
+              end
+
+            {cache_key, {[identifier | acc], acc_donatable, idx + 1}}
+        end)
+      end)
+
     if MapSet.size(donated_leaf_set) > 0 and mesh != nil do
       raise ArgumentError,
             "buffer donation is not currently supported with sharded execution"
     end
-
-    {args_key, reverse_args_identifiers} =
-      Enum.map_reduce(vars, [], fn var, acc ->
-        Nx.Defn.Composite.traverse(var, acc, fn
-          %T{vectorized_axes: vectorized_axes} = t, acc ->
-            %T{type: type, shape: shape, names: names} = Nx.devectorize(t)
-            identifier = {type, shape, names}
-            cache_key = {type, shape, names, vectorized_axes}
-            {cache_key, [identifier | acc]}
-        end)
-      end)
 
     disk_key = %{
       client: client.name,

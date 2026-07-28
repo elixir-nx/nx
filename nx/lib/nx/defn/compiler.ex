@@ -870,62 +870,50 @@ defmodule Nx.Defn.Compiler do
   @doc false
   def to_lazy_params_sharded(fun, args_list, opts \\ []) do
     # Multiple args lists (for sharding): [[args1], [args2], [args3]]
-    # Returns: {fun, params, templates, [flatten1, flatten2, flatten3], donated_params}
+    # Returns: {fun, params, templates, [flatten1, flatten2, flatten3]}
     # Each flatten is kept separate - we do NOT concatenate them
     [first_args | rest_args] = args_list
-    {fun, params, templates, first_flatten, donated} = to_lazy_params(fun, first_args, opts)
+    {fun, params, templates, first_flatten} = to_lazy_params(fun, first_args, opts)
 
     # Build flattens for remaining args lists
     # Each flatten remains separate: [[lazy1, lazy2], [lazy3, lazy4], ...]
     rest_flattens =
       Enum.map(rest_args, fn args ->
-        {_, _, _, flatten, _} = to_lazy_params(fun, args, opts)
+        {_, _, _, flatten} = to_lazy_params(fun, args, opts)
         flatten
       end)
 
-    {fun, params, templates, [first_flatten | rest_flattens], donated}
+    {fun, params, templates, [first_flatten | rest_flattens]}
   end
 
   @doc false
   def to_lazy_params(fun, args, _opts \\ []) do
-    {params, cache, {templates, funs, _, donated}} =
+    {params, cache, {templates, funs, _}} =
       args
-      |> Enum.with_index()
-      |> Enum.reduce({[], [], {[], [], 0, MapSet.new()}}, fn
-        {arg, _argnum}, {params, cache, acc}
+      |> Enum.reduce({[], [], {[], [], 0}}, fn
+        arg, {params, cache, acc}
         when is_list(arg)
         when is_function(arg)
         when is_tuple(arg) and is_function(elem(arg, 0)) ->
           {params, [arg | cache], acc}
 
-        {container, _argnum}, {params, cache, acc} ->
+        container, {params, cache, acc} ->
           {param, acc} =
             Nx.LazyContainer.traverse(container, acc, fn
-              template, fun, {acc_templates, acc_funs, i, donated} ->
-                donated =
-                  if template.donatable do
-                    MapSet.put(donated, i)
-                  else
-                    donated
-                  end
-
-                # Strip so donatable does not leak through template copies / expr params.
-                template = %{template | donatable: false}
-                acc = {[template | acc_templates], [fun | acc_funs], i + 1, donated}
+              template, fun, {acc_templates, acc_funs, i} ->
+                acc = {[template | acc_templates], [fun | acc_funs], i + 1}
                 {Nx.Defn.Expr.parameter(template, :root, i), acc}
             end)
 
           {[param | params], [nil | cache], acc}
       end)
 
-    donated = donated |> MapSet.to_list() |> Enum.sort()
-
     if Enum.all?(cache, &is_nil/1) do
-      {fun, Enum.reverse(params), Enum.reverse(templates), Enum.reverse(funs), donated}
+      {fun, Enum.reverse(params), Enum.reverse(templates), Enum.reverse(funs)}
     else
       cache = Enum.reverse(cache)
       fun = fun(length(params), &apply(fun, merge_cache(cache, &1)))
-      {fun, Enum.reverse(params), Enum.reverse(templates), Enum.reverse(funs), donated}
+      {fun, Enum.reverse(params), Enum.reverse(templates), Enum.reverse(funs)}
     end
   end
 

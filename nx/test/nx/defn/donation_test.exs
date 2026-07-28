@@ -42,42 +42,19 @@ defmodule Nx.Defn.DonationTest do
   end
 
   describe "to_lazy_params" do
-    test "records donated root parameter indices from tensor metadata" do
+    test "preserves donatable on templates and expression parameters" do
       # Map keys are traversed in sorted order: :b then :w
       args = [%{w: Nx.donate(Nx.tensor([1.0])), b: Nx.tensor([0.0])}]
 
-      {_fun, params, templates, _flatten, donated} =
+      {_fun, params, templates, _flatten} =
         Nx.Defn.Compiler.to_lazy_params(fn p -> p end, args, [])
 
-      assert donated == [1]
-      # Templates stored for compile matching are stripped.
-      refute Enum.any?(templates, & &1.donatable)
-      # Expression parameters do not carry the call-boundary mark.
-      refute Enum.any?(params, fn param ->
-               Nx.Defn.Composite.reduce(param, false, fn
-                 %Nx.Tensor{donatable: true}, _ -> true
-                 _, acc -> acc
-               end)
-             end)
-    end
+      assert Enum.map(templates, & &1.donatable) == [false, true]
 
-    test "donates every leaf marked on the container" do
-      args = [%{w: Nx.donate(Nx.tensor([1.0, 2.0])), b: Nx.donate(Nx.tensor([0.0]))}]
-
-      {_fun, _params, _templates, _flatten, donated} =
-        Nx.Defn.Compiler.to_lazy_params(fn p -> p end, args, [])
-
-      assert donated == [0, 1]
-    end
-
-    test "compile derives donated_params from donatable templates" do
-      template = Nx.donate(Nx.template({3}, {:s, 32}))
-
-      {_fun, _params, templates, _flatten, donated} =
-        Nx.Defn.Compiler.to_lazy_params(&Nx.add(&1, 1), [template], [])
-
-      assert donated == [0]
-      refute hd(templates).donatable
+      assert Enum.map(params, fn param ->
+               Nx.Defn.Composite.reduce(param, [], fn t, acc -> [t.donatable | acc] end)
+               |> Enum.reverse()
+             end) == [[false, true]]
     end
   end
 end

@@ -147,12 +147,7 @@ defmodule Nx.LinAlg do
 
     {output_shape, output_names} = Nx.Shape.cholesky(shape, names)
 
-    out = %{
-      tensor
-      | type: output_type,
-        shape: output_shape,
-        names: output_names
-    }
+    out = %{tensor | type: output_type, shape: output_shape, names: output_names}
 
     Nx.block(%Nx.Block.LinAlg.Cholesky{}, [tensor], out, fn %Nx.Block.LinAlg.Cholesky{}, t ->
       Nx.LinAlg.Cholesky.cholesky(t)
@@ -1416,18 +1411,8 @@ defmodule Nx.LinAlg do
     eigenvals_name = tl(eigenvecs_name)
 
     output =
-      {%{
-         tensor
-         | names: eigenvals_name,
-           type: output_type,
-           shape: eigenvals_shape
-       },
-       %{
-         tensor
-         | names: eigenvecs_name,
-           type: output_type,
-           shape: eigenvecs_shape
-       }}
+      {%{tensor | names: eigenvals_name, type: output_type, shape: eigenvals_shape},
+       %{tensor | names: eigenvecs_name, type: output_type, shape: eigenvecs_shape}}
 
     Nx.block(struct!(Nx.Block.LinAlg.Eigh, opts), [tensor], output, fn %Nx.Block.LinAlg.Eigh{},
                                                                        t ->
@@ -1547,24 +1532,9 @@ defmodule Nx.LinAlg do
     rank = tuple_size(shape)
 
     output =
-      {%{
-         tensor
-         | names: List.duplicate(nil, rank),
-           type: output_type,
-           shape: u_shape
-       },
-       %{
-         tensor
-         | names: List.duplicate(nil, rank - 1),
-           type: output_type,
-           shape: s_shape
-       },
-       %{
-         tensor
-         | names: List.duplicate(nil, rank),
-           type: output_type,
-           shape: v_shape
-       }}
+      {%{tensor | names: List.duplicate(nil, rank), type: output_type, shape: u_shape},
+       %{tensor | names: List.duplicate(nil, rank - 1), type: output_type, shape: s_shape},
+       %{tensor | names: List.duplicate(nil, rank), type: output_type, shape: v_shape}}
 
     Nx.block(struct!(Nx.Block.LinAlg.SVD, opts), [tensor], output, fn %Nx.Block.LinAlg.SVD{}, t ->
       Nx.LinAlg.SVD.svd(t, opts)

@@ -318,8 +318,7 @@ defmodule Nx.Defn do
 
   Buffer donation is baked from the templates at compile time: pass
   `Nx.donate/1` on the templates (or tensors used as templates) that should
-  be donated. `Nx.Defn` derives `:donated_params` from those marks for
-  compilers. Marking live arguments with `Nx.donate/1` only when invoking
+  be donated. Marking live arguments with `Nx.donate/1` only when invoking
   the compiled function does not enable donation if the template was not
   donatable; omitting `donate/1` on invoke also does not disable donation
   already baked from templates. See `Nx.donate/1`.
@@ -329,10 +328,9 @@ defmodule Nx.Defn do
       when is_function(fun) and is_list(template_args) and is_list(opts) do
     opts = prepare_options(opts)
 
-    {fun, params, templates, _flatten, donated} =
+    {fun, params, templates, _flatten} =
       Nx.Defn.Compiler.to_lazy_params(fun, template_args, opts)
 
-    opts = put_donated_params(opts, donated)
     compiled_fun = Nx.Defn.Compiler.__compile__(fun, params, opts)
 
     wrap(fun, fn args ->
@@ -420,8 +418,8 @@ defmodule Nx.Defn do
 
   Buffer donation is requested by marking tensors with `Nx.donate/1` before
   calling the JIT function (or by passing donatable templates to `compile/3`).
-  `Nx.Defn` derives `:donated_params` (donated root leaf indices) for
-  compilers from that mark. See `Nx.donate/1`.
+  Supporting compilers read the `donatable` mark on argument tensors. See
+  `Nx.donate/1`.
 
   """
   def jit(fun, opts \\ []) when is_function(fun) and is_list(opts) do
@@ -465,8 +463,7 @@ defmodule Nx.Defn do
 
   defp do_jit_apply(fun, args, opts) do
     opts = prepare_options(opts)
-    {fun, params, _templates, flatten, donated} = Nx.Defn.Compiler.to_lazy_params(fun, args, opts)
-    opts = put_donated_params(opts, donated)
+    {fun, params, _templates, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args, opts)
     [res] = Nx.Defn.Compiler.__jit__(fun, params, [flatten], opts)
     res
   end
@@ -498,8 +495,7 @@ defmodule Nx.Defn do
   """
   def debug_expr_apply(fun, args, opts \\ []) when is_function(fun) and is_list(args) do
     opts = opts |> prepare_options() |> Keyword.put(:compiler, Nx.Defn.Debug)
-    {fun, params, _templates, flatten, donated} = Nx.Defn.Compiler.to_lazy_params(fun, args, opts)
-    opts = put_donated_params(opts, donated)
+    {fun, params, _templates, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args, opts)
     [res] = Nx.Defn.Compiler.__jit__(fun, params, [flatten], opts)
     res
   end
@@ -517,9 +513,6 @@ defmodule Nx.Defn do
 
     opts
   end
-
-  defp put_donated_params(opts, []), do: Keyword.delete(opts, :donated_params)
-  defp put_donated_params(opts, donated), do: Keyword.put(opts, :donated_params, donated)
 
   defp wrap(fun, callback) do
     {:arity, arity} = Function.info(fun, :arity)
@@ -908,10 +901,9 @@ defmodule Nx.Defn do
   defp do_shard_jit_apply(fun, mesh, args_list, opts) do
     opts = prepare_options(opts)
 
-    {fun, params, _templates, args_list, donated} =
+    {fun, params, _templates, args_list} =
       Nx.Defn.Compiler.to_lazy_params_sharded(fun, args_list, opts)
 
-    opts = put_donated_params(opts, donated)
     Nx.Defn.Compiler.__shard_jit__(fun, mesh, params, args_list, opts)
   end
 

@@ -1045,10 +1045,9 @@ defmodule Nx do
       step.(%{params: Nx.donate(params), metrics: metrics}, batch)
 
   `donate/1` is idempotent. The mark is stored on `%Nx.Tensor{}` as
-  `donatable: true` and is preserved by `to_template/1`, so `compile/3`
-  templates can bake donation at compile time. At the Defn boundary the
-  mark is collected into leaf indices (`:donated_params`) for compilers;
-  it is stripped from expression parameters so it does not enter the IR.
+  `donatable: true` and is preserved by `to_template/1` and through Defn
+  parameters, so compilers (such as EXLA) can read it on their argument
+  tensors. `compile/3` templates can bake donation at compile time.
   Compilers without donation support treat the mark as a no-op.
 
   For `Nx.Defn.compile/3`, donation is fixed from the templates passed at
@@ -1058,12 +1057,12 @@ defmodule Nx do
   not disable donation that was baked from templates.
 
   Call `donate/1` on the values you pass into JIT/compile. Donation is a
-  call-boundary hint, not graph metadata — apply it at the call site rather
-  than relying on it to survive intermediate eager transforms. Eager ops that
-  copy fields from an input (for example `%{t | shape: ...}`) may keep
-  `donatable: true`, so do not reuse a donated-derived tensor in an unrelated
-  JIT call unless you intend to donate it. Donated input buffers must not be
-  read after a donating call on compilers that implement donation.
+  call-boundary hint — apply it at the call site rather than relying on it
+  to survive intermediate eager transforms. Eager ops that copy fields from
+  an input (for example `%{t | shape: ...}`) may keep `donatable: true`, so
+  do not reuse a donated-derived tensor in an unrelated JIT call unless you
+  intend to donate it. Donated input buffers must not be read after a
+  donating call on compilers that implement donation.
 
   ## Examples
 

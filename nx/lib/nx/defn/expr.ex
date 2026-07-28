@@ -1657,10 +1657,7 @@ defmodule Nx.Defn.Expr do
 
   defp unary_expr(out, context, op, arg) do
     if c = maybe_constant(arg) do
-      apply(Nx.BinaryBackend, op, [
-        %{out | shape: {}, names: []},
-        constant_binary(arg, c)
-      ])
+      apply(Nx.BinaryBackend, op, [%{out | shape: {}, names: []}, constant_binary(arg, c)])
       |> Nx.to_number()
       |> then(&constant(out, &1))
     else
