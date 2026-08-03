@@ -149,7 +149,7 @@ defmodule EXLA.MemoryTrackingTest do
 
     assert %{allocated: baseline} = Client.get_memory_statistics(client)
 
-    t1 = Nx.iota({200_000}) |> Nx.donate()
+    t1 = Nx.iota({200_000}) |> Nx.donatable()
     t2 = Nx.iota({100_000})
 
     assert %{allocated: before} = Client.get_memory_statistics(client)

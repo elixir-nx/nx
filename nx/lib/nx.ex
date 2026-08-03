@@ -1029,67 +1029,44 @@ defmodule Nx do
   end
 
   @doc """
-  Marks a tensor (or all tensor leaves in a container) as donatable.
+  Marks a tensor (or all tensors in a container) as donatable.
 
-  Donatable tensors tell supporting compilers (such as EXLA) that the caller
-  will not use these input buffers after the next JIT/compile invocation, so
-  their device memory may back same-shape/dtype outputs instead of allocating
-  roughly 2× the memory:
+  Supporting compilers such as EXLA may reuse the input buffer for an
+  output of the same shape and type on the next JIT/compile call, instead
+  of allocating new device memory. After that call, the original buffers
+  must not be read.
 
-      step = Nx.Defn.jit(&update/2, compiler: EXLA)
-      params = step.(Nx.donate(params), batch)
-      # previous `params` device buffers are now invalid
-
-  You can donate only part of a container:
-
-      step.(%{params: Nx.donate(params), metrics: metrics}, batch)
-
-  `donate/1` is idempotent. The mark is stored on `%Nx.Tensor{}` as
-  `donatable: true` and is preserved by `to_template/1` and through Defn
-  parameters, so compilers (such as EXLA) can read it on their argument
-  tensors. `compile/3` templates can bake donation at compile time.
-  Compilers without donation support treat the mark as a no-op.
-
-  For `Nx.Defn.compile/3`, donation is fixed from the templates passed at
-  compile time. Marking live arguments with `donate/1` only when *invoking*
-  a previously compiled function has no effect — pass donatable templates
-  to `compile/3` instead. Conversely, omitting `donate/1` on invoke does
-  not disable donation that was baked from templates.
-
-  Call `donate/1` on the values you pass into JIT/compile. Donation is a
-  call-boundary hint — apply it at the call site rather than relying on it
-  to survive intermediate eager transforms. Eager ops that copy fields from
-  an input (for example `%{t | shape: ...}`) may keep `donatable: true`, so
-  do not reuse a donated-derived tensor in an unrelated JIT call unless you
-  intend to donate it. Donated input buffers must not be read after a
-  donating call on compilers that implement donation.
+  The mark is stored on the tensor as `donatable?: true` and is preserved
+  by `to_template/1`. For `Nx.Defn.compile/3`, pass donatable templates at
+  compile time — marking arguments only when invoking a compiled function
+  has no effect.
 
   ## Examples
 
-      iex> t = Nx.donate(Nx.tensor([1, 2, 3]))
-      iex> t.donatable
+      iex> t = Nx.donatable(Nx.tensor([1, 2, 3]))
+      iex> Nx.donatable?(t)
       true
 
-      iex> %{a: a, b: b} = Nx.donate(%{a: Nx.tensor(1), b: Nx.tensor(2)})
-      iex> {a.donatable, b.donatable}
+      iex> %{a: a, b: b} = Nx.donatable(%{a: Nx.tensor(1), b: Nx.tensor(2)})
+      iex> {Nx.donatable?(a), Nx.donatable?(b)}
       {true, true}
 
   """
   @doc type: :conversion
-  def donate(tensor_or_container) do
+  def donatable(tensor_or_container) do
     Nx.Defn.Composite.traverse(tensor_or_container, fn value ->
-      %{to_tensor(value) | donatable: true}
+      %{to_tensor(value) | donatable?: true}
     end)
   end
 
   @doc """
-  Returns `true` if `tensor` is marked as donatable.
+  Returns whether `tensor` is marked as donatable.
 
-  See `donate/1`.
+  See `donatable/1`.
   """
   @doc type: :conversion
-  def donatable?(%T{donatable: true}), do: true
-  def donatable?(%T{}), do: false
+  def donatable?(%T{donatable?: true}), do: true
+  def donatable?(t) when is_tensor(t), do: false
 
   @doc """
   Creates a tensor with the given shape which increments
@@ -2670,8 +2647,7 @@ defmodule Nx do
 
     new_shape = put_elem(tensor.shape, 0, batch_size)
 
-    result =
-      impl!(tensor).to_batched(%{tensor | shape: new_shape}, tensor, opts)
+    result = impl!(tensor).to_batched(%{tensor | shape: new_shape}, tensor, opts)
 
     case vectorized_axes do
       [] ->
@@ -3077,10 +3053,7 @@ defmodule Nx do
         %{tensor | names: names}
 
       vectorized_axes == [] ->
-        impl!(tensor).reshape(
-          %{tensor | shape: new_shape, names: names},
-          tensor
-        )
+        impl!(tensor).reshape(%{tensor | shape: new_shape, names: names}, tensor)
 
       true ->
         apply_vectorized(tensor, fn tensor, offset ->
@@ -3092,11 +3065,7 @@ defmodule Nx do
             |> List.to_tuple()
 
           impl!(tensor).reshape(
-            %{
-              tensor
-              | shape: new_shape,
-                names: List.duplicate(nil, offset) ++ names
-            },
+            %{tensor | shape: new_shape, names: List.duplicate(nil, offset) ++ names},
             tensor
           )
         end)
@@ -3625,11 +3594,7 @@ defmodule Nx do
       if old_shape == new_shape do
         tensor
       else
-        impl!(tensor).squeeze(
-          %{tensor | shape: new_shape, names: new_names},
-          tensor,
-          axes
-        )
+        impl!(tensor).squeeze(%{tensor | shape: new_shape, names: new_names}, tensor, axes)
       end
     end)
   end
@@ -6053,11 +6018,7 @@ defmodule Nx do
 
     {shape, names} = Nx.Shape.binary_broadcast(left_shape, left_names, right_shape, right_names)
 
-    apply(impl!(left, right), op, [
-      %{left | type: type, shape: shape, names: names},
-      left,
-      right
-    ])
+    apply(impl!(left, right), op, [%{left | type: type, shape: shape, names: names}, left, right])
   end
 
   defp non_complex_element_wise_pred_op(left, right, op) do
@@ -8548,13 +8509,7 @@ defmodule Nx do
       end
 
     impl!(target, indices, updates)
-    |> apply(op, [
-      %{target | type: type},
-      target,
-      indices,
-      updates,
-      [axes: axes]
-    ])
+    |> apply(op, [%{target | type: type}, target, indices, updates, [axes: axes]])
     |> vectorize(vectorized_axes)
   end
 
@@ -8784,14 +8739,9 @@ defmodule Nx do
   def abs(tensor) do
     apply_vectorized(tensor, fn tensor ->
       case tensor.type do
-        {:u, _} ->
-          tensor
-
-        {:c, size} ->
-          impl!(tensor).abs(%{tensor | type: {:f, div(size, 2)}}, tensor)
-
-        _ ->
-          impl!(tensor).abs(tensor, tensor)
+        {:u, _} -> tensor
+        {:c, size} -> impl!(tensor).abs(%{tensor | type: {:f, div(size, 2)}}, tensor)
+        _ -> impl!(tensor).abs(tensor, tensor)
       end
     end)
   end
@@ -8824,10 +8774,7 @@ defmodule Nx do
   @doc type: :element
   def conjugate(tensor) do
     apply_vectorized(tensor, fn tensor ->
-      impl!(tensor).conjugate(
-        %{tensor | type: Nx.Type.to_complex(tensor.type)},
-        tensor
-      )
+      impl!(tensor).conjugate(%{tensor | type: Nx.Type.to_complex(tensor.type)}, tensor)
     end)
   end
 
@@ -11044,13 +10991,7 @@ defmodule Nx do
             {reshaped_tensor, new_shape, new_names, offset}
         end
 
-      out = %{
-        tensor
-        | type: Nx.Type.normalize!(opts[:type]),
-          shape: shape,
-          names: names
-      }
-
+      out = %{tensor | type: Nx.Type.normalize!(opts[:type]), shape: shape, names: names}
       opts = [tie_break: tie_break, axis: axis, keep_axis: opts[:keep_axis]]
       apply(impl!(tensor), op, [out, tensor, opts])
     end)
@@ -13465,12 +13406,7 @@ defmodule Nx do
         tensor
       else
         {shape, names} = Nx.Shape.transpose(shape, axes, names)
-
-        impl!(tensor).transpose(
-          %{tensor | shape: shape, names: names},
-          tensor,
-          axes
-        )
+        impl!(tensor).transpose(%{tensor | shape: shape, names: names}, tensor, axes)
       end
     end)
   end
@@ -14578,12 +14514,7 @@ defmodule Nx do
 
     result =
       impl!(tensor).put_slice(
-        %{
-          tensor
-          | shape: output_shape_devec,
-            names: output_names,
-            type: output_type
-        },
+        %{tensor | shape: output_shape_devec, names: output_names, type: output_type},
         tensor,
         start_indices,
         slice
@@ -15863,13 +15794,7 @@ defmodule Nx do
       {output_shape, output_names} = Nx.Shape.top_k(shape, names, opts[:k])
 
       out_values = %{tensor | shape: output_shape, names: output_names}
-
-      out_indices = %{
-        tensor
-        | shape: output_shape,
-          names: output_names,
-          type: {:s, 32}
-      }
+      out_indices = %{tensor | shape: output_shape, names: output_names, type: {:s, 32}}
 
       block(
         struct!(Nx.Block.TopK, k: opts[:k]),
@@ -16936,13 +16861,7 @@ defmodule Nx do
         |> Tuple.insert_at(axis, length)
         |> Tuple.delete_at(axis + 1)
 
-      out =
-        to_template(%{
-          tensor
-          | shape: output_shape,
-            type: Nx.Type.to_complex(tensor.type)
-        })
-
+      out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
       apply(impl!(tensor), kind, [out, tensor, opts])
     end)
   end
@@ -17321,12 +17240,7 @@ defmodule Nx do
         |> Tuple.insert_at(ax2, l2)
         |> Tuple.delete_at(ax2 + 1)
 
-      out =
-        to_template(%{
-          tensor
-          | shape: output_shape,
-            type: Nx.Type.to_complex(tensor.type)
-        })
+      out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
 
       block_struct =
         if kind == :fft2 do
@@ -17477,13 +17391,7 @@ defmodule Nx do
         |> Tuple.insert_at(axis, rfft_length)
         |> Tuple.delete_at(axis + 1)
 
-      out =
-        to_template(%{
-          tensor
-          | shape: output_shape,
-            type: Nx.Type.to_complex(tensor.type)
-        })
-
+      out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_complex(tensor.type)})
       block_struct = struct!(Nx.Block.RFFT, eps: opts[:eps], length: length, axis: axis)
 
       block(block_struct, [tensor], out, fn s, tensor ->
@@ -17593,13 +17501,7 @@ defmodule Nx do
         |> Tuple.insert_at(axis, n)
         |> Tuple.delete_at(axis + 1)
 
-      out =
-        to_template(%{
-          tensor
-          | shape: output_shape,
-            type: Nx.Type.to_real(tensor.type)
-        })
-
+      out = to_template(%{tensor | shape: output_shape, type: Nx.Type.to_real(tensor.type)})
       block_struct = struct(Nx.Block.IRFFT, eps: opts[:eps], length: n, axis: axis)
 
       block(block_struct, [tensor], out, fn s, tensor ->

@@ -316,21 +316,11 @@ defmodule Nx.Defn do
 
     * `:hooks` - a map of callbacks to override named io_calls. See `Nx.Defn.Kernel.io_call/3`.
 
-  Buffer donation is baked from the templates at compile time: pass
-  `Nx.donate/1` on the templates (or tensors used as templates) that should
-  be donated. Marking live arguments with `Nx.donate/1` only when invoking
-  the compiled function does not enable donation if the template was not
-  donatable; omitting `donate/1` on invoke also does not disable donation
-  already baked from templates. See `Nx.donate/1`.
-
   """
   def compile(fun, template_args, opts \\ [])
       when is_function(fun) and is_list(template_args) and is_list(opts) do
+    {fun, params, templates, _flatten} = Nx.Defn.Compiler.to_lazy_params(fun, template_args)
     opts = prepare_options(opts)
-
-    {fun, params, templates, _flatten} =
-      Nx.Defn.Compiler.to_lazy_params(fun, template_args, opts)
-
     compiled_fun = Nx.Defn.Compiler.__compile__(fun, params, opts)
 
     wrap(fun, fn args ->
@@ -416,11 +406,6 @@ defmodule Nx.Defn do
       or `:reuse` (reuses the exiting JIT compilation). It is not recommended
       to set the `:compiler` option when reusing.
 
-  Buffer donation is requested by marking tensors with `Nx.donate/1` before
-  calling the JIT function (or by passing donatable templates to `compile/3`).
-  Supporting compilers read the `donatable` mark on argument tensors. See
-  `Nx.donate/1`.
-
   """
   def jit(fun, opts \\ []) when is_function(fun) and is_list(opts) do
     wrap(fun, &jit_apply(fun, &1, opts))
@@ -463,7 +448,7 @@ defmodule Nx.Defn do
 
   defp do_jit_apply(fun, args, opts) do
     opts = prepare_options(opts)
-    {fun, params, _templates, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args, opts)
+    {fun, params, _templates, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args)
     [res] = Nx.Defn.Compiler.__jit__(fun, params, [flatten], opts)
     res
   end
@@ -495,7 +480,7 @@ defmodule Nx.Defn do
   """
   def debug_expr_apply(fun, args, opts \\ []) when is_function(fun) and is_list(args) do
     opts = opts |> prepare_options() |> Keyword.put(:compiler, Nx.Defn.Debug)
-    {fun, params, _templates, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args, opts)
+    {fun, params, _templates, flatten} = Nx.Defn.Compiler.to_lazy_params(fun, args)
     [res] = Nx.Defn.Compiler.__jit__(fun, params, [flatten], opts)
     res
   end
@@ -509,9 +494,7 @@ defmodule Nx.Defn do
       raise ArgumentError, ":hooks option must be a map"
     end
 
-    opts = Keyword.put(opts, :hooks, hooks)
-
-    opts
+    Keyword.put(opts, :hooks, hooks)
   end
 
   defp wrap(fun, callback) do
@@ -900,10 +883,7 @@ defmodule Nx.Defn do
 
   defp do_shard_jit_apply(fun, mesh, args_list, opts) do
     opts = prepare_options(opts)
-
-    {fun, params, _templates, args_list} =
-      Nx.Defn.Compiler.to_lazy_params_sharded(fun, args_list, opts)
-
+    {fun, params, _templates, args_list} = Nx.Defn.Compiler.to_lazy_params_sharded(fun, args_list)
     Nx.Defn.Compiler.__shard_jit__(fun, mesh, params, args_list, opts)
   end
 

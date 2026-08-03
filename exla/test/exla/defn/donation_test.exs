@@ -7,9 +7,9 @@ defmodule EXLA.Defn.DonationTest do
     Nx.backend_transfer(Nx.tensor(value), {EXLA.Backend, client: :host})
   end
 
-  describe "Nx.donate/1" do
+  describe "Nx.donatable/1" do
     test "donates a single argument and consumes its buffer" do
-      x = Nx.donate(on_device([1, 2, 3, 4]))
+      x = Nx.donatable(on_device([1, 2, 3, 4]))
       %EXLA.Backend{buffer: %DeviceBuffer{} = orig} = x.data
 
       fun = EXLA.jit(&Nx.add(&1, 1))
@@ -23,8 +23,8 @@ defmodule EXLA.Defn.DonationTest do
     end
 
     test "donates both args of a two-arg function" do
-      x = Nx.donate(on_device([1, 2, 3]))
-      y = Nx.donate(on_device([10, 20, 30]))
+      x = Nx.donatable(on_device([1, 2, 3]))
+      y = Nx.donatable(on_device([10, 20, 30]))
       %EXLA.Backend{buffer: %DeviceBuffer{} = xb} = x.data
       %EXLA.Backend{buffer: %DeviceBuffer{} = yb} = y.data
 
@@ -44,8 +44,8 @@ defmodule EXLA.Defn.DonationTest do
     end
 
     test "donating a composite argument consumes every marked leaf" do
-      a = Nx.donate(on_device([1, 2]))
-      b = Nx.donate(on_device([3, 4]))
+      a = Nx.donatable(on_device([1, 2]))
+      b = Nx.donatable(on_device([3, 4]))
       %EXLA.Backend{buffer: %DeviceBuffer{} = ab} = a.data
       %EXLA.Backend{buffer: %DeviceBuffer{} = bb} = b.data
 
@@ -65,7 +65,7 @@ defmodule EXLA.Defn.DonationTest do
     end
 
     test "donation does not consume non-donated args" do
-      x = Nx.donate(on_device([1, 2, 3]))
+      x = Nx.donatable(on_device([1, 2, 3]))
       y = on_device([10, 20, 30])
       %EXLA.Backend{buffer: %DeviceBuffer{} = yb} = y.data
 
@@ -79,7 +79,7 @@ defmodule EXLA.Defn.DonationTest do
 
     test "raises when no output has a matching shape/dtype" do
       assert_raise ArgumentError, ~r"no output with matching shape", fn ->
-        EXLA.jit(&Nx.sum/1).(Nx.donate(on_device([1, 2, 3, 4])))
+        EXLA.jit(&Nx.sum/1).(Nx.donatable(on_device([1, 2, 3, 4])))
       end
     end
 
@@ -89,7 +89,7 @@ defmodule EXLA.Defn.DonationTest do
 
       _ = EXLA.jit(&Nx.add(&1, 1)).(x)
       # If this cached the non-donating executable, the buffer wouldn't be consumed below.
-      x2 = Nx.donate(on_device([1, 2, 3]))
+      x2 = Nx.donatable(on_device([1, 2, 3]))
       %EXLA.Backend{buffer: %DeviceBuffer{} = xb2} = x2.data
 
       _ = EXLA.jit(&Nx.add(&1, 1)).(x2)
@@ -100,7 +100,7 @@ defmodule EXLA.Defn.DonationTest do
     end
 
     test "donates only the marked leaves of a map" do
-      a = Nx.donate(on_device([1, 2]))
+      a = Nx.donatable(on_device([1, 2]))
       b = on_device([3, 4])
       %EXLA.Backend{buffer: %DeviceBuffer{} = ab} = a.data
       %EXLA.Backend{buffer: %DeviceBuffer{} = bb} = b.data
@@ -123,13 +123,13 @@ defmodule EXLA.Defn.DonationTest do
 
       assert_raise ArgumentError, ~r"not currently supported with sharded execution", fn ->
         EXLA.shard_jit(&Nx.add(&1, 1), mesh, input_shardings: [%{}]).([
-          [Nx.donate(on_device([1, 2, 3]))]
+          [Nx.donatable(on_device([1, 2, 3]))]
         ])
       end
     end
 
     test "compile bakes donation from donatable templates" do
-      template = Nx.donate(Nx.template({3}, {:s, 32}))
+      template = Nx.donatable(Nx.template({3}, {:s, 32}))
       fun = EXLA.compile(&Nx.add(&1, 1), [template])
 
       x = on_device([1, 2, 3])

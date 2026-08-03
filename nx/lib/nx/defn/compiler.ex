@@ -868,18 +868,18 @@ defmodule Nx.Defn.Compiler do
   end
 
   @doc false
-  def to_lazy_params_sharded(fun, args_list, opts \\ []) do
+  def to_lazy_params_sharded(fun, args_list) do
     # Multiple args lists (for sharding): [[args1], [args2], [args3]]
     # Returns: {fun, params, templates, [flatten1, flatten2, flatten3]}
     # Each flatten is kept separate - we do NOT concatenate them
     [first_args | rest_args] = args_list
-    {fun, params, templates, first_flatten} = to_lazy_params(fun, first_args, opts)
+    {fun, params, templates, first_flatten} = to_lazy_params(fun, first_args)
 
     # Build flattens for remaining args lists
     # Each flatten remains separate: [[lazy1, lazy2], [lazy3, lazy4], ...]
     rest_flattens =
       Enum.map(rest_args, fn args ->
-        {_, _, _, flatten} = to_lazy_params(fun, args, opts)
+        {_, _, _, flatten} = to_lazy_params(fun, args)
         flatten
       end)
 
@@ -887,10 +887,9 @@ defmodule Nx.Defn.Compiler do
   end
 
   @doc false
-  def to_lazy_params(fun, args, _opts \\ []) do
+  def to_lazy_params(fun, args) do
     {params, cache, {templates, funs, _}} =
-      args
-      |> Enum.reduce({[], [], {[], [], 0}}, fn
+      Enum.reduce(args, {[], [], {[], [], 0}}, fn
         arg, {params, cache, acc}
         when is_list(arg)
         when is_function(arg)

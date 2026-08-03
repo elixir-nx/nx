@@ -341,10 +341,10 @@ defmodule EXLA.Defn do
             %T{type: type, shape: shape, names: names} = Nx.devectorize(t)
             identifier = {type, shape, names}
             # Include donatable so donation sets miss the cache for non-donating ones.
-            cache_key = {type, shape, names, vectorized_axes, t.donatable}
+            cache_key = {type, shape, names, vectorized_axes, t.donatable?}
 
             acc_donatable =
-              if t.donatable do
+              if t.donatable? do
                 MapSet.put(acc_donatable, idx)
               else
                 acc_donatable

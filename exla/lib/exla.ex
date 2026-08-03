@@ -305,9 +305,9 @@ defmodule EXLA do
 
   ## Buffer donation
 
-  Mark inputs with `Nx.donate/1` (or pass donatable templates to `compile/3`).
-  EXLA reads `donatable` on argument tensors and aliases donated inputs onto
-  matching outputs. Not supported with sharded execution. See `Nx.donate/1`.
+  Mark inputs with `Nx.donatable/1` (or pass donatable templates to `compile/3`).
+  EXLA reads `donatable?` on argument tensors and aliases donated inputs onto
+  matching outputs. Not supported with sharded execution. See `Nx.donatable/1`.
 
   """
   def jit(function, options \\ []) do
