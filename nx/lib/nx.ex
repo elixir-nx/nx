@@ -14419,7 +14419,7 @@ defmodule Nx do
   ## Vectorized tensors
 
   Both the tensor and the slices can be vectorized, but the indices
-  must remain non-vectorized.
+  must be non-vectorized.
 
       iex> t = Nx.tensor([[1, 2, 3, 4], [5, 6, 7, 8]]) |> Nx.vectorize(:x)
       iex> slice = Nx.tensor([[10, 20], [30, 40]]) |> Nx.vectorize(:y)
