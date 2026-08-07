@@ -99,18 +99,31 @@ defmodule Nx.Defn.Expr do
   inspection.
   """
   def metadata(expr, metadata) when is_map(metadata) do
-    case to_container_expr(expr) do
-      %{data: %{context: context}} = res ->
-        expr(res, context, :metadata, [Nx.devectorize(expr), metadata])
+    if expr_container?(expr) do
+      case to_container_expr(expr) do
+        %{data: %{context: context}} = res ->
+          expr(res, context, :metadata, [Nx.devectorize(expr), metadata])
 
-      t when is_tuple(t) ->
-        context = elem(t, 0).data.context
+        t when is_tuple(t) ->
+          context = elem(t, 0).data.context
 
-        tuple(
-          expr(tuple_out(tuple_size(t)), context, :metadata, [Nx.devectorize(expr), metadata]),
-          Tuple.to_list(t)
-        )
+          tuple(
+            expr(tuple_out(tuple_size(t)), context, :metadata, [Nx.devectorize(expr), metadata]),
+            Tuple.to_list(t)
+          )
+      end
+    else
+      # BinaryBackend.block/4 (and similar) may re-run callbacks that call
+      # stop_grad/custom_grad/metadata; concrete tensors must pass through.
+      expr
     end
+  end
+
+  defp expr_container?(container) do
+    Composite.reduce(container, true, fn
+      %T{data: %Expr{}}, true -> true
+      _, _ -> false
+    end)
   end
 
   @doc """

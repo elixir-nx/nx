@@ -244,9 +244,13 @@ defmodule Nx.Defn.Kernel do
       expr = stop_grad(expr)
 
   """
-  def stop_grad(expr) do
+  def stop_grad(%Nx.Tensor{data: %Nx.Defn.Expr{}} = expr) do
     Nx.Defn.Expr.metadata(expr, %{stop_grad: true, inspect: :stop_grad})
   end
+
+  # Concrete backends (e.g. BinaryBackend.block/4 re-applying a default callback)
+  # must not wrap results in Expr.metadata.
+  def stop_grad(expr), do: expr
 
   @doc """
   Defines a custom gradient for the given expression.
@@ -268,9 +272,15 @@ defmodule Nx.Defn.Kernel do
       end
 
   """
-  def custom_grad(expr, inputs, fun) when Kernel.and(is_list(inputs), is_function(fun, 1)) do
+  def custom_grad(%Nx.Tensor{data: %Nx.Defn.Expr{}} = expr, inputs, fun)
+      when Kernel.and(is_list(inputs), is_function(fun, 1)) do
     Nx.Defn.Expr.metadata(expr, %{custom_grad: {inputs, fun}, inspect: :custom_grad})
   end
+
+  # See stop_grad/1 — pass through when re-applied outside an expression.
+  def custom_grad(expr, inputs, fun)
+      when Kernel.and(is_list(inputs), is_function(fun, 1)),
+      do: expr
 
   @doc """
   Element-wise unary plus operator.
