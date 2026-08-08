@@ -17551,18 +17551,18 @@ defmodule Nx do
   One can also pass two higher order tensors with the same shape `{j, k, ...}`, in which case
   the output will be of shape `{j, k, ..., n}`.
 
-    iex> Nx.linspace(Nx.tensor([[[0, 10]]]), Nx.tensor([[[10, 100]]]), n: 10, name: :samples, type: {:u, 8})
-    #Nx.Tensor<
-      u8[1][1][2][samples: 10]
-      [
+      iex> Nx.linspace(Nx.tensor([[[0, 10]]]), Nx.tensor([[[10, 100]]]), n: 10, name: :samples, type: {:u, 8})
+      #Nx.Tensor<
+        u8[1][1][2][samples: 10]
         [
           [
-            [0, 1, 2, 3, 4, 5, 6, 7, 8, 10],
-            [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+            [
+              [0, 1, 2, 3, 4, 5, 6, 7, 8, 10],
+              [10, 20, 30, 40, 50, 60, 70, 80, 90, 100]
+            ]
           ]
         ]
-      ]
-    >
+      >
 
   ## Vectorized tensors
 
