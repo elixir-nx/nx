@@ -17562,7 +17562,7 @@ defmodule Nx do
           ]
         ]
       ]
-    >
+      >
 
   ## Vectorized tensors
 
