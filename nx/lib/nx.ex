@@ -17551,8 +17551,8 @@ defmodule Nx do
   One can also pass two higher order tensors with the same shape `{j, k, ...}`, in which case
   the output will be of shape `{j, k, ..., n}`.
 
-    iex> Nx.linspace(Nx.tensor([[[0, 10]]]), Nx.tensor([[[10, 100]]]), n: 10, name: :samples, type: {:u, 8})
-    #Nx.Tensor<
+      iex> Nx.linspace(Nx.tensor([[[0, 10]]]), Nx.tensor([[[10, 100]]]), n: 10, name: :samples, type: {:u, 8})
+      #Nx.Tensor<
       u8[1][1][2][samples: 10]
       [
         [
