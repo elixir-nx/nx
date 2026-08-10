@@ -602,7 +602,7 @@ defmodule EXLA.Defn do
       {pairs, _used_outs} =
         donated_leaf_set
         |> Enum.sort()
-        |> Enum.reduce({[], MapSet.new()}, fn leaf_idx, {pairs, used_outs} ->
+        |> Enum.map_reduce(MapSet.new(), fn leaf_idx, used_outs ->
           case Map.fetch(positions, leaf_idx) do
             {:ok, {k, in_ts}} ->
               out_idx =
@@ -622,7 +622,7 @@ defmodule EXLA.Defn do
 
                 j ->
                   # +1 accounts for the callback_pid arg prepended at MLIR index 0.
-                  {[{k + 1, j} | pairs], MapSet.put(used_outs, j)}
+                  {{k + 1, j}, MapSet.put(used_outs, j)}
               end
 
             :error ->
@@ -632,7 +632,7 @@ defmodule EXLA.Defn do
           end
         end)
 
-      Enum.reverse(pairs)
+      pairs
     end
   end
 
