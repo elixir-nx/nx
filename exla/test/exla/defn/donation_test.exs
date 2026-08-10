@@ -128,11 +128,11 @@ defmodule EXLA.Defn.DonationTest do
       end
     end
 
-    test "compile bakes donation from donatable templates" do
+    test "compile donates when both templates and args are donatable" do
       template = Nx.donatable(Nx.template({3}, {:s, 32}))
       fun = EXLA.compile(&Nx.add(&1, 1), [template])
 
-      x = on_device([1, 2, 3])
+      x = Nx.donatable(on_device([1, 2, 3]))
       %EXLA.Backend{buffer: %DeviceBuffer{} = xb} = x.data
 
       assert Nx.to_flat_list(fun.(x)) == [2, 3, 4]
@@ -140,6 +140,31 @@ defmodule EXLA.Defn.DonationTest do
       assert_raise RuntimeError, ~r"called on deleted or donated buffer", fn ->
         DeviceBuffer.read(xb)
       end
+    end
+
+    test "compile raises when templates are donatable but args are not" do
+      template = Nx.donatable(Nx.template({3}, {:s, 32}))
+      fun = EXLA.compile(&Nx.add(&1, 1), [template])
+
+      assert_raise ArgumentError, ~r"compiled with donatable\?: true but got false", fn ->
+        fun.(on_device([1, 2, 3]))
+      end
+    end
+
+    test "compile raises when args are donatable but templates are not" do
+      fun = EXLA.compile(&Nx.add(&1, 1), [Nx.template({3}, {:s, 32})])
+
+      assert_raise ArgumentError, ~r"compiled with donatable\?: false but got true", fn ->
+        fun.(Nx.donatable(on_device([1, 2, 3])))
+      end
+    end
+
+    test "inspect shows a clear message after donation" do
+      x = Nx.donatable(on_device([1, 2, 3]))
+      _ = EXLA.jit(&Nx.add(&1, 1)).(x)
+
+      assert inspect(x) =~ "Deallocated due to buffer donation"
+      refute inspect(x) =~ "Inspect.Error"
     end
   end
 end

@@ -474,6 +474,13 @@ deallocate_device_mem(ErlNifEnv *env, fine::Term buffer_term) {
 
 FINE_NIF(deallocate_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND);
 
+bool is_device_buffer_deleted(ErlNifEnv *env, fine::Term buffer_term) {
+  auto buffer = decode_exla_buffer(env, buffer_term);
+  return buffer->buffer()->IsDeleted();
+}
+
+FINE_NIF(is_device_buffer_deleted, 0);
+
 fine::Ok<> transfer_to_infeed(ErlNifEnv *env,
                               fine::ResourcePtr<ExlaClient> client,
                               int64_t device_id,

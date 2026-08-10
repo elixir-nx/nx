@@ -226,13 +226,24 @@ defmodule EXLA.Backend do
   end
 
   @impl true
-  def inspect(%T{} = tensor, inspect_opts) do
-    limit = if inspect_opts.limit == :infinity, do: :infinity, else: inspect_opts.limit + 1
+  def inspect(%T{data: %B{buffer: buffer}} = tensor, inspect_opts) do
+    if EXLA.DeviceBuffer.deleted?(buffer) do
+      message =
+        if tensor.donatable? do
+          "Deallocated due to buffer donation"
+        else
+          "Deallocated"
+        end
 
-    tensor
-    |> to_binary(min(limit, Nx.size(tensor)))
-    |> then(&Nx.Backend.inspect(tensor, &1, inspect_opts))
-    |> maybe_add_signature(tensor)
+      maybe_add_signature(message, tensor)
+    else
+      limit = if inspect_opts.limit == :infinity, do: :infinity, else: inspect_opts.limit + 1
+
+      tensor
+      |> to_binary(min(limit, Nx.size(tensor)))
+      |> then(&Nx.Backend.inspect(tensor, &1, inspect_opts))
+      |> maybe_add_signature(tensor)
+    end
   end
 
   if Application.compile_env(:exla, :add_backend_on_inspect, true) do

@@ -62,4 +62,21 @@ defmodule Nx.Defn.DonationTest do
              end) == [[false, true]]
     end
   end
+
+  describe "Nx.Defn.compile/3" do
+    test "raises when donatable? mismatches between templates and args" do
+      template = Nx.donatable(Nx.template({3}, {:s, 32}))
+      fun = Nx.Defn.compile(&Nx.add(&1, 1), [template])
+
+      assert_raise ArgumentError, ~r"compiled with donatable\?: true but got false", fn ->
+        fun.(Nx.tensor([1, 2, 3]))
+      end
+
+      fun = Nx.Defn.compile(&Nx.add(&1, 1), [Nx.template({3}, {:s, 32})])
+
+      assert_raise ArgumentError, ~r"compiled with donatable\?: false but got true", fn ->
+        fun.(Nx.donatable(Nx.tensor([1, 2, 3])))
+      end
+    end
+  end
 end

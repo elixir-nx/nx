@@ -1038,8 +1038,8 @@ defmodule Nx do
 
   The mark is stored on the tensor as `donatable?: true` and is preserved
   by `to_template/1`. For `Nx.Defn.compile/3`, pass donatable templates at
-  compile time — marking arguments only when invoking a compiled function
-  has no effect.
+  compile time; invoking the compiled function then requires matching
+  `donatable?` marks on the live arguments (mismatches raise).
 
   ## Examples
 
