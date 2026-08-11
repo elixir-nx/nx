@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.13.1 (2026-08-10)
+
+### Bug fixes
+
+* Update to latest Nx to resolve bug (#1804)
+
 ## v0.13.0 (2026-07-17)
 
 ### Enhancements
