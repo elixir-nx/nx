@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.13.1 (2026-08-10)
+
+### Bug fixes
+
+  * [Nx.Defn.Evaluator] Return the modified tensor expression from the cache computation for :hooks
+
 ## v0.13.0 (2026-07-17)
 
 ### Enhancements
