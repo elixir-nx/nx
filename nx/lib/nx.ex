@@ -1029,6 +1029,46 @@ defmodule Nx do
   end
 
   @doc """
+  Marks a tensor (or all tensors in a container) as donatable.
+
+  Supporting compilers such as EXLA may reuse the input buffer for an
+  output of the same shape and type on the next JIT/compile call, instead
+  of allocating new device memory. After that call, the original buffers
+  must not be read.
+
+  The mark is stored on the tensor as `donatable?: true` and is preserved
+  by `to_template/1`. For `Nx.Defn.compile/3`, pass donatable templates at
+  compile time; invoking the compiled function then requires matching
+  `donatable?` marks on the live arguments (mismatches raise).
+
+  ## Examples
+
+      iex> t = Nx.donatable(Nx.tensor([1, 2, 3]))
+      iex> Nx.donatable?(t)
+      true
+
+      iex> %{a: a, b: b} = Nx.donatable(%{a: Nx.tensor(1), b: Nx.tensor(2)})
+      iex> {Nx.donatable?(a), Nx.donatable?(b)}
+      {true, true}
+
+  """
+  @doc type: :conversion
+  def donatable(tensor_or_container) do
+    Nx.Defn.Composite.traverse(tensor_or_container, fn value ->
+      %{to_tensor(value) | donatable?: true}
+    end)
+  end
+
+  @doc """
+  Returns whether `tensor` is marked as donatable.
+
+  See `donatable/1`.
+  """
+  @doc type: :conversion
+  def donatable?(%T{donatable?: true}), do: true
+  def donatable?(t) when is_tensor(t), do: false
+
+  @doc """
   Creates a tensor with the given shape which increments
   along the provided axis. You may optionally provide dimension
   names.

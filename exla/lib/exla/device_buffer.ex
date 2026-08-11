@@ -86,4 +86,11 @@ defmodule EXLA.DeviceBuffer do
       {:error, :already_deallocated} -> :already_deallocated
     end
   end
+
+  @doc """
+  Returns true if the underlying PjRt buffer has been deleted or donated.
+  """
+  def deleted?(%DeviceBuffer{ref: ref}) do
+    EXLA.NIF.is_device_buffer_deleted(ref)
+  end
 end

@@ -334,16 +334,30 @@ defmodule EXLA.Defn do
             "input sharding configuration provided but no device mesh was provided"
     end
 
-    {args_key, reverse_args_identifiers} =
-      Enum.map_reduce(vars, [], fn var, acc ->
+    {args_key, {reverse_args_identifiers, donated_leaf_set, _idx}} =
+      Enum.map_reduce(vars, {[], MapSet.new(), 0}, fn var, acc ->
         Nx.Defn.Composite.traverse(var, acc, fn
-          %T{vectorized_axes: vectorized_axes} = t, acc ->
+          %T{vectorized_axes: vectorized_axes} = t, {acc, acc_donatable, idx} ->
             %T{type: type, shape: shape, names: names} = Nx.devectorize(t)
             identifier = {type, shape, names}
-            cache_key = {type, shape, names, vectorized_axes}
-            {cache_key, [identifier | acc]}
+            # Include donatable so donation sets miss the cache for non-donating ones.
+            cache_key = {type, shape, names, vectorized_axes, t.donatable?}
+
+            acc_donatable =
+              if t.donatable? do
+                MapSet.put(acc_donatable, idx)
+              else
+                acc_donatable
+              end
+
+            {cache_key, {[identifier | acc], acc_donatable, idx + 1}}
         end)
       end)
+
+    if MapSet.size(donated_leaf_set) > 0 and mesh != nil do
+      raise ArgumentError,
+            "buffer donation is not currently supported with sharded execution"
+    end
 
     disk_key = %{
       client: client.name,
@@ -411,10 +425,14 @@ defmodule EXLA.Defn do
             expr = Nx.Defn.Composite.traverse(expr, &Nx.devectorize/1)
             callback_pid_typespec = EXLA.Executable.callback_server_pid_typespec()
 
-            comp_typespecs =
-              for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: typespec
+            user_args_with_leaf_index =
+              for {i, typespec} <- inputs_and_typespecs, i >= used_buffers, do: {i, typespec}
 
+            comp_typespecs = Enum.map(user_args_with_leaf_index, fn {_, ts} -> ts end)
             comp_typespecs = [callback_pid_typespec | comp_typespecs]
+
+            alias_pairs =
+              compute_alias_pairs!(donated_leaf_set, user_args_with_leaf_index, out_typespecs)
 
             EXLA.MLIR.Module.new(comp_typespecs, out_typespecs, fn builder ->
               # Add device mesh to module if provided
@@ -427,8 +445,13 @@ defmodule EXLA.Defn do
                 end)
               end
 
+              for {arg_index, output_index} <- alias_pairs do
+                Function.set_arg_aliasing(builder, arg_index, output_index)
+              end
+
               # Only create the token when it will actually be used, that is:
               # streaming (infeed/outfeed) or lazy transfers
+
               outfeed =
                 if reverse_infeeds != [] do
                   outfeed
@@ -561,6 +584,57 @@ defmodule EXLA.Defn do
   defp map_improper_list([], _fun, acc), do: :lists.reverse(acc)
 
   defp us_to_ms(time), do: Float.round(time / 1000, 1)
+
+  ## Buffer donation
+
+  defp compute_alias_pairs!(donated_leaf_set, user_args_with_leaf_index, out_typespecs) do
+    if MapSet.size(donated_leaf_set) == 0 do
+      []
+    else
+      # Map leaf index -> {0-based MLIR position among user args, typespec}.
+      positions =
+        user_args_with_leaf_index
+        |> Enum.with_index(fn {leaf_idx, ts}, k -> {leaf_idx, {k, ts}} end)
+        |> Map.new()
+
+      out_with_index = Enum.with_index(out_typespecs)
+
+      {pairs, _used_outs} =
+        donated_leaf_set
+        |> Enum.sort()
+        |> Enum.map_reduce(MapSet.new(), fn leaf_idx, used_outs ->
+          case Map.fetch(positions, leaf_idx) do
+            {:ok, {k, in_ts}} ->
+              out_idx =
+                Enum.find_value(out_with_index, fn {out_ts, j} ->
+                  if not MapSet.member?(used_outs, j) and
+                       out_ts.shape == in_ts.shape and out_ts.type == in_ts.type do
+                    j
+                  end
+                end)
+
+              case out_idx do
+                nil ->
+                  raise ArgumentError,
+                        "input marked for donation has no output with matching shape " <>
+                          "#{inspect(in_ts.shape)} and type #{inspect(in_ts.type)}; " <>
+                          "cannot alias this argument"
+
+                j ->
+                  # +1 accounts for the callback_pid arg prepended at MLIR index 0.
+                  {{k + 1, j}, MapSet.put(used_outs, j)}
+              end
+
+            :error ->
+              raise ArgumentError,
+                    "argument marked for donation is not used by the " <>
+                      "computation; only used inputs can be donated"
+          end
+        end)
+
+      pairs
+    end
+  end
 
   ## Operator handling
 

@@ -45,6 +45,12 @@ public:
 
   void SetClient(ExlaClient *client) { client_ = client; }
 
+  // Begin/end memory accounting for this buffer. TrackDeallocation is
+  // idempotent and uses a size cached at allocation time, so it still works
+  // after XLA deletes the buffer via donation.
+  void TrackAllocation();
+  void TrackDeallocation();
+
   // Replace the underlying PjRt buffer with a new one (e.g. an shm-backed
   // view).  The old buffer is deallocated first so XLA can free its memory.
   void ReplaceBuffer(std::unique_ptr<xla::PjRtBuffer> new_buffer);
@@ -54,8 +60,9 @@ public:
 private:
   std::unique_ptr<xla::PjRtBuffer> buffer_;
   ExlaClient *client_ = nullptr;
-
-  void TrackDeallocation();
+  bool tracked_ = false;
+  size_t tracked_size_ = 0;
+  int tracked_device_id_ = 0;
 };
 
 class ExlaExecutable {

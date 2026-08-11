@@ -39,6 +39,8 @@ defmodule EXLA.NIF do
       ),
       do: err!()
 
+  def mlir_set_function_argument_aliasing(_function, _arg_index, _output_index), do: err!()
+
   def mlir_build(_function, _root), do: err!()
 
   def mlir_compile(
@@ -71,6 +73,7 @@ defmodule EXLA.NIF do
   def read_device_mem(_buffer, _size), do: err!()
   def get_buffer_typespec(_buffer), do: err!()
   def deallocate_device_mem(_buffer), do: err!()
+  def is_device_buffer_deleted(_buffer), do: err!()
   def transfer_to_infeed(_client, _device, _buffers, _typespecs), do: err!()
   def transfer_from_outfeed(_client, _device, _typespecs, _pid, _ref), do: err!()
   def copy_buffer_to_device(_client, _buffer, _device), do: err!()

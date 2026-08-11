@@ -141,4 +141,26 @@ defmodule EXLA.MemoryTrackingTest do
     assert stats.peak == 11000 + baseline_allocated
     assert Map.get(stats.per_device, 0) == baseline_allocated
   end
+
+  test "untracks donated buffers after execution" do
+    client = Client.fetch!(:host)
+    Nx.default_backend({EXLA.Backend, client: :host})
+    :erlang.garbage_collect()
+
+    assert %{allocated: baseline} = Client.get_memory_statistics(client)
+
+    t1 = Nx.iota({200_000}) |> Nx.donatable()
+    t2 = Nx.iota({100_000})
+
+    assert %{allocated: before} = Client.get_memory_statistics(client)
+    assert before == baseline + Nx.byte_size(t1) + Nx.byte_size(t2)
+
+    res = EXLA.jit_apply(fn x, y -> Nx.put_slice(x, [0], y) end, [t1, t2])
+
+    assert %{allocated: allocated} = Client.get_memory_statistics(client)
+    # t1 was donated; only the result and live t2 should remain counted.
+    assert allocated == baseline + Nx.byte_size(res) + Nx.byte_size(t2)
+    assert :already_deallocated = Nx.backend_deallocate(t1)
+    assert %{allocated: ^allocated} = Client.get_memory_statistics(client)
+  end
 end

@@ -249,6 +249,20 @@ fine::Ok<> mlir_set_function_argument_attribute(
 
 FINE_NIF(mlir_set_function_argument_attribute, 0);
 
+fine::Ok<> mlir_set_function_argument_aliasing(
+    ErlNifEnv *env, fine::ResourcePtr<MLIRFunction> function, int64_t arg_index,
+    int64_t output_index) {
+  auto context = function->module()->module()->getContext();
+  auto builder = mlir::Builder(context);
+  auto attr = builder.getI32IntegerAttr(static_cast<int32_t>(output_index));
+
+  function->function().setArgAttr(arg_index, "tf.aliasing_output", attr);
+
+  return fine::Ok();
+}
+
+FINE_NIF(mlir_set_function_argument_aliasing, 0);
+
 mlir::Type mlir_get_typespec(ErlNifEnv *env,
                              fine::ResourcePtr<mlir::Value> value) {
   return value->getType();
@@ -459,6 +473,13 @@ deallocate_device_mem(ErlNifEnv *env, fine::Term buffer_term) {
 }
 
 FINE_NIF(deallocate_device_mem, ERL_NIF_DIRTY_JOB_IO_BOUND);
+
+bool is_device_buffer_deleted(ErlNifEnv *env, fine::Term buffer_term) {
+  auto buffer = decode_exla_buffer(env, buffer_term);
+  return buffer->buffer()->IsDeleted();
+}
+
+FINE_NIF(is_device_buffer_deleted, 0);
 
 fine::Ok<> transfer_to_infeed(ErlNifEnv *env,
                               fine::ResourcePtr<ExlaClient> client,

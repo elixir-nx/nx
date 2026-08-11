@@ -303,6 +303,15 @@ defmodule EXLA do
       this if the input tensors are allocated on host and the computation is
       running on GPU/TPU with a limited amount of memory**
 
+  ## Buffer donation
+
+  You can mark tensors as donatable with `Nx.donatable/1`. When those tensors
+  are passed to `jit/2`, or when both the templates and the live arguments
+  are marked for `compile/3`, EXLA may reuse their buffers for outputs of
+  the same shape and type instead of allocating new device memory.
+  Donated buffers must not be read afterwards. Not supported
+  with sharded execution. See `Nx.donatable/1`.
+
   """
   def jit(function, options \\ []) do
     Nx.Defn.jit(function, Keyword.put(options, :compiler, EXLA))

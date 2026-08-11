@@ -22,21 +22,28 @@ ExlaBuffer::ExlaBuffer(std::unique_ptr<xla::PjRtBuffer> buffer)
 ExlaBuffer::~ExlaBuffer() {
   // Theoretically this may block if a computation is running
   // but we always block the host until the computation is done.
+  TrackDeallocation();
+}
 
-  // Track memory deallocation when buffer is garbage collected
-  // (only if not already explicitly deallocated)
-  if (buffer_ && !buffer_->IsDeleted()) {
-    TrackDeallocation();
+void ExlaBuffer::TrackAllocation() {
+  if (!client_ || tracked_ || !buffer_ || buffer_->IsDeleted()) {
+    return;
+  }
+  auto size_or = GetOnDeviceSizeInBytes();
+  if (size_or.ok()) {
+    tracked_size_ = size_or.value();
+    tracked_device_id_ = device_id();
+    client_->TrackBufferAllocated(tracked_device_id_, tracked_size_);
+    tracked_ = true;
   }
 }
 
 void ExlaBuffer::TrackDeallocation() {
-  if (client_) {
-    auto size_or = GetOnDeviceSizeInBytes();
-    if (size_or.ok()) {
-      client_->TrackBufferDeallocated(device_id(), size_or.value());
-    }
+  if (!client_ || !tracked_) {
+    return;
   }
+  client_->TrackBufferDeallocated(tracked_device_id_, tracked_size_);
+  tracked_ = false;
 }
 
 void CopyLiteralToBinary(xla::Literal *literal, ErlNifBinary *binary,
@@ -65,29 +72,26 @@ tsl::StatusOr<ERL_NIF_TERM> ExlaBuffer::ToBinary(ErlNifEnv *env,
 }
 
 void ExlaBuffer::ReplaceBuffer(std::unique_ptr<xla::PjRtBuffer> new_buffer) {
-  if (buffer_ && !buffer_->IsDeleted()) {
+  if (buffer_) {
     TrackDeallocation();
-    buffer_->Delete();
-  }
-  buffer_ = std::move(new_buffer);
-  if (client_ && buffer_) {
-    auto size_or = GetOnDeviceSizeInBytes();
-    if (size_or.ok()) {
-      client_->TrackBufferAllocated(device_id(), size_or.value());
+    if (!buffer_->IsDeleted()) {
+      buffer_->Delete();
     }
   }
+  buffer_ = std::move(new_buffer);
+  TrackAllocation();
 }
 
 tsl::Status ExlaBuffer::Deallocate() {
-  if (buffer_->IsDeleted()) {
+  bool already_deleted = buffer_->IsDeleted();
+  // Untrack even when XLA already deleted the buffer (donation).
+  TrackDeallocation();
+  if (already_deleted) {
     return xla::FailedPrecondition(
         "Attempt to deallocate already deallocated buffer.");
-  } else {
-    // Track memory before marking as deleted
-    TrackDeallocation();
-    buffer_->Delete();
-    return tsl::OkStatus();
   }
+  buffer_->Delete();
+  return tsl::OkStatus();
 }
 
 tsl::StatusOr<fine::ResourcePtr<ExlaBuffer>>
@@ -97,14 +101,8 @@ ExlaBuffer::CopyToDevice(xla::PjRtDevice *dst_device) {
                         buffer_->CopyToMemorySpace(memory_space));
   auto new_buffer = fine::make_resource<ExlaBuffer>(std::move(buf));
 
-  // Copy client tracking
   new_buffer->SetClient(client_);
-  if (client_) {
-    auto size_or = new_buffer->GetOnDeviceSizeInBytes();
-    if (size_or.ok()) {
-      client_->TrackBufferAllocated(new_buffer->device_id(), size_or.value());
-    }
-  }
+  new_buffer->TrackAllocation();
 
   return new_buffer;
 }
@@ -244,12 +242,8 @@ UnpackResult(ErlNifEnv *env,
       pjrt_buf->GetReadyFuture().Await();
       auto result = fine::make_resource<ExlaBuffer>(std::move(pjrt_buf));
 
-      // Track memory allocation
       result->SetClient(client);
-      auto size_or = result->GetOnDeviceSizeInBytes();
-      if (size_or.ok()) {
-        client->TrackBufferAllocated(result->device_id(), size_or.value());
-      }
+      result->TrackAllocation();
 
       replica_results.push_back(result);
     }
@@ -378,6 +372,20 @@ ExlaExecutable::Run(ErlNifEnv *env, ExlaExecutable::RunArguments arguments,
         num_partitions);
   }
 
+  // Donation: PjRt deletes donated input buffers during Execute. Untrack them
+  // now so memory stats drop before the Elixir-side resource is GC'd.
+  for (const auto &replica_arguments : arguments) {
+    for (const auto &argument : replica_arguments) {
+      if (auto value =
+              std::get_if<fine::ResourcePtr<ExlaBuffer>>(&argument)) {
+        auto &buffer = *value;
+        if (buffer->buffer()->IsDeleted()) {
+          buffer->TrackDeallocation();
+        }
+      }
+    }
+  }
+
   // we need to unpack the results into Erlang terms, the result is a vector
   // of vectors of unique ptrs to pjrt buffers, where the size of the output
   // equals the number of replicas and each individual replica is a vector of
@@ -399,12 +407,8 @@ ExlaClient::BufferFromBinary(ERL_NIF_TERM source_term, xla::Shape &shape,
                                                           shape, device_id));
   auto exla_buffer = fine::make_resource<ExlaBuffer>(std::move(buffer));
 
-  // Track memory allocation
   exla_buffer->SetClient(this);
-  auto size_or = exla_buffer->GetOnDeviceSizeInBytes();
-  if (size_or.ok()) {
-    TrackBufferAllocated(device_id, size_or.value());
-  }
+  exla_buffer->TrackAllocation();
 
   return exla_buffer;
 }

@@ -346,6 +346,11 @@ defmodule Nx.Defn do
             """
           end
 
+          if arg_template.donatable? != template.donatable? do
+            raise ArgumentError,
+                  "argument at position #{pos} was compiled with donatable?: #{template.donatable?} but got #{arg_template.donatable?}"
+          end
+
           {:ok, {templates, [fun | acc]}}
 
         _arg_template, _fun, {[], acc} ->
