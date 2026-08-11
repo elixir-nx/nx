@@ -2,7 +2,7 @@ defmodule Torchx.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/elixir-nx/nx"
-  @version "0.13.0"
+  @version "0.13.1"
 
   @libtorch_compilers [:torchx, :cmake]
 

@@ -360,6 +360,23 @@ defmodule Nx.Defn.EvaluatorTest do
       assert tensor == Nx.tensor(3)
     end
 
+    defn metadata_hook(a) do
+      a
+      |> Nx.add(1)
+      |> stop_grad()
+      |> io_call(:example, &send_to_self({:default, &1}))
+    end
+
+    test "hook on metadata-wrapped expression" do
+      assert metadata_hook(1) == Nx.tensor(2)
+      assert_received {:default, tensor}
+      assert tensor == Nx.tensor(2)
+
+      assert Nx.Defn.jit(&metadata_hook/1).(1) == Nx.tensor(2)
+      assert_received {:default, tensor}
+      assert tensor == Nx.tensor(2)
+    end
+
     defn container_hook(a, b), do: io_call({a, b}, :example, &send_to_self({:default, &1}))
 
     test "container io_call with overriddes" do
@@ -716,7 +733,7 @@ defmodule Nx.Defn.EvaluatorTest do
       t = Nx.iota({2, 3}, vectorized_axes: [a: 1], type: :s32)
 
       message = """
-      test/nx/defn/evaluator_test.exs:685: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
+      test/nx/defn/evaluator_test.exs:702: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
 
       {\e[32m
        <<<<< Body (do-block) <<<<<
@@ -748,7 +765,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       error =
         """
-        test/nx/defn/evaluator_test.exs:685: condition must be a scalar tensor, got: #Nx.Tensor<
+        test/nx/defn/evaluator_test.exs:702: condition must be a scalar tensor, got: #Nx.Tensor<
           vectorized[x: 1]
           u8[1]
         \s\s

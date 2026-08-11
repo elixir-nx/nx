@@ -195,7 +195,7 @@ defmodule Nx.Defn.Evaluator do
 
   defp compute_cache(:io_call, %{data: %Expr{args: args}}, state, cache) do
     [tensor_expr, callback_spec, template, ref] = args
-    {_, cache} = composite_compute_cache(tensor_expr, state, cache)
+    {tensor_expr, cache} = composite_compute_cache(tensor_expr, state, cache)
     {[tensor_expr, callback_spec, template, ref], cache}
   end
 
