@@ -11,11 +11,11 @@ defmodule Nx.Defn.TreeTest do
     :ok
   end
 
-  defn with_hook(a, b), do: hook(a + b, :example)
+  defn with_hook(a, b), do: io_call(a + b, :example)
 
   defn duplicate_hook_names(a, b) do
-    ha = hook(a, :same)
-    hb = hook(b, :same)
+    ha = io_call(a, :same)
+    hb = io_call(b, :same)
     ha + hb
   end
 
@@ -80,14 +80,14 @@ defmodule Nx.Defn.TreeTest do
              ] = inside_both_cond(bool, a, b) |> Tree.scope_ids() |> Enum.sort_by(&elem(&1, 1))
     end
 
-    test "treats hooks with the same name as distinct nodes" do
+    test "treats io_calls with the same name as distinct nodes" do
       a = Expr.parameter(:root, {:u, 64}, {}, 0)
       b = Expr.parameter(:root, {:u, 64}, {}, 1)
 
       assert [
                {_, :add},
-               {_, :hook},
-               {_, :hook},
+               {_, :io_call},
+               {_, :io_call},
                {_, :parameter},
                {_, :parameter}
              ] =

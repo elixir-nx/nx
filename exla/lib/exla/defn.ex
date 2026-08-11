@@ -362,15 +362,15 @@ defmodule EXLA.Defn do
           {{cache_fun, cache_fun}, Keyword.delete(options, EXLA)}
         end
 
-      {eval_time, {expr, {ref, outputs, {used_inputs, defined_hooks}}}} =
+      {eval_time, {expr, {ref, outputs, {used_inputs, defined_io_calls}}}} =
         :timer.tc(fn ->
           expr_cache_fun.({key, args_key, lazy_transfers}, fn ->
             expr = fun.(vars)
 
-            inputs_and_hooks =
-              Outfeed.used_inputs_and_hooks(expr, used_inputs, lazy_transfers)
+            inputs_and_io_calls =
+              Outfeed.used_inputs_and_io_calls(expr, used_inputs, lazy_transfers)
 
-            {expr, {make_ref(), Nx.to_template(expr), inputs_and_hooks}}
+            {expr, {make_ref(), Nx.to_template(expr), inputs_and_io_calls}}
           end)
         end)
 
@@ -382,8 +382,8 @@ defmodule EXLA.Defn do
         )
       end
 
-      outfeed = Outfeed.new(hooks, defined_hooks)
-      comp_key = {ref, client.name, outfeed.used_hooks, lazy_transfers, options}
+      outfeed = Outfeed.new(hooks, defined_io_calls)
+      comp_key = {ref, client.name, outfeed.used_io_call_names, lazy_transfers, options}
 
       {comp_time, {evaled, {xla_time, executable, inputs_and_typespecs, outfeed}}} =
         :timer.tc(fn ->
@@ -493,7 +493,7 @@ defmodule EXLA.Defn do
 
       if evaled && cache, do: check_recompilation(key, args_key, outputs)
 
-      outfeed = Outfeed.with_user_hooks(outfeed, hooks)
+      outfeed = Outfeed.with_user_io_calls(outfeed, hooks)
 
       {executable, {used_inputs, outputs, outfeed, inputs_and_typespecs}}
     end)
@@ -818,54 +818,13 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(
-         :hook,
-         %T{
-           data: %Expr{
-             id: id,
-             args: [tensor_expr, {:token_hook, hooked_expr, inner_spec}, _template, _ref]
-           }
-         } = hook_expr,
-         %{client: %EXLA.Client{platform: platform}, callback_pid_value: callback_pid_value} =
-           state,
-         cache
-       )
-       when platform in [:host, :cuda] do
-    {reverse_hooked_values, reverse_hooked_typespecs, cache} =
-      Composite.reduce(hooked_expr, {[], [], cache}, fn %T{} = expr, {acc, typespecs, cache} ->
-        {value, cache} = recur_operator(expr, state, cache) |> unwrap_single_tensor!()
-        {[value | acc], [Value.get_typespec(value) | typespecs], cache}
-      end)
-
-    hooked_values = Enum.reverse(reverse_hooked_values)
-    hooked_typespecs = Enum.reverse(reverse_hooked_typespecs)
-    hooked_template = Nx.to_template(hooked_expr)
-
-    cache = add_callback(cache, {id, inner_spec, nil, hooked_template})
-
-    unless callback_pid_value do
-      raise "internal bug: hook callback pid operand is missing"
-    end
-
-    num_aliased = length(hooked_typespecs)
-
-    Value.host_callback(
-      [callback_pid_value | hooked_values],
-      hooked_typespecs,
-      id,
-      num_aliased
-    )
-
-    recur_hook_pass(tensor_expr, hook_expr, state, cache)
-  end
-
-  defp cached_recur_operator(
-         :hook,
+         :io_call,
          %T{
            data: %Expr{
              id: id,
              args: [tensor_expr, callback_spec, _template, _ref]
            }
-         } = hook_expr,
+         } = io_call_expr,
          %{client: %EXLA.Client{platform: platform}, callback_pid_value: callback_pid_value} =
            state,
          cache
@@ -885,23 +844,23 @@ defmodule EXLA.Defn do
     cache = add_callback(cache, {id, callback_spec, nil, arg_template})
 
     unless callback_pid_value do
-      raise "internal bug: hook callback pid operand is missing"
+      raise "internal bug: io_call callback pid operand is missing"
     end
 
     aliased_outputs =
       Value.host_callback([callback_pid_value | arg_values], leaf_typespecs, id, num_aliased)
 
-    {wrap_tuple_result(aliased_outputs, hook_expr), cache}
+    {wrap_tuple_result(aliased_outputs, io_call_expr), cache}
   end
 
   defp cached_recur_operator(
-         :hook,
+         :io_call,
          _expr,
          %{client: %EXLA.Client{platform: platform}},
          _cache
        ) do
     raise """
-    hook/3 is currently only supported for EXLA CPU (platform: :host) and CUDA (platform: :cuda),
+    Nx.io_call/3 is currently only supported for EXLA CPU (platform: :host) and CUDA (platform: :cuda),
     but the active EXLA client is configured for platform #{inspect(platform)}.
     Please run on the :host or :cuda client or wait for future segmentation-based support.
     """
@@ -1806,7 +1765,7 @@ defmodule EXLA.Defn do
     )
   end
 
-  ## Cache and hook helpers
+  ## Cache and io_call helpers
 
   defp no_token_cache(),
     do: %{__MODULE__ => Outfeed.empty()}
@@ -2370,22 +2329,6 @@ defmodule EXLA.Defn do
 
   defp to_mlir_logical(%Value{} = value) do
     to_type(value, {:pred, 8})
-  end
-
-  defp recur_hook_pass(%T{data: %Expr{}} = expr, _hook_expr, state, cache) do
-    recur_operator(expr, state, cache)
-  end
-
-  defp recur_hook_pass(composite, hook_expr, state, cache) do
-    {values, cache} =
-      composite
-      |> List.wrap()
-      |> Composite.flatten_list()
-      |> Enum.map_reduce(cache, fn %T{} = expr, cache ->
-        recur_operator(expr, state, cache) |> unwrap_single_tensor!()
-      end)
-
-    {wrap_tuple_result(values, hook_expr), cache}
   end
 
   defp container_to_typespecs(container) do

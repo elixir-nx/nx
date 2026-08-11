@@ -10,12 +10,59 @@ defmodule Nx.LinAlg.BlockEigh do
   import Nx.Defn
 
   defn eigh(matrix, opts) do
-    matrix
-    |> Nx.revectorize([collapsed_axes: :auto],
-      target_shape: {Nx.axis_size(matrix, -2), Nx.axis_size(matrix, -1)}
-    )
-    |> decompose(opts)
-    |> revectorize_result(matrix)
+    result =
+      matrix
+      |> Nx.revectorize([collapsed_axes: :auto],
+        target_shape: {Nx.axis_size(matrix, -2), Nx.axis_size(matrix, -1)}
+      )
+      |> decompose(opts)
+      |> revectorize_result(matrix)
+
+    custom_grad(result, [matrix], fn g ->
+      eigh_grad(result, matrix, g)
+    end)
+  end
+
+  # Reverse-mode for A = Q diag(Λ) Qᴴ with distinct eigenvalues.
+  # See https://people.maths.ox.ac.uk/gilesm/files/NA-08-01.pdf
+  # Implementation verified against Jax
+  defnp eigh_grad({eigenvals, eigenvecs}, _input, {g_vals, g_vecs}) do
+    batch_axes = batch_axes(eigenvecs)
+    eye = eye_from_matrix(eigenvecs)
+    g_vals = broadcast_grad(g_vals, eigenvals)
+    g_vecs = broadcast_grad(g_vecs, eigenvecs)
+
+    # F_ij = 1/(λ_j - λ_i) for i ≠ j, 0 on the diagonal (JAX eigh JVP convention)
+    f = 1 / (eye + Nx.new_axis(eigenvals, -2) - Nx.new_axis(eigenvals, -1)) - eye
+
+    mid =
+      Nx.new_axis(g_vals, -1) * eye +
+        f * Nx.dot(Nx.LinAlg.adjoint(eigenvecs), [-1], batch_axes, g_vecs, [-2], batch_axes)
+
+    grad =
+      eigenvecs
+      |> Nx.dot([-1], batch_axes, mid, [-2], batch_axes)
+      |> Nx.dot([-1], batch_axes, Nx.LinAlg.adjoint(eigenvecs), [-2], batch_axes)
+
+    # Symmetrize: A is Hermitian/symmetric
+    [(grad + Nx.LinAlg.adjoint(grad)) / 2]
+  end
+
+  defnp broadcast_grad(g, template) do
+    if Nx.rank(g) == 0 do
+      Nx.broadcast(g, Nx.shape(template))
+    else
+      g
+    end
+  end
+
+  deftransformp batch_axes(t) do
+    rank = tuple_size(t.shape)
+    Enum.to_list(0..(rank - 3)//1)
+  end
+
+  deftransformp eye_from_matrix(t) do
+    Nx.eye(Nx.shape(t), type: Nx.type(t))
   end
 
   defnp decompose(matrix, opts) do

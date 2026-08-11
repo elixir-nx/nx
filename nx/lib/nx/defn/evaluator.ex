@@ -8,8 +8,8 @@ defmodule Nx.Defn.Evaluator do
 
   The following options are specific to this compiler:
 
-    * `:hooks` - a map of callbacks to override named `hook` side effects.
-      This allows overriding named `hook`s at JIT time without recompiling the
+    * `:hooks` - a map of callbacks to override named `io_call` side effects.
+      This allows overriding named `io_call`s at JIT time without recompiling the
       graph.
 
     * `:garbage_collect` - when true, garbage collects
@@ -193,9 +193,8 @@ defmodule Nx.Defn.Evaluator do
     {[clauses_cache, last_cache, Map.keys(all_ids)], cache}
   end
 
-  defp compute_cache(:hook, %{data: %Expr{args: args}}, state, cache) do
+  defp compute_cache(:io_call, %{data: %Expr{args: args}}, state, cache) do
     [tensor_expr, callback_spec, template, ref] = args
-    cache = compute_cache_token_hook(callback_spec, state, cache)
     {tensor_expr, cache} = composite_compute_cache(tensor_expr, state, cache)
     {[tensor_expr, callback_spec, template, ref], cache}
   end
@@ -203,13 +202,6 @@ defmodule Nx.Defn.Evaluator do
   defp compute_cache(_op, tensor, state, cache) do
     Tree.apply_args(tensor, cache, &compute_cache(&1, state, &2))
   end
-
-  defp compute_cache_token_hook({:token_hook, hooked_expr, _inner_spec}, state, cache) do
-    {_, cache} = composite_compute_cache(hooked_expr, state, cache)
-    cache
-  end
-
-  defp compute_cache_token_hook(_callback_spec, _state, cache), do: cache
 
   ## Evaluation
 
@@ -288,9 +280,9 @@ defmodule Nx.Defn.Evaluator do
     {elem(tuple, i), caches}
   end
 
-  defp eval_apply(:hook, [tensor_expr, callback_spec, out_template, _ref], _ans, state, caches) do
+  defp eval_apply(:io_call, [tensor_expr, callback_spec, out_template, _ref], _ans, state, caches) do
     {tensor_value, caches} = composite_eval(tensor_expr, state, caches)
-    caches = run_hook_side_effect(callback_spec, tensor_value, state, caches)
+    caches = run_io_call_side_effect(callback_spec, tensor_value, state, caches)
 
     result =
       case out_template do
@@ -395,19 +387,8 @@ defmodule Nx.Defn.Evaluator do
     {apply(mod, op, args), caches}
   end
 
-  defp run_hook_side_effect({:token_hook, hooked_expr, inner_spec}, _tensor_value, state, caches) do
-    {hooked_value, caches} = composite_eval(hooked_expr, state, caches)
-
-    case resolve_hook(inner_spec, state.hooks) do
-      nil -> :ok
-      fun -> fun.(hooked_value)
-    end
-
-    caches
-  end
-
-  defp run_hook_side_effect(callback_spec, tensor_value, state, caches) do
-    case resolve_hook(callback_spec, state.hooks) do
+  defp run_io_call_side_effect(callback_spec, tensor_value, state, caches) do
+    case resolve_io_call(callback_spec, state.hooks) do
       nil -> :ok
       fun -> fun.(tensor_value)
     end
@@ -459,6 +440,6 @@ defmodule Nx.Defn.Evaluator do
     [fn -> other end | acc]
   end
 
-  defp resolve_hook({:fn, fun}, _hooks), do: fun
-  defp resolve_hook({:named, name, callback}, hooks), do: hooks[name] || callback
+  defp resolve_io_call({:fn, fun}, _hooks), do: fun
+  defp resolve_io_call({:named, name, callback}, hooks), do: hooks[name] || callback
 end

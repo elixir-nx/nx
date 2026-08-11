@@ -28,11 +28,11 @@ defmodule DistributedServings do
   defnp add_five_round_about(batch) do
     batch
     |> Nx.multiply(2)
-    |> hook(:double)
+    |> io_call(:double)
     |> Nx.add(10)
-    |> hook(:plus_ten)
+    |> io_call(:plus_ten)
     |> Nx.divide(2)
-    |> hook(:to_be_ignored)
+    |> io_call(:to_be_ignored)
   end
 
   defp wait_for_parent(parent) do

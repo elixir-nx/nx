@@ -938,7 +938,13 @@ defmodule Nx.Defn.Graph do
   end
 
   defp do_rewrite_subtree(
-         %T{data: %Expr{op: :token, id: id, args: [token]}} = expr,
+         %T{
+           data: %Expr{
+             op: :io_call,
+             id: id,
+             args: [tensor_expr, callback_spec, template, ref]
+           }
+         } = expr,
          state,
          acc
        ) do
@@ -947,19 +953,8 @@ defmodule Nx.Defn.Graph do
         {res, put_in(acc.used_args[id], res)}
 
       _ ->
-        # Each hook's payload lives in `token.hooks[].expr`, inside a
-        # `%Nx.Defn.Token{}` struct (not a `%T{}`/list) -- the generic
-        # clause's list handling silently skips it, so a hook payload that
-        # depends on a stage-boundary-hoisted value would keep its stale,
-        # pre-remap parameter reference. Traverse hook exprs here (mirrors
-        # `Nx.Defn.Tree.apply_args/4`'s `:token` clause).
-        {hooks, acc} =
-          Enum.map_reduce(token.hooks, acc, fn %{expr: hook_expr} = hook, acc ->
-            {hook_expr, acc} = composite_rewrite_subtree(hook_expr, state, acc)
-            {%{hook | expr: hook_expr}, acc}
-          end)
-
-        {put_in(expr.data.args, [%{token | hooks: hooks}]), acc}
+        {tensor_expr, acc} = composite_rewrite_subtree(tensor_expr, state, acc)
+        {put_in(expr.data.args, [tensor_expr, callback_spec, template, ref]), acc}
     end
   end
 

@@ -92,6 +92,15 @@ public:
 
   bool is_deallocated() const { return deallocated_; }
 
+  // Replace the tensor owned by this BEAM resource (e.g. after materializing
+  // a contiguous copy before exporting a data pointer).
+  void replace(torch::Tensor tensor) {
+    if (deallocated_) {
+      throw std::runtime_error("Tensor has been deallocated");
+    }
+    tensor_ = std::move(tensor);
+  }
+
 private:
   torch::Tensor tensor_;
   bool deallocated_;

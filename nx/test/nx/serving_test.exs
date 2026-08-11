@@ -51,11 +51,11 @@ defmodule Nx.ServingTest do
   defn add_five_round_about(batch) do
     batch
     |> Nx.multiply(2)
-    |> hook(:double)
+    |> io_call(:double)
     |> Nx.add(10)
-    |> hook(:plus_ten)
+    |> io_call(:plus_ten)
     |> Nx.divide(2)
-    |> hook(:to_be_ignored)
+    |> io_call(:to_be_ignored)
   end
 
   describe "run/2" do
@@ -272,8 +272,10 @@ defmodule Nx.ServingTest do
       assert catch_exit(serving |> Nx.Serving.run(stream) |> Enum.to_list())
     end
 
-    test "with input streaming and hooks" do
-      serving = Nx.Serving.jit(&Nx.multiply(&1, 2)) |> Nx.Serving.streaming(hooks: [:foo, :bar])
+    test "with input streaming and io_calls" do
+      serving =
+        Nx.Serving.jit(&Nx.multiply(&1, 2)) |> Nx.Serving.streaming(hooks: [:foo, :bar])
+
       stream = Stream.map([[1, 2], [3]], &Nx.Batch.concatenate([Nx.tensor(&1)]))
 
       assert_raise ArgumentError,
@@ -323,7 +325,7 @@ defmodule Nx.ServingTest do
       assert Nx.Defn.jit_apply(&Function.identity/1, [batch]) == Nx.tensor([[1, 2], [3, 4]])
     end
 
-    test "with hooks" do
+    test "with io_calls" do
       serving =
         Nx.Serving.jit(&add_five_round_about/1)
         |> Nx.Serving.streaming(hooks: [:double, :plus_ten])
@@ -1021,7 +1023,7 @@ defmodule Nx.ServingTest do
       assert_receive {:DOWN, ^ref, _, _, {{%RuntimeError{}, _}, {Nx.Serving, :streaming, []}}}
     end
 
-    test "2+2=2(+pad)+2(+pad) and hooks", config do
+    test "2+2=2(+pad)+2(+pad) and io_calls", config do
       serving =
         Nx.Serving.jit(&add_five_round_about/1)
         |> Nx.Serving.streaming(hooks: [:double, :plus_ten])
@@ -1054,7 +1056,7 @@ defmodule Nx.ServingTest do
       Task.await(t2, :infinity)
     end
 
-    test "2+2=4(+pad) and hooks", config do
+    test "2+2=4(+pad) and io_calls", config do
       serving =
         Nx.Serving.jit(&add_five_round_about/1)
         |> Nx.Serving.streaming(hooks: [:double, :plus_ten])
@@ -1128,7 +1130,7 @@ defmodule Nx.ServingTest do
       refute_received {:DOWN, _, _, _, _}
     end
 
-    test "with output streaming and hooks", config do
+    test "with output streaming and io_calls", config do
       serving = Nx.Serving.new(Simple, self()) |> Nx.Serving.streaming(hooks: [:foo, :bar])
       simple_supervised!(config, batch_size: 2, serving: serving)
       stream = Stream.map([[1, 2], [3]], &Nx.Batch.concatenate([Nx.tensor(&1)]))

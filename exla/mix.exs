@@ -70,8 +70,8 @@ defmodule EXLA.MixProject do
 
   defp deps do
     [
-      # {:nx, path: "../nx"},
-      {:nx, "~> 0.13"},
+      {:nx, path: "../nx"},
+      # {:nx, "~> 0.13"},
       {:telemetry, "~> 0.4.0 or ~> 1.0"},
       {:xla, "~> 0.10.0", runtime: false},
       {:fine, "~> 0.1", runtime: false},
@@ -207,7 +207,7 @@ defmodule EXLA.MixProject do
 
     if cached? do
       Mix.shell().info("Using libexla.so from #{cached_so}")
-      File.cp!(cached_so, "cache/libexla.so")
+      atomic_cp!(cached_so, "cache/libexla.so")
     end
 
     result = Mix.Tasks.Compile.ElixirMake.run(args)
@@ -215,10 +215,19 @@ defmodule EXLA.MixProject do
     if not cached? and match?({:ok, _}, result) do
       Mix.shell().info("Caching libexla.so at #{cached_so}")
       File.mkdir_p!(Path.dirname(cached_so))
-      File.cp!("cache/libexla.so", cached_so)
+      atomic_cp!("cache/libexla.so", cached_so)
     end
 
     result
+  end
+
+  # File.cp!/2 rewrites the destination in place (O_TRUNC, same inode), which
+  # corrupts any OS process that currently has the .so mmap'd. Renaming
+  # installs a new inode instead.
+  defp atomic_cp!(source, destination) do
+    tmp = "#{destination}.tmp.#{System.pid()}"
+    File.cp!(source, tmp)
+    File.rename!(tmp, destination)
   end
 
   defp xla_cache_dir() do

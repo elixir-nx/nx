@@ -199,8 +199,8 @@ defmodule Nx.Defn.Grad do
     acc
   end
 
-  defp parents_args(:hook, t, id, acc) do
-    reduce_args(:hook, t, acc, fn arg, {parents, nodes} ->
+  defp parents_args(:io_call, t, id, acc) do
+    reduce_args(:io_call, t, acc, fn arg, {parents, nodes} ->
       if arg.data.op in @constants do
         {parents, nodes}
       else
@@ -257,7 +257,7 @@ defmodule Nx.Defn.Grad do
   defp reduce_args(:gather, %{data: %{args: [arg | _]}}, acc, fun),
     do: fun.(arg, acc)
 
-  defp reduce_args(:hook, %{data: %{args: [tensor_expr | _]}}, acc, fun),
+  defp reduce_args(:io_call, %{data: %{args: [tensor_expr | _]}}, acc, fun),
     do: Composite.reduce(tensor_expr, acc, fun)
 
   defp reduce_args(:while, %{data: %{args: [initial | _]}}, acc, fun),
@@ -433,10 +433,12 @@ defmodule Nx.Defn.Grad do
     context = hd(flatten_initial).data.context
     arg_context = condition.data.context
     gs = Enum.zip_with(gs, flatten_initial, &Nx.broadcast/2)
+    n_args = length(flatten_initial)
 
     # Convert all gradients into while parameters.
-    {grad_args, _} =
-      Enum.map_reduce(gs, length(gs), fn g, pos ->
+    # Positions: arg is 0..n_args-1; grad_args continue from n_args.
+    {grad_args, pos_after_grads} =
+      Enum.map_reduce(gs, n_args, fn g, pos ->
         {Expr.parameter(g, arg_context, pos), pos + 1}
       end)
 
@@ -455,14 +457,51 @@ defmodule Nx.Defn.Grad do
       |> Composite.flatten_list()
       |> Enum.map_reduce({nodes, while_grads}, &to_grad(&1, {arg, %{}, 0}, parents, &2, []))
 
-    # And finally build a new while.
-    {_, while_gs} =
+    # Reverse-mode through while must apply body VJPs from last iteration to first.
+    # We rematerialize each intermediate state from `initial` (O(n²) time, O(1)
+    # extra memory) so the graph stays EXLA-compatible without a dynamic stack.
+    zero = Expr.tensor(0)
+    index_arg = Expr.parameter(zero, arg_context, n_args)
+
+    {_, n} =
       Expr.while(
-        {initial, List.to_tuple(gs)},
+        {initial, zero},
         context,
-        {arg, List.to_tuple(grad_args)},
+        {arg, index_arg},
         condition,
-        {body, List.to_tuple(grad_body)}
+        {body, Nx.add(index_arg, 1)}
+      )
+
+    # Carry: {s, g, k, j, s0}. Keep {arg, grad_args} at the front so existing
+    # parameter positions stay valid; append {k, j, s0} with fresh parameters.
+    k_arg = Expr.parameter(n, arg_context, pos_after_grads)
+    j_arg = Expr.parameter(zero, arg_context, pos_after_grads + 1)
+
+    {s0_arg, _} =
+      Composite.traverse(initial, pos_after_grads + 2, fn t, pos ->
+        {Expr.parameter(t, arg_context, pos), pos + 1}
+      end)
+
+    remat? = Nx.less(j_arg, Nx.subtract(k_arg, 1))
+    grad_args_tuple = List.to_tuple(grad_args)
+    grad_body_tuple = List.to_tuple(grad_body)
+
+    reverse_body =
+      {
+        select_composite(remat?, body, s0_arg),
+        select_composite(remat?, grad_args_tuple, grad_body_tuple),
+        Nx.select(remat?, k_arg, Nx.subtract(k_arg, 1)),
+        Nx.select(remat?, Nx.add(j_arg, 1), zero),
+        s0_arg
+      }
+
+    {_s, while_gs, _k, _j, _s0} =
+      Expr.while(
+        {initial, List.to_tuple(gs), n, zero, initial},
+        context,
+        {arg, grad_args_tuple, k_arg, j_arg, s0_arg},
+        Nx.greater(k_arg, 0),
+        reverse_body
       )
 
     # Now set the computed gradients for each input.
@@ -579,6 +618,15 @@ defmodule Nx.Defn.Grad do
       g = clear_axis_names(g)
       Map.update(grads, child.data.id, [g], &[g | &1])
     end)
+  end
+
+  defp select_composite(pred, left, right) do
+    {selected, []} =
+      Composite.traverse(left, Composite.flatten_list([right]), fn l, [r | rest] ->
+        {Nx.select(pred, l, r), rest}
+      end)
+
+    selected
   end
 
   ## Gradients
@@ -1181,15 +1229,28 @@ defmodule Nx.Defn.Grad do
     [{x, Nx.multiply(g, gs)}]
   end
 
-  defp grad(:hook, [tensor_expr, _, _, _], _ans, g, _batch_count) do
-    gs = List.wrap(g)
+  defp grad(
+         :io_call,
+         [tensor_expr, _callback_spec, _template, _ref],
+         _ans,
+         g,
+         _batch_count
+       ) do
+    leaf_count = Composite.reduce(tensor_expr, 0, fn _, count -> count + 1 end)
 
-    {pairs, _} =
+    gs =
+      cond do
+        is_list(g) and length(g) == leaf_count -> g
+        is_tuple(g) and tuple_size(g) == leaf_count -> Tuple.to_list(g)
+        true -> List.wrap(g)
+      end
+
+    {pairs, []} =
       Composite.reduce(tensor_expr, {[], gs}, fn child, {pairs, [grad | gs]} ->
         {[{child, grad} | pairs], gs}
       end)
 
-    pairs
+    Enum.reverse(pairs)
   end
 
   defp grad(:conjugate, [%{type: {type, _}} = t], _ans, g, _batch_count) do
@@ -1250,7 +1311,15 @@ defmodule Nx.Defn.Grad do
         :conjugate -> Nx.conjugate(a)
       end
 
-    a_inv_hermitian = Nx.LinAlg.invert(Nx.LinAlg.adjoint(a))
+    # a is triangular after transform_a; invert(A^H) via triangular_solve.
+    # :transpose already flipped triangle once; adjoint flips once more.
+    a_h = Nx.LinAlg.adjoint(a)
+
+    a_h_lower =
+      if opts[:transform_a] == :transpose, do: opts[:lower], else: not opts[:lower]
+
+    eye = Nx.eye(Nx.shape(a_h), type: Nx.type(a_h))
+    a_inv_hermitian = Nx.LinAlg.triangular_solve(a_h, eye, lower: a_h_lower)
     batch_axes = linalg_batch_axes(a_inv_hermitian)
 
     x = if b_rank_correction_axis, do: Nx.new_axis(x, b_rank_correction_axis), else: x
