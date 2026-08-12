@@ -4803,6 +4803,25 @@ defmodule Nx.Defn.GradTest do
       )
     end
 
+    @constant_rhs Nx.tensor([4.0, 3.0, 2.0])
+
+    defn solve_grad_constant_rhs(a) do
+      grad(a, fn a ->
+        a
+        |> Nx.LinAlg.solve(@constant_rhs)
+        |> Nx.sum()
+      end)
+    end
+
+    test "computes the grad when the right-hand side is a constant" do
+      a = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+
+      assert_all_close(
+        solve_grad_constant_rhs(a),
+        solve_grad_wrt_a(a, @constant_rhs)
+      )
+    end
+
     test "computes grad for batched tensor with vector b" do
       a =
         Nx.tensor([

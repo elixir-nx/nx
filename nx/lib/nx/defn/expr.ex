@@ -428,9 +428,35 @@ defmodule Nx.Defn.Expr do
     out
   end
 
+  # A block's arguments may mix traced expressions with plain constant tensors
+  # (for example `Nx.LinAlg.solve(x, b)` where `b` is closed over). Constants
+  # carry no context of their own, so take the context from the first traced
+  # argument as the fallback for those constants.
+  defp block_context(args) do
+    Enum.find_value(args, :root, fn
+      %T{data: %Expr{context: context}} -> context
+      _ -> nil
+    end)
+  end
+
+  # Preserve each already-traced argument's own context exactly as before the
+  # fix; only arguments with no context of their own (constants) fall back to
+  # the block's derived context. Must run before `to_expr/1` converts the
+  # constants into expressions, since that erases the distinction.
+  defp arg_context(%T{data: %Expr{context: context}}, _fallback), do: context
+  defp arg_context(_arg, fallback), do: fallback
+
   defp expr_block(struct, in_args, fun) do
     {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
-    params = Enum.with_index(args, &parameter/2)
+    context = block_context(args)
+    contexts = Enum.map(args, &arg_context(&1, context))
+    args = Enum.map(args, &to_expr/1)
+    in_args = args ++ opts
+
+    params =
+      args
+      |> Enum.zip(contexts)
+      |> Enum.with_index(fn {arg, arg_context}, pos -> parameter(arg, arg_context, pos) end)
 
     case apply(fun, [struct | params ++ opts]) do
       %{data: %{context: context}} = res ->

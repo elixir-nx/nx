@@ -5,6 +5,7 @@ defmodule Nx.DefnTest do
   alias Nx.Defn.{Expr, Debug, Evaluator}
   alias Nx.DefnTest.Sample
   import Nx.Defn
+  import Nx.Helpers
 
   defmacrop location(plus) do
     file = Path.relative_to_cwd(__CALLER__.file)
@@ -928,6 +929,19 @@ defmodule Nx.DefnTest do
       assert %T{data: %Expr{op: :elem, args: [svd_expr, 0]}, shape: {3, 3}} = u
       assert %T{data: %Expr{op: :elem, args: [^svd_expr, 1]}, shape: {3}} = s
       assert %T{data: %Expr{op: :elem, args: [^svd_expr, 2]}, shape: {3, 3}} = vt
+    end
+  end
+
+  describe "block" do
+    @rhs Nx.tensor([4.0, 3.0, 2.0])
+    @mat Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+
+    @tag compiler: Evaluator
+    test "accepts a constant tensor argument" do
+      assert_all_close(
+        Nx.Defn.jit(fn a -> Nx.LinAlg.solve(a, @rhs) end).(@mat),
+        Nx.LinAlg.solve(@mat, @rhs)
+      )
     end
   end
 
