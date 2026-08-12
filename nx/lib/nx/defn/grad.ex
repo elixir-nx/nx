@@ -421,6 +421,7 @@ defmodule Nx.Defn.Grad do
 
     {grads, []} =
       Composite.reduce(expr, {grads, gs}, fn child, {grads, [g | gs]} ->
+        g = match_block_cotangent(g, child)
         {Map.update(grads, child.data.id, [g], &[g | &1]), gs}
       end)
 
@@ -618,6 +619,18 @@ defmodule Nx.Defn.Grad do
       g = clear_axis_names(g)
       Map.update(grads, child.data.id, [g], &[g | &1])
     end)
+  end
+
+  # A block body receives one cotangent per output, each shaped like that
+  # output. An output nothing depends on accumulates no gradient, so
+  # `sum_grad/1` hands back the rank-0 zero, which block bodies cannot index
+  # or batch over. Restore the invariant here, once, rather than in each body.
+  defp match_block_cotangent(g, out) do
+    case {Nx.shape(g), Nx.shape(out)} do
+      {shape, shape} -> g
+      {{}, _} -> Nx.broadcast(Nx.as_type(g, Nx.type(out)), out)
+      {_, _} -> g
+    end
   end
 
   defp select_composite(pred, left, right) do

@@ -2334,6 +2334,25 @@ defmodule Nx.Defn.GradTest do
         Nx.stack([eigh_evals_grad(t[0]), eigh_evals_grad(t[1])])
       )
     end
+
+    defn eigh_evecs_grad(t) do
+      grad(t, fn x ->
+        {_evals, evecs} = Nx.LinAlg.eigh(x)
+        Nx.sum(evecs)
+      end)
+    end
+
+    test "computes the grad when only one output is consumed" do
+      t = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+
+      assert_all_close(Nx.add(eigh_evals_grad(t), eigh_evecs_grad(t)), eigh_sum_grad(t))
+    end
+
+    test "grad of the eigenvalue sum is the identity" do
+      t = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+
+      assert_all_close(eigh_evals_grad(t), Nx.eye(3, type: :f32))
+    end
   end
 
   describe "cholesky" do
@@ -2456,6 +2475,33 @@ defmodule Nx.Defn.GradTest do
 
       assert_equal(qr_grad(t), Nx.stack([qr_grad(t[0]), qr_grad(t[1])]))
     end
+
+    defn qr_q_only_grad(t) do
+      grad(t, fn x ->
+        {q, _r} = Nx.LinAlg.qr(x)
+        Nx.sum(q)
+      end)
+    end
+
+    defn qr_r_only_grad(t) do
+      grad(t, fn x ->
+        {_q, r} = Nx.LinAlg.qr(x)
+        Nx.sum(r)
+      end)
+    end
+
+    defn qr_both_grad(t) do
+      grad(t, fn x ->
+        {q, r} = Nx.LinAlg.qr(x)
+        Nx.sum(q) + Nx.sum(r)
+      end)
+    end
+
+    test "computes the grad when only one output is consumed" do
+      t = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+
+      assert_all_close(Nx.add(qr_q_only_grad(t), qr_r_only_grad(t)), qr_both_grad(t))
+    end
   end
 
   describe "lu" do
@@ -2523,6 +2569,43 @@ defmodule Nx.Defn.GradTest do
         ])
 
       assert_equal(lu_grad(t), Nx.stack([lu_grad(t[0]), lu_grad(t[1])]))
+    end
+
+    defn lu_p_only_grad(t) do
+      grad(t, fn x ->
+        {p, _l, _u} = Nx.LinAlg.lu(x)
+        Nx.sum(p)
+      end)
+    end
+
+    defn lu_l_only_grad(t) do
+      grad(t, fn x ->
+        {_p, l, _u} = Nx.LinAlg.lu(x)
+        Nx.sum(l)
+      end)
+    end
+
+    defn lu_u_only_grad(t) do
+      grad(t, fn x ->
+        {_p, _l, u} = Nx.LinAlg.lu(x)
+        Nx.sum(u)
+      end)
+    end
+
+    defn lu_all_grad(t) do
+      grad(t, fn x ->
+        {p, l, u} = Nx.LinAlg.lu(x)
+        Nx.sum(p) + Nx.sum(l) + Nx.sum(u)
+      end)
+    end
+
+    test "computes the grad when only one output is consumed" do
+      t = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+
+      assert_all_close(
+        lu_p_only_grad(t) |> Nx.add(lu_l_only_grad(t)) |> Nx.add(lu_u_only_grad(t)),
+        lu_all_grad(t)
+      )
     end
   end
 
@@ -2598,6 +2681,71 @@ defmodule Nx.Defn.GradTest do
         ])
 
       assert_equal(svd_sum_grad(t), Nx.stack([svd_sum_grad(t[0]), svd_sum_grad(t[1])]))
+    end
+
+    defn svd_u_only_grad(t) do
+      grad(t, fn x ->
+        {u, _s, _vt} = Nx.LinAlg.svd(x)
+        Nx.sum(u)
+      end)
+    end
+
+    defn svd_s_only_grad(t) do
+      grad(t, fn x ->
+        {_u, s, _vt} = Nx.LinAlg.svd(x)
+        Nx.sum(s)
+      end)
+    end
+
+    defn svd_vt_only_grad(t) do
+      grad(t, fn x ->
+        {_u, _s, vt} = Nx.LinAlg.svd(x)
+        Nx.sum(vt)
+      end)
+    end
+
+    defn svd_all_outputs_grad(t) do
+      grad(t, fn x ->
+        {u, s, vt} = Nx.LinAlg.svd(x)
+        Nx.sum(u) + Nx.sum(s) + Nx.sum(vt)
+      end)
+    end
+
+    test "computes the grad when only one output is consumed" do
+      t = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+
+      assert_all_close(
+        svd_u_only_grad(t) |> Nx.add(svd_s_only_grad(t)) |> Nx.add(svd_vt_only_grad(t)),
+        svd_all_outputs_grad(t)
+      )
+    end
+
+    test "grad of the singular value sum is u . vt" do
+      t = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+      {u, _s, vt} = Nx.LinAlg.svd(t)
+
+      assert_all_close(svd_s_only_grad(t), Nx.dot(u, vt))
+    end
+
+    test "grad with only singular values consumed batches elementwise" do
+      t = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+      batched = Nx.stack([t, Nx.multiply(t, 1.5)])
+
+      assert_equal(
+        svd_s_only_grad(batched),
+        Nx.stack([svd_s_only_grad(t), svd_s_only_grad(Nx.multiply(t, 1.5))])
+      )
+    end
+
+    test "grad with only singular values consumed works over vectorized axes" do
+      t = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+      stacked = Nx.stack([t, Nx.multiply(t, 1.5)])
+      vectorized = Nx.vectorize(stacked, :batch)
+
+      assert_equal(
+        Nx.devectorize(svd_s_only_grad(vectorized), keep_names: false),
+        Nx.stack([svd_s_only_grad(t), svd_s_only_grad(Nx.multiply(t, 1.5))])
+      )
     end
   end
 
