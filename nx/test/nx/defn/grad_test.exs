@@ -2829,14 +2829,14 @@ defmodule Nx.Defn.GradTest do
       )
     end
 
-    test "computes the composed grad for tall tensor" do
+    test "computes full-matrices grad for tall tensor" do
+      t = Nx.tensor([[3.0, 0.0], [1.0, 2.0], [1.0, 1.0]])
+
       assert_all_close(
-        svd_composed_grad(Nx.tensor([[3, 0], [1, 2], [1, 1]])),
-        Nx.tensor([
-          [25.911056518554688, 6.1099162101745605],
-          [12.69705581665039, 10.84456729888916],
-          [10.668402671813965, 6.426826477050781]
-        ])
+        svd_sum_grad(t),
+        central_diff_sum_svd(t, []),
+        atol: 1.0e-2,
+        rtol: 1.0e-2
       )
     end
 
@@ -2935,6 +2935,13 @@ defmodule Nx.Defn.GradTest do
       assert_all_close(
         svd_thin_sum_grad(t),
         central_diff_sum_svd(t, full_matrices?: false),
+        atol: 1.0e-2,
+        rtol: 1.0e-2
+      )
+
+      assert_all_close(
+        svd_sum_grad(t),
+        central_diff_sum_svd(t, []),
         atol: 1.0e-2,
         rtol: 1.0e-2
       )
