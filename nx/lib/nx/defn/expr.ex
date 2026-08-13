@@ -427,6 +427,7 @@ defmodule Nx.Defn.Expr do
 
     out
   end
+
   ## Nx.Defn AST callbacks
 
   @doc false
