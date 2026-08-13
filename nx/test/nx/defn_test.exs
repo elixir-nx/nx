@@ -933,14 +933,14 @@ defmodule Nx.DefnTest do
   end
 
   describe "block" do
-    @rhs Nx.tensor([4.0, 3.0, 2.0])
-    @mat Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
-
     @tag compiler: Evaluator
     test "accepts a constant tensor argument" do
+      rhs = Nx.tensor([4.0, 3.0, 2.0])
+      mat = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+
       assert_all_close(
-        Nx.Defn.jit(fn a -> Nx.LinAlg.solve(a, @rhs) end).(@mat),
-        Nx.LinAlg.solve(@mat, @rhs)
+        Nx.Defn.jit(fn a -> Nx.LinAlg.solve(a, rhs) end).(mat),
+        Nx.LinAlg.solve(mat, rhs)
       )
     end
   end
@@ -2148,6 +2148,40 @@ defmodule Nx.DefnTest do
       assert_raise RuntimeError,
                    ~r"cannot build defn because expressions come from different contexts: :root and {:while, #Reference<[^>]+>}",
                    fn -> while_mixed_context(Nx.tensor(0), Nx.tensor(1)) end
+    end
+
+    defn while_block_mixed_context_lhs(a) do
+      x = a + 1
+
+      while {x, i = 0}, i < 10 do
+        x_next = Nx.LinAlg.solve(a, x)
+        {x_next, i + 1}
+      end
+    end
+
+    defn while_block_mixed_context_rhs(a) do
+      x = a + 1
+
+      while {x, i = 0}, i < 10 do
+        x_next = Nx.LinAlg.solve(x, a)
+        {x_next, i + 1}
+      end
+    end
+
+    test "raises on mixed context when a block captures an outer tensor as the left argument" do
+      a = Nx.tensor([[1.0, 0.0], [0.0, 1.0]])
+
+      assert_raise RuntimeError,
+                   ~r"cannot build defn because expressions come from different contexts: \{:while, #Reference<[^>]+>\} and :root",
+                   fn -> while_block_mixed_context_lhs(a) end
+    end
+
+    test "raises on mixed context when a block captures an outer tensor as the right argument" do
+      a = Nx.tensor([[1.0, 0.0], [0.0, 1.0]])
+
+      assert_raise RuntimeError,
+                   ~r"cannot build defn because expressions come from different contexts: :root and \{:while, #Reference<[^>]+>}",
+                   fn -> while_block_mixed_context_rhs(a) end
     end
 
     defn while_condition_opts(a) do
