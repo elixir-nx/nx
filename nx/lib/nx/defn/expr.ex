@@ -428,21 +428,6 @@ defmodule Nx.Defn.Expr do
     out
   end
 
-  defp expr_block(struct, in_args, fun) do
-    {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
-    params = Enum.with_index(args, &parameter/2)
-
-    case apply(fun, [struct | params ++ opts]) do
-      %{data: %{context: context}} = res ->
-        expr(res, context, :block, [struct, in_args, res, fun])
-
-      t when is_tuple(t) ->
-        context = elem(t, 0).data.context
-        out = tuple_out(tuple_size(t))
-        tuple(expr(out, context, :block, [struct, in_args, t, fun]), Tuple.to_list(t))
-    end
-  end
-
   ## Nx.Defn AST callbacks
 
   @doc false
@@ -839,7 +824,21 @@ defmodule Nx.Defn.Expr do
 
   @impl true
   def block(struct, _output \\ nil, in_args, fun) do
-    expr_block(struct, in_args, fun)
+    {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
+    {args, context} = to_exprs(args)
+    context = context || :root
+    in_args = args ++ opts
+    params = Enum.with_index(args, fn arg, pos -> parameter(arg, context, pos) end)
+
+    case apply(fun, [struct | params ++ opts]) do
+      %{data: %{context: context}} = res ->
+        expr(res, context, :block, [struct, in_args, res, fun])
+
+      t when is_tuple(t) ->
+        context = elem(t, 0).data.context
+        out = tuple_out(tuple_size(t))
+        tuple(expr(out, context, :block, [struct, in_args, t, fun]), Tuple.to_list(t))
+    end
   end
 
   @impl true

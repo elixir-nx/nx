@@ -4803,6 +4803,16 @@ defmodule Nx.Defn.GradTest do
       )
     end
 
+    test "computes the grad when the right-hand side is a constant" do
+      a = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+      b = Nx.tensor([4.0, 3.0, 2.0])
+
+      assert_all_close(
+        Nx.Defn.grad(a, fn a -> Nx.sum(Nx.LinAlg.solve(a, b)) end),
+        solve_grad_wrt_a(a, b)
+      )
+    end
+
     test "computes grad for batched tensor with vector b" do
       a =
         Nx.tensor([
