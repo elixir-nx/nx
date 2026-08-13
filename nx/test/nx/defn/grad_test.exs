@@ -6179,6 +6179,47 @@ defmodule Nx.Defn.GradTest do
                Nx.broadcast(1.0, {4, 2, 3}) |> Nx.vectorize(batch: 4)
     end
 
+    test "same vec axis name with different input and output sizes" do
+      x = Nx.tensor([[1], [2], [3]]) |> Nx.vectorize(x: 3)
+
+      grad =
+        Nx.Defn.grad(x, fn t ->
+          devec = Nx.devectorize(t, keep_names: true)
+          new_axis = Nx.reshape(devec, {1, 3, 1}, names: [:x, nil, nil])
+          Nx.vectorize(new_axis, x: 1)
+        end)
+
+      assert grad == Nx.tensor([[1.0], [1.0], [1.0]]) |> Nx.vectorize(x: 3)
+    end
+
+    test "same vec axis name with different sizes then add" do
+      x = Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]) |> Nx.vectorize(x: 3)
+
+      grad =
+        Nx.Defn.grad(x, fn t ->
+          devec = Nx.devectorize(t, keep_names: true)
+          new_axis = Nx.reshape(devec, {1, 3, 2}, names: [:x, nil, nil])
+          vec = Nx.vectorize(new_axis, x: 1)
+          Nx.sum(Nx.add(vec, Nx.tensor([1.0, 10.0])))
+        end)
+
+      assert grad == Nx.broadcast(1.0, {3, 2}) |> Nx.vectorize(x: 3)
+    end
+
+    test "output vec axis size 1 with a different name then add" do
+      x = Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]) |> Nx.vectorize(x: 3)
+
+      grad =
+        Nx.Defn.grad(x, fn t ->
+          devec = Nx.devectorize(t, keep_names: false)
+          new_axis = Nx.reshape(devec, {1, 3, 2})
+          vec = Nx.vectorize(new_axis, y: 1)
+          Nx.sum(Nx.add(vec, Nx.tensor([1.0, 10.0])))
+        end)
+
+      assert grad == Nx.broadcast(1.0, {3, 2}) |> Nx.vectorize(x: 3)
+    end
+
     test "vectorized grad through Nx.LinAlg.qr (custom grad)" do
       x =
         Nx.tensor([
