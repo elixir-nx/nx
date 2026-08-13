@@ -1698,8 +1698,9 @@ defmodule Nx.Defn.Grad do
   defp unbroadcast(%{shape: shape} = x, res, %{shape: shape}, _batch_count), do: {x, res}
 
   defp unbroadcast(x, res, %{shape: new_shape}, batch_count) do
-    # Preserve batch dims when x doesn't already have them:
-    # x has fewer dims than batch_count, or its leading dims are all 1.
+    # Preserve batch dims when x doesn't already have them: fewer dims than
+    # batch_count, or leading 1s that expand against a larger batch. Leading 1s
+    # that already match the result are a real size-1 vec prefix — leave them.
     batch_offset =
       cond do
         batch_count == 0 ->
@@ -1708,7 +1709,11 @@ defmodule Nx.Defn.Grad do
         tuple_size(x.shape) < batch_count ->
           batch_count
 
-        Enum.all?(0..(batch_count - 1)//1, &(elem(x.shape, &1) == 1)) ->
+        tuple_size(new_shape) >= batch_count and
+            Enum.all?(
+              0..(batch_count - 1)//1,
+              &(elem(x.shape, &1) == 1 and elem(new_shape, &1) > 1)
+            ) ->
           batch_count
 
         true ->
