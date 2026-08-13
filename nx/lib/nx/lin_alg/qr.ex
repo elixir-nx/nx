@@ -200,7 +200,6 @@ defmodule Nx.LinAlg.QR do
     # and drop the matching extra columns so the multiply matches R^{-H}.
     dq_q_m = Nx.slice_along_axis(dq_q_m, 0, Nx.axis_size(r_sq, -1), axis: -1)
 
-
     r_inv_conj =
       case Nx.type(r_inv) do
         {:c, _} -> Nx.conjugate(r_inv)
