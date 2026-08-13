@@ -151,23 +151,99 @@ defmodule Nx.LinAlg.QR do
   end
 
   defn qr_grad({q, r}, {dq, dr}) do
-    # Definition taken from https://arxiv.org/pdf/2009.10071.pdf
-    # Equation (3)
-    eye = Nx.eye(Nx.shape(r), type: Nx.type(r))
-    r_inv = Nx.LinAlg.triangular_solve(r, eye, lower: false)
-    ba = batch_axes(r)
+    [dispatch_qr_grad(q, r, dq, dr)]
+  end
+
+  # Square / reduced-tall / complete-tall: https://arxiv.org/pdf/2009.10071.pdf Equation (3).
+  # Wide: Proposition 2 in the same paper (partition R = [U | V]).
+  deftransformp dispatch_qr_grad(q, r, dq, dr) do
+    rank = tuple_size(Nx.shape(r))
+    r_rows = elem(Nx.shape(r), rank - 2)
+    r_cols = elem(Nx.shape(r), rank - 1)
+
+    if r_rows < r_cols do
+      qr_grad_wide(q, r, dq, dr)
+    else
+      qr_grad_square(q, r, dq, dr)
+    end
+  end
+
+  defnp qr_grad_square(q, r, dq, dr) do
+    r_sq = take_square_r(r)
+    eye = Nx.eye(Nx.shape(r_sq), type: Nx.type(r))
+    r_inv = Nx.LinAlg.triangular_solve(r_sq, eye, lower: false)
+    batch_axes = batch_axes(r)
+
+    dr_conj =
+      case Nx.type(dr) do
+        {:c, _} -> Nx.conjugate(dr)
+        _ -> dr
+      end
+
+    dq_conj =
+      case Nx.type(dq) do
+        {:c, _} -> Nx.conjugate(dq)
+        _ -> dq
+      end
 
     m =
-      Nx.dot(r, [-1], ba, Nx.LinAlg.adjoint(dr), [-2], ba)
-      |> Nx.subtract(Nx.dot(Nx.LinAlg.adjoint(dq), [-1], ba, q, [-2], ba))
+      r
+      |> Nx.dot([-1], batch_axes, dr_conj, [-1], batch_axes)
+      |> Nx.subtract(Nx.dot(dq_conj, [-2], batch_axes, q, [-2], batch_axes))
 
     # copyltu
     m_ltu = Nx.tril(m) |> Nx.add(m |> Nx.tril(k: -1) |> Nx.LinAlg.adjoint())
 
-    q_m = Nx.dot(q, [-1], ba, m_ltu, [-2], ba)
-    da = Nx.dot(Nx.add(dq, q_m), [-1], ba, Nx.LinAlg.adjoint(r_inv), [-2], ba)
+    dq_q_m = dq + Nx.dot(q, [-1], batch_axes, m_ltu, [-2], batch_axes)
 
-    [da]
+    # R may have extra zero rows (complete tall). Invert the leading square block
+    # and drop the matching extra columns so the multiply matches R^{-H}.
+    dq_q_m = Nx.slice_along_axis(dq_q_m, 0, Nx.axis_size(r_sq, -1), axis: -1)
+
+
+    r_inv_conj =
+      case Nx.type(r_inv) do
+        {:c, _} -> Nx.conjugate(r_inv)
+        _ -> r_inv
+      end
+
+    Nx.dot(dq_q_m, [-1], batch_axes, r_inv_conj, [-1], batch_axes)
+  end
+
+  defnp qr_grad_wide(q, r, dq, dr) do
+    m = Nx.axis_size(q, -2)
+    u = Nx.slice_along_axis(r, 0, m, axis: -1)
+    du = Nx.slice_along_axis(dr, 0, m, axis: -1)
+    v = Nx.slice_along_axis(r, m, Nx.axis_size(r, -1) - m, axis: -1)
+    dv = Nx.slice_along_axis(dr, m, Nx.axis_size(dr, -1) - m, axis: -1)
+
+    batch_axes = batch_axes(r)
+    y = Nx.dot(q, [-1], batch_axes, v, [-2], batch_axes)
+
+    # Use implicit transpose in dot instead of adjoint
+    dv_conj =
+      case Nx.type(dv) do
+        {:c, _} -> Nx.conjugate(dv)
+        _ -> dv
+      end
+
+    dq_prime =
+      dq + Nx.dot(y, [-1], batch_axes, dv_conj, [-1], batch_axes)
+
+    dx = qr_grad_square(q, u, dq_prime, du)
+    dy = Nx.dot(q, [-1], batch_axes, dv, [-2], batch_axes)
+    Nx.concatenate([dx, dy], axis: -1)
+  end
+
+  deftransformp take_square_r(r) do
+    rank = tuple_size(Nx.shape(r))
+    rows = elem(Nx.shape(r), rank - 2)
+    cols = elem(Nx.shape(r), rank - 1)
+    k = min(rows, cols)
+
+    r
+    |> Nx.slice_along_axis(0, k, axis: -2)
+    |> Nx.slice_along_axis(0, k, axis: -1)
   end
 
   deftransformp batch_axes(t) do

@@ -2583,6 +2583,99 @@ defmodule Nx.Defn.GradTest do
 
       assert_all_close(Nx.add(qr_q_only_grad(t), qr_r_only_grad(t)), qr_both_grad(t))
     end
+
+    defn qr_complete_grad(t) do
+      grad(t, fn x ->
+        {q, r} = Nx.LinAlg.qr(x, mode: :complete)
+        Nx.sum(q) + Nx.sum(r)
+      end)
+    end
+
+    defn qr_complete_q_only_grad(t) do
+      grad(t, fn x ->
+        {q, _r} = Nx.LinAlg.qr(x, mode: :complete)
+        Nx.sum(q)
+      end)
+    end
+
+    defn qr_complete_r_only_grad(t) do
+      grad(t, fn x ->
+        {_q, r} = Nx.LinAlg.qr(x, mode: :complete)
+        Nx.sum(r)
+      end)
+    end
+
+    test "computes grad for tall tensor" do
+      t = Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+
+      assert_all_close(qr_both_grad(t), central_diff_sum_qr(t, []), atol: 1.0e-2, rtol: 1.0e-2)
+    end
+
+    test "computes grad for wide tensor" do
+      t = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+
+      assert_all_close(qr_both_grad(t), central_diff_sum_qr(t, []), atol: 1.0e-2, rtol: 1.0e-2)
+      assert_all_close(Nx.add(qr_q_only_grad(t), qr_r_only_grad(t)), qr_both_grad(t))
+    end
+
+    test "computes grad for tall tensor with mode: :complete" do
+      t = Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+
+      assert_all_close(
+        qr_complete_grad(t),
+        central_diff_sum_qr(t, mode: :complete),
+        atol: 1.0e-2,
+        rtol: 1.0e-2
+      )
+
+      assert_all_close(
+        Nx.add(qr_complete_q_only_grad(t), qr_complete_r_only_grad(t)),
+        qr_complete_grad(t)
+      )
+    end
+
+    test "computes grad for batched wide tensor" do
+      t =
+        Nx.tensor([
+          [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+          [[3.0, 1.0, 2.0], [2.0, 4.0, 1.0]]
+        ])
+
+      assert_equal(qr_both_grad(t), Nx.stack([qr_both_grad(t[0]), qr_both_grad(t[1])]))
+    end
+
+    test "computes grad for batched complete tensor" do
+      t =
+        Nx.tensor([
+          [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]],
+          [[3.0, 1.0], [2.0, 4.0], [1.0, 2.0]]
+        ])
+
+      assert_equal(
+        qr_complete_grad(t),
+        Nx.stack([qr_complete_grad(t[0]), qr_complete_grad(t[1])])
+      )
+    end
+
+    defp central_diff_sum_qr(t, opts, eps \\ 1.0e-3) do
+      loss = fn x ->
+        {q, r} = Nx.LinAlg.qr(x, opts)
+        Nx.add(Nx.sum(q), Nx.sum(r))
+      end
+
+      {m, n} = Nx.shape(t)
+
+      Nx.tensor(
+        for i <- 0..(m - 1) do
+          for j <- 0..(n - 1) do
+            idx = Nx.tensor([i, j])
+            plus = loss.(Nx.indexed_add(t, idx, eps))
+            minus = loss.(Nx.indexed_add(t, idx, -eps))
+            Nx.to_number(Nx.subtract(plus, minus)) / (2 * eps)
+          end
+        end
+      )
+    end
   end
 
   describe "lu" do
@@ -6033,6 +6126,32 @@ defmodule Nx.Defn.GradTest do
 
       check_vectorized_grad(x, fn t ->
         {q, r} = Nx.LinAlg.qr(t)
+        Nx.add(Nx.sum(q), Nx.sum(r))
+      end)
+    end
+
+    test "vectorized grad through Nx.LinAlg.qr for wide and complete" do
+      wide =
+        Nx.tensor([
+          [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+          [[3.0, 1.0, 2.0], [2.0, 4.0, 1.0]]
+        ])
+        |> Nx.vectorize(:batch)
+
+      check_vectorized_grad(wide, fn t ->
+        {q, r} = Nx.LinAlg.qr(t)
+        Nx.add(Nx.sum(q), Nx.sum(r))
+      end)
+
+      tall =
+        Nx.tensor([
+          [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]],
+          [[7.0, 8.0], [9.0, 10.0], [11.0, 12.0]]
+        ])
+        |> Nx.vectorize(:batch)
+
+      check_vectorized_grad(tall, fn t ->
+        {q, r} = Nx.LinAlg.qr(t, mode: :complete)
         Nx.add(Nx.sum(q), Nx.sum(r))
       end)
     end
