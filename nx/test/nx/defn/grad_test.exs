@@ -2921,6 +2921,62 @@ defmodule Nx.Defn.GradTest do
         Nx.stack([svd_s_only_grad(t), svd_s_only_grad(Nx.multiply(t, 1.5))])
       )
     end
+
+    defn svd_thin_sum_grad(t) do
+      grad(t, fn x ->
+        {u, s, vt} = Nx.LinAlg.svd(x, full_matrices?: false)
+        Nx.sum(u) + Nx.sum(s) + Nx.sum(vt)
+      end)
+    end
+
+    test "computes grad for wide tensor" do
+      t = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+
+      assert_all_close(
+        svd_thin_sum_grad(t),
+        central_diff_sum_svd(t, full_matrices?: false),
+        atol: 1.0e-2,
+        rtol: 1.0e-2
+      )
+
+      {u, _s, vt} = Nx.LinAlg.svd(t, full_matrices?: false)
+      assert_all_close(svd_s_only_grad(t), Nx.dot(u, vt), atol: 1.0e-3, rtol: 1.0e-3)
+
+      assert_all_close(
+        svd_u_only_grad(t) |> Nx.add(svd_s_only_grad(t)) |> Nx.add(svd_vt_only_grad(t)),
+        svd_all_outputs_grad(t)
+      )
+    end
+
+    test "computes grad for batched wide tensor" do
+      t =
+        Nx.tensor([
+          [[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]],
+          [[3.0, 1.0, 2.0], [2.0, 4.0, 1.0]]
+        ])
+
+      assert_equal(svd_sum_grad(t), Nx.stack([svd_sum_grad(t[0]), svd_sum_grad(t[1])]))
+    end
+
+    defp central_diff_sum_svd(t, opts, eps \\ 1.0e-3) do
+      loss = fn x ->
+        {u, s, vt} = Nx.LinAlg.svd(x, opts)
+        Nx.add(Nx.sum(u), Nx.add(Nx.sum(s), Nx.sum(vt)))
+      end
+
+      {m, n} = Nx.shape(t)
+
+      Nx.tensor(
+        for i <- 0..(m - 1) do
+          for j <- 0..(n - 1) do
+            idx = Nx.tensor([i, j])
+            plus = loss.(Nx.indexed_add(t, idx, eps))
+            minus = loss.(Nx.indexed_add(t, idx, -eps))
+            Nx.to_number(Nx.subtract(plus, minus)) / (2 * eps)
+          end
+        end
+      )
+    end
   end
 
   describe "invert" do

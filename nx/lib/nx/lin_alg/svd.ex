@@ -316,15 +316,36 @@ defmodule Nx.LinAlg.SVD do
     u_out * sign_r
   end
 
-  defnp svd_grad({u, s_input, vt}, input, {du, ds, dvt}) do
+  defn svd_grad({u, s_input, vt}, input, g) do
+    [dispatch_svd_grad({u, s_input, vt}, input, g)]
+  end
+
+  # Tall / square: https://j-towns.github.io/papers/svd-derivative.pdf
+  # Wide: SVD(Aᴴ) swaps U and V, so reuse the tall VJP and adjoint da.
+  deftransformp dispatch_svd_grad({u, s_input, vt}, input, {du, ds, dvt}) do
+    rank = tuple_size(Nx.shape(input))
+    m = elem(Nx.shape(input), rank - 2)
+    n = elem(Nx.shape(input), rank - 1)
+
+    if m < n do
+      da_h =
+        svd_grad_tall(
+          {Nx.LinAlg.adjoint(vt), s_input, Nx.LinAlg.adjoint(u)},
+          Nx.LinAlg.adjoint(input),
+          {Nx.LinAlg.adjoint(dvt), ds, Nx.LinAlg.adjoint(du)}
+        )
+
+      Nx.LinAlg.adjoint(da_h)
+    else
+      svd_grad_tall({u, s_input, vt}, input, {du, ds, dvt})
+    end
+  end
+
+  defnp svd_grad_tall({u, s_input, vt}, input, {du, ds, dvt}) do
     m = Nx.axis_size(input, -2)
     n = Nx.axis_size(input, -1)
     k = Nx.axis_size(s_input, -1)
     batch_axes = batch_axes(input)
-
-    if m < n do
-      raise "grad for Nx.LinAlg.svd/2 not implemented for the wide matrix case"
-    end
 
     u =
       if m == n do
@@ -400,7 +421,7 @@ defmodule Nx.LinAlg.SVD do
     dvt_component =
       Nx.dot(u, [-1], batch_axes, first_dvt_component + second_dvt_component, [-2], batch_axes)
 
-    [du_component + ds_component + dvt_component]
+    du_component + ds_component + dvt_component
   end
 
   deftransformp batch_axes(t) do
