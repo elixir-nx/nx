@@ -401,6 +401,7 @@ defmodule Nx.Defn.Grad do
 
           _ ->
             g = gs |> Tuple.to_list() |> Enum.map(&sum_grad/1)
+            g = broadcast_tuple_grads(op, args, g)
             {nodes, update_grads(op, args, ans, g, to_grad_ids, grads)}
         end
 
@@ -619,6 +620,26 @@ defmodule Nx.Defn.Grad do
       Map.update(grads, child.data.id, [g], &[g | &1])
     end)
   end
+
+  # Unused tuple outputs get a rank-0 zero from `sum_grad([])`. Broadcast
+  # each slot onto the primal leaf, as `update_grads(:while, ...)` does.
+  defp broadcast_tuple_grads(op, args, gs) do
+    case tuple_primal(op, args) do
+      nil ->
+        gs
+
+      primal ->
+        Enum.zip_with(gs, Composite.flatten_list([primal]), fn g, out ->
+          Nx.broadcast(g, Nx.devectorize(out, keep_names: false))
+        end)
+    end
+  end
+
+  defp tuple_primal(:block, [_, _, expr | _]), do: expr
+  defp tuple_primal(:metadata, [expr | _]), do: expr
+  defp tuple_primal(:cond, [_, last]), do: last
+  defp tuple_primal(:io_call, [tensor_expr | _]), do: tensor_expr
+  defp tuple_primal(_, _), do: nil
 
   defp select_composite(pred, left, right) do
     {selected, []} =

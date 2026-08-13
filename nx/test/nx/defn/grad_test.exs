@@ -93,6 +93,48 @@ defmodule Nx.Defn.GradTest do
       assert_receive {:io_call, tensor}
       assert tensor == Nx.tensor(6.0)
     end
+
+    defn io_call_tuple_pair(x) do
+      r = {Nx.multiply(x, 2.0), Nx.multiply(x, 3.0)}
+
+      io_call(
+        custom_grad(r, [x], fn {ga, gb} ->
+          n = Nx.axis_size(ga, -2)
+          [Nx.add(Nx.multiply(ga, n * 1.0), gb)]
+        end),
+        :tuple_grad
+      )
+    end
+
+    defn io_call_tuple_both(x) do
+      grad(x, fn x ->
+        {p, q} = io_call_tuple_pair(x)
+        Nx.sum(p) + Nx.sum(q)
+      end)
+    end
+
+    defn io_call_tuple_first(x) do
+      grad(x, fn x ->
+        {p, _} = io_call_tuple_pair(x)
+        Nx.sum(p)
+      end)
+    end
+
+    defn io_call_tuple_second(x) do
+      grad(x, fn x ->
+        {_, q} = io_call_tuple_pair(x)
+        Nx.sum(q)
+      end)
+    end
+
+    test "computes grad when only one tuple output is consumed" do
+      a = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+
+      assert_all_close(
+        Nx.add(io_call_tuple_first(a), io_call_tuple_second(a)),
+        io_call_tuple_both(a)
+      )
+    end
   end
 
   describe "metadata" do
@@ -122,6 +164,45 @@ defmodule Nx.Defn.GradTest do
 
     test "computes custom grad" do
       assert {x, x} = custom_grad_meta(Nx.tensor(1))
+    end
+
+    defn custom_grad_tuple_pair(x) do
+      r = {Nx.multiply(x, 2.0), Nx.multiply(x, 3.0)}
+
+      custom_grad(r, [x], fn {ga, gb} ->
+        n = Nx.axis_size(ga, -2)
+        [Nx.add(Nx.multiply(ga, n * 1.0), gb)]
+      end)
+    end
+
+    defn custom_grad_tuple_both(x) do
+      grad(x, fn x ->
+        {p, q} = custom_grad_tuple_pair(x)
+        Nx.sum(p) + Nx.sum(q)
+      end)
+    end
+
+    defn custom_grad_tuple_first(x) do
+      grad(x, fn x ->
+        {p, _} = custom_grad_tuple_pair(x)
+        Nx.sum(p)
+      end)
+    end
+
+    defn custom_grad_tuple_second(x) do
+      grad(x, fn x ->
+        {_, q} = custom_grad_tuple_pair(x)
+        Nx.sum(q)
+      end)
+    end
+
+    test "computes custom grad when only one tuple output is consumed" do
+      a = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+
+      assert_all_close(
+        Nx.add(custom_grad_tuple_first(a), custom_grad_tuple_second(a)),
+        custom_grad_tuple_both(a)
+      )
     end
 
     defn random_meta(t), do: grad(t, fn t -> t |> Nx.exp() |> random_meta_transform() end)
@@ -2334,6 +2415,25 @@ defmodule Nx.Defn.GradTest do
         Nx.stack([eigh_evals_grad(t[0]), eigh_evals_grad(t[1])])
       )
     end
+
+    defn eigh_evecs_grad(t) do
+      grad(t, fn x ->
+        {_evals, evecs} = Nx.LinAlg.eigh(x)
+        Nx.sum(evecs)
+      end)
+    end
+
+    test "computes the grad when only one output is consumed" do
+      t = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+
+      assert_all_close(Nx.add(eigh_evals_grad(t), eigh_evecs_grad(t)), eigh_sum_grad(t))
+    end
+
+    test "grad of the eigenvalue sum is the identity" do
+      t = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+
+      assert_all_close(eigh_evals_grad(t), Nx.eye(3, type: :f32))
+    end
   end
 
   describe "cholesky" do
@@ -2456,6 +2556,33 @@ defmodule Nx.Defn.GradTest do
 
       assert_equal(qr_grad(t), Nx.stack([qr_grad(t[0]), qr_grad(t[1])]))
     end
+
+    defn qr_q_only_grad(t) do
+      grad(t, fn x ->
+        {q, _r} = Nx.LinAlg.qr(x)
+        Nx.sum(q)
+      end)
+    end
+
+    defn qr_r_only_grad(t) do
+      grad(t, fn x ->
+        {_q, r} = Nx.LinAlg.qr(x)
+        Nx.sum(r)
+      end)
+    end
+
+    defn qr_both_grad(t) do
+      grad(t, fn x ->
+        {q, r} = Nx.LinAlg.qr(x)
+        Nx.sum(q) + Nx.sum(r)
+      end)
+    end
+
+    test "computes the grad when only one output is consumed" do
+      t = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+
+      assert_all_close(Nx.add(qr_q_only_grad(t), qr_r_only_grad(t)), qr_both_grad(t))
+    end
   end
 
   describe "lu" do
@@ -2523,6 +2650,43 @@ defmodule Nx.Defn.GradTest do
         ])
 
       assert_equal(lu_grad(t), Nx.stack([lu_grad(t[0]), lu_grad(t[1])]))
+    end
+
+    defn lu_p_only_grad(t) do
+      grad(t, fn x ->
+        {p, _l, _u} = Nx.LinAlg.lu(x)
+        Nx.sum(p)
+      end)
+    end
+
+    defn lu_l_only_grad(t) do
+      grad(t, fn x ->
+        {_p, l, _u} = Nx.LinAlg.lu(x)
+        Nx.sum(l)
+      end)
+    end
+
+    defn lu_u_only_grad(t) do
+      grad(t, fn x ->
+        {_p, _l, u} = Nx.LinAlg.lu(x)
+        Nx.sum(u)
+      end)
+    end
+
+    defn lu_all_grad(t) do
+      grad(t, fn x ->
+        {p, l, u} = Nx.LinAlg.lu(x)
+        Nx.sum(p) + Nx.sum(l) + Nx.sum(u)
+      end)
+    end
+
+    test "computes the grad when only one output is consumed" do
+      t = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+
+      assert_all_close(
+        lu_p_only_grad(t) |> Nx.add(lu_l_only_grad(t)) |> Nx.add(lu_u_only_grad(t)),
+        lu_all_grad(t)
+      )
     end
   end
 
@@ -2598,6 +2762,71 @@ defmodule Nx.Defn.GradTest do
         ])
 
       assert_equal(svd_sum_grad(t), Nx.stack([svd_sum_grad(t[0]), svd_sum_grad(t[1])]))
+    end
+
+    defn svd_u_only_grad(t) do
+      grad(t, fn x ->
+        {u, _s, _vt} = Nx.LinAlg.svd(x)
+        Nx.sum(u)
+      end)
+    end
+
+    defn svd_s_only_grad(t) do
+      grad(t, fn x ->
+        {_u, s, _vt} = Nx.LinAlg.svd(x)
+        Nx.sum(s)
+      end)
+    end
+
+    defn svd_vt_only_grad(t) do
+      grad(t, fn x ->
+        {_u, _s, vt} = Nx.LinAlg.svd(x)
+        Nx.sum(vt)
+      end)
+    end
+
+    defn svd_all_outputs_grad(t) do
+      grad(t, fn x ->
+        {u, s, vt} = Nx.LinAlg.svd(x)
+        Nx.sum(u) + Nx.sum(s) + Nx.sum(vt)
+      end)
+    end
+
+    test "computes the grad when only one output is consumed" do
+      t = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+
+      assert_all_close(
+        svd_u_only_grad(t) |> Nx.add(svd_s_only_grad(t)) |> Nx.add(svd_vt_only_grad(t)),
+        svd_all_outputs_grad(t)
+      )
+    end
+
+    test "grad of the singular value sum is u . vt" do
+      t = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+      {u, _s, vt} = Nx.LinAlg.svd(t)
+
+      assert_all_close(svd_s_only_grad(t), Nx.dot(u, vt))
+    end
+
+    test "grad with only singular values consumed batches elementwise" do
+      t = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+      batched = Nx.stack([t, Nx.multiply(t, 1.5)])
+
+      assert_equal(
+        svd_s_only_grad(batched),
+        Nx.stack([svd_s_only_grad(t), svd_s_only_grad(Nx.multiply(t, 1.5))])
+      )
+    end
+
+    test "grad with only singular values consumed works over vectorized axes" do
+      t = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+      stacked = Nx.stack([t, Nx.multiply(t, 1.5)])
+      vectorized = Nx.vectorize(stacked, :batch)
+
+      assert_equal(
+        Nx.devectorize(svd_s_only_grad(vectorized), keep_names: false),
+        Nx.stack([svd_s_only_grad(t), svd_s_only_grad(Nx.multiply(t, 1.5))])
+      )
     end
   end
 
@@ -3227,6 +3456,52 @@ defmodule Nx.Defn.GradTest do
       assert grad_if_tuple(Nx.tensor(2)) == Nx.tensor(112.0)
       assert grad_if_tuple(Nx.tensor(-1)) == Nx.tensor(5.0)
       assert grad_if_tuple(Nx.tensor(-2)) == Nx.tensor(444.0)
+    end
+
+    defn if_tuple_pair(x) do
+      r = {Nx.multiply(x, 2.0), Nx.multiply(x, 3.0)}
+
+      pair =
+        custom_grad(r, [x], fn {ga, gb} ->
+          n = Nx.axis_size(ga, -2)
+          [Nx.add(Nx.multiply(ga, n * 1.0), gb)]
+        end)
+
+      if Nx.sum(x) > 0 do
+        pair
+      else
+        pair
+      end
+    end
+
+    defn if_tuple_both(x) do
+      grad(x, fn x ->
+        {p, q} = if_tuple_pair(x)
+        Nx.sum(p) + Nx.sum(q)
+      end)
+    end
+
+    defn if_tuple_first(x) do
+      grad(x, fn x ->
+        {p, _} = if_tuple_pair(x)
+        Nx.sum(p)
+      end)
+    end
+
+    defn if_tuple_second(x) do
+      grad(x, fn x ->
+        {_, q} = if_tuple_pair(x)
+        Nx.sum(q)
+      end)
+    end
+
+    test "computes grad when only one tuple output is consumed" do
+      a = Nx.tensor([[4.0, 1.0, 0.5], [1.0, 3.0, 0.2], [0.5, 0.2, 2.0]])
+
+      assert_all_close(
+        Nx.add(if_tuple_first(a), if_tuple_second(a)),
+        if_tuple_both(a)
+      )
     end
   end
 
