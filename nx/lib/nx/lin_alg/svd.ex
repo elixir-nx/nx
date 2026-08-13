@@ -316,15 +316,39 @@ defmodule Nx.LinAlg.SVD do
     u_out * sign_r
   end
 
-  defnp svd_grad({u, s_input, vt}, input, {du, ds, dvt}) do
+  defn svd_grad({u, s_input, vt}, input, g) do
+    [dispatch_svd_grad({u, s_input, vt}, input, g)]
+  end
+
+  # Tall / square: https://j-towns.github.io/papers/svd-derivative.pdf
+  # Wide: SVD(Aᴴ) swaps U and V, so reuse the tall VJP and adjoint da.
+  deftransformp dispatch_svd_grad({u, s_input, vt}, input, {du, ds, dvt}) do
+    rank = tuple_size(Nx.shape(input))
+    m = elem(Nx.shape(input), rank - 2)
+    n = elem(Nx.shape(input), rank - 1)
+
+    if m < n do
+      da_h =
+        svd_grad_tall(
+          {Nx.LinAlg.adjoint(vt), s_input, Nx.LinAlg.adjoint(u)},
+          Nx.LinAlg.adjoint(input),
+          {Nx.LinAlg.adjoint(dvt), ds, Nx.LinAlg.adjoint(du)}
+        )
+
+      Nx.LinAlg.adjoint(da_h)
+    else
+      svd_grad_tall({u, s_input, vt}, input, {du, ds, dvt})
+    end
+  end
+
+  defnp svd_grad_tall({u, s_input, vt}, input, {du, ds, dvt}) do
     m = Nx.axis_size(input, -2)
     n = Nx.axis_size(input, -1)
     k = Nx.axis_size(s_input, -1)
     batch_axes = batch_axes(input)
 
-    if m < n do
-      raise "grad for Nx.LinAlg.svd/2 not implemented for the wide matrix case"
-    end
+    u_full = u
+    du_full = du
 
     u =
       if m == n do
@@ -400,7 +424,35 @@ defmodule Nx.LinAlg.SVD do
     dvt_component =
       Nx.dot(u, [-1], batch_axes, first_dvt_component + second_dvt_component, [-2], batch_axes)
 
-    [du_component + ds_component + dvt_component]
+    da = du_component + ds_component + dvt_component
+    add_extra_u_term(da, u_full, du_full, u, s_inv, vt)
+  end
+
+  # Full-matrices leftover columns U2 (tall) or V2 (wide, after adjoint swap).
+  # dA += -U2 dU2ᴴ U1 S⁻¹ Vᴴ
+  # Giles NA-08-01 §3: https://people.maths.ox.ac.uk/gilesm/files/NA-08-01.pdf
+  # TensorFlow _SvdGrad: leftover V2 term after the thin VJP.
+  deftransformp add_extra_u_term(da, u, du, u1, s_inv, vt) do
+    rank = tuple_size(Nx.shape(u))
+    u_cols = elem(Nx.shape(u), rank - 1)
+    k = elem(Nx.shape(u1), rank - 1)
+
+    if u_cols > k do
+      ba = batch_axes(u)
+      u2 = Nx.slice_along_axis(u, k, u_cols - k, axis: -1)
+      du2 = Nx.slice_along_axis(du, k, u_cols - k, axis: -1)
+
+      u2_du2h = Nx.dot(u2, [-1], ba, Nx.LinAlg.adjoint(du2), [-2], ba)
+
+      u1_sinv_vt =
+        u1
+        |> Nx.dot([-1], ba, s_inv, [-2], ba)
+        |> Nx.dot([-1], ba, vt, [-2], ba)
+
+      Nx.subtract(da, Nx.dot(u2_du2h, [-1], ba, u1_sinv_vt, [-2], ba))
+    else
+      da
+    end
   end
 
   deftransformp batch_axes(t) do
