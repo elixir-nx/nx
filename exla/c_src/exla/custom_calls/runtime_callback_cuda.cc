@@ -104,15 +104,10 @@ ffi::Error exla_runtime_callback_cuda_impl(
     ffi::Result<ffi::AnyBuffer> ret = *maybe_ret_or;
     ffi::AnyBuffer out = *ret;
 
-    size_t size = ffi::ByteWidth(out.element_type()) *
-                  static_cast<size_t>(out.element_count());
-
-    host_output_buffers.emplace_back(size);
-    std::vector<uint8_t> &host_out = host_output_buffers.back();
-
-    exla::callback_bridge::OutputBuffer obuf;
-    obuf.data = host_out.data();
-    obuf.size = size;
+    exla::callback_bridge::OutputBuffer obuf(out);
+    host_output_buffers.emplace_back(obuf.size);
+    // The callback writes into host memory; the H->D copy happens after.
+    obuf.data = host_output_buffers.back().data();
     outputs.push_back(obuf);
 
     device_output_ptrs.push_back(out.untyped_data());
