@@ -39,7 +39,6 @@ struct OutputBuffer {
   uint8_t *data = nullptr;
   size_t size = 0;
 
-  OutputBuffer() = default;
   OutputBuffer(const xla::ffi::AnyBuffer &buf);
 };
 
