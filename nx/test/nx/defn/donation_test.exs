@@ -46,6 +46,34 @@ defmodule Nx.Defn.DonationTest do
     end
   end
 
+  describe "donatable propagation" do
+    test "expression parameters keep the mark, expressions built from them do not" do
+      template = Nx.donatable(Nx.template({3}, {:s, 32}))
+
+      {_fun, [param], _templates, _flatten} =
+        Nx.Defn.Compiler.to_lazy_params(fn t -> t end, [template])
+
+      assert param.donatable?
+      refute Nx.add(param, 1).donatable?
+      refute Nx.sum(param).donatable?
+      refute Nx.reshape(param, {3, 1}).donatable?
+    end
+
+    test "results of a jitted function are not donatable" do
+      fun = Nx.Defn.jit(&Nx.add(&1, 1))
+      refute Nx.donatable?(fun.(Nx.donatable(Nx.tensor([1, 2, 3]))))
+    end
+
+    test "results are not donatable when only part of a container is" do
+      fun = Nx.Defn.jit(fn %{a: a, b: b} -> %{a: Nx.add(a, b), b: Nx.multiply(b, 2)} end)
+
+      result = fun.(%{a: Nx.donatable(Nx.tensor([1, 2])), b: Nx.tensor([3, 4])})
+
+      refute Nx.donatable?(result.a)
+      refute Nx.donatable?(result.b)
+    end
+  end
+
   describe "to_lazy_params" do
     test "preserves donatable on templates and expression parameters" do
       # Map keys are traversed in sorted order: :b then :w

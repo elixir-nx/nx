@@ -159,6 +159,34 @@ defmodule EXLA.Defn.DonationTest do
       end
     end
 
+    test "results are not donatable" do
+      x = Nx.donatable(on_device([1, 2, 3]))
+
+      result = EXLA.jit(&Nx.add(&1, 1)).(x)
+
+      refute Nx.donatable?(result)
+      # The mark must not survive into a later call either, which would donate
+      # a buffer the caller never offered.
+      assert Nx.to_flat_list(EXLA.jit(&Nx.sum/1).(result)) == [9]
+    end
+
+    test "a result which is the donated argument itself is not donatable" do
+      x = Nx.donatable(on_device([1, 2, 3]))
+      y = on_device([10, 20, 30])
+      %EXLA.Backend{buffer: %DeviceBuffer{} = xb} = x.data
+
+      {passed_through, sum} = EXLA.jit(fn a, b -> {a, Nx.add(b, 1)} end).(x, y)
+
+      refute Nx.donatable?(passed_through)
+      refute Nx.donatable?(sum)
+      assert Nx.to_flat_list(passed_through) == [1, 2, 3]
+
+      # The argument was still donated, its buffer now backs the result.
+      assert_raise RuntimeError, ~r"called on deleted or donated buffer", fn ->
+        DeviceBuffer.read(xb)
+      end
+    end
+
     test "inspect shows a clear message after donation" do
       x = Nx.donatable(on_device([1, 2, 3]))
       _ = EXLA.jit(&Nx.add(&1, 1)).(x)
