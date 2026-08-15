@@ -1333,8 +1333,17 @@ defmodule Nx.Defn.Expr do
     {atom, make_ref()}
   end
 
-  defp expr(tensor, context, op, args) do
+  # Expression nodes are built by copying the shape, type and names of an
+  # existing tensor, which would also carry over its `donatable?` mark. The mark
+  # says a specific buffer may be reused, so it is only meaningful on a
+  # parameter, which stands for an argument the caller handed us. Everything
+  # else is computed and gets a buffer of its own.
+  defp expr(tensor, context, :parameter = op, args) do
     %{tensor | data: %Expr{id: id(), op: op, args: args, context: context}}
+  end
+
+  defp expr(tensor, context, op, args) do
+    %{tensor | data: %Expr{id: id(), op: op, args: args, context: context}, donatable?: false}
   end
 
   defp to_expr(%T{data: %Expr{}} = t),

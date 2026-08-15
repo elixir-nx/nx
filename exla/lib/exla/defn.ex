@@ -384,7 +384,15 @@ defmodule EXLA.Defn do
             inputs_and_io_calls =
               Outfeed.used_inputs_and_io_calls(expr, used_inputs, lazy_transfers)
 
-            {expr, {make_ref(), Nx.to_template(expr), inputs_and_io_calls}}
+            # A parameter returned as is keeps the donatable mark of the
+            # argument behind it. The caller owns whatever comes back and has
+            # not asked to donate it again, so results are never donatable.
+            outputs =
+              expr
+              |> Nx.to_template()
+              |> Nx.Defn.Composite.traverse(&%{&1 | donatable?: false})
+
+            {expr, {make_ref(), outputs, inputs_and_io_calls}}
           end)
         end)
 

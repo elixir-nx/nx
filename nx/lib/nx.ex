@@ -1041,6 +1041,10 @@ defmodule Nx do
   compile time; invoking the compiled function then requires matching
   `donatable?` marks on the live arguments (mismatches raise).
 
+  The mark applies to the argument only. Whatever a function returns belongs
+  to its caller, who has not asked to donate it, so results are never
+  donatable, not even when the result is a donated argument returned as is.
+
   ## Examples
 
       iex> t = Nx.donatable(Nx.tensor([1, 2, 3]))
@@ -1050,6 +1054,10 @@ defmodule Nx do
       iex> %{a: a, b: b} = Nx.donatable(%{a: Nx.tensor(1), b: Nx.tensor(2)})
       iex> {Nx.donatable?(a), Nx.donatable?(b)}
       {true, true}
+
+      iex> fun = Nx.Defn.jit(&Nx.add(&1, 1))
+      iex> Nx.donatable?(fun.(Nx.donatable(Nx.tensor([1, 2, 3]))))
+      false
 
   """
   @doc type: :conversion
