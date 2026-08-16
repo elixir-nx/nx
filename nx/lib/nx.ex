@@ -12480,7 +12480,7 @@ defmodule Nx do
         tensor
       else
         out = %{tensor | type: type, shape: shape, names: names}
-        impl!(tensor).reduce(out, tensor, acc, [axes: axes, keep_axes: keep_axes], fun)
+        impl!(tensor, acc).reduce(out, tensor, acc, [axes: axes, keep_axes: keep_axes], fun)
       end
 
     vectorize(output, vectorized_axes)
@@ -12617,7 +12617,7 @@ defmodule Nx do
 
       out = %{tensor | shape: output_shape}
       opts = [padding: padding_config, strides: strides, window_dilations: dilations]
-      impl!(tensor).window_reduce(out, tensor, acc, window_dimensions, opts, fun)
+      impl!(tensor, acc).window_reduce(out, tensor, acc, window_dimensions, opts, fun)
     end)
   end
 
@@ -13995,7 +13995,7 @@ defmodule Nx do
 
       Nx.Shared.raise_complex_not_supported(output_type, :clip, 2)
 
-      impl!(tensor).clip(%{tensor | type: output_type}, tensor, min, max)
+      impl!(tensor, min, max).clip(%{tensor | type: output_type}, tensor, min, max)
     end)
   end
 
@@ -14521,7 +14521,7 @@ defmodule Nx do
     output_names = List.duplicate(nil, offset) ++ output_names
 
     result =
-      impl!(tensor).put_slice(
+      impl!(tensor, slice).put_slice(
         %{tensor | shape: output_shape_devec, names: output_names, type: output_type},
         tensor,
         start_indices,
@@ -15199,7 +15199,7 @@ defmodule Nx do
 
     {shape, names} = Nx.Shape.gather(tensor.shape, indices.shape, axes)
     out = %{tensor | shape: shape, names: names}
-    result = impl!(tensor).gather(out, tensor, indices, axes: axes)
+    result = impl!(tensor, indices).gather(out, tensor, indices, axes: axes)
     vectorize(result, vectorized_axes)
   end
 
