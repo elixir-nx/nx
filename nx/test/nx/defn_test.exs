@@ -2994,4 +2994,29 @@ defmodule Nx.DefnTest do
       assert vectorized_metadata_tuple(x, z) == vec_nonvec_result
     end
   end
+
+  describe "multi-tensor ops with captured closure tensors" do
+    @describetag compiler: Evaluator
+
+    test "put_slice in a jit closure over a concrete target" do
+      t = Nx.tensor([1.0, 2.0, 3.0, 4.0, 5.0])
+      jitted = Nx.Defn.jit(fn p -> Nx.put_slice(t, [1], p) end)
+
+      assert jitted.(Nx.tensor([10.0, 20.0])) == Nx.tensor([1.0, 10.0, 20.0, 4.0, 5.0])
+    end
+
+    test "clip in a jit closure over a concrete target" do
+      t = Nx.tensor([1.0, 2.0, 3.0, 4.0, 5.0])
+      jitted = Nx.Defn.jit(fn lo -> Nx.clip(t, lo, 10.0) end)
+
+      assert jitted.(Nx.tensor(1.5)) == Nx.tensor([1.5, 2.0, 3.0, 4.0, 5.0])
+    end
+
+    test "gather in a jit closure over a concrete source" do
+      t = Nx.tensor([1.0, 2.0, 3.0, 4.0, 5.0])
+      jitted = Nx.Defn.jit(fn idx -> Nx.gather(t, Nx.reshape(idx, {3, 1})) end)
+
+      assert jitted.(Nx.tensor([0, 2, 4], type: :s32)) == Nx.tensor([1.0, 3.0, 5.0])
+    end
+  end
 end

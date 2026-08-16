@@ -6536,4 +6536,37 @@ defmodule Nx.Defn.GradTest do
                    end
     end
   end
+
+  describe "multi-tensor ops with captured closure tensors" do
+    test "put_slice grad wrt the update with a captured target" do
+      t = Nx.tensor([1.0, 2.0, 3.0, 4.0, 5.0])
+
+      grad = Nx.Defn.grad(Nx.tensor([10.0, 20.0]), fn p -> Nx.sum(Nx.put_slice(t, [1], p)) end)
+      assert grad == Nx.tensor([1.0, 1.0])
+    end
+
+    test "clip grad wrt min and max with a captured target" do
+      t = Nx.tensor([1.0, 2.0, 3.0, 4.0, 5.0])
+
+      grad_min = Nx.Defn.grad(Nx.tensor(1.5), fn lo -> Nx.sum(Nx.clip(t, lo, Nx.tensor(4.5))) end)
+      assert grad_min == Nx.tensor(1.0)
+
+      grad_max = Nx.Defn.grad(Nx.tensor(4.5), fn hi -> Nx.sum(Nx.clip(t, Nx.tensor(1.5), hi)) end)
+      assert grad_max == Nx.tensor(1.0)
+    end
+
+    test "reduce and window_reduce raise their documented no-grad error, not a dispatch crash" do
+      t = Nx.tensor([1.0, 2.0, 3.0, 4.0, 5.0])
+
+      assert_raise ArgumentError, ~r"cannot compute gradient for Nx.reduce/4", fn ->
+        Nx.Defn.grad(Nx.tensor(0.0), fn a -> Nx.reduce(t, a, fn x, acc -> Nx.add(x, acc) end) end)
+      end
+
+      assert_raise ArgumentError, ~r"cannot compute gradient for Nx.window_reduce/5", fn ->
+        Nx.Defn.grad(Nx.tensor(0.0), fn a ->
+          Nx.sum(Nx.window_reduce(t, a, {2}, fn x, acc -> Nx.max(x, acc) end))
+        end)
+      end
+    end
+  end
 end
