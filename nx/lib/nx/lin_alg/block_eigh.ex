@@ -71,7 +71,9 @@ defmodule Nx.LinAlg.BlockEigh do
     if n > 1 do
       m_decompose(matrix, opts)
     else
-      {Nx.take_diagonal(Nx.real(matrix)), Nx.tensor([1], type: matrix.type)}
+      # derive the 1x1 eigenvector matrix from the input so it inherits
+      # the collapsed vectorized (batch) axes
+      {Nx.take_diagonal(Nx.real(matrix)), Nx.multiply(matrix, 0) |> Nx.add(1)}
     end
   end
 
