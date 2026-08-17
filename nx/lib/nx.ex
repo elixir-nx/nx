@@ -2020,11 +2020,6 @@ defmodule Nx do
   Creates a one-dimensional tensor from a `binary` with the given `type`.
 
   If the binary size does not match its type, an error is raised.
-
-  For sub-byte types (u2/u4/s2/s4), the input may also be a bitstring
-  whose bit count is not divisible by 8, as produced by `to_binary/2`
-  for those types.
-
   ## Examples
 
       iex> Nx.from_binary(<<1, 2, 3, 4>>, :s8)
