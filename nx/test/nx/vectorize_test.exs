@@ -824,4 +824,25 @@ defmodule Nx.VectorizeTest do
       assert result == Nx.vectorize(expected, a: 2, b: 3)
     end
   end
+
+  describe "revectorize" do
+    test "raises ArgumentError for more than one :auto across target_axes and :target_shape" do
+      t = Nx.iota({24}) |> Nx.vectorize(:x)
+
+      message =
+        "cannot have more than one `:auto` occurrence between target_axes and the :target_shape option"
+
+      assert_raise ArgumentError, message, fn ->
+        Nx.revectorize(t, a: :auto, b: :auto)
+      end
+
+      assert_raise ArgumentError, message, fn ->
+        Nx.revectorize(t, [a: :auto], target_shape: {:auto, 2})
+      end
+
+      assert_raise ArgumentError, message, fn ->
+        Nx.revectorize(t, [a: 2], target_shape: {:auto, :auto})
+      end
+    end
+  end
 end
