@@ -1427,6 +1427,12 @@ defmodule NxTest do
       assert Nx.reshape(t, {2, 2}, names: [:x, :y]) ==
                Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
     end
+
+    test "raises ArgumentError for more than one :auto dimension" do
+      assert_raise ArgumentError,
+                   "only a single :auto dimension is allowed in reshape, got: {:auto, :auto}",
+                   fn -> Nx.reshape(Nx.iota({12}), {:auto, :auto}) end
+    end
   end
 
   describe "flatten" do
