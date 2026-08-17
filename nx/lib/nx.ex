@@ -2020,7 +2020,6 @@ defmodule Nx do
   Creates a one-dimensional tensor from a `binary` with the given `type`.
 
   If the binary size does not match its type, an error is raised.
-
   ## Examples
 
       iex> Nx.from_binary(<<1, 2, 3, 4>>, :s8)
@@ -2049,7 +2048,7 @@ defmodule Nx do
       is ignored inside `defn`
   """
   @doc type: :creation
-  def from_binary(binary, type, opts \\ []) when is_binary(binary) do
+  def from_binary(binary, type, opts \\ []) when is_bitstring(binary) do
     opts = keyword!(opts, [:backend])
     {_, size} = type = Nx.Type.normalize!(type)
     dim = div(Kernel.bit_size(binary), size)

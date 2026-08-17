@@ -1489,6 +1489,20 @@ defmodule NxTest do
         Nx.from_binary("", {:u, 32})
       end)
     end
+
+    test "round-trips sub-byte tensors whose binary is not byte-aligned" do
+      for {type, values} <- [
+            {{:u, 2}, [1, 2, 3]},
+            {{:u, 4}, [5, 10, 15]},
+            {{:s, 2}, [-1, 0, 1]}
+          ] do
+        tensor = Nx.tensor(values, type: type)
+        data = Nx.to_binary(tensor)
+
+        refute is_binary(data)
+        assert Nx.from_binary(data, type) == tensor
+      end
+    end
   end
 
   describe "to_batched/3" do
