@@ -1255,15 +1255,12 @@ defmodule Nx.LinAlg do
     if rank < 2 do
       shape
     else
-      [n, m | tl] =
-        shape
-        |> Tuple.to_list()
-        |> Enum.reverse()
+      rows = elem(shape, rank - 2)
+      cols = elem(shape, rank - 1)
 
-      tl
-      |> List.to_tuple()
-      |> Tuple.insert_at(rank - 2, n)
-      |> Tuple.insert_at(rank - 1, m)
+      shape
+      |> put_elem(rank - 2, cols)
+      |> put_elem(rank - 1, rows)
     end
   end
 
