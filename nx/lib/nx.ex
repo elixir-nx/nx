@@ -2021,6 +2021,10 @@ defmodule Nx do
 
   If the binary size does not match its type, an error is raised.
 
+  For sub-byte types (u2/u4/s2/s4), the input may also be a bitstring
+  whose bit count is not divisible by 8, as produced by `to_binary/2`
+  for those types.
+
   ## Examples
 
       iex> Nx.from_binary(<<1, 2, 3, 4>>, :s8)
@@ -2049,7 +2053,7 @@ defmodule Nx do
       is ignored inside `defn`
   """
   @doc type: :creation
-  def from_binary(binary, type, opts \\ []) when is_binary(binary) do
+  def from_binary(binary, type, opts \\ []) when is_bitstring(binary) do
     opts = keyword!(opts, [:backend])
     {_, size} = type = Nx.Type.normalize!(type)
     dim = div(Kernel.bit_size(binary), size)
