@@ -1054,6 +1054,55 @@ defmodule Nx.LinAlgTest do
           key
       end
     end
+
+    test "supports batched input" do
+      key = Nx.Random.key(42)
+
+      for shape <- [{2, 3, 3}, {2, 3, 4}, {2, 4, 3}, {2, 2, 3, 3}], reduce: key do
+        key ->
+          {t, key} = Nx.Random.uniform(key, -1, 1, shape: shape, type: :f64)
+
+          pinv = Nx.LinAlg.pinv(t)
+
+          rank = tuple_size(shape)
+          {rows, cols} = {elem(shape, rank - 2), elem(shape, rank - 1)}
+
+          expected_shape =
+            shape |> Tuple.delete_at(rank - 1) |> Tuple.delete_at(rank - 2)
+
+          assert Nx.shape(pinv) ==
+                   expected_shape
+                   |> Tuple.insert_at(rank - 2, cols)
+                   |> Tuple.insert_at(rank - 1, rows)
+
+          # batched result equals the stacked per-matrix results
+          batch_dims = shape |> Tuple.to_list() |> Enum.take(rank - 2)
+          flat = Nx.reshape(t, {Enum.product(batch_dims), rows, cols})
+
+          per_matrix =
+            for i <- 0..(Enum.product(batch_dims) - 1) do
+              Nx.LinAlg.pinv(flat[i])
+            end
+
+          assert_all_close(
+            Nx.reshape(pinv, {Enum.product(batch_dims), cols, rows}),
+            Nx.stack(per_matrix),
+            atol: 1.0e-6
+          )
+
+          # Moore-Penrose: A P A = A, per batch
+          batch_axes = Enum.to_list(0..(rank - 3))
+
+          apa =
+            t
+            |> Nx.dot([rank - 1], batch_axes, pinv, [rank - 2], batch_axes)
+            |> Nx.dot([rank - 1], batch_axes, t, [rank - 2], batch_axes)
+
+          assert_all_close(apa, t, atol: 1.0e-3)
+
+          key
+      end
+    end
   end
 
   describe "least_squares" do

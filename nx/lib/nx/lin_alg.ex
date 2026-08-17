@@ -1286,7 +1286,8 @@ defmodule Nx.LinAlg do
         s_inv_matrix = Nx.select(s_idx, 0, 1 / adjusted_s)
 
         sut = Nx.new_axis(s_inv_matrix, -1) * ut
-        Nx.dot(v, sut)
+        batch_axes = batch_axes(v)
+        Nx.dot(v, [-1], batch_axes, sut, [-2], batch_axes)
     end
   end
 
