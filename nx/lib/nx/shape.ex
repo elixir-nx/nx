@@ -162,6 +162,11 @@ defmodule Nx.Shape do
   def reshape(old_shape, new_shape) do
     old_size = Tuple.product(old_shape)
 
+    if Enum.count(Tuple.to_list(new_shape), &(&1 == :auto)) > 1 do
+      raise ArgumentError,
+            "only a single :auto dimension is allowed in reshape, got: #{inspect(new_shape)}"
+    end
+
     new_shape =
       case Enum.find_index(Tuple.to_list(new_shape), &(&1 == :auto)) do
         nil ->
