@@ -623,6 +623,22 @@ defmodule NxTest do
   end
 
   describe "inspect" do
+    test "sub-byte integer tensors" do
+      assert inspect(Nx.tensor([1, 2, 3], type: {:u, 2})) == """
+             #Nx.Tensor<
+               u2[3]
+               [1, 2, 3]
+             >\
+             """
+
+      assert inspect(Nx.tensor([-1, 0, 1], type: {:s, 2})) == """
+             #Nx.Tensor<
+               s2[3]
+               [-1, 0, 1]
+             >\
+             """
+    end
+
     test "scalar" do
       assert inspect(Nx.tensor(123)) == """
              #Nx.Tensor<

@@ -172,11 +172,11 @@ defmodule Nx.Backend do
     {doc, tail} =
       case type do
         {:s, size} ->
-          <<seg::size(^size)-signed-integer-native, tail::binary>> = data
+          <<seg::size(^size)-signed-integer-native, tail::bitstring>> = data
           {Integer.to_string(seg), tail}
 
         {:u, size} ->
-          <<seg::size(^size)-unsigned-integer-native, tail::binary>> = data
+          <<seg::size(^size)-unsigned-integer-native, tail::bitstring>> = data
           {Integer.to_string(seg), tail}
 
         {:c, size} ->
