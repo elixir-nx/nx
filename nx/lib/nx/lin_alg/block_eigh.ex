@@ -73,7 +73,7 @@ defmodule Nx.LinAlg.BlockEigh do
     else
       # derive the 1x1 eigenvector matrix from the input so it inherits
       # the collapsed vectorized (batch) axes
-      {Nx.take_diagonal(Nx.real(matrix)), Nx.multiply(matrix, 0) |> Nx.add(1)}
+      {Nx.take_diagonal(Nx.real(matrix)), Nx.fill(matrix, 1)}
     end
   end
 
