@@ -587,6 +587,33 @@ defmodule Nx.LinAlgTest do
   end
 
   describe "eigh" do
+    test "supports batched 1x1 matrices" do
+      t = Nx.tensor([[[2.0]], [[5.0]]], type: :f64)
+
+      {eigenvals, eigenvecs} = Nx.LinAlg.eigh(t)
+
+      assert eigenvals == Nx.tensor([[2.0], [5.0]], type: :f64)
+      assert eigenvecs == Nx.tensor([[[1.0]], [[1.0]]], type: :f64)
+
+      # double batch
+      t2 = Nx.iota({3, 2, 1, 1}, type: :f64) |> Nx.add(1.0)
+      {vals2, vecs2} = Nx.LinAlg.eigh(t2)
+      assert Nx.shape(vals2) == {3, 2, 1}
+      assert Nx.shape(vecs2) == {3, 2, 1, 1}
+      assert_all_close(vals2, Nx.reshape(t2, {3, 2, 1}))
+    end
+
+    test "batched size-1 dimensions work through svd and pinv" do
+      {_u, s, _vt} = Nx.LinAlg.svd(Nx.tensor([[[3.0, 4.0]], [[6.0, 8.0]]], type: :f64))
+      assert_all_close(s, Nx.tensor([[5.0], [10.0]], type: :f64))
+
+      {_u2, s2, _vt2} = Nx.LinAlg.svd(Nx.tensor([[[3.0], [4.0]], [[6.0], [8.0]]], type: :f64))
+      assert_all_close(s2, Nx.tensor([[5.0], [10.0]], type: :f64))
+
+      pinv = Nx.LinAlg.pinv(Nx.tensor([[[2.0]], [[4.0]]], type: :f64))
+      assert_all_close(pinv, Nx.tensor([[[0.5]], [[0.25]]], type: :f64))
+    end
+
     test "computes eigenvalues and eigenvectors" do
       t =
         Nx.tensor([
