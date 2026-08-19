@@ -294,15 +294,10 @@ defmodule EXLA.Defn.APITest do
       io_call(a + b, :raises, fn _ -> raise "boom" end)
     end
 
-    @tag :capture_log
-    test "halts outfeed when io_call raises" do
-      {_pid, ref} =
-        spawn_monitor(fn ->
-          EXLA.jit(&hook_raises/2).(2, 3)
-        end)
-
-      assert_receive {:DOWN, ^ref, :process, _, {%RuntimeError{message: message}, _}}
-      assert message =~ "boom"
+    test "propagates the original exception when io_call raises" do
+      assert_raise RuntimeError, "boom", fn ->
+        EXLA.jit(&hook_raises/2).(2, 3)
+      end
     end
 
     defn side_effect_hooks(a, b) do
