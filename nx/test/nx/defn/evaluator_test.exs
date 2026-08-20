@@ -805,4 +805,76 @@ defmodule Nx.Defn.EvaluatorTest do
       assert a == vectorized_metadata(a)
     end
   end
+
+  describe "raise_if" do
+    defmodule RaiseIfError do
+      defexception [:message, :value]
+    end
+
+    defn runtime_raise_if(value, predicate) do
+      raise_if(value, predicate, "runtime check failed")
+    end
+
+    defn custom_runtime_raise_if(value, predicate) do
+      raise_if(value, predicate, RaiseIfError,
+        message: "custom runtime check failed",
+        value: :preserved
+      )
+    end
+
+    defn module_runtime_raise_if(value, predicate) do
+      raise_if(value, predicate, ArgumentError)
+    end
+
+    defn container_runtime_raise_if(container, predicate) do
+      raise_if(container, predicate, "container check failed")
+    end
+
+    defn static_false_raise_if(value) do
+      raise_if(value, false, "unreachable")
+    end
+
+    defn static_true_raise_if(value) do
+      raise_if(value, true, "static check failed")
+    end
+
+    test "passes values through when the predicate is false" do
+      assert runtime_raise_if(Nx.tensor([1, 2]), 0) == Nx.tensor([1, 2])
+      assert static_false_raise_if(Nx.tensor(3)) == Nx.tensor(3)
+    end
+
+    test "raises when the predicate is true" do
+      assert_raise RuntimeError, "runtime check failed", fn ->
+        runtime_raise_if(Nx.tensor(1), 1)
+      end
+
+      assert_raise RuntimeError, "static check failed", fn ->
+        static_true_raise_if(Nx.tensor(1))
+      end
+    end
+
+    test "raises custom exceptions with arguments" do
+      error =
+        assert_raise RaiseIfError, "custom runtime check failed", fn ->
+          custom_runtime_raise_if(Nx.tensor(1), 1)
+        end
+
+      assert error.value == :preserved
+
+      assert_raise ArgumentError, fn ->
+        module_runtime_raise_if(Nx.tensor(1), 1)
+      end
+    end
+
+    test "passes containers through and raises from the container branch" do
+      container = %Container{a: 1, b: 2, c: :reset, d: :kept}
+
+      assert container_runtime_raise_if(container, 0) ==
+               %Container{a: Nx.tensor(1), b: Nx.tensor(2), c: %{}, d: :kept}
+
+      assert_raise RuntimeError, "container check failed", fn ->
+        container_runtime_raise_if(container, 1)
+      end
+    end
+  end
 end
