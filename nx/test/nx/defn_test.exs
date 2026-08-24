@@ -1205,8 +1205,12 @@ defmodule Nx.DefnTest do
       end
     end
 
-    test "raises lazily" do
+    test "does not evaluate the other boolean branch" do
       assert if_boolean_raise(boolean: true) == Expr.tensor(1)
+    end
+
+    @tag compiler: Evaluator
+    test "raises when the boolean else branch is taken" do
       assert_raise ArgumentError, "oops", fn -> if_boolean_raise(boolean: false) end
     end
 

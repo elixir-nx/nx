@@ -136,17 +136,21 @@ defmodule Nx.Defn.GradTest do
       )
     end
 
-    defn value_and_grad_raise_if(t) do
+    defn value_and_grad_runtime_raise(t) do
       value_and_grad(t, fn t ->
-        raise_if(Nx.pow(t, 2), t < 0, "negative input")
+        if t < 0 do
+          raise "negative input"
+        else
+          Nx.pow(t, 2)
+        end
       end)
     end
 
-    test "raise_if passes gradients through and runs on the primal path" do
-      assert value_and_grad_raise_if(Nx.tensor(3.0)) == {Nx.tensor(9.0), Nx.tensor(6.0)}
+    test "raise in if passes gradients through and runs on the primal path" do
+      assert value_and_grad_runtime_raise(Nx.tensor(3.0)) == {Nx.tensor(9.0), Nx.tensor(6.0)}
 
       assert_raise RuntimeError, "negative input", fn ->
-        value_and_grad_raise_if(Nx.tensor(-1.0))
+        value_and_grad_runtime_raise(Nx.tensor(-1.0))
       end
     end
   end

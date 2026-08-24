@@ -877,4 +877,113 @@ defmodule Nx.Defn.EvaluatorTest do
       end
     end
   end
+
+  describe "runtime raise" do
+    defmodule RuntimeRaiseError do
+      defexception [:message, :value]
+    end
+
+    defn runtime_raise(value, predicate) do
+      if predicate do
+        raise "runtime check failed"
+      else
+        value
+      end
+    end
+
+    defn custom_runtime_raise(value, predicate) do
+      if predicate do
+        raise RuntimeRaiseError,
+          message: "custom runtime check failed",
+          value: :preserved
+      else
+        value
+      end
+    end
+
+    defn raise_then_value(value, predicate) do
+      if predicate do
+        raise "must not fall through"
+        value
+      else
+        value
+      end
+    end
+
+    defn all_raise(predicate) do
+      if predicate do
+        raise "true branch"
+      else
+        raise "false branch"
+      end
+    end
+
+    defn halt_on_nth(x, n) do
+      {x, i, _n} =
+        while {x, i = 0, n}, i < 10 do
+          i =
+            if i == n do
+              raise "Halting on selected iteration"
+            else
+              i
+            end
+
+          {x + 1, i + 1, n}
+        end
+
+      {x, i}
+    end
+
+    defn top_level_raise(_value) do
+      raise "top-level"
+    end
+
+    test "passes values through when the predicate is false" do
+      assert runtime_raise(Nx.tensor([1, 2]), 0) == Nx.tensor([1, 2])
+    end
+
+    test "raises when the predicate is true" do
+      assert_raise RuntimeError, "runtime check failed", fn ->
+        runtime_raise(Nx.tensor(1), 1)
+      end
+    end
+
+    test "raises custom exceptions with arguments" do
+      error =
+        assert_raise RuntimeRaiseError, "custom runtime check failed", fn ->
+          custom_runtime_raise(Nx.tensor(1), 1)
+        end
+
+      assert error.value == :preserved
+    end
+
+    test "does not evaluate expressions after raise in the same branch" do
+      assert raise_then_value(Nx.tensor(3), 0) == Nx.tensor(3)
+
+      assert_raise RuntimeError, "must not fall through", fn ->
+        raise_then_value(Nx.tensor(3), 1)
+      end
+    end
+
+    test "selects the raising branch when every branch raises" do
+      assert_raise RuntimeError, "true branch", fn -> all_raise(1) end
+      assert_raise RuntimeError, "false branch", fn -> all_raise(0) end
+    end
+
+    test "halts a while loop on the selected iteration" do
+      assert {x, i} = halt_on_nth(0, 11)
+      assert x == Nx.tensor(10)
+      assert i == Nx.tensor(10)
+
+      assert_raise RuntimeError, "Halting on selected iteration", fn ->
+        halt_on_nth(0, 5)
+      end
+    end
+
+    test "raises at trace time from the top level" do
+      assert_raise RuntimeError, "top-level", fn ->
+        top_level_raise(Nx.tensor(1))
+      end
+    end
+  end
 end

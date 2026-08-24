@@ -391,26 +391,39 @@ defmodule EXLA.Defn.APITest do
     end
   end
 
-  describe "raise_if" do
-    defmodule RaiseIfError do
+  describe "runtime raise" do
+    defmodule RuntimeRaiseError do
       defexception [:message, :value]
     end
 
-    defn runtime_raise_if(value, predicate) do
-      raise_if(value, predicate, "runtime check failed")
+    defn runtime_raise(value, predicate) do
+      if predicate do
+        raise "runtime check failed"
+      else
+        value
+      end
     end
 
-    defn custom_runtime_raise_if(value, predicate) do
-      raise_if(value, predicate, RaiseIfError,
-        message: "custom runtime check failed",
-        value: :preserved
-      )
+    defn custom_runtime_raise(value, predicate) do
+      if predicate do
+        raise RuntimeRaiseError,
+          message: "custom runtime check failed",
+          value: :preserved
+      else
+        value
+      end
     end
 
     defn halt_on_nth(x, n) do
       {x, i, _n} =
         while {x, i = 0, n}, i < 10 do
-          i = raise_if(i, i == n, "Halting on selected iteration")
+          i =
+            if i == n do
+              raise "Halting on selected iteration"
+            else
+              i
+            end
+
           {x + 1, i + 1, n}
         end
 
@@ -418,19 +431,19 @@ defmodule EXLA.Defn.APITest do
     end
 
     test "passes values through when the predicate is false" do
-      assert_equal(EXLA.jit(&runtime_raise_if/2).(Nx.tensor([1, 2]), 0), Nx.tensor([1, 2]))
+      assert_equal(EXLA.jit(&runtime_raise/2).(Nx.tensor([1, 2]), 0), Nx.tensor([1, 2]))
     end
 
     test "raises when the predicate is true" do
       assert_raise RuntimeError, "runtime check failed", fn ->
-        EXLA.jit(&runtime_raise_if/2).(1, 1)
+        EXLA.jit(&runtime_raise/2).(1, 1)
       end
     end
 
     test "raises custom exceptions with arguments" do
       error =
-        assert_raise RaiseIfError, "custom runtime check failed", fn ->
-          EXLA.jit(&custom_runtime_raise_if/2).(1, 1)
+        assert_raise RuntimeRaiseError, "custom runtime check failed", fn ->
+          EXLA.jit(&custom_runtime_raise/2).(1, 1)
         end
 
       assert error.value == :preserved
@@ -443,6 +456,18 @@ defmodule EXLA.Defn.APITest do
 
       assert_raise RuntimeError, "Halting on selected iteration", fn ->
         EXLA.jit(&halt_on_nth/2).(0, 5)
+      end
+    end
+
+    defn piped_raise_if(value, predicate) do
+      raise_if(value, predicate, "piped")
+    end
+
+    test "raise_if remains a pipeable wrapper" do
+      assert_equal(EXLA.jit(&piped_raise_if/2).(Nx.tensor(1), 0), Nx.tensor(1))
+
+      assert_raise RuntimeError, "piped", fn ->
+        EXLA.jit(&piped_raise_if/2).(1, 1)
       end
     end
   end

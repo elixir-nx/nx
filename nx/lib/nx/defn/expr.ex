@@ -433,6 +433,49 @@ defmodule Nx.Defn.Expr do
   @doc false
   def id(), do: make_ref()
 
+  @runtime_raise_tag :nx_defn_runtime_raise
+
+  @doc false
+  def trace_raise(message) do
+    maybe_throw_runtime_raise({:message, message})
+  end
+
+  @doc false
+  def trace_raise(exception, arguments) do
+    maybe_throw_runtime_raise({:exception, exception, arguments})
+  end
+
+  @doc false
+  def apply_runtime_raise({:message, message}) do
+    Kernel.raise(message)
+  end
+
+  def apply_runtime_raise({:exception, exception, arguments}) do
+    Kernel.raise(exception, arguments)
+  end
+
+  @doc false
+  def catch_runtime_raise(fun) when is_function(fun, 0) do
+    try do
+      {:value, fun.()}
+    catch
+      :throw, {@runtime_raise_tag, spec} ->
+        {:raise, spec}
+    end
+  end
+
+  defp maybe_throw_runtime_raise(spec) do
+    if Process.get(Nx.Defn.Compiler) do
+      throw({@runtime_raise_tag, spec})
+    else
+      apply_runtime_raise(spec)
+    end
+  end
+
+  defp runtime_raise_io_call(spec, template) do
+    io_call(to_container_expr(template), {:fn, fn _ -> apply_runtime_raise(spec) end})
+  end
+
   @doc false
   def io_call(tensor_or_container, callback_spec) do
     tensor_expr =
@@ -491,51 +534,89 @@ defmodule Nx.Defn.Expr do
       end
 
     case clauses do
-      # At least one clause is expected
       [] ->
         raise CompileError,
           line: meta[:line],
           file: file,
           description: "cond/if expects at least one branch to always evaluate to true"
 
-      # We found a clause that always matches, return it always
-      [{_meta, %T{data: %Expr{op: :constant, args: [number]}}, expr} | _] when number != 0 ->
-        expr.()
+      [{first_meta, first_pred, first_fun} | rest] ->
+        first_result = catch_runtime_raise(first_fun)
 
-      # Otherwise, keep it as a cond and validate the last clause always returns true
-      [{_, first_pred, first} | rest] ->
-        first = first.()
+        cond do
+          always_true_pred?(first_pred) and match?({:value, _}, first_result) ->
+            elem(first_result, 1)
 
-        {[{last_pred, last} | reverse], _} =
-          Enum.reduce(rest, {[{first_pred, first}], 1}, fn {meta, pred, expr},
-                                                           {acc, branch_idx} ->
-            expr = expr.()
+          true ->
+            rest_evaluated =
+              Enum.map(rest, fn {clause_meta, pred, fun} ->
+                {clause_meta, pred, catch_runtime_raise(fun)}
+              end)
 
-            if not Nx.Defn.Composite.compatible?(first, expr, fn _, _ -> true end) do
-              raise CompileError,
-                line: meta[:line],
-                file: file,
-                description: """
-                cond/if expects all branches to return compatible tensor types.
-
-                #{Nx.Defn.TemplateDiff.build_and_inspect(first, expr, "First Branch (expected)", "Branch #{branch_idx}", fn _, _ -> true end)}
-                """
-            end
-
-            {[{pred, expr} | acc], branch_idx + 1}
-          end)
-
-        case last_pred do
-          %T{data: %Expr{op: :constant, args: [number]}} when number != 0 ->
-            cond(Enum.reverse(reverse), last)
-
-          _ ->
-            raise CompileError,
-              line: meta[:line],
-              file: file,
-              description: "cond/if expects at least one branch to always evaluate to true"
+            finish_cond(file, meta, [
+              {first_meta, first_pred, first_result} | rest_evaluated
+            ])
         end
     end
+  end
+
+  defp always_true_pred?(%T{data: %Expr{op: :constant, args: [number]}}) when number != 0,
+    do: true
+
+  defp always_true_pred?(_), do: false
+
+  defp finish_cond(file, error_meta, evaluated) do
+    {_meta, last_pred, _result} = List.last(evaluated)
+
+    unless always_true_pred?(last_pred) do
+      raise CompileError,
+        line: error_meta[:line],
+        file: file,
+        description: "cond/if expects at least one branch to always evaluate to true"
+    end
+
+    template = cond_raise_template(evaluated)
+    clauses = materialize_cond_clauses(file, evaluated, template)
+    {_first_meta, first_pred, _} = hd(evaluated)
+
+    if always_true_pred?(first_pred) do
+      clauses |> hd() |> elem(1)
+    else
+      {last, reverse} = List.pop_at(clauses, -1)
+      cond(reverse, elem(last, 1))
+    end
+  end
+
+  defp cond_raise_template(evaluated) do
+    Enum.find_value(evaluated, fn
+      {_meta, _pred, {:value, expr}} -> expr
+      _ -> nil
+    end) || tensor(0)
+  end
+
+  defp materialize_cond_clauses(file, evaluated, template) do
+    evaluated
+    |> Enum.with_index()
+    |> Enum.map(fn {{meta, pred, result}, branch_idx} ->
+      expr =
+        case result do
+          {:value, expr} -> expr
+          {:raise, spec} -> runtime_raise_io_call(spec, template)
+        end
+
+      if branch_idx > 0 and not Nx.Defn.Composite.compatible?(template, expr, fn _, _ -> true end) do
+        raise CompileError,
+          line: meta[:line],
+          file: file,
+          description: """
+          cond/if expects all branches to return compatible tensor types.
+
+          #{Nx.Defn.TemplateDiff.build_and_inspect(template, expr, "First Branch (expected)", "Branch #{branch_idx}", fn _, _ -> true end)}
+          """
+      end
+
+      {pred, expr}
+    end)
   end
 
   @doc false
@@ -591,7 +672,7 @@ defmodule Nx.Defn.Expr do
   defp while_vectorized(file, line, initial, context, arg, condition, condition_body) do
     case condition.vectorized_axes do
       [] ->
-        body = condition_body.(:body, arg) |> to_container_expr()
+        body = while_body_expr(fn -> condition_body.(:body, arg) end, initial)
         compatible_while!(file, line, initial, body)
         while(initial, context, arg, condition, body)
 
@@ -612,7 +693,7 @@ defmodule Nx.Defn.Expr do
         inner_initial = vectorized_while__take_index_param(outer_arg, index_param)
         {inner_arg, inner_context} = to_param_expr(inner_initial, :while)
         inner_condition = condition_body.(:condition, inner_arg) |> to_pred(line, file, :while)
-        inner_body = condition_body.(:body, inner_arg) |> to_container_expr()
+        inner_body = while_body_expr(fn -> condition_body.(:body, inner_arg) end, inner_initial)
 
         compatible_while!(file, line, inner_initial, inner_body)
 
@@ -711,7 +792,13 @@ defmodule Nx.Defn.Expr do
           body =
             Enum.reduce(internal_unroll, arg, fn index, acc ->
               next = Nx.add(index_param, step * index)
-              body = condition_body.(:body, {{next, generator_param}, acc}) |> to_container_expr()
+
+              body =
+                while_body_expr(
+                  fn -> condition_body.(:body, {{next, generator_param}, acc}) end,
+                  initial
+                )
+
               index == 0 and compatible_while!(file, line, initial, body)
               body
             end)
@@ -727,7 +814,9 @@ defmodule Nx.Defn.Expr do
       end
 
     Enum.reduce(external, result, fn index, acc ->
-      body = condition_body.(:body, {{index, generator}, acc}) |> to_container_expr()
+      body =
+        while_body_expr(fn -> condition_body.(:body, {{index, generator}, acc}) end, initial)
+
       index == external.first and compatible_while!(file, line, initial, body)
       body
     end)
@@ -803,6 +892,13 @@ defmodule Nx.Defn.Expr do
       %{vectorized_axes: [{^first_axis, _} | other_axes]} = leaf
       Nx.revectorize(leaf, vectorized_axes ++ other_axes)
     end)
+  end
+
+  defp while_body_expr(fun, initial) do
+    case catch_runtime_raise(fun) do
+      {:value, body} -> to_container_expr(body)
+      {:raise, spec} -> runtime_raise_io_call(spec, initial)
+    end
   end
 
   defp compatible_while!(file, line, initial, body) do
