@@ -246,15 +246,13 @@ defmodule EXLA.Defn do
       end)
 
     infeeds = Map.new(infeeds)
-    error_ref = make_ref()
 
     {:ok, outfeed_pid} =
       Outfeed.start_child(
         executable,
         outfeed,
         Process.group_leader(),
-        infeeds,
-        {self(), error_ref}
+        infeeds
       )
 
     ref = Process.monitor(outfeed_pid)
@@ -273,25 +271,17 @@ defmodule EXLA.Defn do
     _ = EXLA.Defn.Lock.transfer(lock, fn -> send(runner, lock) end, outfeed_pid)
 
     receive do
-      {:DOWN, ^ref, _, _, _} ->
+      {:DOWN, ^ref, _, _, down_reason} ->
         runner_result = EXLA.Defn.Runner.read(runner)
 
-        callback_error =
-          receive do
-            {:exla_callback_error, ^error_ref, kind, reason, stacktrace} ->
-              {kind, reason, stacktrace}
-          after
-            0 -> nil
-          end
+        case {down_reason, runner_result} do
+          {{:shutdown, %EXLA.Defn.CallbackError{} = error}, _runner_result} ->
+            :erlang.raise(error.kind, error.reason, error.stacktrace)
 
-        case {callback_error, runner_result} do
-          {{kind, reason, stacktrace}, _runner_result} ->
+          {_down_reason, {:error, kind, reason, stacktrace}} ->
             :erlang.raise(kind, reason, stacktrace)
 
-          {nil, {:error, kind, reason, stacktrace}} ->
-            :erlang.raise(kind, reason, stacktrace)
-
-          {nil, {:ok, results}} ->
+          {_down_reason, {:ok, results}} ->
             Enum.map(results, fn result ->
               EXLA.Defn.Buffers.to_nx!(result, outputs, executable.mesh)
             end)

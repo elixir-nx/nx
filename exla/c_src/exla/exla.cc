@@ -8,6 +8,7 @@
 #include <tuple>
 #include <unistd.h>
 #include <unordered_map>
+#include <variant>
 
 #include "absl/log/globals.h"
 #include "absl/log/initialize.h"
@@ -597,12 +598,11 @@ FINE_NIF(get_supported_platforms, 0);
 
 // ExlaExecutable Functions
 
-ExlaExecutable::RunResult run(ErlNifEnv *env,
-                              fine::ResourcePtr<ExlaExecutable> executable,
-                              ExlaExecutable::RunArguments arguments,
-                              int64_t device_id,
-                              std::optional<ErlNifPid> callback_server_pid) {
-  auto result = unwrap(executable->Run(env, arguments, device_id));
+std::variant<ExlaExecutable::RunResult, fine::Error<std::string>>
+run(ErlNifEnv *env, fine::ResourcePtr<ExlaExecutable> executable,
+    ExlaExecutable::RunArguments arguments, int64_t device_id,
+    std::optional<ErlNifPid> callback_server_pid) {
+  auto status_or = executable->Run(env, arguments, device_id);
 
   if (callback_server_pid.has_value()) {
     auto pid = callback_server_pid.value();
@@ -611,10 +611,14 @@ ExlaExecutable::RunResult run(ErlNifEnv *env,
     enif_free_env(msg_env);
   }
 
-  return result;
+  if (!status_or.ok()) {
+    return fine::Error(std::string(status_or.status().message()));
+  }
+
+  return std::move(status_or.value());
 }
 
-ExlaExecutable::RunResult
+std::variant<ExlaExecutable::RunResult, fine::Error<std::string>>
 run_cpu(ErlNifEnv *env, fine::ResourcePtr<ExlaExecutable> executable,
         ExlaExecutable::RunArguments arguments, int64_t device_id,
         std::optional<ErlNifPid> callback_server_pid) {
@@ -623,11 +627,10 @@ run_cpu(ErlNifEnv *env, fine::ResourcePtr<ExlaExecutable> executable,
 
 FINE_NIF(run_cpu, ERL_NIF_DIRTY_JOB_CPU_BOUND);
 
-ExlaExecutable::RunResult run_io(ErlNifEnv *env,
-                                 fine::ResourcePtr<ExlaExecutable> executable,
-                                 ExlaExecutable::RunArguments arguments,
-                                 int64_t device_id,
-                                 std::optional<ErlNifPid> callback_server_pid) {
+std::variant<ExlaExecutable::RunResult, fine::Error<std::string>>
+run_io(ErlNifEnv *env, fine::ResourcePtr<ExlaExecutable> executable,
+       ExlaExecutable::RunArguments arguments, int64_t device_id,
+       std::optional<ErlNifPid> callback_server_pid) {
   return run(env, executable, arguments, device_id, callback_server_pid);
 }
 

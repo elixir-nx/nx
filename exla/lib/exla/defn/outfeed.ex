@@ -216,8 +216,7 @@ defmodule EXLA.Defn.Outfeed do
         %EXLA.Executable{} = executable,
         %Outfeed{} = outfeed,
         group_leader,
-        infeeds,
-        error_sink
+        infeeds
       ) do
     %{client: client, device_id: device_id} = executable
 
@@ -233,11 +232,11 @@ defmodule EXLA.Defn.Outfeed do
     callbacks = resolve_callbacks(callbacks, io_calls)
 
     Task.Supervisor.start_child(EXLA.Defn.TaskSupervisor, fn ->
-      init(client, device_id, infeed_flags, infeeds, callbacks, group_leader, error_sink)
+      init(client, device_id, infeed_flags, infeeds, callbacks, group_leader)
     end)
   end
 
-  defp init(client, device_id, infeed_flags, infeeds, callbacks, group_leader, error_sink) do
+  defp init(client, device_id, infeed_flags, infeeds, callbacks, group_leader) do
     Process.flag(:trap_exit, true)
     # Copy the group leader so we report to the proper device
     Process.group_leader(self(), group_leader)
@@ -245,7 +244,7 @@ defmodule EXLA.Defn.Outfeed do
     ref = make_ref()
     typespec = EXLA.Typespec.tensor({:u, 16}, {})
 
-    loop(client, device_id, ref, typespec, infeed_flags, infeeds, callbacks, error_sink, nil)
+    loop(client, device_id, ref, typespec, infeed_flags, infeeds, callbacks, nil)
   end
 
   defp loop(
@@ -256,7 +255,6 @@ defmodule EXLA.Defn.Outfeed do
          infeed_flags,
          infeeds,
          callbacks,
-         error_sink,
          callback_error
        ) do
     if active_infeed_flags?(infeed_flags) do
@@ -274,7 +272,6 @@ defmodule EXLA.Defn.Outfeed do
           drop_infeed_flags(infeed_flags),
           infeeds,
           callbacks,
-          error_sink,
           callback_error
         )
 
@@ -297,7 +294,6 @@ defmodule EXLA.Defn.Outfeed do
               infeed_flags,
               infeeds,
               callbacks,
-              error_sink,
               callback_error
             )
         end
@@ -313,13 +309,11 @@ defmodule EXLA.Defn.Outfeed do
           infeed_flags,
           infeeds,
           callbacks,
-          error_sink,
           callback_error || error
         )
 
       :stop ->
-        maybe_send_callback_error(error_sink, callback_error)
-        :ok
+        stop_with_callback_error(callback_error)
 
       other ->
         Logger.debug("EXLA.Outfeed ignoring unexpected message: #{inspect(other)}")
@@ -332,17 +326,18 @@ defmodule EXLA.Defn.Outfeed do
           infeed_flags,
           infeeds,
           callbacks,
-          error_sink,
           callback_error
         )
     end
   end
 
-  defp maybe_send_callback_error({pid, ref}, {kind, reason, stacktrace}) do
-    send(pid, {:exla_callback_error, ref, kind, reason, stacktrace})
+  defp stop_with_callback_error({kind, reason, stacktrace}) do
+    exit(
+      {:shutdown, %EXLA.Defn.CallbackError{kind: kind, reason: reason, stacktrace: stacktrace}}
+    )
   end
 
-  defp maybe_send_callback_error(_error_sink, nil), do: :ok
+  defp stop_with_callback_error(nil), do: :ok
 
   defp drop_infeed_flags(infeed_flags) do
     keys = for {k, _} <- infeed_flags, is_integer(k), do: k
