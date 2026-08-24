@@ -1209,9 +1209,25 @@ defmodule Nx.DefnTest do
       assert if_boolean_raise(boolean: true) == Expr.tensor(1)
     end
 
-    @tag compiler: Evaluator
     test "raises when the boolean else branch is taken" do
       assert_raise ArgumentError, "oops", fn -> if_boolean_raise(boolean: false) end
+    end
+
+    defn if_rank_raise(t) do
+      if Nx.rank(t) != 2 do
+        raise ArgumentError, "tensor must have rank 2"
+      end
+
+      {r, c} = Nx.shape(t)
+      r + c
+    end
+
+    test "aborts tracing when a known if predicate raises" do
+      assert_raise ArgumentError, "tensor must have rank 2", fn ->
+        if_rank_raise(Nx.tensor([1, 2, 3]))
+      end
+
+      assert if_rank_raise(Nx.tensor([[1, 2], [3, 4]])) == Expr.tensor(4)
     end
 
     test "raises correct error on incompatible shapes" do

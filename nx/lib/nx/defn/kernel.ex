@@ -989,9 +989,10 @@ defmodule Nx.Defn.Kernel do
   see `cond/1` instead.
 
   When a `defn` is invoked, both `do`/`else` clauses are traversed
-  and expanded in order to build their expressions. `raise/1` and
-  `raise/2` inside a clause halt the computation at runtime only if
-  that clause is selected. See `raise/2`.
+  and expanded in order to build their expressions, unless the
+  predicate is known while building. `raise/1` and `raise/2` inside
+  a clause halt the computation at runtime only if that clause is
+  selected. See `raise/2`.
   """
   defmacro if(pred, do_else)
 
@@ -1551,10 +1552,11 @@ defmodule Nx.Defn.Kernel do
   @doc ~S"""
   Raises an `exception` with the given `arguments`.
 
-  Inside `if/2`, `cond/1`, and `while/3`, `raise` is invoked at
-  runtime when that branch is selected. Inside `case/2` and at
-  the top level of a `defn`, it still runs while building the
-  numerical expression.
+  If the `if`/`cond`/`while` predicate is a tensor value, `raise`
+  runs at runtime when that branch is selected. If the predicate
+  is known while building the expression (ranks, shapes, booleans),
+  it still raises then. Inside `case/2` and at the top level of a
+  `defn`, it also runs while building the numerical expression.
 
   First, a valid use case for raising while building the expression:
   we know tensor shapes and types, but not their values, so we can

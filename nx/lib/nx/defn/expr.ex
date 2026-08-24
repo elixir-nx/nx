@@ -543,11 +543,14 @@ defmodule Nx.Defn.Expr do
       [{first_meta, first_pred, first_fun} | rest] ->
         first_result = catch_runtime_raise(first_fun)
 
-        cond do
-          always_true_pred?(first_pred) and match?({:value, _}, first_result) ->
-            elem(first_result, 1)
+        case {always_true_pred?(first_pred), first_result} do
+          {true, {:value, expr}} ->
+            expr
 
-          true ->
+          {true, {:raise, spec}} ->
+            apply_runtime_raise(spec)
+
+          {false, _} ->
             rest_evaluated =
               Enum.map(rest, fn {clause_meta, pred, fun} ->
                 {clause_meta, pred, catch_runtime_raise(fun)}
