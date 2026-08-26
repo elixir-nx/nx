@@ -813,7 +813,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
     defn maybe_raise(value, predicate) do
       if predicate do
-        runtime_raise "runtime check failed"
+        runtime_raise("runtime check failed")
       else
         value
       end
@@ -821,9 +821,10 @@ defmodule Nx.Defn.EvaluatorTest do
 
     defn custom_runtime_raise(value, predicate) do
       if predicate do
-        runtime_raise RuntimeRaiseError,
+        runtime_raise(RuntimeRaiseError,
           message: "custom runtime check failed",
           value: :preserved
+        )
       else
         value
       end
@@ -831,7 +832,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
     defn raise_then_value(value, predicate) do
       if predicate do
-        runtime_raise "must not fall through"
+        runtime_raise("must not fall through")
         value
       else
         value
@@ -840,9 +841,9 @@ defmodule Nx.Defn.EvaluatorTest do
 
     defn all_raise(predicate) do
       if predicate do
-        runtime_raise "true branch"
+        runtime_raise("true branch")
       else
-        runtime_raise "false branch"
+        runtime_raise("false branch")
       end
     end
 
@@ -851,7 +852,7 @@ defmodule Nx.Defn.EvaluatorTest do
         while {x, i = 0, n}, i < 10 do
           i =
             if i == n do
-              runtime_raise "Halting on selected iteration"
+              runtime_raise("Halting on selected iteration")
             else
               i
             end
@@ -876,7 +877,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
     defn container_runtime_raise(container, predicate) do
       if predicate do
-        runtime_raise "container check failed"
+        runtime_raise("container check failed")
       else
         container
       end
@@ -884,7 +885,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
     defn static_false_runtime_raise(value) do
       if false do
-        runtime_raise "unreachable"
+        runtime_raise("unreachable")
       else
         value
       end
@@ -892,7 +893,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
     defn static_true_runtime_raise(value) do
       if true do
-        runtime_raise "static check failed"
+        runtime_raise("static check failed")
       else
         value
       end

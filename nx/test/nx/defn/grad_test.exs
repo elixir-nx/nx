@@ -139,7 +139,7 @@ defmodule Nx.Defn.GradTest do
     defn value_and_grad_runtime_raise(t) do
       value_and_grad(t, fn t ->
         if t < 0 do
-          runtime_raise "negative input"
+          runtime_raise("negative input")
         else
           Nx.pow(t, 2)
         end

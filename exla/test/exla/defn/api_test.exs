@@ -398,7 +398,7 @@ defmodule EXLA.Defn.APITest do
 
     defn maybe_raise(value, predicate) do
       if predicate do
-        runtime_raise "runtime check failed"
+        runtime_raise("runtime check failed")
       else
         value
       end
@@ -406,9 +406,10 @@ defmodule EXLA.Defn.APITest do
 
     defn custom_runtime_raise(value, predicate) do
       if predicate do
-        runtime_raise RuntimeRaiseError,
+        runtime_raise(RuntimeRaiseError,
           message: "custom runtime check failed",
           value: :preserved
+        )
       else
         value
       end
@@ -419,7 +420,7 @@ defmodule EXLA.Defn.APITest do
         while {x, i = 0, n}, i < 10 do
           i =
             if i == n do
-              runtime_raise "Halting on selected iteration"
+              runtime_raise("Halting on selected iteration")
             else
               i
             end
