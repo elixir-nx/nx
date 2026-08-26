@@ -436,12 +436,12 @@ defmodule Nx.Defn.Expr do
   @runtime_raise_tag :nx_defn_runtime_raise
 
   @doc false
-  def trace_raise(message) do
+  def runtime_raise(message) do
     maybe_throw_runtime_raise({:message, message})
   end
 
   @doc false
-  def trace_raise(exception, arguments) do
+  def runtime_raise(exception, arguments) do
     maybe_throw_runtime_raise({:exception, exception, arguments})
   end
 
@@ -547,10 +547,7 @@ defmodule Nx.Defn.Expr do
           {true, {:value, expr}} ->
             expr
 
-          {true, {:raise, spec}} ->
-            apply_runtime_raise(spec)
-
-          {false, _} ->
+          _ ->
             rest_evaluated =
               Enum.map(rest, fn {clause_meta, pred, fun} ->
                 {clause_meta, pred, catch_runtime_raise(fun)}

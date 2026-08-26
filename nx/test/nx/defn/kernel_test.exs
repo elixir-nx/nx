@@ -163,10 +163,12 @@ defmodule Nx.Defn.KernelTest do
   end
 
   describe "macros" do
-    test "defines runtime raise_if macros" do
+    test "defines runtime raise macros" do
       macros = Nx.Defn.Kernel.__info__(:macros)
       assert {:raise_if, 3} in macros
       assert {:raise_if, 4} in macros
+      assert {:runtime_raise, 1} in macros
+      assert {:runtime_raise, 2} in macros
     end
 
     test "raise outside of defn" do

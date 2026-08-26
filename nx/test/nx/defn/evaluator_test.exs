@@ -883,9 +883,9 @@ defmodule Nx.Defn.EvaluatorTest do
       defexception [:message, :value]
     end
 
-    defn runtime_raise(value, predicate) do
+    defn maybe_raise(value, predicate) do
       if predicate do
-        raise "runtime check failed"
+        runtime_raise "runtime check failed"
       else
         value
       end
@@ -893,7 +893,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
     defn custom_runtime_raise(value, predicate) do
       if predicate do
-        raise RuntimeRaiseError,
+        runtime_raise RuntimeRaiseError,
           message: "custom runtime check failed",
           value: :preserved
       else
@@ -903,7 +903,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
     defn raise_then_value(value, predicate) do
       if predicate do
-        raise "must not fall through"
+        runtime_raise "must not fall through"
         value
       else
         value
@@ -912,9 +912,9 @@ defmodule Nx.Defn.EvaluatorTest do
 
     defn all_raise(predicate) do
       if predicate do
-        raise "true branch"
+        runtime_raise "true branch"
       else
-        raise "false branch"
+        runtime_raise "false branch"
       end
     end
 
@@ -923,7 +923,7 @@ defmodule Nx.Defn.EvaluatorTest do
         while {x, i = 0, n}, i < 10 do
           i =
             if i == n do
-              raise "Halting on selected iteration"
+              runtime_raise "Halting on selected iteration"
             else
               i
             end
@@ -938,13 +938,21 @@ defmodule Nx.Defn.EvaluatorTest do
       raise "top-level"
     end
 
+    defn raise_inside_if(value, predicate) do
+      if predicate do
+        raise "always raises while building"
+      else
+        value
+      end
+    end
+
     test "passes values through when the predicate is false" do
-      assert runtime_raise(Nx.tensor([1, 2]), 0) == Nx.tensor([1, 2])
+      assert maybe_raise(Nx.tensor([1, 2]), 0) == Nx.tensor([1, 2])
     end
 
     test "raises when the predicate is true" do
       assert_raise RuntimeError, "runtime check failed", fn ->
-        runtime_raise(Nx.tensor(1), 1)
+        maybe_raise(Nx.tensor(1), 1)
       end
     end
 
@@ -983,6 +991,12 @@ defmodule Nx.Defn.EvaluatorTest do
     test "raises at trace time from the top level" do
       assert_raise RuntimeError, "top-level", fn ->
         top_level_raise(Nx.tensor(1))
+      end
+    end
+
+    test "raise inside if still raises while building" do
+      assert_raise RuntimeError, "always raises while building", fn ->
+        raise_inside_if(Nx.tensor(1), 0)
       end
     end
   end

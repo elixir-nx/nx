@@ -106,11 +106,11 @@ defmodule Nx.Defn.Kernel do
       end
 
   When a `defn` is invoked, all `cond` clauses are traversed
-  and expanded in order to build their expressions. `raise/1` and
-  `raise/2` inside a clause become a runtime check: they halt the
-  computation only if that clause is selected. Other uses of `raise`,
-  such as inside `case/2`, still happen while building the expression.
-  See `raise/2`.
+  and expanded in order to build their expressions. This means that,
+  **if you attempt to raise in any clause, then it will always raise**.
+  You can only `raise` in limited situations inside `defn`, see
+  `raise/2`. To raise at runtime from a tensor predicate, see
+  `runtime_raise/1` or `raise_if/3`.
   """
   defmacro cond(opts), do: special_form!([opts])
 
@@ -989,10 +989,11 @@ defmodule Nx.Defn.Kernel do
   see `cond/1` instead.
 
   When a `defn` is invoked, both `do`/`else` clauses are traversed
-  and expanded in order to build their expressions, unless the
-  predicate is known while building. `raise/1` and `raise/2` inside
-  a clause halt the computation at runtime only if that clause is
-  selected. See `raise/2`.
+  and expanded in order to build their expressions. This means that,
+  **if you attempt to raise in any clause, then it will always raise**.
+  You can only `raise` in limited situations inside `defn`, see
+  `raise/2`. To raise at runtime from a tensor predicate, see
+  `runtime_raise/1` or `raise_if/3`.
   """
   defmacro if(pred, do_else)
 
@@ -1450,8 +1451,8 @@ defmodule Nx.Defn.Kernel do
   `predicate` is true, the numerical computation is halted and the exception
   is raised in the caller.
 
-  `raise_if/3` is implemented as `if/2` plus `raise/1`. Therefore, its
-  result must be part of the output of `defn`, and support depends on
+  `raise_if/3` is implemented as `if/2` plus `runtime_raise/1`. Therefore,
+  its result must be part of the output of `defn`, and support depends on
   the compiler. EXLA currently supports runtime callbacks on host and
   CUDA clients, but not in sharded computations.
 
@@ -1474,7 +1475,7 @@ defmodule Nx.Defn.Kernel do
       value = unquote(value)
 
       Nx.Defn.Kernel.if unquote(predicate) do
-        Nx.Defn.Kernel.raise(unquote(exception_or_message))
+        Nx.Defn.Kernel.runtime_raise(unquote(exception_or_message))
       else
         value
       end
@@ -1499,7 +1500,7 @@ defmodule Nx.Defn.Kernel do
       value = unquote(value)
 
       Nx.Defn.Kernel.if unquote(predicate) do
-        Nx.Defn.Kernel.raise(unquote(exception), unquote(arguments))
+        Nx.Defn.Kernel.runtime_raise(unquote(exception), unquote(arguments))
       else
         value
       end
@@ -1545,22 +1546,22 @@ defmodule Nx.Defn.Kernel do
   # Since there is no defdelegate for macros, we do it manually.
   defmacro raise(message) do
     quote do
-      Nx.Defn.Expr.trace_raise(unquote(message))
+      Elixir.Kernel.raise(unquote(message))
     end
   end
 
   @doc ~S"""
   Raises an `exception` with the given `arguments`.
 
-  If the `if`/`cond`/`while` predicate is a tensor value, `raise`
-  runs at runtime when that branch is selected. If the predicate
-  is known while building the expression (ranks, shapes, booleans),
-  it still raises then. Inside `case/2` and at the top level of a
-  `defn`, it also runs while building the numerical expression.
+  `raise/2` is invoked while building the numerical expression,
+  not inside the device. This means that `raise` may be invoked
+  on unexpected situations, as we build the numerical expression.
+  To better understand those cases, let's see some examples.
 
-  First, a valid use case for raising while building the expression:
-  we know tensor shapes and types, but not their values, so we can
-  assert on the shape:
+  First, let's start with a valid use case for `raise/2`: raise
+  on mismatched shapes. Inside `defn`, we know the tensor shapes
+  and types, but not their values, so we can assert on the shape
+  while building the numerical expression:
 
       defn square_shape(tensor) do
         case Nx.shape(tensor) do
@@ -1579,35 +1580,70 @@ defmodule Nx.Defn.Kernel do
         if a != b do
           a * b
         else
-          raise "expected different tensors"
+          raise "expected different tensors, got: #{inspect(a)} and #{inspect(b)}"
         end
       end
 
-  `a` and `b` are tensors and the `if` depends on their values, which
-  are unknown while the expression is built. Both branches are converted
-  into a numerical expression. The raising branch becomes a host callback
-  that raises only if it is selected at runtime, rather than raising
-  while the expression is built.
+  In this case, both `a` and `b` are tensors and we are comparing their values.
+  However, their values are unknown, which means we need to convert the whole
+  `if` to a numerical expression and run it on the device. Therefore, once we
+  convert the `else` branch, it will execute `raise/2`, making it so the code
+  above always raises!
 
-  `raise` inside `case/2` still runs while building the expression,
-  because only the matching clause is evaluated. If that `case` sits
-  inside `if/2` or `cond/1`, the throw is captured as that branch's
-  runtime raise. The exception or message is static Elixir data;
-  runtime tensor values cannot be interpolated into the exception
-  message.
-
-  A runtime `raise` aborts the whole numerical computation. It is a host
-  callback, not an exception inside the CPU/GPU program. EXLA currently
-  supports it on host and CUDA clients, but not in sharded computations.
-  The result of the surrounding `if`/`cond` must stay part of the `defn`
-  output, or the raising branch may be eliminated.
-
-  `raise_if/3` and `raise_if/4` are pipeable wrappers around the same
-  `if` plus `raise` pattern.
+  To raise based on runtime tensor values, use `runtime_raise/1` or
+  `raise_if/3`.
   """
   defmacro raise(exception, arguments) do
     quote do
-      Nx.Defn.Expr.trace_raise(unquote(exception), unquote(arguments))
+      Elixir.Kernel.raise(unquote(exception), unquote(arguments))
+    end
+  end
+
+  @doc """
+  Raises `exception_or_message` at runtime when the surrounding branch
+  is selected.
+
+  Unlike `raise/2`, this does not raise while building the numerical
+  expression. Inside `if/2`, `cond/1`, and `while/3`, it becomes a host
+  callback that raises only if that branch is taken.
+
+  It is implemented on top of `io_call/2`. The result of the surrounding
+  `if`/`cond` must stay part of the `defn` output, or the raising branch
+  may be eliminated. EXLA currently supports it on host and CUDA clients,
+  but not in sharded computations.
+
+  The exception or message is static Elixir data captured while the
+  expression is built. Runtime tensor values cannot be interpolated
+  into the exception message.
+
+  ## Examples
+
+      defn some_check(a, b) do
+        if a != b do
+          a * b
+        else
+          runtime_raise "expected different tensors"
+        end
+      end
+
+  See `runtime_raise/2` to raise a custom exception with arguments.
+  `raise_if/3` is a pipeable wrapper around `if` plus `runtime_raise`.
+  """
+  defmacro runtime_raise(exception_or_message) do
+    quote do
+      Nx.Defn.Expr.runtime_raise(unquote(exception_or_message))
+    end
+  end
+
+  @doc """
+  Raises `exception` with `arguments` at runtime when the surrounding
+  branch is selected.
+
+  See `runtime_raise/1` for when this runs relative to `raise/2`.
+  """
+  defmacro runtime_raise(exception, arguments) do
+    quote do
+      Nx.Defn.Expr.runtime_raise(unquote(exception), unquote(arguments))
     end
   end
 

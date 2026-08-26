@@ -396,9 +396,9 @@ defmodule EXLA.Defn.APITest do
       defexception [:message, :value]
     end
 
-    defn runtime_raise(value, predicate) do
+    defn maybe_raise(value, predicate) do
       if predicate do
-        raise "runtime check failed"
+        runtime_raise "runtime check failed"
       else
         value
       end
@@ -406,7 +406,7 @@ defmodule EXLA.Defn.APITest do
 
     defn custom_runtime_raise(value, predicate) do
       if predicate do
-        raise RuntimeRaiseError,
+        runtime_raise RuntimeRaiseError,
           message: "custom runtime check failed",
           value: :preserved
       else
@@ -419,7 +419,7 @@ defmodule EXLA.Defn.APITest do
         while {x, i = 0, n}, i < 10 do
           i =
             if i == n do
-              raise "Halting on selected iteration"
+              runtime_raise "Halting on selected iteration"
             else
               i
             end
@@ -431,12 +431,12 @@ defmodule EXLA.Defn.APITest do
     end
 
     test "passes values through when the predicate is false" do
-      assert_equal(EXLA.jit(&runtime_raise/2).(Nx.tensor([1, 2]), 0), Nx.tensor([1, 2]))
+      assert_equal(EXLA.jit(&maybe_raise/2).(Nx.tensor([1, 2]), 0), Nx.tensor([1, 2]))
     end
 
     test "raises when the predicate is true" do
       assert_raise RuntimeError, "runtime check failed", fn ->
-        EXLA.jit(&runtime_raise/2).(1, 1)
+        EXLA.jit(&maybe_raise/2).(1, 1)
       end
     end
 

@@ -611,7 +611,7 @@ defmodule Nx.Defn.Compiler do
     {{call, meta, [ast | rest]}, state}
   end
 
-  defp normalize({{:., _, [Nx.Defn.Expr, :trace_raise]} = call, meta, args}, state) do
+  defp normalize({{:., _, [Nx.Defn.Expr, :runtime_raise]} = call, meta, args}, state) do
     {args, state} = normalize_list(args, state)
     {{call, meta, args}, state}
   end
