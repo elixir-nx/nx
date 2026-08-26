@@ -110,7 +110,7 @@ defmodule Nx.Defn.Kernel do
   **if you attempt to raise in any clause, then it will always raise**.
   You can only `raise` in limited situations inside `defn`, see
   `raise/2`. To raise at runtime from a tensor predicate, see
-  `runtime_raise/1` or `raise_if/3`.
+  `runtime_raise/1`.
   """
   defmacro cond(opts), do: special_form!([opts])
 
@@ -993,7 +993,7 @@ defmodule Nx.Defn.Kernel do
   **if you attempt to raise in any clause, then it will always raise**.
   You can only `raise` in limited situations inside `defn`, see
   `raise/2`. To raise at runtime from a tensor predicate, see
-  `runtime_raise/1` or `raise_if/3`.
+  `runtime_raise/1`.
   """
   defmacro if(pred, do_else)
 
@@ -1441,73 +1441,6 @@ defmodule Nx.Defn.Kernel do
     do: io_call(expr, name, function)
 
   @doc """
-  Raises `exception_or_message` at runtime when `predicate` is truthy.
-
-  `predicate` must be a scalar tensor, where zero is considered false and
-  any other number is considered true. The booleans `false` and `true` are
-  also supported.
-
-  The given `value` is returned unchanged when `predicate` is false. When
-  `predicate` is true, the numerical computation is halted and the exception
-  is raised in the caller.
-
-  `raise_if/3` is implemented as `if/2` plus `runtime_raise/1`. Therefore,
-  its result must be part of the output of `defn`, and support depends on
-  the compiler. EXLA currently supports runtime callbacks on host and
-  CUDA clients, but not in sharded computations.
-
-  The exception or message is static Elixir data captured while the numerical
-  expression is built. Runtime tensor values cannot be interpolated into the
-  exception message.
-
-  ## Examples
-
-      defn ensure_finite(tensor) do
-        tensor
-        |> raise_if(Nx.any(Nx.is_infinity(tensor)), "infinite value")
-        |> raise_if(Nx.any(Nx.is_nan(tensor)), "NaN value")
-      end
-
-  See `raise_if/4` to raise a custom exception with arguments.
-  """
-  defmacro raise_if(value, predicate, exception_or_message) do
-    quote do
-      value = unquote(value)
-
-      Nx.Defn.Kernel.if unquote(predicate) do
-        Nx.Defn.Kernel.runtime_raise(unquote(exception_or_message))
-      else
-        value
-      end
-    end
-  end
-
-  @doc """
-  Raises `exception` with `arguments` at runtime when `predicate` is truthy.
-
-  It follows the same runtime and pass-through semantics as `raise_if/3`.
-
-  ## Examples
-
-      defn ensure_positive(tensor) do
-        raise_if(tensor, Nx.any(tensor <= 0), ArgumentError,
-          message: "expected all values to be positive"
-        )
-      end
-  """
-  defmacro raise_if(value, predicate, exception, arguments) do
-    quote do
-      value = unquote(value)
-
-      Nx.Defn.Kernel.if unquote(predicate) do
-        Nx.Defn.Kernel.runtime_raise(unquote(exception), unquote(arguments))
-      else
-        value
-      end
-    end
-  end
-
-  @doc """
   Asserts the keyword list has the given keys.
 
   If it succeeds, it returns the given keyword list. Raises
@@ -1590,8 +1523,7 @@ defmodule Nx.Defn.Kernel do
   convert the `else` branch, it will execute `raise/2`, making it so the code
   above always raises!
 
-  To raise based on runtime tensor values, use `runtime_raise/1` or
-  `raise_if/3`.
+  To raise based on runtime tensor values, use `runtime_raise/1`.
   """
   defmacro raise(exception, arguments) do
     quote do
@@ -1627,7 +1559,6 @@ defmodule Nx.Defn.Kernel do
       end
 
   See `runtime_raise/2` to raise a custom exception with arguments.
-  `raise_if/3` is a pipeable wrapper around `if` plus `runtime_raise`.
   """
   defmacro runtime_raise(exception_or_message) do
     quote do

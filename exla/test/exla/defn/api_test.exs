@@ -459,16 +459,42 @@ defmodule EXLA.Defn.APITest do
       end
     end
 
-    defn piped_raise_if(value, predicate) do
-      raise_if(value, predicate, "piped")
+    defn halt_on_nth_with_value(x, n) do
+      {x, i, _n} =
+        while {x, i = 0, n}, i < 10 do
+          i =
+            if i == n do
+              io_call(i, fn i ->
+                raise "Halting on iteration #{Nx.to_number(i)}"
+              end)
+            else
+              i
+            end
+
+          {x + 1, i + 1, n}
+        end
+
+      {x, i}
     end
 
-    test "raise_if remains a pipeable wrapper" do
-      assert_equal(EXLA.jit(&piped_raise_if/2).(Nx.tensor(1), 0), Nx.tensor(1))
-
-      assert_raise RuntimeError, "piped", fn ->
-        EXLA.jit(&piped_raise_if/2).(1, 1)
+    test "io_call can raise with the runtime iteration value" do
+      assert_raise RuntimeError, "Halting on iteration 5", fn ->
+        EXLA.jit(&halt_on_nth_with_value/2).(0, 5)
       end
+    end
+
+    defn callback_rescues(value) do
+      io_call(value, fn t ->
+        try do
+          raise "internal boom"
+        rescue
+          _ -> t
+        end
+      end)
+    end
+
+    test "does not bubble a raise rescued inside the callback" do
+      assert_equal(EXLA.jit(&callback_rescues/1).(Nx.tensor(4)), Nx.tensor(4))
     end
   end
 
