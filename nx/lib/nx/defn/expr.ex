@@ -433,16 +433,17 @@ defmodule Nx.Defn.Expr do
   @doc false
   def id(), do: make_ref()
 
-  @runtime_raise_tag :nx_defn_runtime_raise
+  @runtime_raise_key :nx_defn_runtime_raise
+  @runtime_raise_sentinel :nx_defn_runtime_raise_sentinel
 
   @doc false
   def runtime_raise(message) do
-    maybe_throw_runtime_raise({:message, message})
+    track_runtime_raise({:message, message})
   end
 
   @doc false
   def runtime_raise(exception, arguments) do
-    maybe_throw_runtime_raise({:exception, exception, arguments})
+    track_runtime_raise({:exception, exception, arguments})
   end
 
   @doc false
@@ -455,18 +456,33 @@ defmodule Nx.Defn.Expr do
   end
 
   @doc false
-  def catch_runtime_raise(fun) when is_function(fun, 0) do
+  def with_runtime_raise(fun) when is_function(fun, 0) do
+    previous = Process.get(@runtime_raise_key)
+    Process.put(@runtime_raise_key, nil)
+
     try do
-      {:value, fun.()}
-    catch
-      :throw, {@runtime_raise_tag, spec} ->
-        {:raise, spec}
+      result = fun.()
+      spec = Process.get(@runtime_raise_key)
+
+      cond do
+        spec == nil -> {:value, result}
+        result == @runtime_raise_sentinel -> {:raise, spec}
+        true -> {:value_and_raise, result, spec}
+      end
+    after
+      Process.put(@runtime_raise_key, previous)
     end
   end
 
-  defp maybe_throw_runtime_raise(spec) do
+  @doc false
+  def wrap_runtime_raise(spec, template) do
+    runtime_raise_io_call(spec, template)
+  end
+
+  defp track_runtime_raise(spec) do
     if Process.get(Nx.Defn.Compiler) do
-      throw({@runtime_raise_tag, spec})
+      Process.put(@runtime_raise_key, spec)
+      @runtime_raise_sentinel
     else
       apply_runtime_raise(spec)
     end
@@ -541,7 +557,7 @@ defmodule Nx.Defn.Expr do
           description: "cond/if expects at least one branch to always evaluate to true"
 
       [{first_meta, first_pred, first_fun} | rest] ->
-        first_result = catch_runtime_raise(first_fun)
+        first_result = with_runtime_raise(first_fun)
 
         case {always_true_pred?(first_pred), first_result} do
           {true, {:value, expr}} ->
@@ -550,7 +566,7 @@ defmodule Nx.Defn.Expr do
           _ ->
             rest_evaluated =
               Enum.map(rest, fn {clause_meta, pred, fun} ->
-                {clause_meta, pred, catch_runtime_raise(fun)}
+                {clause_meta, pred, with_runtime_raise(fun)}
               end)
 
             finish_cond(file, meta, [
@@ -590,6 +606,7 @@ defmodule Nx.Defn.Expr do
   defp cond_raise_template(evaluated) do
     Enum.find_value(evaluated, fn
       {_meta, _pred, {:value, expr}} -> expr
+      {_meta, _pred, {:value_and_raise, expr, _spec}} -> expr
       _ -> nil
     end) || tensor(0)
   end
@@ -602,6 +619,7 @@ defmodule Nx.Defn.Expr do
         case result do
           {:value, expr} -> expr
           {:raise, spec} -> runtime_raise_io_call(spec, template)
+          {:value_and_raise, expr, spec} -> runtime_raise_io_call(spec, expr)
         end
 
       if branch_idx > 0 and not Nx.Defn.Composite.compatible?(template, expr, fn _, _ -> true end) do
@@ -895,9 +913,10 @@ defmodule Nx.Defn.Expr do
   end
 
   defp while_body_expr(fun, initial) do
-    case catch_runtime_raise(fun) do
+    case with_runtime_raise(fun) do
       {:value, body} -> to_container_expr(body)
       {:raise, spec} -> runtime_raise_io_call(spec, initial)
+      {:value_and_raise, body, spec} -> runtime_raise_io_call(spec, to_container_expr(body))
     end
   end
 

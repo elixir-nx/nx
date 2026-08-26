@@ -1539,10 +1539,13 @@ defmodule Nx.Defn.Kernel do
   expression. Inside `if/2`, `cond/1`, and `while/3`, it becomes a host
   callback that raises only if that branch is taken.
 
-  It is implemented on top of `io_call/2`. The result of the surrounding
-  `if`/`cond` must stay part of the `defn` output, or the raising branch
-  may be eliminated. EXLA currently supports it on host and CUDA clients,
-  but not in sharded computations.
+  It is implemented on top of `io_call/2`: the branch result is passed
+  through a host callback, like other `io_call` values. Later expressions
+  in the same branch still run while the expression is built; the raise
+  is kept alive by threading that result through the callback. The result
+  of the surrounding `if`/`cond` must stay part of the `defn` output, or
+  the raising branch may be eliminated. EXLA currently supports it on host
+  and CUDA clients, but not in sharded computations.
 
   The exception or message is static Elixir data captured while the
   expression is built. Runtime tensor values cannot be interpolated

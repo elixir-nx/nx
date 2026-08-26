@@ -186,16 +186,23 @@ defmodule Nx.Defn.Compiler do
     previous = Process.put(Nx.Defn.Compiler, compiler)
 
     try do
-      case Nx.Defn.Expr.catch_runtime_raise(fn ->
-             fun
-             |> apply(args)
-             |> Nx.Defn.Composite.traverse(&Nx.Defn.Expr.tensor/1)
+      case Nx.Defn.Expr.with_runtime_raise(fn ->
+             result = apply(fun, args)
+
+             if result == :nx_defn_runtime_raise_sentinel do
+               result
+             else
+               Nx.Defn.Composite.traverse(result, &Nx.Defn.Expr.tensor/1)
+             end
            end) do
         {:value, result} ->
           result
 
         {:raise, spec} ->
           Nx.Defn.Expr.apply_runtime_raise(spec)
+
+        {:value_and_raise, result, spec} ->
+          Nx.Defn.Expr.wrap_runtime_raise(spec, result)
       end
     after
       if previous_backend do
