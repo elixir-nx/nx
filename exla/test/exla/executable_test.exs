@@ -70,8 +70,8 @@ defmodule EXLA.ExecutableTest do
           [Value.add(x, y, s32_typespec())]
         end)
 
-      assert [[t3 = %DeviceBuffer{}]] = Executable.run(exec, [[t1, t2]])
-      assert [[a = %DeviceBuffer{}]] = Executable.run(exec, [[t3, t3]])
+      assert {:ok, [[t3 = %DeviceBuffer{}]]} = Executable.run(exec, [[t1, t2]])
+      assert {:ok, [[a = %DeviceBuffer{}]]} = Executable.run(exec, [[t3, t3]])
 
       assert <<4::32-native>> == DeviceBuffer.read(a)
     end
@@ -151,7 +151,7 @@ defmodule EXLA.ExecutableTest do
       dumped = Executable.dump(exec)
       exec = Executable.load(client(), dumped)
 
-      assert [[a = %DeviceBuffer{}]] = EXLA.Executable.run(exec, [[t1, t2]], [])
+      assert {:ok, [[a = %DeviceBuffer{}]]} = EXLA.Executable.run(exec, [[t1, t2]], [])
       assert <<2::32-native>> == DeviceBuffer.read(a)
     end
   end

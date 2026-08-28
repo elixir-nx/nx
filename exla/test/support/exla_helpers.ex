@@ -90,7 +90,7 @@ defmodule EXLAHelpers do
   """
   def run_one(args, opts \\ [], output \\ nil, fun) do
     exec = compile(Enum.map(args, & &1.typespec), opts, output, fun)
-    [result] = EXLA.Executable.run(exec, [args], opts)
+    {:ok, [result]} = EXLA.Executable.run(exec, [args], opts)
     result
   end
 end

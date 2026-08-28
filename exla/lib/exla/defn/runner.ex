@@ -21,16 +21,7 @@ defmodule EXLA.Defn.Runner do
   @impl true
   def handle_continue({ref, fun}, nil) do
     receive do
-      ^ref ->
-        result =
-          try do
-            {:ok, fun.()}
-          catch
-            kind, reason ->
-              {:error, kind, reason, __STACKTRACE__}
-          end
-
-        {:noreply, result}
+      ^ref -> {:noreply, fun.()}
     end
   end
 

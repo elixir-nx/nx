@@ -248,12 +248,7 @@ defmodule EXLA.Defn do
     infeeds = Map.new(infeeds)
 
     {:ok, outfeed_pid} =
-      Outfeed.start_child(
-        executable,
-        outfeed,
-        Process.group_leader(),
-        infeeds
-      )
+      Outfeed.start_child(executable, outfeed, Process.group_leader(), infeeds)
 
     ref = Process.monitor(outfeed_pid)
 
@@ -261,11 +256,7 @@ defmodule EXLA.Defn do
 
     {:ok, runner} =
       EXLA.Defn.Runner.start_link(lock, fn ->
-        try do
-          EXLA.Executable.run(executable, [Enum.reverse(buffers)], run_options)
-        after
-          send(outfeed_pid, :stop)
-        end
+        EXLA.Executable.run(executable, [Enum.reverse(buffers)], run_options)
       end)
 
     _ = EXLA.Defn.Lock.transfer(lock, fn -> send(runner, lock) end, outfeed_pid)
@@ -278,8 +269,8 @@ defmodule EXLA.Defn do
           {{:shutdown, %EXLA.Defn.CallbackError{} = error}, _runner_result} ->
             :erlang.raise(error.kind, error.reason, error.stacktrace)
 
-          {_down_reason, {:error, kind, reason, stacktrace}} ->
-            :erlang.raise(kind, reason, stacktrace)
+          {_down_reason, {:error, message}} ->
+            raise RuntimeError, message: message
 
           {_down_reason, {:ok, results}} ->
             Enum.map(results, fn result ->
@@ -310,13 +301,15 @@ defmodule EXLA.Defn do
           end)
         end)
 
-      EXLA.Executable.run(executable, input_lists, run_options)
-    else
-      [_ | _] = results ->
-        # For sharded execution, we get a list of results (one per partition)
-        Enum.map(results, fn result ->
-          EXLA.Defn.Buffers.to_nx!(result, outputs, executable.mesh)
-        end)
+      case EXLA.Executable.run(executable, input_lists, run_options) do
+        {:ok, results} ->
+          Enum.map(results, fn result ->
+            EXLA.Defn.Buffers.to_nx!(result, outputs, executable.mesh)
+          end)
+
+        {:error, message} ->
+          raise RuntimeError, message: message
+      end
     after
       EXLA.Defn.Lock.unlock(lock)
     end

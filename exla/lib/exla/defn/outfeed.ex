@@ -384,6 +384,7 @@ defmodule EXLA.Defn.Outfeed do
       rescue
         exception ->
           stacktrace = __STACKTRACE__
+          send(self(), :stop)
 
           {
             {:error, {:exception, Exception.format(:error, exception, stacktrace)}},
@@ -392,6 +393,7 @@ defmodule EXLA.Defn.Outfeed do
       catch
         kind, reason ->
           stacktrace = __STACKTRACE__
+          send(self(), :stop)
 
           {
             {:error, {kind, Exception.format(kind, reason, stacktrace)}},
