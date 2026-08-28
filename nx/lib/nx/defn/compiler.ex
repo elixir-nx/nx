@@ -186,24 +186,9 @@ defmodule Nx.Defn.Compiler do
     previous = Process.put(Nx.Defn.Compiler, compiler)
 
     try do
-      case Nx.Defn.Expr.with_runtime_raise(fn ->
-             result = apply(fun, args)
-
-             if result == :nx_defn_runtime_raise_sentinel do
-               result
-             else
-               Nx.Defn.Composite.traverse(result, &Nx.Defn.Expr.tensor/1)
-             end
-           end) do
-        {:value, result} ->
-          result
-
-        {:raise, spec} ->
-          Nx.Defn.Expr.apply_runtime_raise(spec)
-
-        {:value_and_raise, result, spec} ->
-          Nx.Defn.Expr.wrap_runtime_raise(spec, result)
-      end
+      fun
+      |> apply(args)
+      |> Nx.Defn.Composite.traverse(&Nx.Defn.Expr.tensor/1)
     after
       if previous_backend do
         Process.put(Nx.Shared.backend_pdict_key(), previous_backend)
@@ -616,11 +601,6 @@ defmodule Nx.Defn.Compiler do
   defp normalize({{:., _, [Nx.Defn.Kernel, :hook]} = call, meta, [ast | rest]}, state) do
     {ast, state} = normalize(ast, state)
     {{call, meta, [ast | rest]}, state}
-  end
-
-  defp normalize({{:., _, [Nx.Defn.Expr, :runtime_raise]} = call, meta, args}, state) do
-    {args, state} = normalize_list(args, state)
-    {{call, meta, args}, state}
   end
 
   defp normalize({{:., _, [:erlang, :error]} = dot, meta, args}, state) do

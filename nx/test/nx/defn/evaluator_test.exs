@@ -830,15 +830,6 @@ defmodule Nx.Defn.EvaluatorTest do
       end
     end
 
-    defn raise_then_value(value, predicate) do
-      if predicate do
-        runtime_raise("must not fall through")
-        value
-      else
-        value
-      end
-    end
-
     defn all_raise(predicate) do
       if predicate do
         runtime_raise("true branch")
@@ -877,7 +868,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
     defn container_runtime_raise(container, predicate) do
       if predicate do
-        runtime_raise("container check failed")
+        io_call(container, fn _ -> raise "container check failed" end)
       else
         container
       end
@@ -916,14 +907,6 @@ defmodule Nx.Defn.EvaluatorTest do
         end
 
       assert error.value == :preserved
-    end
-
-    test "does not evaluate expressions after raise in the same branch" do
-      assert raise_then_value(Nx.tensor(3), 0) == Nx.tensor(3)
-
-      assert_raise RuntimeError, "must not fall through", fn ->
-        raise_then_value(Nx.tensor(3), 1)
-      end
     end
 
     test "selects the raising branch when every branch raises" do
