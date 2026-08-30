@@ -53,11 +53,9 @@ defprotocol EXLA.CustomCall do
 
   ## Native handlers
 
-  Emitting a custom call in MLIR is only half of the story: the **target name**
-  must be registered with XLA on the relevant platform (typically via a native
-  library loaded into the process). That registration is **not** configured
-  through `config :exla, ...`; you load or link the native code by the same
-  means you would for any other NIF-backed extension.
+  For a custom call backed by an external native library, load the library that
+  registers the corresponding native handler for the active XLA platform before
+  compiling the block.
 
   ## Example
 

@@ -82,6 +82,9 @@ defmodule EXLA do
   your block tag struct; see `EXLA.CustomCall` for the `call/4` contract,
   including returning `:skip` to fall back to the block's default Elixir callback.
 
+  The native library implementing the handler is loaded with `load_dylib/1`,
+  which must happen before compiling any function that emits the target name.
+
   Backend-specific behaviour, options, and limitations for Nx functions are
   documented in the [Backend documentation](backend_documentation.html) guides
   (for example [Nx](backend_documentation-nx.html) and
