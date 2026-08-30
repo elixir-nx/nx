@@ -12,6 +12,12 @@ defmodule EXLA.CustomCall.Spec do
       `name = ` (for example `{"k", "42 : i64"}`). An empty list omits the dictionary
       from the op.
 
+    * **`mlir_attributes`** — Optional `{name, attr}` pairs, default `[]`, emitted
+      directly on `stablehlo.custom_call`. Use these for compiler-visible metadata such
+      as layouts and sharding rules. Names and attributes use the same binary format as
+      `attributes`. Names must be unique and cannot be `call_target_name`, `api_version`,
+      or `backend_config`.
+
     * **`operand_element_types`** — How operand SSA values are presented to the handler:
 
       * **`:default`** — use each lowered operand’s element type as produced from the
@@ -27,11 +33,17 @@ defmodule EXLA.CustomCall.Spec do
 
   @enforce_keys [:call_target_name]
 
-  defstruct [:call_target_name, attributes: [], operand_element_types: :default]
+  defstruct [
+    :call_target_name,
+    attributes: [],
+    mlir_attributes: [],
+    operand_element_types: :default
+  ]
 
   @type t :: %__MODULE__{
           call_target_name: String.t(),
           attributes: [{String.t(), String.t()}],
+          mlir_attributes: [{String.t(), String.t()}],
           operand_element_types: :default | [Nx.Type.t()]
         }
 end

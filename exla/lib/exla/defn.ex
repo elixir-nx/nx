@@ -880,6 +880,14 @@ defmodule EXLA.Defn do
                     "EXLA.CustomCall.Spec attributes must be a list of {binary_key, binary_attr} pairs, got: #{inspect(other)}"
           end
 
+        mlir_attributes =
+          if is_list(spec.mlir_attributes) do
+            spec.mlir_attributes
+          else
+            raise ArgumentError,
+                  "EXLA.CustomCall.Spec mlir_attributes must be a list of {binary_key, binary_attr} pairs, got: #{inspect(spec.mlir_attributes)}"
+          end
+
         call_args = cast_custom_call_operands(call_args, spec.operand_element_types)
 
         out_typespecs =
@@ -888,7 +896,13 @@ defmodule EXLA.Defn do
           |> Enum.map(&expr_to_typespec/1)
 
         lowered =
-          Value.custom_call(call_args, out_typespecs, spec.call_target_name, dictionary_entries)
+          Value.custom_call(
+            call_args,
+            out_typespecs,
+            spec.call_target_name,
+            dictionary_entries,
+            mlir_attributes
+          )
           |> wrap_tuple_result(out)
 
         {lowered, cache}

@@ -9,7 +9,14 @@ end
 defimpl EXLA.CustomCall, for: EXLA.Test.QRAliasBlock do
   def call(_, {%{type: {q_kind, q_size}}, _r_expr}, [_tensor], client)
       when q_kind != :c and q_size == 32 and client.platform == :host do
-    {:ok, %EXLA.CustomCall.Spec{call_target_name: "qr_cpu_custom_call_f32_exla_alias"}}
+    {:ok,
+     %EXLA.CustomCall.Spec{
+       call_target_name: "qr_cpu_custom_call_f32_exla_alias",
+       mlir_attributes: [
+         {"operand_layouts", "[dense<[1, 0]> : tensor<2xindex>]"},
+         {"result_layouts", "[dense<[1, 0]> : tensor<2xindex>, dense<[1, 0]> : tensor<2xindex>]"}
+       ]
+     }}
   end
 
   def call(_, _, _, _), do: :skip
