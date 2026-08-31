@@ -141,7 +141,7 @@ mlir_op(ErlNifEnv *env, fine::ResourcePtr<MLIRFunction> function,
         std::string op_name,
         std::vector<fine::ResourcePtr<mlir::Value>> operands,
         std::vector<std::string> result_type_strings,
-        std::vector<std::tuple<fine::Atom, std::string>> attributes_kwlist,
+        std::vector<std::tuple<std::string, std::string>> attributes_kwlist,
         std::vector<fine::ResourcePtr<mlir::Region>> regions) {
   auto result_types = std::vector<mlir::Type>{};
 
@@ -154,7 +154,7 @@ mlir_op(ErlNifEnv *env, fine::ResourcePtr<MLIRFunction> function,
 
   for (auto const &[key, value] : attributes_kwlist) {
     auto attribute_value = function->module()->ParseAttribute(value);
-    attributes.push_back(std::make_tuple(key.to_string(), attribute_value));
+    attributes.push_back(std::make_tuple(key, attribute_value));
   }
 
   return function->Op(op_name, operands, result_types, attributes, regions);

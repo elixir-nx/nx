@@ -780,9 +780,11 @@ defmodule EXLA.MLIR.Value do
         [%Value{function: func} | _] = operands,
         typespecs,
         call_target_name,
-        dictionary_entries \\ []
+        dictionary_entries \\ [],
+        mlir_attributes \\ []
       )
-      when is_binary(call_target_name) and is_list(typespecs) and is_list(dictionary_entries) do
+      when is_binary(call_target_name) and is_list(typespecs) and is_list(dictionary_entries) and
+             is_list(mlir_attributes) do
     result_types = typespecs_to_mlir_types(typespecs)
 
     attributes = [
@@ -796,6 +798,8 @@ defmodule EXLA.MLIR.Value do
       else
         attributes
       end
+
+    attributes = attributes ++ custom_call_mlir_attrs(mlir_attributes)
 
     op(func, "stablehlo.custom_call", operands, result_types, attributes: attributes)
   end
@@ -927,13 +931,15 @@ defmodule EXLA.MLIR.Value do
         %Value{ref: ref, function: %Function{ref: ^function_ref}} -> ref
       end)
 
+    attributes = Enum.map(opts[:attributes], fn {name, value} -> {to_string(name), value} end)
+
     refs =
       EXLA.NIF.mlir_op(
         function.ref,
         op_name,
         refs,
         result_types,
-        opts[:attributes],
+        attributes,
         opts[:regions]
       )
 
@@ -1102,6 +1108,30 @@ defmodule EXLA.MLIR.Value do
               "custom_call backend_config dictionary must be a list of {binary_key, binary_attr} pairs, got entry: #{inspect(other)}"
     end)
     |> attr_dict()
+  end
+
+  @reserved_custom_call_attrs ["call_target_name", "api_version", "backend_config"]
+
+  defp custom_call_mlir_attrs(pairs) do
+    attributes =
+      Enum.map(pairs, fn
+        {name, attr} when is_binary(name) and is_binary(attr) ->
+          {name, attr}
+
+        other ->
+          raise ArgumentError,
+                "custom_call MLIR attributes must be a list of {binary_name, binary_attr} pairs, got entry: #{inspect(other)}"
+      end)
+
+    names = Enum.map(attributes, &elem(&1, 0))
+
+    if Enum.any?(names, &(&1 in @reserved_custom_call_attrs)) or
+         length(Enum.uniq(names)) != length(names) do
+      raise ArgumentError,
+            "custom_call MLIR attribute names must be unique and cannot override EXLA attributes"
+    end
+
+    attributes
   end
 
   defp join_list(list) do
