@@ -3678,6 +3678,26 @@ defmodule Nx.Defn.GradTest do
       assert grad_while_constant(tensor) == Nx.tensor([1.0, 1.0, 1.0, 1.0, 1.0])
     end
 
+    defn grad_while_f64(t) do
+      grad(t, fn t ->
+        {_, t} =
+          while {i = 0, t}, i < 3 do
+            {i + 1, t * 2.0}
+          end
+
+        Nx.sum(t)
+      end)
+    end
+
+    test "preserves the input type across the loop carry" do
+      # Three doublings, so Σ(8t) and ∂/∂t = 8 everywhere.
+      tensor = Nx.tensor([1.0, 2.0, 3.0], type: :f64)
+      result = grad_while_f64(tensor)
+
+      assert Nx.type(result) == {:f, 64}
+      assert result == Nx.tensor([8.0, 8.0, 8.0], type: :f64)
+    end
+
     defn grad_while_param(t, x) do
       value_and_grad(x, fn x ->
         {_, t} =
