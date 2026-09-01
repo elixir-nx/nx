@@ -111,7 +111,7 @@ defmodule Nx.Defn.Grad do
 
   defp constant(float, %T{shape: shape} = t) do
     names = List.duplicate(nil, tuple_size(shape))
-    Expr.constant(%{t | names: names, type: {:f, 32}}, float, [])
+    Expr.constant(%{t | names: names, type: Nx.Type.to_floating(t.type)}, float, [])
   end
 
   # Align heterogenous vectorized inputs to the union of vec axes — matching
