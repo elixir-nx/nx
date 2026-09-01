@@ -3678,7 +3678,7 @@ defmodule Nx.Defn.GradTest do
       assert grad_while_constant(tensor) == Nx.tensor([1.0, 1.0, 1.0, 1.0, 1.0])
     end
 
-    defn grad_while_f64(t) do
+    defn grad_while_doubling(t) do
       grad(t, fn t ->
         {_, t} =
           while {i = 0, t}, i < 3 do
@@ -3691,11 +3691,18 @@ defmodule Nx.Defn.GradTest do
 
     test "preserves the input type across the loop carry" do
       # Three doublings, so Σ(8t) and ∂/∂t = 8 everywhere.
-      tensor = Nx.tensor([1.0, 2.0, 3.0], type: :f64)
-      result = grad_while_f64(tensor)
+      tensor = Nx.tensor([1.0, 2.0, 3.0], type: {:f, 64})
+      result = grad_while_doubling(tensor)
 
       assert Nx.type(result) == {:f, 64}
-      assert result == Nx.tensor([8.0, 8.0, 8.0], type: :f64)
+      assert result == Nx.tensor([8.0, 8.0, 8.0], type: {:f, 64})
+    end
+
+    test "preserves complex types across the loop carry" do
+      result = grad_while_doubling(~VEC[1+1i 2-2i 3])
+
+      assert Nx.type(result) == {:c, 64}
+      assert result == ~VEC[8 8 8]c64
     end
 
     defn grad_while_param(t, x) do
