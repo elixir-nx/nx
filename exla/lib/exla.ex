@@ -82,6 +82,9 @@ defmodule EXLA do
   your block tag struct; see `EXLA.CustomCall` for the `call/4` contract,
   including returning `:skip` to fall back to the block's default Elixir callback.
 
+  The native library implementing the handler is loaded with `load_dylib/1`,
+  which must happen before compiling any function that emits the target name.
+
   Backend-specific behaviour, options, and limitations for Nx functions are
   documented in the [Backend documentation](backend_documentation.html) guides
   (for example [Nx](backend_documentation-nx.html) and
@@ -489,6 +492,50 @@ defmodule EXLA do
     end
 
     {expr_cache_fun, comp_cache_fun}
+  end
+
+  @doc """
+  Loads a native shared library into the OS process running the VM.
+
+  ## Path
+
+  `path` is a string handed to the system dynamic loader as is, extension
+  included (`.so`, also `.dylib` on macOS). Look up rules are the same as
+  for native dynamic linking loaders (for example, searching through
+  `LD_LIBRARY_PATH`). Therefore, using absolute paths is advised.
+
+  ## Loading semantics
+
+  The library must be loaded **before** EXLA compiles a computation emitting one
+  of the targets it implements. Otherwise compilation fails with an unregistered
+  custom call error. Your application `start/2` callback is a good place for it:
+
+      defmodule MyApp.Application do
+        use Application
+
+        @impl true
+        def start(_type, _args) do
+          :ok = EXLA.load_dylib(Application.app_dir(:my_app, "priv/libmy_custom_calls.so"))
+          Supervisor.start_link([], strategy: :one_for_one, name: MyApp.Supervisor)
+        end
+      end
+
+  The library is never unloaded, since XLA holds on to the registered handlers
+  for as long as the VM runs. Therefore, it is advised that the library is as
+  lightweight as possible.
+
+  ## Errors
+
+  An `ArgumentError` is raised with the message reported by the dynamic loader
+  when the library cannot be opened. The usual causes are a path that does not
+  exist, a library built for a different architecture, and symbols that cannot
+  be resolved.
+
+  This function is only supported on Unix systems (Linux and macOS).
+  """
+  @spec load_dylib(Path.t()) :: :ok
+  def load_dylib(path) when is_binary(path) do
+    EXLA.NIF.load_dylib(path)
   end
 
   @impl true

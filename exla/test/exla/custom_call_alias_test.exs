@@ -59,13 +59,7 @@ defmodule EXLA.CustomCallAliasTest do
       """)
     end
 
-    case EXLA.NIF.load_dylib(path) do
-      :ok ->
-        :ok
-
-      other ->
-        flunk("load_dylib(#{path}) expected :ok, got: #{inspect(other)}")
-    end
+    assert EXLA.load_dylib(path) == :ok
   end
 
   test "builtin QR lowering includes qr_cpu_custom_call_f32 in MLIR" do
