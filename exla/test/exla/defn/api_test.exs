@@ -294,15 +294,10 @@ defmodule EXLA.Defn.APITest do
       io_call(a + b, :raises, fn _ -> raise "boom" end)
     end
 
-    @tag :capture_log
-    test "halts outfeed when io_call raises" do
-      {_pid, ref} =
-        spawn_monitor(fn ->
-          EXLA.jit(&hook_raises/2).(2, 3)
-        end)
-
-      assert_receive {:DOWN, ^ref, :process, _, {%RuntimeError{message: message}, _}}
-      assert message =~ "boom"
+    test "propagates the original exception when io_call raises" do
+      assert_raise RuntimeError, "boom", fn ->
+        EXLA.jit(&hook_raises/2).(2, 3)
+      end
     end
 
     defn side_effect_hooks(a, b) do
@@ -393,6 +388,90 @@ defmodule EXLA.Defn.APITest do
 
     test "executes io_call with anonymous function callback" do
       assert_equal(EXLA.jit(&io_call_passthrough/2).(2, 3), Nx.tensor(5))
+    end
+  end
+
+  describe "runtime raise" do
+    defn maybe_raise(value, predicate) do
+      if predicate do
+        runtime_raise("runtime check failed")
+      else
+        value
+      end
+    end
+
+    defn halt_on_nth(x, n) do
+      {x, i, _n} =
+        while {x, i = 0, n}, i < 10 do
+          i =
+            if i == n do
+              runtime_raise("Halting on selected iteration")
+            else
+              i
+            end
+
+          {x + 1, i + 1, n}
+        end
+
+      {x, i}
+    end
+
+    test "passes values through when the predicate is false" do
+      assert_equal(EXLA.jit(&maybe_raise/2).(Nx.tensor([1, 2]), 0), Nx.tensor([1, 2]))
+    end
+
+    test "raises when the predicate is true" do
+      assert_raise RuntimeError, "runtime check failed", fn ->
+        EXLA.jit(&maybe_raise/2).(1, 1)
+      end
+    end
+
+    test "halts a while loop on the selected iteration" do
+      assert {x, i} = EXLA.jit(&halt_on_nth/2).(0, 11)
+      assert_equal(x, Nx.tensor(10))
+      assert_equal(i, Nx.tensor(10))
+
+      assert_raise RuntimeError, "Halting on selected iteration", fn ->
+        EXLA.jit(&halt_on_nth/2).(0, 5)
+      end
+    end
+
+    defn halt_on_nth_with_value(x, n) do
+      {x, i, _n} =
+        while {x, i = 0, n}, i < 10 do
+          i =
+            if i == n do
+              io_call(i, fn i ->
+                raise "Halting on iteration #{Nx.to_number(i)}"
+              end)
+            else
+              i
+            end
+
+          {x + 1, i + 1, n}
+        end
+
+      {x, i}
+    end
+
+    test "io_call can raise with the runtime iteration value" do
+      assert_raise RuntimeError, "Halting on iteration 5", fn ->
+        EXLA.jit(&halt_on_nth_with_value/2).(0, 5)
+      end
+    end
+
+    defn callback_rescues(value) do
+      io_call(value, fn t ->
+        try do
+          raise "internal boom"
+        rescue
+          _ -> t
+        end
+      end)
+    end
+
+    test "does not bubble a raise rescued inside the callback" do
+      assert_equal(EXLA.jit(&callback_rescues/1).(Nx.tensor(4)), Nx.tensor(4))
     end
   end
 

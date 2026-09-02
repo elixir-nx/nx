@@ -262,12 +262,21 @@ defmodule EXLA.Defn do
     _ = EXLA.Defn.Lock.transfer(lock, fn -> send(runner, lock) end, outfeed_pid)
 
     receive do
-      {:DOWN, ^ref, _, _, _} ->
-        results = EXLA.Defn.Runner.read(runner)
+      {:DOWN, ^ref, _, _, down_reason} ->
+        runner_result = EXLA.Defn.Runner.read(runner)
 
-        Enum.map(results, fn result ->
-          EXLA.Defn.Buffers.to_nx!(result, outputs, executable.mesh)
-        end)
+        case {down_reason, runner_result} do
+          {{:shutdown, %EXLA.Defn.CallbackError{} = error}, _runner_result} ->
+            :erlang.raise(error.kind, error.reason, error.stacktrace)
+
+          {_down_reason, {:error, message}} ->
+            raise RuntimeError, message: message
+
+          {_down_reason, {:ok, results}} ->
+            Enum.map(results, fn result ->
+              EXLA.Defn.Buffers.to_nx!(result, outputs, executable.mesh)
+            end)
+        end
     end
   end
 
@@ -292,13 +301,15 @@ defmodule EXLA.Defn do
           end)
         end)
 
-      EXLA.Executable.run(executable, input_lists, run_options)
-    else
-      [_ | _] = results ->
-        # For sharded execution, we get a list of results (one per partition)
-        Enum.map(results, fn result ->
-          EXLA.Defn.Buffers.to_nx!(result, outputs, executable.mesh)
-        end)
+      case EXLA.Executable.run(executable, input_lists, run_options) do
+        {:ok, results} ->
+          Enum.map(results, fn result ->
+            EXLA.Defn.Buffers.to_nx!(result, outputs, executable.mesh)
+          end)
+
+        {:error, message} ->
+          raise RuntimeError, message: message
+      end
     after
       EXLA.Defn.Lock.unlock(lock)
     end

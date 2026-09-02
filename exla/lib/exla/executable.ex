@@ -22,7 +22,7 @@ defmodule EXLA.Executable do
   @doc """
   Runs the given executable with a list of lists as inputs and the given options.
 
-  Works across nodes.
+  Returns `{:ok, results}` or `{:error, message}`. Works across nodes.
   """
   def run(executable, inputs, options \\ [])
 
@@ -47,8 +47,15 @@ defmodule EXLA.Executable do
     callback_server_pid = Keyword.get(options, :callback_server_pid)
     inputs = prepare_runtime_callback_inputs(inputs, callback_server_pid)
 
-    for data_and_device_id <- run(client, ref, device_id, inputs, options) do
-      decompose_output(data_and_device_id, output_typespecs, client, mesh)
+    case run(client, ref, device_id, inputs, options) do
+      {:error, message} ->
+        {:error, IO.iodata_to_binary(message)}
+
+      results ->
+        {:ok,
+         for data_and_device_id <- results do
+           decompose_output(data_and_device_id, output_typespecs, client, mesh)
+         end}
     end
   end
 

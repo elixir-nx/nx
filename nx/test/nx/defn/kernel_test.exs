@@ -163,6 +163,25 @@ defmodule Nx.Defn.KernelTest do
   end
 
   describe "macros" do
+    test "defines runtime raise macros" do
+      macros = Nx.Defn.Kernel.__info__(:macros)
+      assert {:runtime_raise, 1} in macros
+      refute {:runtime_raise, 2} in macros
+      refute {:raise_if, 3} in macros
+      refute {:raise_if, 4} in macros
+    end
+
+    test "runtime_raise/1 requires a compile-time string" do
+      assert_raise ArgumentError, ~r/compile-time string/, fn ->
+        Code.eval_string("""
+        defmodule Nx.Defn.KernelTest.RuntimeRaiseNotString do
+          import Nx.Defn
+          defn go(t), do: runtime_raise(t)
+        end
+        """)
+      end
+    end
+
     test "raise outside of defn" do
       assert_raise RuntimeError,
                    "cannot invoke Nx.Defn.Kernel.if/2 because you are not inside a defn",

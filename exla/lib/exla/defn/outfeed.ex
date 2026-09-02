@@ -244,10 +244,19 @@ defmodule EXLA.Defn.Outfeed do
     ref = make_ref()
     typespec = EXLA.Typespec.tensor({:u, 16}, {})
 
-    loop(client, device_id, ref, typespec, infeed_flags, infeeds, callbacks)
+    loop(client, device_id, ref, typespec, infeed_flags, infeeds, callbacks, nil)
   end
 
-  defp loop(client, device_id, ref, typespec, infeed_flags, infeeds, callbacks) do
+  defp loop(
+         client,
+         device_id,
+         ref,
+         typespec,
+         infeed_flags,
+         infeeds,
+         callbacks,
+         callback_error
+       ) do
     if active_infeed_flags?(infeed_flags) do
       :ok = EXLA.Client.from_outfeed(client, device_id, [typespec], self(), ref)
     end
@@ -262,7 +271,8 @@ defmodule EXLA.Defn.Outfeed do
           typespec,
           drop_infeed_flags(infeed_flags),
           infeeds,
-          callbacks
+          callbacks,
+          callback_error
         )
 
       {^ref, <<flag::native-unsigned-16>>} ->
@@ -276,21 +286,58 @@ defmodule EXLA.Defn.Outfeed do
 
             EXLA.Client.to_infeed(client, device_id, [{data, data_typespec}])
 
-            loop(client, device_id, ref, typespec, infeed_flags, infeeds, callbacks)
+            loop(
+              client,
+              device_id,
+              ref,
+              typespec,
+              infeed_flags,
+              infeeds,
+              callbacks,
+              callback_error
+            )
         end
 
       {:exla_runtime_call, callback_id, args_spec, reply_tag} ->
-        send_callback_reply(callbacks, callback_id, args_spec, reply_tag)
-        loop(client, device_id, ref, typespec, infeed_flags, infeeds, callbacks)
+        error = send_callback_reply(callbacks, callback_id, args_spec, reply_tag)
+
+        loop(
+          client,
+          device_id,
+          ref,
+          typespec,
+          infeed_flags,
+          infeeds,
+          callbacks,
+          callback_error || error
+        )
 
       :stop ->
-        :ok
+        stop_with_callback_error(callback_error)
 
       other ->
         Logger.debug("EXLA.Outfeed ignoring unexpected message: #{inspect(other)}")
-        loop(client, device_id, ref, typespec, infeed_flags, infeeds, callbacks)
+
+        loop(
+          client,
+          device_id,
+          ref,
+          typespec,
+          infeed_flags,
+          infeeds,
+          callbacks,
+          callback_error
+        )
     end
   end
+
+  defp stop_with_callback_error({kind, reason, stacktrace}) do
+    exit(
+      {:shutdown, %EXLA.Defn.CallbackError{kind: kind, reason: reason, stacktrace: stacktrace}}
+    )
+  end
+
+  defp stop_with_callback_error(nil), do: :ok
 
   defp drop_infeed_flags(infeed_flags) do
     keys = for {k, _} <- infeed_flags, is_integer(k), do: k
@@ -315,35 +362,47 @@ defmodule EXLA.Defn.Outfeed do
   end
 
   defp send_callback_reply(callbacks, callback_id, args_spec, reply_tag) do
-    reply =
+    {reply, callback_error} =
       try do
-        with {:ok, callback} <- Map.fetch(callbacks, callback_id),
-             {:ok, tensor_args} <- materialize_callback_args(callback, args_spec) do
-          callback
-          |> invoke_callback(tensor_args)
-          |> encode_callback_reply()
-        else
-          :error ->
-            Logger.error(
-              "EXLA.Outfeed received callback id #{inspect(callback_id)} that is not registered"
-            )
+        result =
+          with {:ok, callback} <- Map.fetch(callbacks, callback_id),
+               {:ok, tensor_args} <- materialize_callback_args(callback, args_spec) do
+            invoke_callback(callback, tensor_args)
+          else
+            :error ->
+              Logger.error(
+                "EXLA.Outfeed received callback id #{inspect(callback_id)} that is not registered"
+              )
 
-            encode_callback_reply({:error, :unknown_callback})
+              {:error, :unknown_callback}
 
-          {:error, _} = error ->
-            error
-        end
+            {:error, _} = error ->
+              error
+          end
+
+        {encode_callback_reply(result), nil}
       rescue
         exception ->
+          stacktrace = __STACKTRACE__
           send(self(), :stop)
-          {:error, {:exception, Exception.format(:error, exception, __STACKTRACE__)}}
+
+          {
+            {:error, {:exception, Exception.format(:error, exception, stacktrace)}},
+            {:error, exception, stacktrace}
+          }
       catch
         kind, reason ->
+          stacktrace = __STACKTRACE__
           send(self(), :stop)
-          {:error, {kind, Exception.format(kind, reason, __STACKTRACE__)}}
+
+          {
+            {:error, {kind, Exception.format(kind, reason, stacktrace)}},
+            {kind, reason, stacktrace}
+          }
       end
 
     deliver_native_reply(reply_tag, reply)
+    callback_error
   end
 
   defp deliver_native_reply(reply_tag, reply) do
@@ -386,10 +445,10 @@ defmodule EXLA.Defn.Outfeed do
       {:ok, []}
     rescue
       exception ->
-        {:error, {:exception, Exception.format(:error, exception, __STACKTRACE__)}}
+        {:error, {:callback_error, :error, exception, __STACKTRACE__}}
     catch
       kind, reason ->
-        {:error, {kind, Exception.format(kind, reason, __STACKTRACE__)}}
+        {:error, {:callback_error, kind, reason, __STACKTRACE__}}
     end
   end
 
@@ -403,10 +462,10 @@ defmodule EXLA.Defn.Outfeed do
         end
       rescue
         exception ->
-          {:error, {:exception, exception, __STACKTRACE__}}
+          {:error, {:callback_error, :error, exception, __STACKTRACE__}}
       catch
         kind, reason ->
-          {:error, {kind, reason}}
+          {:error, {:callback_error, kind, reason, __STACKTRACE__}}
       end
 
     case result do
@@ -468,8 +527,8 @@ defmodule EXLA.Defn.Outfeed do
     raise RuntimeError.exception(msg)
   end
 
-  defp encode_callback_reply({:error, {:exception, exception, _stack}}) do
-    raise exception
+  defp encode_callback_reply({:error, {:callback_error, kind, reason, stacktrace}}) do
+    :erlang.raise(kind, reason, stacktrace)
   end
 
   defp encode_callback_reply({:error, {kind, reason}}) when is_binary(reason) do

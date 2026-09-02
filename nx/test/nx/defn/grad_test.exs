@@ -135,6 +135,24 @@ defmodule Nx.Defn.GradTest do
         io_call_tuple_both(a)
       )
     end
+
+    defn value_and_grad_runtime_raise(t) do
+      value_and_grad(t, fn t ->
+        if t < 0 do
+          runtime_raise("negative input")
+        else
+          Nx.pow(t, 2)
+        end
+      end)
+    end
+
+    test "runtime_raise in if passes gradients through and runs on the primal path" do
+      assert value_and_grad_runtime_raise(Nx.tensor(3.0)) == {Nx.tensor(9.0), Nx.tensor(6.0)}
+
+      assert_raise RuntimeError, "negative input", fn ->
+        value_and_grad_runtime_raise(Nx.tensor(-1.0))
+      end
+    end
   end
 
   describe "metadata" do

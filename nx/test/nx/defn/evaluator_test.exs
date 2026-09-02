@@ -805,4 +805,130 @@ defmodule Nx.Defn.EvaluatorTest do
       assert a == vectorized_metadata(a)
     end
   end
+
+  describe "runtime raise" do
+    defn maybe_raise(value, predicate) do
+      if predicate do
+        runtime_raise("runtime check failed")
+      else
+        value
+      end
+    end
+
+    defn all_raise(predicate) do
+      if predicate do
+        runtime_raise("true branch")
+      else
+        runtime_raise("false branch")
+      end
+    end
+
+    defn halt_on_nth(x, n) do
+      {x, i, _n} =
+        while {x, i = 0, n}, i < 10 do
+          i =
+            if i == n do
+              runtime_raise("Halting on selected iteration")
+            else
+              i
+            end
+
+          {x + 1, i + 1, n}
+        end
+
+      {x, i}
+    end
+
+    defn top_level_raise(_value) do
+      raise "top-level"
+    end
+
+    defn raise_inside_if(value, predicate) do
+      if predicate do
+        raise "always raises while building"
+      else
+        value
+      end
+    end
+
+    defn container_runtime_raise(container, predicate) do
+      if predicate do
+        io_call(container, fn _ -> raise "container check failed" end)
+      else
+        container
+      end
+    end
+
+    defn static_false_runtime_raise(value) do
+      if false do
+        runtime_raise("unreachable")
+      else
+        value
+      end
+    end
+
+    defn static_true_runtime_raise(value) do
+      if true do
+        runtime_raise("static check failed")
+      else
+        value
+      end
+    end
+
+    test "passes values through when the predicate is false" do
+      assert maybe_raise(Nx.tensor([1, 2]), 0) == Nx.tensor([1, 2])
+    end
+
+    test "raises when the predicate is true" do
+      assert_raise RuntimeError, "runtime check failed", fn ->
+        maybe_raise(Nx.tensor(1), 1)
+      end
+    end
+
+    test "selects the raising branch when every branch raises" do
+      assert_raise RuntimeError, "true branch", fn -> all_raise(1) end
+      assert_raise RuntimeError, "false branch", fn -> all_raise(0) end
+    end
+
+    test "halts a while loop on the selected iteration" do
+      assert {x, i} = halt_on_nth(0, 11)
+      assert x == Nx.tensor(10)
+      assert i == Nx.tensor(10)
+
+      assert_raise RuntimeError, "Halting on selected iteration", fn ->
+        halt_on_nth(0, 5)
+      end
+    end
+
+    test "raises at trace time from the top level" do
+      assert_raise RuntimeError, "top-level", fn ->
+        top_level_raise(Nx.tensor(1))
+      end
+    end
+
+    test "raise inside if still raises while building" do
+      assert_raise RuntimeError, "always raises while building", fn ->
+        raise_inside_if(Nx.tensor(1), 0)
+      end
+    end
+
+    test "passes containers through and raises from the container branch" do
+      container = %Container{a: 1, b: 2, c: :reset, d: :kept}
+
+      assert container_runtime_raise(container, 0) ==
+               %Container{a: Nx.tensor(1), b: Nx.tensor(2), c: %{}, d: :kept}
+
+      assert_raise RuntimeError, "container check failed", fn ->
+        container_runtime_raise(container, 1)
+      end
+    end
+
+    test "known boolean predicates still raise at runtime" do
+      assert static_false_runtime_raise(Nx.tensor(3)) == Nx.tensor(3)
+
+      assert_raise RuntimeError, "static check failed", fn ->
+        static_true_runtime_raise(Nx.tensor(1))
+      end
+    end
+  end
 end

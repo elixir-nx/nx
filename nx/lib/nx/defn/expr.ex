@@ -711,7 +711,10 @@ defmodule Nx.Defn.Expr do
           body =
             Enum.reduce(internal_unroll, arg, fn index, acc ->
               next = Nx.add(index_param, step * index)
-              body = condition_body.(:body, {{next, generator_param}, acc}) |> to_container_expr()
+
+              body =
+                condition_body.(:body, {{next, generator_param}, acc}) |> to_container_expr()
+
               index == 0 and compatible_while!(file, line, initial, body)
               body
             end)
@@ -727,7 +730,9 @@ defmodule Nx.Defn.Expr do
       end
 
     Enum.reduce(external, result, fn index, acc ->
-      body = condition_body.(:body, {{index, generator}, acc}) |> to_container_expr()
+      body =
+        condition_body.(:body, {{index, generator}, acc}) |> to_container_expr()
+
       index == external.first and compatible_while!(file, line, initial, body)
       body
     end)

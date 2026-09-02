@@ -92,35 +92,72 @@ defmodule EXLA.Defn.RuntimeCallTest do
     Nx.runtime_call(out, x, [], &bad_callback_fn/2)
   end
 
-  @tag :capture_log
   test "runtime_call errors when result shape does not match template" do
     x = Nx.iota({2})
-    test_pid = self()
 
-    {pid, ref} =
-      spawn_monitor(fn ->
-        bad_callback(x)
-        send(test_pid, :unexpected_success)
-      end)
+    error = assert_raise ArgumentError, fn -> bad_callback(x) end
 
-    assert_receive {:DOWN, ^ref, :process, ^pid, reason}
-    message = runtime_error_message(reason)
-
-    assert message =~ "expected the runtime_call function to match the given output template"
-    refute_received :unexpected_success
+    assert error.message =~
+             "expected the runtime_call function to match the given output template"
   end
 
-  defp runtime_error_message({{%RuntimeError{message: message}, _stacktrace}, _call_info}),
-    do: message
+  defp return_error_callback(_t, _opts), do: {:error, :asdf}
 
-  defp runtime_error_message({%RuntimeError{message: message}, _stacktrace}),
-    do: message
+  defn callback_returns_error(x) do
+    Nx.runtime_call(x, x, &return_error_callback/2)
+  end
 
-  defp runtime_error_message({:error, {:runtime_error, message}}),
-    do: message
+  test "runtime_call propagates a callback error tuple" do
+    assert_raise RuntimeError, "Elixir callback error: :asdf", fn ->
+      callback_returns_error(Nx.tensor(1))
+    end
+  end
 
-  defp runtime_error_message(other),
-    do: inspect(other)
+  defmodule CallbackError do
+    defexception [:message, :value]
+  end
+
+  defp raise_callback(_t, _opts) do
+    raise CallbackError, message: "callback failed", value: :preserved
+  end
+
+  defn callback_raises(x) do
+    Nx.runtime_call(x, x, &raise_callback/2)
+  end
+
+  test "runtime_call preserves the original callback exception" do
+    error = assert_raise CallbackError, "callback failed", fn -> callback_raises(Nx.tensor(1)) end
+    assert error.value == :preserved
+  end
+
+  defp throw_callback(_t, _opts), do: throw({:callback_throw, :asdf})
+
+  defn callback_throws(x) do
+    Nx.runtime_call(x, x, &throw_callback/2)
+  end
+
+  test "runtime_call preserves callback throws" do
+    assert catch_throw(callback_throws(Nx.tensor(1))) == {:callback_throw, :asdf}
+  end
+
+  defp exit_callback(_t, _opts), do: exit(:callback_exit)
+
+  defn callback_exits(x) do
+    Nx.runtime_call(x, x, &exit_callback/2)
+  end
+
+  test "runtime_call preserves callback exits" do
+    assert catch_exit(callback_exits(Nx.tensor(1))) == :callback_exit
+  end
+
+  test "a rescued callback failure does not crash linked infrastructure" do
+    task =
+      Task.async(fn ->
+        assert_raise CallbackError, "callback failed", fn -> callback_raises(Nx.tensor(1)) end
+      end)
+
+    assert %CallbackError{value: :preserved} = Task.await(task, 5_000)
+  end
 
   test "works when using EXLA compiler directly" do
     x = Nx.tensor([1, 2, 3])

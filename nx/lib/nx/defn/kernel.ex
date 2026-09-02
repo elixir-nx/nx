@@ -109,7 +109,8 @@ defmodule Nx.Defn.Kernel do
   and expanded in order to build their expressions. This means that,
   **if you attempt to raise in any clause, then it will always raise**.
   You can only `raise` in limited situations inside `defn`, see
-  `raise/2` for more information.
+  `raise/2`. To raise at runtime from a tensor predicate, see
+  `runtime_raise/1`.
   """
   defmacro cond(opts), do: special_form!([opts])
 
@@ -991,7 +992,8 @@ defmodule Nx.Defn.Kernel do
   and expanded in order to build their expressions. This means that,
   **if you attempt to raise in any clause, then it will always raise**.
   You can only `raise` in limited situations inside `defn`, see
-  `raise/2` for more information.
+  `raise/2`. To raise at runtime from a tensor predicate, see
+  `runtime_raise/1`.
   """
   defmacro if(pred, do_else)
 
@@ -1521,12 +1523,51 @@ defmodule Nx.Defn.Kernel do
   convert the `else` branch, it will execute `raise/2`, making it so the code
   above always raises!
 
-  In such cases, there are no alternatives. We can't execute exceptions in the
-  CPU/GPU, so you need to approach the problem under a different perspective.
+  To raise based on runtime tensor values, use `runtime_raise/1`.
   """
   defmacro raise(exception, arguments) do
     quote do
       Elixir.Kernel.raise(unquote(exception), unquote(arguments))
+    end
+  end
+
+  @doc """
+  Raises `message` at runtime when the surrounding branch is selected.
+
+  Unlike `raise/2`, this does not raise while building the numerical
+  expression. It is `io_call/2` with a dummy scalar whose callback
+  raises, so it only fires if that branch is taken. Tensor branches
+  still broadcast with the dummy; tuple and container branches need
+  `io_call/2` on the value itself.
+
+  As with `io_call/2`, you must return the result or the raise may be
+  optimized away. `message` must be a compile-time string. For a custom
+  exception, raise inside `io_call/2`. EXLA currently supports this on
+  host and CUDA clients, but not in sharded computations.
+
+  ## Examples
+
+      defn some_check(a, b) do
+        if a != b do
+          a * b
+        else
+          runtime_raise("expected different tensors")
+        end
+      end
+  """
+  defmacro runtime_raise(message) do
+    __defn__!(:runtime_raise, 1)
+    message = Macro.expand(message, __CALLER__)
+
+    Elixir.Kernel.if is_binary(message) do
+      quote do
+        io_call(Nx.tensor(0), fn _ -> Elixir.Kernel.raise(unquote(message)) end)
+      end
+    else
+      Kernel.raise(
+        ArgumentError,
+        "runtime_raise/1 expects a compile-time string, got: #{Macro.to_string(message)}"
+      )
     end
   end
 
