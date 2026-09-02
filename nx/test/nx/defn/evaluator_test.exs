@@ -807,24 +807,9 @@ defmodule Nx.Defn.EvaluatorTest do
   end
 
   describe "runtime raise" do
-    defmodule RuntimeRaiseError do
-      defexception [:message, :value]
-    end
-
     defn maybe_raise(value, predicate) do
       if predicate do
         runtime_raise("runtime check failed")
-      else
-        value
-      end
-    end
-
-    defn custom_runtime_raise(value, predicate) do
-      if predicate do
-        runtime_raise(RuntimeRaiseError,
-          message: "custom runtime check failed",
-          value: :preserved
-        )
       else
         value
       end
@@ -898,15 +883,6 @@ defmodule Nx.Defn.EvaluatorTest do
       assert_raise RuntimeError, "runtime check failed", fn ->
         maybe_raise(Nx.tensor(1), 1)
       end
-    end
-
-    test "raises custom exceptions with arguments" do
-      error =
-        assert_raise RuntimeRaiseError, "custom runtime check failed", fn ->
-          custom_runtime_raise(Nx.tensor(1), 1)
-        end
-
-      assert error.value == :preserved
     end
 
     test "selects the raising branch when every branch raises" do

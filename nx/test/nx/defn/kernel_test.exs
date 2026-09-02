@@ -166,7 +166,7 @@ defmodule Nx.Defn.KernelTest do
     test "defines runtime raise macros" do
       macros = Nx.Defn.Kernel.__info__(:macros)
       assert {:runtime_raise, 1} in macros
-      assert {:runtime_raise, 2} in macros
+      refute {:runtime_raise, 2} in macros
       refute {:raise_if, 3} in macros
       refute {:raise_if, 4} in macros
     end

@@ -1541,8 +1541,9 @@ defmodule Nx.Defn.Kernel do
   `io_call/2` on the value itself.
 
   As with `io_call/2`, you must return the result or the raise may be
-  optimized away. `message` must be a compile-time string. EXLA currently
-  supports this on host and CUDA clients, but not in sharded computations.
+  optimized away. `message` must be a compile-time string. For a custom
+  exception, raise inside `io_call/2`. EXLA currently supports this on
+  host and CUDA clients, but not in sharded computations.
 
   ## Examples
 
@@ -1553,8 +1554,6 @@ defmodule Nx.Defn.Kernel do
           runtime_raise("expected different tensors")
         end
       end
-
-  See `runtime_raise/2` to raise a custom exception with arguments.
   """
   defmacro runtime_raise(message) do
     __defn__!(:runtime_raise, 1)
@@ -1569,22 +1568,6 @@ defmodule Nx.Defn.Kernel do
         ArgumentError,
         "runtime_raise/1 expects a compile-time string, got: #{Macro.to_string(message)}"
       )
-    end
-  end
-
-  @doc """
-  Raises `exception` with `arguments` at runtime when the surrounding
-  branch is selected.
-
-  See `runtime_raise/1` for when this runs relative to `raise/2`.
-  """
-  defmacro runtime_raise(exception, arguments) do
-    __defn__!(:runtime_raise, 2)
-
-    quote do
-      io_call(Nx.tensor(0), fn _ ->
-        Elixir.Kernel.raise(unquote(exception), unquote(arguments))
-      end)
     end
   end
 
