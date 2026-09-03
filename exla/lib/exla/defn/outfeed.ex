@@ -364,45 +364,44 @@ defmodule EXLA.Defn.Outfeed do
   defp send_callback_reply(callbacks, callback_id, args_spec, reply_tag) do
     {reply, callback_error} =
       try do
-        result =
-          with {:ok, callback} <- Map.fetch(callbacks, callback_id),
-               {:ok, tensor_args} <- materialize_callback_args(callback, args_spec) do
-            invoke_callback(callback, tensor_args)
-          else
-            :error ->
-              Logger.error(
-                "EXLA.Outfeed received callback id #{inspect(callback_id)} that is not registered"
-              )
-
-              {:error, :unknown_callback}
-
-            {:error, _} = error ->
-              error
-          end
-
-        {encode_callback_reply(result), nil}
-      rescue
-        exception ->
-          stacktrace = __STACKTRACE__
-          send(self(), :stop)
-
-          {
-            {:error, {:exception, Exception.format(:error, exception, stacktrace)}},
-            {:error, exception, stacktrace}
-          }
+        with {:ok, callback} <- fetch_callback(callbacks, callback_id),
+             {:ok, tensor_args} <- materialize_callback_args(callback, args_spec),
+             {:ok, result} <- invoke_callback(callback, tensor_args) do
+          {{:ok, encode_callback_outputs(result)}, nil}
+        else
+          {:error, exception} -> raise exception
+        end
       catch
         kind, reason ->
           stacktrace = __STACKTRACE__
-          send(self(), :stop)
 
-          {
-            {:error, {kind, Exception.format(kind, reason, stacktrace)}},
-            {kind, reason, stacktrace}
-          }
+          exception =
+            if kind == :error do
+              Exception.normalize(kind, reason, stacktrace)
+            else
+              RuntimeError.exception(Exception.format(kind, reason, stacktrace))
+            end
+
+          Logger.error(Exception.message(exception))
+          send(self(), :stop)
+          {{:error, exception}, {kind, reason, stacktrace}}
       end
 
     deliver_native_reply(reply_tag, reply)
     callback_error
+  end
+
+  defp fetch_callback(callbacks, callback_id) do
+    case Map.fetch(callbacks, callback_id) do
+      {:ok, callback} ->
+        {:ok, callback}
+
+      :error ->
+        {:error,
+         RuntimeError.exception(
+           "EXLA.Outfeed received callback id #{inspect(callback_id)} that is not registered"
+         )}
+    end
   end
 
   defp deliver_native_reply(reply_tag, reply) do
@@ -411,8 +410,12 @@ defmodule EXLA.Defn.Outfeed do
         {:ok, payload} ->
           EXLA.NIF.runtime_callback_reply(reply_tag, :ok, payload)
 
-        {:error, {tag, reason}} ->
-          EXLA.NIF.runtime_callback_reply(reply_tag, :error, {tag, reason})
+        {:error, exception} ->
+          EXLA.NIF.runtime_callback_reply(
+            reply_tag,
+            :error,
+            {:exception, Exception.message(exception)}
+          )
       end
     rescue
       _ ->
@@ -420,130 +423,46 @@ defmodule EXLA.Defn.Outfeed do
           "EXLA.Outfeed failed to send callback reply to native for tag #{inspect(reply_tag)}"
         )
     end
+
+    :ok
   end
 
-  defp invoke_callback({invoke, nil, _arg_template, _opts}, tensor_args) do
-    invoke_side_effect(invoke, tensor_args)
+  defp invoke_callback({{:fn, fun}, nil, _arg_template, _opts}, tensor_args)
+       when is_function(fun, 1) do
+    fun.(tensor_args)
+    {:ok, []}
+  end
+
+  defp invoke_callback({{:named, _, nil}, nil, _arg_template, _opts}, _tensor_args) do
+    {:ok, []}
   end
 
   defp invoke_callback({fun, out_template, _arg_template, opts}, tensor_args)
        when is_function(fun) do
-    run_runtime_callback({:ok, tensor_args}, fun, out_template, opts)
-  end
+    value = if opts, do: fun.(tensor_args, opts), else: fun.(tensor_args)
 
-  defp invoke_side_effect({:fn, fun}, tensor_args) when is_function(fun, 1) do
-    run_side_effect(fun, tensor_args)
-  end
-
-  defp invoke_side_effect({:named, _, nil}, _tensor_args) do
-    {:ok, []}
-  end
-
-  defp run_side_effect(fun, tensor_args) when is_function(fun, 1) do
-    try do
-      fun.(tensor_args)
-      {:ok, []}
-    rescue
-      exception ->
-        {:error, {:callback_error, :error, exception, __STACKTRACE__}}
-    catch
-      kind, reason ->
-        {:error, {:callback_error, kind, reason, __STACKTRACE__}}
+    case value do
+      {:error, reason} -> raise RuntimeError, "Elixir callback error: #{inspect(reason)}"
+      _ -> :ok
     end
-  end
 
-  defp run_runtime_callback({:ok, tensor_args}, fun, out_template, opts) do
-    result =
-      try do
-        if opts do
-          fun.(tensor_args, opts)
-        else
-          fun.(tensor_args)
-        end
-      rescue
-        exception ->
-          {:error, {:callback_error, :error, exception, __STACKTRACE__}}
-      catch
-        kind, reason ->
-          {:error, {:callback_error, kind, reason, __STACKTRACE__}}
-      end
+    if Nx.compatible?(value, out_template) do
+      {:ok, value}
+    else
+      msg =
+        "expected the runtime_call function to match the given output template " <>
+          "#{inspect(out_template)}, got: #{inspect(value)}"
 
-    case result do
-      {:error, _} = error ->
-        error
-
-      value ->
-        if Nx.compatible?(value, out_template) do
-          {:ok, value}
-        else
-          {:error, {:shape_mismatch, value, out_template}}
-        end
+      {:error, ArgumentError.exception(msg)}
     end
   end
 
   defp materialize_callback_args({_, _, arg_template, _}, args_spec) when is_list(args_spec) do
     materialize_callback_tensors(arg_template, args_spec)
-  catch
-    {:error, reason} ->
-      {:error, {:decode_failed, ArgumentError.exception("invalid args_spec #{inspect(reason)}")}}
   end
 
   defp materialize_callback_args({_, _, _arg_template, _}, other) do
-    {:error, {:invalid_args_spec, other}}
-  end
-
-  defp encode_callback_reply({:ok, []}), do: {:ok, []}
-  defp encode_callback_reply({:ok, value}), do: {:ok, encode_callback_outputs(value)}
-
-  defp encode_callback_reply({:error, {:shape_mismatch, left, right}}) do
-    msg =
-      "expected the runtime_call function to match the given output template " <>
-        "#{inspect(right)}, got: #{inspect(left)}"
-
-    raise ArgumentError.exception(msg)
-  end
-
-  defp encode_callback_reply({:error, {:invalid_result, left, right}}) do
-    msg =
-      "expected the runtime_call function to return a value compatible with the output " <>
-        "template #{inspect(right)}, got: #{inspect(left)}"
-
-    raise ArgumentError.exception(msg)
-  end
-
-  defp encode_callback_reply({:error, {:decode_failed, exception}}) do
-    msg = Exception.message(exception)
-    msg = "failed to decode Elixir callback arguments: #{msg}"
-    raise ArgumentError.exception(msg)
-  end
-
-  defp encode_callback_reply({:error, {:invalid_args_spec, other}}) do
-    msg = "invalid args_spec for Elixir callback: #{inspect(other)}"
-    raise ArgumentError.exception(msg)
-  end
-
-  defp encode_callback_reply({:error, :unknown_callback}) do
-    msg = "unknown EXLA runtime_call callback id"
-    raise RuntimeError.exception(msg)
-  end
-
-  defp encode_callback_reply({:error, {:callback_error, kind, reason, stacktrace}}) do
-    :erlang.raise(kind, reason, stacktrace)
-  end
-
-  defp encode_callback_reply({:error, {kind, reason}}) when is_binary(reason) do
-    msg = "Elixir callback #{kind}: #{reason}"
-    raise RuntimeError.exception(msg)
-  end
-
-  defp encode_callback_reply({:error, {kind, reason}}) do
-    msg = "Elixir callback #{kind}: #{inspect(reason)}"
-    raise RuntimeError.exception(msg)
-  end
-
-  defp encode_callback_reply({:error, reason}) do
-    msg = "Elixir callback error: #{inspect(reason)}"
-    raise RuntimeError.exception(msg)
+    {:error, ArgumentError.exception("invalid args_spec for Elixir callback: #{inspect(other)}")}
   end
 
   defp maybe_revectorize(decoded, %Nx.Tensor{vectorized_axes: axes}) when axes != [] do
@@ -565,7 +484,11 @@ defmodule EXLA.Defn.Outfeed do
           if Nx.compatible?(decoded, template) do
             {decoded, rest}
           else
-            throw({:error, {:shape_mismatch, decoded, template}})
+            msg =
+              "expected the runtime_call argument to match the given input template " <>
+                "#{inspect(template)}, got: #{inspect(decoded)}"
+
+            throw({:error, ArgumentError.exception(msg)})
           end
 
         other, acc ->
@@ -573,12 +496,17 @@ defmodule EXLA.Defn.Outfeed do
       end)
 
     case remaining do
-      [] -> {:ok, container}
-      _ -> {:error, {:invalid_args_spec, :extra_values}}
+      [] ->
+        {:ok, container}
+
+      _ ->
+        {:error, ArgumentError.exception("invalid args_spec for Elixir callback: extra values")}
     end
   catch
     :throw, {:error, _} = error -> error
   end
+
+  defp encode_callback_outputs([]), do: []
 
   defp encode_callback_outputs(container) do
     [container]
