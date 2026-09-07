@@ -295,9 +295,18 @@ defmodule EXLA.Defn do
 
       # Check if args are pre-sliced (list of arglists for each partition)
       input_lists =
-        Enum.map(args, fn partition_args ->
+        args
+        |> Enum.with_index()
+        |> Enum.map(fn {partition_args, partition_index} ->
+          # executable.device_id is -1 for sharded (SPMD) executables, since
+          # they are not pinned to a single device (see EXLA.MLIR.Module.compile/5).
+          # -1 is only meaningful to EXLA.Executable.run/3; each partition's
+          # arguments must instead be placed on the device matching its
+          # partition index, following PjRt's default device assignment.
+          target_device_id = if is_sharded?, do: partition_index, else: executable.device_id
+
           EXLA.Defn.Buffers.filter_by_indexes(partition_args, used_inputs, fn arg, _i ->
-            EXLA.Defn.Buffers.from_nx!(arg, executable)
+            EXLA.Defn.Buffers.from_nx!(arg, executable, true, target_device_id)
           end)
         end)
 

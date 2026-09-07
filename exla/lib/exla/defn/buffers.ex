@@ -140,8 +140,17 @@ defmodule EXLA.Defn.Buffers do
 
   @doc """
   Nx -> EXLA.DeviceBuffer + EXLA.BinaryBuffer.
+
+  `target_device_id` overrides the device to place/compare the buffer
+  against. It defaults to `executable.device_id`, but that is `-1` for
+  sharded (SPMD) executables, which is only a valid value for `run/3` and
+  never a real device to transfer to. Callers preparing per-partition
+  arguments for sharded execution must pass the actual device id for that
+  partition.
   """
-  def from_nx!(fun, executable, transfer? \\ true) do
+  def from_nx!(fun, executable, transfer? \\ true, target_device_id \\ nil) do
+    target_device_id = target_device_id || executable.device_id
+
     %Nx.Tensor{data: data} =
       tensor = Nx.devectorize(fun.())
 
@@ -160,17 +169,17 @@ defmodule EXLA.Defn.Buffers do
 
       %EXLA.Backend{buffer: %EXLA.DeviceBuffer{} = buffer}
       when transfer? and buffer.client_name != executable.client.name
-      when transfer? and buffer.device_id != executable.device_id ->
+      when transfer? and buffer.device_id != target_device_id ->
         buffer_client = EXLA.Client.fetch!(buffer.client_name)
 
         if buffer_client.automatic_transfers do
-          EXLA.DeviceBuffer.copy_to_device(buffer, executable.client, executable.device_id)
+          EXLA.DeviceBuffer.copy_to_device(buffer, executable.client, target_device_id)
         else
           default = EXLA.Client.fetch!(EXLA.Client.default_name())
 
           raise ArgumentError, """
           EXLA computation (defn) is allocated on client #{executable.client.name} \
-          ##{executable.device_id} (#{executable.client.platform}) \
+          ##{target_device_id} (#{executable.client.platform}) \
           but one of the input tensors are allocated on #{buffer_client.name} \
           ##{buffer.device_id} (#{buffer_client.platform}).
 
