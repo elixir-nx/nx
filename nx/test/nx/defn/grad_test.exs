@@ -3889,7 +3889,7 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "computes the gradient of a multi-element carry" do
-      for type <- [f: 8, bf: 16, f: 16, f: 32, f: 64] do
+      for type <- [f: 8, bf: 16, f: 16, f: 32, f: 64, c: 64, c: 128] do
         # acc = a + 3a, so the gradient is 4 and keeps the input's type.
         result = grad_while_accumulator(Nx.tensor(1.0, type: type))
 
@@ -3910,12 +3910,16 @@ defmodule Nx.Defn.GradTest do
     end
 
     test "computes the gradient when a carry has a different type to the input" do
-      for type <- [f: 8, bf: 16, f: 16, f: 32, f: 64] do
-        # acc = a + 3 * sum(s), so the gradient is 1 whatever s holds.
+      for type <- [f: 8, bf: 16, f: 16, f: 32, f: 64, c: 64, c: 128] do
+        # acc = a + 3 * sum(s), so the gradient is 1 whatever s holds. a's
+        # type must absorb whatever the body computes, so widen it to
+        # whatever merges with the series' type: f64 for reals, complex for
+        # complex s (f64 alone doesn't absorb complex; merge always favors it).
+        sink_type = Nx.Type.merge({:f, 64}, type)
         s = Nx.broadcast(Nx.tensor(2, type: type), {4})
-        result = grad_while_carried_series(Nx.tensor(1.0, type: {:f, 64}), s)
+        result = grad_while_carried_series(Nx.tensor(1, type: sink_type), s)
 
-        assert Nx.type(result) == {:f, 64}
+        assert Nx.type(result) == sink_type
         assert_equal(result, 1)
 
         result = grad_while_carried_series(Nx.tensor(1, type: type), Nx.broadcast(2, {4}))
