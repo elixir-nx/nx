@@ -1353,6 +1353,8 @@ defmodule Nx.Defn.Expr do
   end
 
   defp expr(tensor, context, op, args) do
+    args = upcast_float_constants(args, constant_read_type(tensor, args))
+
     %{tensor | data: %Expr{id: id(), op: op, args: args, context: context}, donatable?: false}
   end
 
@@ -1644,15 +1646,40 @@ defmodule Nx.Defn.Expr do
         |> Nx.to_number()
         |> then(&constant(out, &1))
 
-      c1 ->
-        expr(out, context, op, [maybe_upcast_float_constant(arg1, out.type), arg2])
-
-      c2 ->
-        expr(out, context, op, [arg1, maybe_upcast_float_constant(arg2, out.type)])
-
       true ->
         expr(out, context, op, [arg1, arg2])
     end
+  end
+
+  # A float literal is annotated {:f, 32} but carries a full precision Elixir
+  # float, and the annotation is the precision it gets read back at. Comparisons
+  # answer in {:u, 8}, so there the operands say what that precision is.
+  defp constant_read_type(%T{type: type}, args) do
+    if Nx.Type.float?(type) do
+      type
+    else
+      args
+      |> collect_float_types()
+      |> case do
+        [] -> type
+        [first | rest] -> Enum.reduce(rest, first, &Nx.Type.merge/2)
+      end
+    end
+  end
+
+  defp collect_float_types(args) do
+    Enum.flat_map(args, fn
+      %T{type: type} -> if Nx.Type.float?(type), do: [type], else: []
+      _ -> []
+    end)
+  end
+
+  defp upcast_float_constants(args, type) do
+    Enum.map(args, fn
+      %T{data: %Expr{op: :constant}} = t -> maybe_upcast_float_constant(t, type)
+      list when is_list(list) -> upcast_float_constants(list, type)
+      other -> other
+    end)
   end
 
   defp maybe_upcast_float_constant(
@@ -1672,6 +1699,8 @@ defmodule Nx.Defn.Expr do
       t
     end
   end
+
+  defp maybe_upcast_float_constant(t, _out_type), do: t
 
   defp unary_expr(out, context, op, arg) do
     if c = maybe_constant(arg) do

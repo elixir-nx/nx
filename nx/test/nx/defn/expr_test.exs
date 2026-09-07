@@ -236,6 +236,50 @@ defmodule Nx.Defn.ExprTest do
 
       assert %T{data: %Expr{op: :constant, args: [0.7]}} = on_true
     end
+
+    test "upcast float constants taken as values rather than operands" do
+      t_f64 = Nx.tensor([2, 2], type: :f64) |> Expr.tensor()
+      pred = Nx.tensor([1, 0], type: :u8) |> Expr.tensor()
+      c_f32 = Expr.constant(Nx.tensor(0.7, type: :f32), 0.7, [])
+      c_f64 = Expr.constant(Nx.tensor(0.7, type: :f64), 0.7, [])
+      nine_f32 = Expr.constant(Nx.tensor(9.0, type: :f32), 9.0, [])
+      nine_f64 = Expr.constant(Nx.tensor(9.0, type: :f64), 9.0, [])
+
+      assert %T{type: {:f, 64}, data: %Expr{op: :select, args: [^pred, ^c_f64, ^t_f64]}} =
+               Nx.select(pred, c_f32, t_f64)
+
+      assert %T{type: {:f, 64}, data: %Expr{op: :clip, args: [^t_f64, ^c_f64, ^nine_f64]}} =
+               Nx.clip(t_f64, c_f32, nine_f32)
+
+      assert %T{type: {:f, 64}, data: %Expr{op: :pad, args: [^t_f64, ^c_f64, _]}} =
+               Nx.pad(t_f64, c_f32, [{0, 1, 0}])
+
+      c_c64 = Expr.constant(Nx.tensor(0.7, type: :c64), 0.7, [])
+      t_c64 = Nx.tensor([2, 2], type: :c64) |> Expr.tensor()
+
+      assert %T{type: {:c, 64}, data: %Expr{op: :select, args: [^pred, ^c_c64, ^t_c64]}} =
+               Nx.select(pred, c_f32, t_c64)
+    end
+
+    test "upcast float constants passed in a list of tensors" do
+      t_f64 = Nx.tensor(2, type: :f64) |> Expr.tensor()
+      c_f32 = Expr.constant(Nx.tensor(0.7, type: :f32), 0.7, [])
+      c_f64 = Expr.constant(Nx.tensor(0.7, type: :f64), 0.7, [])
+
+      assert %T{type: {:f, 64}, data: %Expr{op: :stack, args: [[_, ^c_f64], _]}} =
+               Nx.stack([t_f64, c_f32])
+    end
+
+    test "upcast float constants for ops that answer in u8" do
+      t_f64 = Nx.tensor([2, 2], type: :f64) |> Expr.tensor()
+      c_f32 = Expr.constant(Nx.tensor(0.7, type: :f32), 0.7, [])
+      c_f64 = Expr.constant(Nx.tensor(0.7, type: :f64), 0.7, [])
+
+      for op <- [:equal, :not_equal, :less, :less_equal, :greater, :greater_equal] do
+        assert %T{type: {:u, 8}, data: %Expr{op: ^op, args: [^t_f64, ^c_f64]}} =
+                 apply(Nx, op, [t_f64, c_f32])
+      end
+    end
   end
 
   describe "inspect" do
