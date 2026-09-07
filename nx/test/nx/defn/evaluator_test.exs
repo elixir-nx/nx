@@ -771,8 +771,7 @@ defmodule Nx.Defn.EvaluatorTest do
         \s\s
           Nx.Defn.Expr
           parameter a:2   s32[1][1]
-          b = reshape 2   s32[1][1]
-          c = less a, b   u8[1][1]
+          b = less a, 2   u8[1][1]
         >, consider using Nx.all/1 or Nx.any/1 to obtain a scalar predicate from tensor
         """
         |> String.trim()
