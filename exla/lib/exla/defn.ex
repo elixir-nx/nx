@@ -38,21 +38,12 @@ defmodule EXLA.Defn do
 
   @doc false
   def __shard_jit__(key, mesh, vars, fun, args_list, options) do
-    input_shardings = options[:input_shardings]
-
-    # Convert map format to list format and validate. This also flattens
-    # container arguments (e.g. an Axon.ModelState) into their tensor leaves,
-    # applying the matching sharding spec to every leaf.
-    {input_shardings_list, unsharded_shape_multipliers} =
-      Nx.Defn.Compiler.validate_and_convert_input_shardings!(mesh, input_shardings, vars)
-
-    vars = Nx.Defn.Compiler.calculate_unsharded_inputs(vars, unsharded_shape_multipliers)
-
-    options =
-      options
-      |> Keyword.put(:mesh, mesh)
-      |> Keyword.put(:input_shardings, input_shardings_list)
-
+    # By the time we get here, `Nx.Defn.Compiler.__shard_jit__/5` has already
+    # validated `options[:input_shardings]` (converting it to list format, one
+    # entry per tensor leaf) and adjusted `vars` to their unsharded (full
+    # logical) shapes, so containers (e.g. an Axon.ModelState) are handled
+    # transparently, just like they are for regular (non-sharded) `jit`.
+    options = Keyword.put(options, :mesh, mesh)
     compiled_fun = __compile__(key, vars, fun, options)
 
     compiled_fun.([args_list])

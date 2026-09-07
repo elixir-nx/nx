@@ -293,6 +293,19 @@ defmodule Nx.Defn.Compiler do
   end
 
   def __shard_jit__(fun, mesh, params, args_list, opts) do
+    {input_shardings, opts} = Keyword.pop(opts, :input_shardings)
+
+    # Container arguments (e.g. an Axon.ModelState) are flattened into their
+    # tensor leaves here, once, so every compiler backend receives an already
+    # validated and expanded (one entry per leaf) `:input_shardings` list,
+    # the same way `to_lazy_params_sharded/2` already flattens `args_list`
+    # into per-leaf functions for regular compilation.
+    {input_shardings, multipliers} =
+      validate_and_convert_input_shardings!(mesh, input_shardings, params)
+
+    params = calculate_unsharded_inputs(params, multipliers)
+    opts = Keyword.put(opts, :input_shardings, input_shardings)
+
     {module, runtime_fun, opts} = prepare_options(fun, opts)
     module.__shard_jit__(fun, mesh, params, runtime_fun, args_list, opts)
   rescue
@@ -886,8 +899,7 @@ defmodule Nx.Defn.Compiler do
     {fun, params, templates, [first_flatten | rest_flattens]}
   end
 
-  @doc false
-  def validate_and_convert_input_shardings!(mesh, input_shardings, vars) do
+  defp validate_and_convert_input_shardings!(mesh, input_shardings, vars) do
     unless is_list(input_shardings) do
       raise ArgumentError,
             "input_shardings are required for sharding, see Nx.Defn.shard_jit/3 for more information"
@@ -998,8 +1010,7 @@ defmodule Nx.Defn.Compiler do
     {dim_shardings_list, dim_shardings}
   end
 
-  @doc false
-  def calculate_unsharded_inputs(vars, input_shardings) do
+  defp calculate_unsharded_inputs(vars, input_shardings) do
     # We use only the first input list in the collection,
     # and we just assume they all have the same deep shapes.
     #
