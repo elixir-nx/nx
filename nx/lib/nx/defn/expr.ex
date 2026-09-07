@@ -1268,12 +1268,14 @@ defmodule Nx.Defn.Expr do
   @impl true
   def concatenate(out, tensors, axis) do
     {tensors, context} = to_exprs(tensors)
+    tensors = upcast_float_constants(tensors, out.type)
     expr(out, context, :concatenate, [tensors, axis])
   end
 
   @impl true
   def stack(out, tensors, axis) do
     {tensors, context} = to_exprs(tensors)
+    tensors = upcast_float_constants(tensors, out.type)
     expr(out, context, :stack, [tensors, axis])
   end
 
@@ -1673,7 +1675,6 @@ defmodule Nx.Defn.Expr do
   defp upcast_float_constants(args, type) do
     Enum.map(args, fn
       %T{data: %Expr{op: :constant}} = t -> maybe_upcast_float_constant(t, type)
-      list when is_list(list) -> upcast_float_constants(list, type)
       other -> other
     end)
   end
