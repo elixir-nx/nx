@@ -395,12 +395,6 @@ defmodule EXLA.Defn.ShardingTest do
   describe "input buffers already on an EXLA device" do
     @moduletag :multi_device
     test "does not crash with 'No matching device found for device_id -1'" do
-      # Regression test: when inputs are already EXLA.Backend device buffers
-      # (instead of plain Nx.BinaryBackend tensors), preparing arguments for
-      # a sharded (SPMD) executable used to compare each buffer's device
-      # against `executable.device_id`, which is `-1` for sharded executables
-      # (a sentinel meaning "multiple devices", not a real device). That sent
-      # `-1` into `EXLA.NIF.copy_buffer_to_device/3`, which doesn't accept it.
       previous_backend = Nx.default_backend()
       Nx.default_backend({EXLA.Backend, client: :host})
 

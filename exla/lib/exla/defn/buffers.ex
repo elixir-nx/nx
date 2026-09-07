@@ -141,12 +141,9 @@ defmodule EXLA.Defn.Buffers do
   @doc """
   Nx -> EXLA.DeviceBuffer + EXLA.BinaryBuffer.
 
-  `target_device_id` overrides the device to place/compare the buffer
-  against. It defaults to `executable.device_id`, but that is `-1` for
-  sharded (SPMD) executables, which is only a valid value for `run/3` and
-  never a real device to transfer to. Callers preparing per-partition
-  arguments for sharded execution must pass the actual device id for that
-  partition.
+  `target_device_id` defaults to `executable.device_id`, but callers for
+  sharded execution must pass the real per-partition device id instead,
+  since `executable.device_id` is `-1` for sharded executables.
   """
   def from_nx!(fun, executable, transfer? \\ true, target_device_id \\ nil) do
     target_device_id = target_device_id || executable.device_id
