@@ -141,12 +141,18 @@ defmodule EXLA.Defn.Buffers do
   @doc """
   Nx -> EXLA.DeviceBuffer + EXLA.BinaryBuffer.
 
-  `target_device_id` defaults to `executable.device_id`, but callers for
-  sharded execution must pass the real per-partition device id instead,
-  since `executable.device_id` is `-1` for sharded executables.
+  ## Options
+
+    * `:transfer?` - whether to automatically transfer a mismatched device
+      buffer to the target device. Defaults to `true`.
+
+    * `:target_device_id` - defaults to `executable.device_id`, but callers
+      for sharded execution must pass the real per-partition device id
+      instead, since `executable.device_id` is `-1` for sharded executables.
   """
-  def from_nx!(fun, executable, transfer? \\ true, target_device_id \\ nil) do
-    target_device_id = target_device_id || executable.device_id
+  def from_nx!(fun, executable, opts \\ []) do
+    transfer? = Keyword.get(opts, :transfer?, true)
+    target_device_id = Keyword.get(opts, :target_device_id) || executable.device_id
 
     %Nx.Tensor{data: data} =
       tensor = Nx.devectorize(fun.())

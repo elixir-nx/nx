@@ -241,8 +241,8 @@ defmodule EXLA.Defn do
 
     {buffers, infeeds} =
       EXLA.Defn.Buffers.split_by_value(args, used_inputs, fn
-        arg, _i, nil -> EXLA.Defn.Buffers.from_nx!(arg, executable, true)
-        arg, i, _depth -> {i, EXLA.Defn.Buffers.from_nx!(arg, executable, false)}
+        arg, _i, nil -> EXLA.Defn.Buffers.from_nx!(arg, executable)
+        arg, i, _depth -> {i, EXLA.Defn.Buffers.from_nx!(arg, executable, transfer?: false)}
       end)
 
     infeeds = Map.new(infeeds)
@@ -302,7 +302,7 @@ defmodule EXLA.Defn do
           target_device_id = if is_sharded?, do: partition_index, else: executable.device_id
 
           EXLA.Defn.Buffers.filter_by_indexes(partition_args, used_inputs, fn arg, _i ->
-            EXLA.Defn.Buffers.from_nx!(arg, executable, true, target_device_id)
+            EXLA.Defn.Buffers.from_nx!(arg, executable, target_device_id: target_device_id)
           end)
         end)
 
