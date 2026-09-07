@@ -1651,11 +1651,7 @@ defmodule Nx.Defn.Expr do
     end
   end
 
-  # A float literal is annotated {:f, 32} but carries a full precision Elixir
-  # float, and the annotation is the precision it gets read back at. The output
-  # type and the other operands decide what that should be. The literal's own
-  # annotation is the thing being corrected, so it does not get a say, and an
-  # op answering in a tuple has no type to contribute.
+  # widen precision of float literals as needed
   defp constant_read_type(%T{type: type}, args) do
     types = operand_float_types(args)
     types = if match?({:tuple, _}, type), do: types, else: [type | types]
