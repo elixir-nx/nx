@@ -1090,7 +1090,12 @@ defmodule Nx.Defn.Expr do
   @impl true
   def reshape(out, tensor) do
     tensor = to_expr(tensor)
-    expr(out, tensor.data.context, :reshape, [tensor])
+
+    if c = maybe_constant(tensor) do
+      constant(out, c)
+    else
+      expr(out, tensor.data.context, :reshape, [tensor])
+    end
   end
 
   @impl true

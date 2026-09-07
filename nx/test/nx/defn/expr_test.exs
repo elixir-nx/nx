@@ -221,6 +221,21 @@ defmodule Nx.Defn.ExprTest do
       assert %T{type: {:c, 128}, data: %Expr{op: :multiply, args: [^c_c128, ^t_f64]}} =
                Nx.multiply(t_f64, c_c64)
     end
+
+    test "reshaping a float constant keeps it a constant" do
+      c_f32 = Expr.constant(Nx.tensor(0.7, type: :f32), 0.7, [])
+      t_f64 = Nx.tensor([2, 2], type: :f64) |> Expr.tensor()
+      pred = Nx.tensor([1, 0], type: :u8) |> Expr.tensor()
+
+      assert %T{shape: {1}, data: %Expr{op: :constant, args: [0.7]}} = Nx.reshape(c_f32, {1})
+
+      # vectorized operands reach an op through a reshape, so a literal only
+      # stays a constant if the reshape keeps it one
+      assert %T{data: %Expr{op: :select, args: [_, on_true, _]}} =
+               Nx.select(Nx.vectorize(pred, :a), c_f32, Nx.vectorize(t_f64, :a))
+
+      assert %T{data: %Expr{op: :constant, args: [0.7]}} = on_true
+    end
   end
 
   describe "inspect" do
