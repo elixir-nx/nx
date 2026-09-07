@@ -279,6 +279,14 @@ defmodule Nx.Defn.ExprTest do
         assert %T{type: {:u, 8}, data: %Expr{op: ^op, args: [^t_f64, ^c_f64]}} =
                  apply(Nx, op, [t_f64, c_f32])
       end
+
+      # the operands decide the precision, so a narrow operand keeps it narrow
+      t_f16 = Nx.tensor([2, 2], type: :f16) |> Expr.tensor()
+      c_f16 = Expr.constant(Nx.tensor(0.7, type: :f16), 0.7, [])
+      c2_f32 = Expr.constant(Nx.tensor(0.7, type: :f32), 0.7, [])
+
+      assert %T{type: {:u, 8}, data: %Expr{op: :less_equal, args: [^t_f16, ^c_f16]}} =
+               Nx.less_equal(t_f16, c2_f32)
     end
   end
 

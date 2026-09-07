@@ -1652,23 +1652,23 @@ defmodule Nx.Defn.Expr do
   end
 
   # A float literal is annotated {:f, 32} but carries a full precision Elixir
-  # float, and the annotation is the precision it gets read back at. Comparisons
-  # answer in {:u, 8}, so there the operands say what that precision is.
+  # float, and the annotation is the precision it gets read back at. The output
+  # type and the other operands decide what that should be. The literal's own
+  # annotation is the thing being corrected, so it does not get a say, and an
+  # op answering in a tuple has no type to contribute.
   defp constant_read_type(%T{type: type}, args) do
-    if Nx.Type.float?(type) do
-      type
-    else
-      args
-      |> collect_float_types()
-      |> case do
-        [] -> type
-        [first | rest] -> Enum.reduce(rest, first, &Nx.Type.merge/2)
-      end
+    types = operand_float_types(args)
+    types = if match?({:tuple, _}, type), do: types, else: [type | types]
+
+    case types do
+      [] -> type
+      [first | rest] -> Enum.reduce(rest, first, &Nx.Type.merge/2)
     end
   end
 
-  defp collect_float_types(args) do
+  defp operand_float_types(args) do
     Enum.flat_map(args, fn
+      %T{data: %Expr{op: :constant}} -> []
       %T{type: type} -> if Nx.Type.float?(type), do: [type], else: []
       _ -> []
     end)
