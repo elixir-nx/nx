@@ -40,26 +40,13 @@ defmodule EXLA.Defn do
   def __shard_jit__(key, mesh, vars, fun, args_list, options) do
     input_shardings = options[:input_shardings]
 
-    # Validate that input_shardings is a list
-    if not is_list(input_shardings) do
-      raise ArgumentError,
-            "input_shardings are required for sharding in EXLA, see EXLA.shard_jit/3 for more information"
-    end
-
-    # Validate number of input_shardings matches number of parameters
-    num_params = length(vars)
-    num_shardings = length(input_shardings)
-
-    if num_shardings != num_params do
-      raise ArgumentError,
-            "expected #{num_params} input sharding configuration(s), got #{num_shardings}"
-    end
-
-    # Convert map format to list format and validate
+    # Convert map format to list format and validate. This also flattens
+    # container arguments (e.g. an Axon.ModelState) into their tensor leaves,
+    # applying the matching sharding spec to every leaf.
     {input_shardings_list, unsharded_shape_multipliers} =
-      convert_and_validate_input_shardings!(mesh, input_shardings, vars)
+      Nx.Defn.Compiler.validate_and_convert_input_shardings!(mesh, input_shardings, vars)
 
-    vars = calculate_unsharded_inputs(vars, unsharded_shape_multipliers)
+    vars = Nx.Defn.Compiler.calculate_unsharded_inputs(vars, unsharded_shape_multipliers)
 
     options =
       options
@@ -69,105 +56,6 @@ defmodule EXLA.Defn do
     compiled_fun = __compile__(key, vars, fun, options)
 
     compiled_fun.([args_list])
-  end
-
-  defp convert_and_validate_input_shardings!(mesh, input_shardings, vars) do
-    # Create a set of all available mesh axes
-    all_axes =
-      mesh.shape
-      |> tuple_size()
-      |> axes_for_rank()
-      |> MapSet.new()
-
-    # Each entry in `vars` is one argument to the jitted function, which may itself
-    # be a container (e.g. a struct implementing Nx.Container) wrapping several
-    # tensors. The same sharding spec applies to every tensor leaf found in that
-    # argument, so we validate and convert it once per leaf rather than assuming
-    # `var` is a plain %Nx.Tensor{}.
-    per_var_results =
-      Enum.zip_with(input_shardings, vars, fn input_sharding, var ->
-        unless is_map(input_sharding) do
-          raise ArgumentError,
-                "expected input sharding to be a map, got: #{inspect(input_sharding)}"
-        end
-
-        {_var, reverse_leaf_results} =
-          Nx.Defn.Composite.traverse(var, [], fn tensor, acc ->
-            leaf_result =
-              convert_and_validate_tensor_sharding!(mesh, all_axes, input_sharding, tensor)
-
-            {tensor, [leaf_result | acc]}
-          end)
-
-        Enum.reverse(reverse_leaf_results)
-      end)
-
-    # Separate the list format (for MLIR), flattened across every leaf in order
-    # (matching how `compile/8` flattens `vars` into individual arguments), from
-    # the multipliers (for shape calculation), which stay grouped per argument so
-    # `calculate_unsharded_inputs/2` can rebuild each argument's container shape.
-    list_format = per_var_results |> Enum.flat_map(& &1) |> Enum.map(&elem(&1, 0))
-
-    multipliers =
-      Enum.map(per_var_results, fn leaf_results -> Enum.map(leaf_results, &elem(&1, 1)) end)
-
-    {list_format, multipliers}
-  end
-
-  defp convert_and_validate_tensor_sharding!(mesh, all_axes, input_sharding, tensor) do
-    # Convert map format to list format
-    # Map: %{tensor_dim => [mesh_axes]}
-    # List: [[mesh_axes], [mesh_axes], ...]
-    tensor_rank = tuple_size(tensor.shape)
-
-    # Build a mapping from dimension indices to mesh axes
-    dim_to_axes_map =
-      Enum.reduce(input_sharding, %{}, fn {tensor_dim, mesh_axes}, acc ->
-        # Normalize tensor dimension (could be integer, negative integer, or atom name)
-        dim_index = Nx.axis_index(tensor, tensor_dim)
-
-        # Check for duplicate dimension specifications
-        if Map.has_key?(acc, dim_index) do
-          raise ArgumentError,
-                "tensor dimension #{inspect(tensor_dim)} (index #{dim_index}) was specified multiple times"
-        end
-
-        Map.put(acc, dim_index, mesh_axes)
-      end)
-
-    # Convert to list format (one entry per tensor dimension)
-    dim_shardings_list =
-      for dim_idx <- 0..(tensor_rank - 1)//1 do
-        Map.get(dim_to_axes_map, dim_idx, [])
-      end
-
-    # Track which axes have been used for this specific tensor
-    {dim_shardings, _used_axes} =
-      Enum.map_reduce(dim_shardings_list, MapSet.new(), fn axis_list, used_axes ->
-        # For each dimension, check that axes are valid and not reused
-        Enum.each(axis_list, fn axis ->
-          if axis not in all_axes do
-            raise ArgumentError,
-                  "axis #{axis} is not valid for mesh with #{MapSet.size(all_axes)} axes"
-          end
-
-          if axis in used_axes do
-            raise ArgumentError, "axis #{axis} was used twice in the same input sharding"
-          end
-        end)
-
-        # Mark these axes as used
-        new_used_axes = Enum.reduce(axis_list, used_axes, &MapSet.put(&2, &1))
-
-        accumulated_dim_shardings =
-          Enum.reduce(axis_list, 1, fn axis, acc ->
-            acc * elem(mesh.shape, axis)
-          end)
-
-        {accumulated_dim_shardings, new_used_axes}
-      end)
-
-    {dim_shardings_list, dim_shardings}
   end
 
   @doc false
@@ -2497,31 +2385,5 @@ defmodule EXLA.Defn do
 
   defp expr_to_typespec(expr) do
     Typespec.tensor(expr.type, expr.shape)
-  end
-
-  defp calculate_unsharded_inputs(vars, input_shardings) do
-    # We use only the first input list in the collection,
-    # and we just assume they all have the same deep shapes.
-    #
-    # `input_shardings` holds one multiplier list per leaf tensor found in the
-    # matching `var` (a var may be a container wrapping several tensors), so we
-    # consume one multiplier list per leaf as we traverse it.
-
-    Enum.zip_with(vars, input_shardings, fn var, leaf_multipliers ->
-      {var, []} =
-        Nx.Defn.Composite.traverse(var, leaf_multipliers, fn
-          %T{shape: shape} = t, [multiplier | rest] ->
-            # TODO: we need to decide how vectorization interacts with input shardings
-            updated_shape =
-              shape |> Tuple.to_list() |> Enum.zip_with(multiplier, &*/2) |> List.to_tuple()
-
-            {%{t | shape: updated_shape}, rest}
-
-          leaf, [_multiplier | rest] ->
-            {leaf, rest}
-        end)
-
-      var
-    end)
   end
 end
