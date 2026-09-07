@@ -3876,6 +3876,56 @@ defmodule Nx.Defn.GradTest do
       assert_all_close(power_via_generator(x), power_via_generator_unroll(x))
       assert_all_close(grad_power_via_generator(x), grad_power_via_generator_unroll(x))
     end
+
+    defn grad_while_accumulator(a) do
+      grad(a, fn a ->
+        {_i, _a, acc} =
+          while {i = 0, a = a, acc = a}, i < 3 do
+            {i + 1, a, acc + a}
+          end
+
+        acc
+      end)
+    end
+
+    test "computes the gradient of a multi-element carry" do
+      for type <- [f: 8, bf: 16, f: 16, f: 32, f: 64] do
+        # acc = a + 3a, so the gradient is 4 and keeps the input's type.
+        result = grad_while_accumulator(Nx.tensor(1.0, type: type))
+
+        assert Nx.type(result) == type
+        assert_equal(result, 4)
+      end
+    end
+
+    defn grad_while_carried_series(a, s) do
+      grad(a, fn a ->
+        {_i, acc, _s} =
+          while {i = 0, acc = a, s = s}, i < 3 do
+            {i + 1, acc + Nx.sum(s), s}
+          end
+
+        acc
+      end)
+    end
+
+    test "computes the gradient when a carry has a different type to the input" do
+      for type <- [f: 8, bf: 16, f: 16, f: 32, f: 64] do
+        # acc = a + 3 * sum(s), so the gradient is 1 whatever s holds.
+        s = Nx.broadcast(Nx.tensor(2, type: type), {4})
+        result = grad_while_carried_series(Nx.tensor(1.0, type: {:f, 64}), s)
+
+        assert Nx.type(result) == {:f, 64}
+        assert_equal(result, 1)
+
+        result = grad_while_carried_series(Nx.tensor(1, type: type), Nx.broadcast(2, {4}))
+
+        # a's gradient is floating point; for a float type that's a no-op, for
+        # an integer type it's the same-size float (s64 becomes f64, not f32).
+        assert Nx.type(result) == type
+        assert_equal(result, 1)
+      end
+    end
   end
 
   describe "axes" do
