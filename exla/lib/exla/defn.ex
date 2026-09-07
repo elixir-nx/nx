@@ -295,9 +295,7 @@ defmodule EXLA.Defn do
 
       # Check if args are pre-sliced (list of arglists for each partition)
       input_lists =
-        args
-        |> Enum.with_index()
-        |> Enum.map(fn {partition_args, partition_index} ->
+        Enum.with_index(args, fn partition_args, partition_index ->
           # executable.device_id is -1 for sharded executables; use the partition index instead.
           target_device_id = if is_sharded?, do: partition_index, else: executable.device_id
 
