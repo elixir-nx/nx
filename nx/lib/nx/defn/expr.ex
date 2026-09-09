@@ -1268,14 +1268,14 @@ defmodule Nx.Defn.Expr do
   @impl true
   def concatenate(out, tensors, axis) do
     {tensors, context} = to_exprs(tensors)
-    tensors = upcast_float_constants(tensors, out.type)
+    tensors = promote_constants(out, tensors)
     expr(out, context, :concatenate, [tensors, axis])
   end
 
   @impl true
   def stack(out, tensors, axis) do
     {tensors, context} = to_exprs(tensors)
-    tensors = upcast_float_constants(tensors, out.type)
+    tensors = promote_constants(out, tensors)
     expr(out, context, :stack, [tensors, axis])
   end
 
@@ -1355,7 +1355,7 @@ defmodule Nx.Defn.Expr do
   end
 
   defp expr(tensor, context, op, args) do
-    args = upcast_float_constants(args, constant_read_type(tensor, args))
+    args = promote_constants(tensor, args)
 
     %{tensor | data: %Expr{id: id(), op: op, args: args, context: context}, donatable?: false}
   end
@@ -1651,6 +1651,24 @@ defmodule Nx.Defn.Expr do
       true ->
         expr(out, context, op, [arg1, arg2])
     end
+  end
+
+  # Read any literal in `args` at the precision the surrounding expression
+  # implies. Nothing to do when the node carries no literal at all.
+  defp promote_constants(out, args) do
+    if constant?(args) do
+      upcast_float_constants(args, constant_read_type(out, args))
+    else
+      args
+    end
+  end
+
+  defp constant?(args) do
+    Enum.any?(args, fn
+      %T{data: %Expr{op: :constant}} -> true
+      list when is_list(list) -> constant?(list)
+      _ -> false
+    end)
   end
 
   # widen precision of float literals as needed
