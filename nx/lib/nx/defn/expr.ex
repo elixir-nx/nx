@@ -1655,12 +1655,13 @@ defmodule Nx.Defn.Expr do
 
   # widen precision of float literals as needed
   defp constant_read_type(%T{type: type}, args) do
-    types = operand_float_types(args)
-    types = if match?({:tuple, _}, type), do: types, else: [type | types]
-
-    case types do
-      [] -> type
-      [first | rest] -> Enum.reduce(rest, first, &Nx.Type.merge/2)
+    if Nx.Type.float?(type) do
+      type
+    else
+      case operand_float_types(args) do
+        [] -> type
+        [first | rest] -> Enum.reduce(rest, first, &Nx.Type.merge/2)
+      end
     end
   end
 
