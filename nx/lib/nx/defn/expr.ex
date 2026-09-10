@@ -1268,12 +1268,14 @@ defmodule Nx.Defn.Expr do
   @impl true
   def concatenate(out, tensors, axis) do
     {tensors, context} = to_exprs(tensors)
+    tensors = promote_constants(out, tensors)
     expr(out, context, :concatenate, [tensors, axis])
   end
 
   @impl true
   def stack(out, tensors, axis) do
     {tensors, context} = to_exprs(tensors)
+    tensors = promote_constants(out, tensors)
     expr(out, context, :stack, [tensors, axis])
   end
 
@@ -1353,6 +1355,8 @@ defmodule Nx.Defn.Expr do
   end
 
   defp expr(tensor, context, op, args) do
+    args = promote_constants(tensor, args)
+
     %{tensor | data: %Expr{id: id(), op: op, args: args, context: context}, donatable?: false}
   end
 
@@ -1644,15 +1648,54 @@ defmodule Nx.Defn.Expr do
         |> Nx.to_number()
         |> then(&constant(out, &1))
 
-      c1 ->
-        expr(out, context, op, [maybe_upcast_float_constant(arg1, out.type), arg2])
-
-      c2 ->
-        expr(out, context, op, [arg1, maybe_upcast_float_constant(arg2, out.type)])
-
       true ->
         expr(out, context, op, [arg1, arg2])
     end
+  end
+
+  # Read any literal in `args` at the precision the surrounding expression
+  # implies. Nothing to do when the node carries no literal at all.
+  defp promote_constants(out, args) do
+    if constant?(args) do
+      upcast_float_constants(args, constant_read_type(out, args))
+    else
+      args
+    end
+  end
+
+  defp constant?(args) do
+    Enum.any?(args, fn
+      %T{data: %Expr{op: :constant}} -> true
+      list when is_list(list) -> constant?(list)
+      _ -> false
+    end)
+  end
+
+  # widen precision of float literals as needed
+  defp constant_read_type(%T{type: type}, args) do
+    if Nx.Type.float?(type) do
+      type
+    else
+      case operand_float_types(args) do
+        [] -> type
+        [first | rest] -> Enum.reduce(rest, first, &Nx.Type.merge/2)
+      end
+    end
+  end
+
+  defp operand_float_types(args) do
+    Enum.flat_map(args, fn
+      %T{data: %Expr{op: :constant}} -> []
+      %T{type: type} -> if Nx.Type.float?(type), do: [type], else: []
+      _ -> []
+    end)
+  end
+
+  defp upcast_float_constants(args, type) do
+    Enum.map(args, fn
+      %T{data: %Expr{op: :constant}} = t -> maybe_upcast_float_constant(t, type)
+      other -> other
+    end)
   end
 
   defp maybe_upcast_float_constant(
@@ -1672,6 +1715,8 @@ defmodule Nx.Defn.Expr do
       t
     end
   end
+
+  defp maybe_upcast_float_constant(t, _out_type), do: t
 
   defp unary_expr(out, context, op, arg) do
     if c = maybe_constant(arg) do
