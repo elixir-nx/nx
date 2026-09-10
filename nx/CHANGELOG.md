@@ -1,5 +1,39 @@
 # Changelog
 
+## v1.0.0 (2026-09-10)
+
+### Enhancements
+
+  * [Nx.Defn] Add `runtime_raise/1` to raise a runtime error from inside `defn` based on tensor values
+  * [Nx.Defn] Lift buffer donation to `Nx.Defn`, so it no longer needs separate handling in each compiler
+  * [Nx.Defn] Rename hooks to `io_call`; pass named io_calls to `Nx.Defn.jit/2` under the `:hooks` option
+  * [Nx] Accept sub-byte bitstrings in `Nx.from_binary/3`
+  * [Nx.Defn] Accept constant tensor arguments in `Nx.block/4`
+
+### Bug fixes
+
+  * [Nx] Read float literals at the precision of the expression around them
+  * [Nx] Keep a reshaped float constant a constant
+  * [Nx] Raise `ArgumentError` for multiple `:auto` dimensions in `Nx.reshape/2`
+  * [Nx] Fix `Nx.inspect` crash on sub-byte integer tensors
+  * [Nx] Fix multi-tensor op dispatch to consider all tensor arguments, not just the first
+  * [Nx.LinAlg] Fix `Nx.LinAlg.eigh/2` dropping the batch dimension for 1x1 matrices
+  * [Nx.LinAlg] Fix `Nx.LinAlg.pinv/1` for batched input
+  * [Nx.LinAlg] Fix `Nx.LinAlg.qr/2` gradient for tall and wide matrices
+  * [Nx.LinAlg] Fix batched gradients for `svd` and `eigh`
+  * [Nx.Defn] Fix `while` gradient propagation and carry types
+  * [Nx.Defn] Fix gradient of functions with tuple outputs not broadcasting onto unused outputs
+  * [Nx.Defn] Seed the gradient backward pass from the expression's own type
+  * [Nx.Defn] Do not propagate donatable marks onto results
+  * [Nx.Defn.Evaluator] Return the modified tensor expression from the cache computation for `:hooks`
+
+### Deprecations and breaking changes
+
+  * [Nx] Remove `Nx.reflect/2`, deprecated in favor of `Nx.pad_outer/3`
+  * [Nx] Remove the `~M` and `~V` sigils, deprecated in favor of `~MAT` and `~VEC`
+  * [Nx.Defn] Remove `hook/2` and `hook/3`, deprecated in favor of `io_call/2` and `io_call/3`
+  * [Nx.Defn] Remove token-based hooks (`create_token/0`, `hook_token/3`, `hook_token/4`, `attach_token/2`, and `Nx.Defn.Token`)
+
 ## v0.13.1 (2026-08-10)
 
 ### Bug fixes

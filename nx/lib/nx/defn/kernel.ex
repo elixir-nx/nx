@@ -1427,19 +1427,6 @@ defmodule Nx.Defn.Kernel do
   def io_call(expr, name, function) when Kernel.and(is_atom(name), is_function(function, 1)),
     do: Nx.io_call(expr, name, function)
 
-  @deprecated "Use io_call/2 instead."
-  def hook(expr, name_or_function)
-
-  @deprecated "Use io_call/2 instead."
-  def hook(expr, name) when is_atom(name), do: io_call(expr, name)
-
-  @deprecated "Use io_call/2 instead."
-  def hook(expr, function) when is_function(function, 1), do: io_call(expr, function)
-
-  @deprecated "Use io_call/3 instead."
-  def hook(expr, name, function) when Kernel.and(is_atom(name), is_function(function, 1)),
-    do: io_call(expr, name, function)
-
   @doc """
   Asserts the keyword list has the given keys.
 

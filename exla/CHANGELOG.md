@@ -1,5 +1,22 @@
 # Changelog
 
+## v1.0.0 (2026-09-10)
+
+### Enhancements
+
+  * Add `EXLA.load_dylib/1` for loading custom call libraries
+  * Support custom call MLIR attributes
+  * Support container arguments in `shard_jit` input shardings
+  * Support `runtime_raise` inside `defn`
+  * Rename hooks to `io_call`; buffer donation is now handled by `Nx.Defn` instead of EXLA
+
+### Bug fixes
+
+  * Use the per-partition device id when preparing `shard_jit` input buffers
+  * Restore the `OutputBuffer` default constructor for the CUDA callback path
+  * Install `libexla.so` atomically to avoid corrupting processes that have it memory-mapped
+  * Return the modified tensor expression from the cache computation for `:hooks`
+
 ## v0.13.1 (2026-08-10)
 
 ### Bug fixes
