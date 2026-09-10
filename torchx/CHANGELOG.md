@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.0 (2026-09-10)
+
+  * Update to latest Nx
+  * Support `Nx.to_pointer/2` and `Nx.from_pointer/5`
+
 ## v0.13.1 (2026-08-10)
 
   * Update to latest Nx to resolve bug (#1804)

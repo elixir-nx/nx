@@ -4036,7 +4036,7 @@ defmodule Nx do
   the tensor is clipped on either end according to the
   padding width. Interior padding widths cannot be negative.
 
-  See also: `reflect/2`, `pad_outer/3`
+  See also: `pad_outer/3`
 
   ## Examples
 
@@ -4267,7 +4267,7 @@ defmodule Nx do
   the tensor is clipped on either end according to the
   padding width. Interior padding widths cannot be negative.
 
-  See also: `reflect/2`, `pad/3`
+  See also: `pad/3`
 
   ## Examples
 
@@ -17809,50 +17809,6 @@ defmodule Nx do
     impl!(tensor).to_pointer(tensor, opts)
   end
 
-  ## Reflect
-
-  @doc """
-  Pads a tensor of rank 1 or greater along the given axes through periodic reflections.
-
-  ## Options
-
-    * `:padding_config` - A list of tuples in the format `{pre, post}`,
-      which specify the length (0 or greater) of the reflection before and
-      after the tensor along a each axis.
-
-  See also: `pad/3`
-
-  ## Examples
-
-      iex> Nx.reflect(Nx.tensor([0, 1, 2]), padding_config: [{3, 1}])
-      #Nx.Tensor<
-        s32[7]
-        [1, 2, 1, 0, 1, 2, 1]
-      >
-
-      iex> Nx.reflect(Nx.tensor([[0, 1, 2], [3, 4, 5]], names: [:x, :y]), padding_config: [{2, 0}, {2, 1}])
-      #Nx.Tensor<
-        s32[x: 4][y: 6]
-        [
-          [2, 1, 0, 1, 2, 1],
-          [5, 4, 3, 4, 5, 4],
-          [2, 1, 0, 1, 2, 1],
-          [5, 4, 3, 4, 5, 4]
-        ]
-      >
-  """
-  @doc type: :shape
-  @deprecated "Use pad_outer/3 instead"
-  def reflect(tensor, opts \\ []) do
-    opts = keyword!(opts, [:padding_config])
-
-    padding_with_index(tensor,
-      padding_config: opts[:padding_config],
-      left_index_period: &left_reflect_index_period/1,
-      right_index_period: &right_reflect_index_period/1
-    )
-  end
-
   @doc """
   Calculates the element-wise logarithm of a tensor with base 2.
 
@@ -18004,28 +17960,6 @@ defmodule Nx do
   end
 
   ## Sigils
-
-  @doc false
-  @deprecated "Use ~MAT instead"
-  defmacro sigil_M({:<<>>, _meta, [string]}, modifiers) do
-    {numbers, type} = string |> String.trim() |> binary_to_numbers()
-    numbers_to_tensor(numbers, type, modifiers)
-  end
-
-  @doc false
-  @deprecated "Use ~VEC instead"
-  defmacro sigil_V({:<<>>, _meta, [string]}, modifiers) do
-    string
-    |> String.trim()
-    |> binary_to_numbers()
-    |> case do
-      {[numbers], type} ->
-        numbers_to_tensor(numbers, type, modifiers)
-
-      _ ->
-        raise ArgumentError, "must be one-dimensional"
-    end
-  end
 
   @doc """
   A convenient `~MAT` sigil for building matrices (two-dimensional tensors).

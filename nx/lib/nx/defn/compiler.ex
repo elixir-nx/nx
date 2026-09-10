@@ -611,11 +611,6 @@ defmodule Nx.Defn.Compiler do
     {{call, meta, [ast | rest]}, state}
   end
 
-  defp normalize({{:., _, [Nx.Defn.Kernel, :hook]} = call, meta, [ast | rest]}, state) do
-    {ast, state} = normalize(ast, state)
-    {{call, meta, [ast | rest]}, state}
-  end
-
   defp normalize({{:., _, [:erlang, :error]} = dot, meta, args}, state) do
     {args, state} = normalize_list(args, state)
     {{dot, meta, args}, state}
