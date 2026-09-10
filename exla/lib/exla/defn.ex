@@ -241,8 +241,8 @@ defmodule EXLA.Defn do
 
     {buffers, infeeds} =
       EXLA.Defn.Buffers.split_by_value(args, used_inputs, fn
-        arg, _i, nil -> EXLA.Defn.Buffers.from_nx!(arg, executable, true)
-        arg, i, _depth -> {i, EXLA.Defn.Buffers.from_nx!(arg, executable, false)}
+        arg, _i, nil -> EXLA.Defn.Buffers.from_nx!(arg, executable)
+        arg, i, _depth -> {i, EXLA.Defn.Buffers.from_nx!(arg, executable, transfer?: false)}
       end)
 
     infeeds = Map.new(infeeds)
@@ -295,9 +295,12 @@ defmodule EXLA.Defn do
 
       # Check if args are pre-sliced (list of arglists for each partition)
       input_lists =
-        Enum.map(args, fn partition_args ->
+        Enum.with_index(args, fn partition_args, partition_index ->
+          # executable.device_id is -1 for sharded executables; use the partition index instead.
+          target_device_id = if is_sharded?, do: partition_index, else: executable.device_id
+
           EXLA.Defn.Buffers.filter_by_indexes(partition_args, used_inputs, fn arg, _i ->
-            EXLA.Defn.Buffers.from_nx!(arg, executable)
+            EXLA.Defn.Buffers.from_nx!(arg, executable, target_device_id: target_device_id)
           end)
         end)
 

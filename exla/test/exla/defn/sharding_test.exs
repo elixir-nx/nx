@@ -392,6 +392,41 @@ defmodule EXLA.Defn.ShardingTest do
     end
   end
 
+  describe "input buffers already on an EXLA device" do
+    @moduletag :multi_device
+    test "does not crash with 'No matching device found for device_id -1'" do
+      previous_backend = Nx.default_backend()
+      Nx.default_backend({EXLA.Backend, client: :host})
+
+      try do
+        fun = fn a, b -> Nx.dot(a, b) end
+
+        mesh = %Mesh{name: "two_host_devices", shape: {2}}
+
+        sharded_matmul =
+          EXLA.shard_jit(
+            fun,
+            mesh,
+            client: :host,
+            input_shardings: [%{0 => [0]}, %{}]
+          )
+
+        a0 = Nx.broadcast(Nx.tensor(1.0, type: {:f, 32}), {2, 4})
+        a1 = Nx.broadcast(Nx.tensor(2.0, type: {:f, 32}), {2, 4})
+        b = Nx.eye(4, type: {:f, 32})
+
+        [result0, result1] = sharded_matmul.([[a0, b], [a1, b]])
+
+        assert_equal(result0, a0)
+        assert result0.data.buffer.device_id == 0
+        assert_equal(result1, a1)
+        assert result1.data.buffer.device_id == 1
+      after
+        Nx.default_backend(previous_backend)
+      end
+    end
+  end
+
   describe "mesh validation" do
     test "raises when input_shardings provided without mesh" do
       fun = fn x -> Nx.add(x, 1) end
