@@ -38,113 +38,15 @@ defmodule EXLA.Defn do
 
   @doc false
   def __shard_jit__(key, mesh, vars, fun, args_list, options) do
-    input_shardings = options[:input_shardings]
-
-    # Validate that input_shardings is a list
-    if not is_list(input_shardings) do
-      raise ArgumentError,
-            "input_shardings are required for sharding in EXLA, see EXLA.shard_jit/3 for more information"
-    end
-
-    # Validate number of input_shardings matches number of parameters
-    num_params = length(vars)
-    num_shardings = length(input_shardings)
-
-    if num_shardings != num_params do
-      raise ArgumentError,
-            "expected #{num_params} input sharding configuration(s), got #{num_shardings}"
-    end
-
-    # Convert map format to list format and validate
-    {input_shardings_list, unsharded_shape_multipliers} =
-      convert_and_validate_input_shardings!(mesh, input_shardings, vars)
-
-    vars = calculate_unsharded_inputs(vars, unsharded_shape_multipliers)
-
-    options =
-      options
-      |> Keyword.put(:mesh, mesh)
-      |> Keyword.put(:input_shardings, input_shardings_list)
-
+    # By the time we get here, `Nx.Defn.Compiler.__shard_jit__/5` has already
+    # validated `options[:input_shardings]` (converting it to list format, one
+    # entry per tensor leaf) and adjusted `vars` to their unsharded (full
+    # logical) shapes, so containers (e.g. an Axon.ModelState) are handled
+    # transparently, just like they are for regular (non-sharded) `jit`.
+    options = Keyword.put(options, :mesh, mesh)
     compiled_fun = __compile__(key, vars, fun, options)
 
     compiled_fun.([args_list])
-  end
-
-  defp convert_and_validate_input_shardings!(mesh, input_shardings, vars) do
-    # Create a set of all available mesh axes
-    all_axes =
-      mesh.shape
-      |> tuple_size()
-      |> axes_for_rank()
-      |> MapSet.new()
-
-    # Convert and validate each input tensor's sharding spec
-    results =
-      Enum.zip_with(input_shardings, vars, fn input_sharding, var ->
-        unless is_map(input_sharding) do
-          raise ArgumentError,
-                "expected input sharding to be a map, got: #{inspect(input_sharding)}"
-        end
-
-        # Convert map format to list format
-        # Map: %{tensor_dim => [mesh_axes]}
-        # List: [[mesh_axes], [mesh_axes], ...]
-        tensor_rank = tuple_size(var.shape)
-
-        # Build a mapping from dimension indices to mesh axes
-        dim_to_axes_map =
-          Enum.reduce(input_sharding, %{}, fn {tensor_dim, mesh_axes}, acc ->
-            # Normalize tensor dimension (could be integer, negative integer, or atom name)
-            dim_index = Nx.axis_index(var, tensor_dim)
-
-            # Check for duplicate dimension specifications
-            if Map.has_key?(acc, dim_index) do
-              raise ArgumentError,
-                    "tensor dimension #{inspect(tensor_dim)} (index #{dim_index}) was specified multiple times"
-            end
-
-            Map.put(acc, dim_index, mesh_axes)
-          end)
-
-        # Convert to list format (one entry per tensor dimension)
-        dim_shardings_list =
-          for dim_idx <- 0..(tensor_rank - 1)//1 do
-            Map.get(dim_to_axes_map, dim_idx, [])
-          end
-
-        # Track which axes have been used for this specific tensor
-        {dim_shardings, _used_axes} =
-          Enum.map_reduce(dim_shardings_list, MapSet.new(), fn axis_list, used_axes ->
-            # For each dimension, check that axes are valid and not reused
-            Enum.each(axis_list, fn axis ->
-              if axis not in all_axes do
-                raise ArgumentError,
-                      "axis #{axis} is not valid for mesh with #{MapSet.size(all_axes)} axes"
-              end
-
-              if axis in used_axes do
-                raise ArgumentError, "axis #{axis} was used twice in the same input sharding"
-              end
-            end)
-
-            # Mark these axes as used
-            new_used_axes = Enum.reduce(axis_list, used_axes, &MapSet.put(&2, &1))
-
-            accumulated_dim_shardings =
-              Enum.reduce(axis_list, 1, fn axis, acc ->
-                acc * elem(mesh.shape, axis)
-              end)
-
-            {accumulated_dim_shardings, new_used_axes}
-          end)
-
-        {dim_shardings_list, dim_shardings}
-      end)
-
-    # Separate the list format (for MLIR) and multipliers (for shape calculation)
-    {list_format, multipliers} = Enum.unzip(results)
-    {list_format, multipliers}
   end
 
   @doc false
@@ -2474,24 +2376,5 @@ defmodule EXLA.Defn do
 
   defp expr_to_typespec(expr) do
     Typespec.tensor(expr.type, expr.shape)
-  end
-
-  defp calculate_unsharded_inputs(vars, input_shardings) do
-    # We use only the first input list in the collection,
-    # and we just assume they all have the same deep shapes.
-
-    Enum.zip_with(vars, input_shardings, fn var, sharding ->
-      Nx.Defn.Composite.traverse(var, fn
-        %T{shape: shape} = t ->
-          # TODO: we need to decide how vectorization interacts with input shardings
-          updated_shape =
-            shape |> Tuple.to_list() |> Enum.zip_with(sharding, &*/2) |> List.to_tuple()
-
-          %{t | shape: updated_shape}
-
-        var ->
-          var
-      end)
-    end)
   end
 end
