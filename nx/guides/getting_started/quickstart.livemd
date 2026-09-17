@@ -26,7 +26,7 @@ First, let's install Nx with `Mix.install`.
 
 ```elixir
 Mix.install([
-  {:nx, "~> 0.9"}
+  {:nx, "~> 1.0"}
 ])
 ```
 
@@ -363,7 +363,7 @@ Nx.less_equal(a, b)
 
 These operations aggregate values across tensor axes.
 
-See also [the aggregation guide](guides/advanced/aggregation.livemd)
+See also [the aggregation guide](aggregation.html)
 for a more in-depth exploration on the subject.
 
 ### Sum

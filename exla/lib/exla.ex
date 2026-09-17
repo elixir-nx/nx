@@ -28,7 +28,7 @@ defmodule EXLA do
   In a script/notebook, you would do:
 
       Mix.install([
-        {:exla, "~> 0.2"}
+        {:exla, "~> 1.0"}
       ])
 
       Nx.global_default_backend(EXLA.Backend)
