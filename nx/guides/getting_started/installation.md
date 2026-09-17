@@ -14,7 +14,7 @@ If you are working inside a Mix project, the recommended way to install Nx is by
 ```elixir
 defp deps do
   [
-    {:nx, "~> 0.9"}  # Install the latest stable version
+    {:nx, "~> 1.0"}  # Install the latest stable version
   ]
 end
 ```
@@ -98,8 +98,8 @@ To enable GPU/TPU acceleration with Google’s XLA backend, install Nx along wit
 ```elixir
 defp deps do
   [
-    {:nx, "~> 0.9"},
-    {:exla, "~> 0.9"}  # EXLA (Google XLA Backend)
+    {:nx, "~> 1.0"},
+    {:exla, "~> 1.0"}  # EXLA (Google XLA Backend)
   ]
 end
 ```
@@ -128,8 +128,8 @@ To run Nx operations on PyTorch’s backend (LibTorch):
 ```elixir
 defp deps do
   [
-    {:nx, "~> 0.9"},
-    {:torchx, "~> 0.9"}  # PyTorch Backend
+    {:nx, "~> 1.0"},
+    {:torchx, "~> 1.0"}  # PyTorch Backend
   ]
 end
 

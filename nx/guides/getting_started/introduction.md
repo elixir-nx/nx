@@ -2,7 +2,7 @@
 
 Nx is a numerical computing library in Elixir. Since Elixir's primary numerical data types and structures are not optimized for numerical programming, Nx is the fundamental package built to bridge this gap.
 
-[Elixir Nx](https://github.com/elixir-nx/nx) smoothly integrates typed, multidimensional data called [tensors](introduction.html#what-are-tensors)).
+[Elixir Nx](https://github.com/elixir-nx/nx) smoothly integrates typed, multidimensional data called [tensors](introduction.html#what-are-tensors).
 Nx has four primary capabilities:
 
 - Tensors hold typed data in multiple, optionally named dimensions.
@@ -13,7 +13,7 @@ Nx has four primary capabilities:
   such as machine learning, simulations, curve fitting, and probabilistic models.
 - Broadcasting, which is a term for element-by-element operations. Most of the Nx operations
   make use of automatic implicit broadcasting. You can see more on broadcasting
-  [here.](intro-to-nx.html#broadcasts)
+  [here.](broadcasting.html)
 
 Nx tensors can hold unsigned integers (u2, u4, u8, u16, u32, u64),
 signed integers (s2, s4, s8, s16, s32, s64),

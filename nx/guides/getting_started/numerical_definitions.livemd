@@ -25,7 +25,7 @@ like this:
 
 ```elixir
 Mix.install([
-  {:nx, "~> 0.9"}
+  {:nx, "~> 1.0"}
 ])
 ```
 
