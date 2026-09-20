@@ -933,6 +933,35 @@ defmodule Nx.DefnTest do
   end
 
   describe "block" do
+    defmodule VectorizedNonlinear do
+      defstruct []
+    end
+
+    @tag compiler: Evaluator
+    test "differentiates nonlinear vectorized block outputs" do
+      input = Nx.tensor([[0.0, 1.0], [2.0, 3.0]]) |> Nx.vectorize(:batch)
+
+      actual =
+        Nx.Defn.jit(fn input ->
+          grad(input, fn x ->
+            value =
+              Nx.block(%VectorizedNonlinear{}, [x], nil, fn _, x ->
+                Nx.add(Nx.sin(x), Nx.cos(x))
+              end)
+
+            Nx.sum(Nx.exp(value))
+          end)
+        end).(input)
+
+      expected =
+        Nx.multiply(
+          Nx.exp(Nx.add(Nx.sin(input), Nx.cos(input))),
+          Nx.subtract(Nx.cos(input), Nx.sin(input))
+        )
+
+      Nx.Testing.assert_all_close(actual, expected)
+    end
+
     @tag compiler: Evaluator
     test "accepts a constant tensor argument" do
       rhs = Nx.tensor([4.0, 3.0, 2.0])
