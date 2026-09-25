@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Bug fixes
+
+  * [Nx] Read Elixir number literals at the precision of element-wise binary operations
+
 ## v1.0.0 (2026-09-10)
 
 ### Enhancements

@@ -3665,4 +3665,93 @@ defmodule NxTest do
       assert_in_delta Nx.to_number(result), 3.14, 1.0e-10
     end
   end
+
+  describe "scalar literal promotion" do
+    test "f32 tensor and an integer literal stay f32" do
+      t = Nx.tensor([1.0, 2.0, 3.0], type: :f32)
+
+      assert Nx.add(t, 1) == Nx.tensor([2.0, 3.0, 4.0], type: :f32)
+      assert Nx.multiply(t, 2) == Nx.tensor([2.0, 4.0, 6.0], type: :f32)
+      assert Nx.divide(t, 2) == Nx.tensor([0.5, 1.0, 1.5], type: :f32)
+
+      # 16777217 is not an f32 integer. The sum is rounded when written, not before.
+      assert Nx.add(Nx.tensor(1.0, type: :f32), 16_777_217) ==
+               Nx.tensor(1.0 + 16_777_217, type: :f32)
+    end
+
+    test "f64 tensor reads a float literal at f64, and an f32 scalar stays rounded" do
+      t = Nx.tensor([1.0], type: :f64)
+      exact = Nx.tensor(0.1, type: :f64)
+      rounded = Nx.tensor(0.1)
+
+      for op <- [:add, :multiply, :divide] do
+        assert Nx.type(apply(Nx, op, [t, 0.1])) == {:f, 64}
+        assert Nx.to_binary(apply(Nx, op, [t, 0.1])) == Nx.to_binary(apply(Nx, op, [t, exact]))
+        assert Nx.to_binary(apply(Nx, op, [0.1, t])) == Nx.to_binary(apply(Nx, op, [exact, t]))
+
+        refute Nx.to_binary(apply(Nx, op, [t, rounded])) ==
+                 Nx.to_binary(apply(Nx, op, [t, exact]))
+
+        assert Nx.type(apply(Nx, op, [t, rounded])) == {:f, 64}
+      end
+    end
+
+    test "explicit f64 scalar matches a float literal on an f64 tensor" do
+      t = Nx.tensor([2.0, 4.0], type: :f64)
+      scalar = Nx.tensor(2.0, type: :f64)
+
+      for op <- [:add, :multiply, :divide] do
+        assert apply(Nx, op, [t, scalar]) == apply(Nx, op, [t, 2.0])
+        assert Nx.type(apply(Nx, op, [t, scalar])) == {:f, 64}
+      end
+    end
+
+    test "negative integer literal widens an unsigned tensor" do
+      t = Nx.tensor([0, 1, 2], type: :u8)
+
+      assert Nx.add(t, -1) == Nx.tensor([-1, 0, 1], type: :s16)
+      assert Nx.multiply(t, -1) == Nx.tensor([0, -1, -2], type: :s16)
+
+      divided = Nx.divide(t, -1)
+      assert Nx.type(divided) == {:f, 32}
+      assert Nx.to_list(divided) == [-0.0, -1.0, -2.0]
+
+      signed = Nx.tensor([1, 2, 3], type: :s32)
+      assert Nx.add(signed, -2) == Nx.tensor([-1, 0, 1], type: :s32)
+      assert Nx.multiply(signed, -2) == Nx.tensor([-2, -4, -6], type: :s32)
+    end
+
+    test "f32 and f64 tensors promote to f64" do
+      f32 = Nx.tensor([1.0, 2.0], type: :f32)
+      f64 = Nx.tensor([0.5, 0.25], type: :f64)
+      widened = Nx.as_type(f32, :f64)
+
+      for op <- [:add, :multiply, :divide] do
+        assert Nx.type(apply(Nx, op, [f32, f64])) == {:f, 64}
+        assert Nx.type(apply(Nx, op, [f64, f32])) == {:f, 64}
+
+        assert Nx.to_binary(apply(Nx, op, [f32, f64])) ==
+                 Nx.to_binary(apply(Nx, op, [widened, f64]))
+      end
+    end
+
+    test "integer literals outside s32 are not truncated" do
+      assert Nx.add(Nx.tensor(1, type: :u8), 5_000_000_000) ==
+               Nx.tensor(5_000_000_001, type: :u64)
+
+      assert Nx.multiply(Nx.tensor(2, type: :s8), 5_000_000_000) ==
+               Nx.tensor(10_000_000_000, type: :s64)
+
+      assert Nx.add(Nx.tensor(1.0, type: :f64), 5_000_000_000) ==
+               Nx.tensor(5_000_000_001.0, type: :f64)
+    end
+
+    test "c128 tensor reads a float literal at f64" do
+      t = Nx.tensor(Complex.new(1.0, 0.0), type: :c128)
+      exact = Nx.add(t, Nx.tensor(0.1, type: :f64))
+
+      assert Nx.type(Nx.add(t, 0.1)) == {:c, 128}
+      assert Nx.to_binary(Nx.add(t, 0.1)) == Nx.to_binary(exact)
+    end
+  end
 end
