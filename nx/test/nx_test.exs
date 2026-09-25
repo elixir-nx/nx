@@ -1160,6 +1160,22 @@ defmodule NxTest do
     test "with mixed types and sizes" do
       assert Nx.put_slice(Nx.tensor([0.0, 0.0]), [0], Nx.tensor([1])) == Nx.tensor([1.0, 0.0])
     end
+
+    test "start indices length reports the shape and the indices" do
+      assert_raise ArgumentError,
+                   ~r/start indices for put_slice of shape \{2, 3\}.*got: \[0\]/,
+                   fn ->
+                     Nx.put_slice(Nx.iota({2, 3}), [0], Nx.iota({1, 1}))
+                   end
+    end
+
+    test "slice rank mismatch reports both shapes" do
+      assert_raise ArgumentError,
+                   ~r/slice shape \{3\}.*shape \{2, 3\}/,
+                   fn ->
+                     Nx.put_slice(Nx.iota({2, 3}), [0, 0], Nx.iota({3}))
+                   end
+    end
   end
 
   describe "access" do
@@ -1463,6 +1479,14 @@ defmodule NxTest do
 
       assert Nx.broadcast(t, {2, 2}, names: [:x, :y]) ==
                Nx.tensor([[1, 2], [3, 4]], names: [:x, :y])
+    end
+
+    test "axes length mismatch reports both shapes and the axes" do
+      assert_raise ArgumentError,
+                   ~r/axes \[0\].*shape \{2, 2\}.*broadcasting to \{2, 2, 2\}/,
+                   fn ->
+                     Nx.broadcast(Nx.iota({2, 2}), {2, 2, 2}, axes: [0])
+                   end
     end
   end
 
@@ -3663,6 +3687,32 @@ defmodule NxTest do
       t = Nx.tensor(3.14, type: :f64)
       result = Nx.slice(t, [], [])
       assert_in_delta Nx.to_number(result), 3.14, 1.0e-10
+    end
+  end
+
+  describe "slice shape errors" do
+    test "start indices length reports the shape and the indices" do
+      assert_raise ArgumentError,
+                   ~r/start indices for slice of shape \{2, 3\}.*got: \[0\]/,
+                   fn ->
+                     Nx.slice(Nx.iota({2, 3}), [0], [1, 1])
+                   end
+    end
+
+    test "lengths list reports the shape and the lengths" do
+      assert_raise ArgumentError,
+                   ~r/lengths for slice of shape \{2, 3\}.*got: \[1\]/,
+                   fn ->
+                     Nx.slice(Nx.iota({2, 3}), [0, 0], [1])
+                   end
+    end
+
+    test "strides list reports the shape and the strides" do
+      assert_raise ArgumentError,
+                   ~r/strides for slice of shape \{2, 3\}.*got: \[1\]/,
+                   fn ->
+                     Nx.slice(Nx.iota({2, 3}), [0, 0], [1, 1], strides: [1])
+                   end
     end
   end
 end

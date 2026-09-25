@@ -12830,7 +12830,7 @@ defmodule Nx do
   ## Error cases
 
       iex> Nx.dot(Nx.tensor([1, 2, 3]), Nx.tensor([1, 2]))
-      ** (ArgumentError) dot/zip expects shapes to be compatible, dimension 0 of left-side (3) does not equal dimension 0 of right-side (2)
+      ** (ArgumentError) dot/zip expects shapes to be compatible, dimension 0 of left shape {3} (3) does not equal dimension 0 of right shape {2} (2)
   """
   @doc type: :ndim
   def dot(t1, t2) do
@@ -13092,12 +13092,12 @@ defmodule Nx do
       iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
       iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
       iex> Nx.dot(u, [2], [0], v, [1], [])
-      ** (ArgumentError) right tensor must be batched if left tensor is batched
+      ** (ArgumentError) right tensor of shape {2, 2, 1} must be batched if left tensor of shape {2, 1, 2} is batched, got left batch axes [0] and right batch axes []
 
       iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
       iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
       iex> Nx.dot(u, [2], [], v, [1], [0])
-      ** (ArgumentError) left tensor must be batched if right tensor is batched
+      ** (ArgumentError) left tensor of shape {2, 1, 2} must be batched if right tensor of shape {2, 2, 1} is batched, got left batch axes [] and right batch axes [0]
 
       iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
       iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
