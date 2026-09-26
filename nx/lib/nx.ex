@@ -6016,8 +6016,39 @@ defmodule Nx do
 
   defp element_wise_bin_op(left, right, op, fun) do
     type = binary_type(left, right) |> fun.()
+
+    # to_tensor/1 stores every float as f32 and every integer as s32.
+    # Read the literal at the result type instead.
+    left = literal_tensor(left, type)
+    right = literal_tensor(right, type)
+
     apply_vectorized([left, right], &devectorized_element_wise_bin_op(type, &1, &2, op))
   end
+
+  defp literal_tensor(number, type) when is_number(number) do
+    tensor(number, type: literal_type(number, type))
+  end
+
+  defp literal_tensor(other, _type), do: other
+
+  # A float literal is an Elixir f64. Keep it at the output float width, and at
+  # the complex component width, so an f64/c128 op does not round it to f32 first.
+  # bf16 and other floats stay on Type.infer/1, same as to_tensor/1.
+  defp literal_type(number, {:f, size}) when is_float(number), do: {:f, size}
+  defp literal_type(number, {:c, size}) when is_float(number), do: {:f, div(size, 2)}
+
+  # Integers stay integers wide enough to hold the value. Casting one to f32
+  # before the arithmetic rounds it early (for example 16777217 + 1.0).
+  defp literal_type(number, type) when is_integer(number) do
+    if Nx.Type.integer?(type) do
+      type
+    else
+      base = if number < 0, do: {:s, 8}, else: {:u, 8}
+      Nx.Type.merge_number(base, number)
+    end
+  end
+
+  defp literal_type(number, _type), do: Nx.Type.infer(number)
 
   defp devectorized_element_wise_bin_op(type, %T{} = left, %T{} = right, op) do
     %T{shape: left_shape, names: left_names} = left
