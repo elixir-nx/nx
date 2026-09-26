@@ -801,6 +801,55 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
+  describe "vectorized block outputs" do
+    defmodule NonlinearBlock do
+      defstruct []
+    end
+
+    defmodule TupleBlock do
+      defstruct []
+    end
+
+    deftransform nonlinear_block(left, right) do
+      Nx.block(%NonlinearBlock{}, [left, right], nil, fn _, left, right ->
+        Nx.add(Nx.sin(left), Nx.cos(right))
+      end)
+    end
+
+    deftransform tuple_block(left, right) do
+      Nx.block(%TupleBlock{}, [left, right], nil, fn _, left, right ->
+        {Nx.add(Nx.sin(left), Nx.cos(right)), Nx.greater(left, right)}
+      end)
+    end
+
+    test "compiles mixed vectorized axes and tuple results" do
+      left = Nx.tensor([[0.0, 1.0], [2.0, 3.0]]) |> Nx.vectorize(:left)
+      right = Nx.tensor([[0.5, 1.5], [2.5, 3.5], [4.5, 5.5]]) |> Nx.vectorize(:right)
+      expected = Nx.add(Nx.sin(left), Nx.cos(right))
+      assert_all_close(EXLA.jit_apply(&nonlinear_block/2, [left, right]), expected)
+      {actual, predicate} = EXLA.jit_apply(&tuple_block/2, [left, right])
+      assert_all_close(actual, expected)
+      assert_equal(predicate, Nx.greater(left, right))
+    end
+
+    test "differentiates a nonlinear expression through a vectorized block" do
+      input = Nx.tensor([[0.0, 1.0], [2.0, 3.0]]) |> Nx.vectorize(:batch)
+
+      actual =
+        jit(fn input ->
+          grad(input, fn x -> Nx.sum(Nx.exp(nonlinear_block(x, x))) end)
+        end).(input)
+
+      expected =
+        Nx.multiply(
+          Nx.exp(Nx.add(Nx.sin(input), Nx.cos(input))),
+          Nx.subtract(Nx.cos(input), Nx.sin(input))
+        )
+
+      assert_all_close(actual, expected)
+    end
+  end
+
   describe "unary float ops" do
     @int_tensor Nx.tensor([1, 2, 3])
     @float_tensor Nx.tensor([1.0, 2.0, 3.0])
