@@ -230,7 +230,7 @@ defmodule Nx.Shape do
       ** (ArgumentError) cannot broadcast tensor of dimensions {4, 2, 2} to {1, 1} with axes [0, 1, 2]
 
       iex> Nx.Shape.broadcast!({2, 2}, {2, 2, 2}, [1, 0])
-      ** (ArgumentError) broadcast axes must be ordered, got 0 after 1
+      ** (ArgumentError) broadcast axes must be ordered, got 0 after 1 when broadcasting {2, 2} to {2, 2, 2}
   """
   def broadcast!(old_shape, new_shape, axes, offset \\ 0)
 
@@ -241,7 +241,8 @@ defmodule Nx.Shape do
 
     if length(axes) != old_rank do
       raise ArgumentError,
-            "expected length of axes (#{length(axes)}) to match rank of shape (#{old_rank})"
+            "expected length of axes #{inspect(axes)} (#{length(axes)}) to match rank of " <>
+              "shape #{inspect(old_shape)} (#{old_rank}) when broadcasting to #{inspect(new_shape)}"
     end
 
     if old_rank > new_rank or not valid_broadcast?(axes, 0, -1, old_shape, new_shape) do
@@ -265,7 +266,9 @@ defmodule Nx.Shape do
 
   defp valid_broadcast?([head | tail], axis, last, old_shape, new_shape) do
     if head < last do
-      raise ArgumentError, "broadcast axes must be ordered, got #{head} after #{last}"
+      raise ArgumentError,
+            "broadcast axes must be ordered, got #{head} after #{last} " <>
+              "when broadcasting #{inspect(old_shape)} to #{inspect(new_shape)}"
     end
 
     old_dim = elem(old_shape, axis)
@@ -476,7 +479,7 @@ defmodule Nx.Shape do
       {{3, 3}, [:y, :batch]}
 
       iex> Nx.Shape.zip_reduce({1, 2, 3}, [0, 1], [nil, nil, nil], {1, 2, 3}, [1, 2], [nil, nil, nil])
-      ** (ArgumentError) dot/zip expects shapes to be compatible, dimension 0 of left-side (1) does not equal dimension 1 of right-side (2)
+      ** (ArgumentError) dot/zip expects shapes to be compatible, dimension 0 of left shape {1, 2, 3} (1) does not equal dimension 1 of right shape {1, 2, 3} (2)
 
       iex> Nx.Shape.zip_reduce({2, 2}, [1], [:x, :y], {2, 2}, [0], [:y, :x])
       ** (ArgumentError) operation would result in duplicate names [:x, :x], please rename your tensors to avoid duplicates
@@ -509,8 +512,8 @@ defmodule Nx.Shape do
     else
       raise ArgumentError,
             "dot/zip expects shapes to be compatible," <>
-              " dimension #{a1} of left-side (#{d1}) does not equal" <>
-              " dimension #{a2} of right-side (#{d2})"
+              " dimension #{a1} of left shape #{inspect(s1)} (#{d1}) does not equal" <>
+              " dimension #{a2} of right shape #{inspect(s2)} (#{d2})"
     end
   end
 
@@ -1241,22 +1244,28 @@ defmodule Nx.Shape do
   ## Error cases
 
       iex> Nx.Shape.slice({2, 15, 30}, [1, 4, 10], [3, 1, 1], [1, 1, 1])
-      ** (ArgumentError) length at axis 0 must be less than axis size of 2, got: 3
+      ** (ArgumentError) length at axis 0 must be less than or equal to axis size of 2 in shape {2, 15, 30}, got: 3
 
   """
   def slice(shape, start_indices, lengths, strides) do
     rank = tuple_size(shape)
 
     if length(strides) != rank do
-      raise ArgumentError, "invalid strides rank for shape of rank #{rank}"
+      raise ArgumentError,
+            "invalid strides for slice of shape #{inspect(shape)}, " <>
+              "expected #{rank} strides, got: #{inspect(strides)}"
     end
 
     if length(start_indices) != rank do
-      raise ArgumentError, "invalid start indices rank for shape of rank #{rank}"
+      raise ArgumentError,
+            "invalid start indices for slice of shape #{inspect(shape)}, " <>
+              "expected #{rank} start indices, got: #{inspect(start_indices)}"
     end
 
     if length(lengths) != rank do
-      raise ArgumentError, "invalid limit indices rank for shape of rank #{rank}"
+      raise ArgumentError,
+            "invalid lengths for slice of shape #{inspect(shape)}, " <>
+              "expected #{rank} lengths, got: #{inspect(lengths)}"
     end
 
     do_slice(shape, 0, start_indices, lengths, strides, [], [])
@@ -1277,7 +1286,8 @@ defmodule Nx.Shape do
 
     if len > dim do
       raise ArgumentError,
-            "length at axis #{pos} must be less than axis size of #{dim}, got: #{len}"
+            "length at axis #{pos} must be less than or equal to axis size of #{dim} " <>
+              "in shape #{inspect(shape)}, got: #{len}"
     end
 
     out = Kernel.ceil(len / s)
@@ -1305,13 +1315,15 @@ defmodule Nx.Shape do
     rank = tuple_size(shape)
 
     if length(start_indices) != rank do
-      raise ArgumentError, "invalid start indices rank for shape of rank #{rank}"
+      raise ArgumentError,
+            "invalid start indices for put_slice of shape #{inspect(shape)}, " <>
+              "expected #{rank} start indices, got: #{inspect(start_indices)}"
     end
 
     if tuple_size(slice_shape) != rank do
       raise ArgumentError,
-            "invalid slice for put_slice, rank of slice must match #{rank}, " <>
-              "got: #{tuple_size(slice_shape)}"
+            "invalid slice for put_slice, rank of slice shape #{inspect(slice_shape)} " <>
+              "must match rank of shape #{inspect(shape)} (#{rank})"
     end
 
     shape
@@ -1858,11 +1870,17 @@ defmodule Nx.Shape do
     right_batched? = b2 != []
 
     if not left_batched? and right_batched? do
-      raise ArgumentError, "left tensor must be batched if right tensor is batched"
+      raise ArgumentError,
+            "left tensor of shape #{inspect(s1)} must be batched if right tensor of " <>
+              "shape #{inspect(s2)} is batched, got left batch axes #{inspect(b1)} and " <>
+              "right batch axes #{inspect(b2)}"
     end
 
     if left_batched? and not right_batched? do
-      raise ArgumentError, "right tensor must be batched if left tensor is batched"
+      raise ArgumentError,
+            "right tensor of shape #{inspect(s2)} must be batched if left tensor of " <>
+              "shape #{inspect(s1)} is batched, got left batch axes #{inspect(b1)} and " <>
+              "right batch axes #{inspect(b2)}"
     end
 
     # batch axes must be increasing starting from 0
