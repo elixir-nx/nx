@@ -211,7 +211,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp parents_args(:block, %{data: %{args: [struct, in_args, _expr, callback]}} = t, id, acc) do
-    expr = apply(callback, [struct | in_args])
+    expr = apply(callback, [struct | in_args]) |> Composite.traverse(&Nx.devectorize/1)
 
     # Now traverse over the block expression where args are the new parameters.
     # Once we access the parameter itself, we point the parameter to the arg.

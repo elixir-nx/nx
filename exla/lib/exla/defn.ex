@@ -983,6 +983,9 @@ defmodule EXLA.Defn do
   end
 
   defp default_block_implementation(struct, call_args, expr, state, cache) do
+    # Block callbacks can return vectorized tensors. The compiled function
+    # signature includes those axes, just like its input operands.
+    expr = Composite.traverse(expr, &Nx.devectorize/1)
     %module{} = struct
     key = computation_key(module, [struct | call_args])
 
