@@ -146,10 +146,11 @@ Inside the container you can interact with the API from IEx using:
 iex -S mix
 ```
 
-Or you can run an example:
+Or you can run an example, or the CPU matmul benchmark:
 
 ```shell
 mix run examples/regression.exs
+mix run bench/matmul.exs
 ```
 
 To run tests:
