@@ -5,6 +5,7 @@
 ### Bug fixes
 
   * [Nx] Read Elixir number literals at the precision of element-wise binary operations
+  * [Nx.Defn] Return finite gradients for `Nx.sigmoid/1` at very negative and non-finite inputs
 
 ## v1.0.0 (2026-09-10)
 
