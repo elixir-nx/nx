@@ -486,6 +486,35 @@ defmodule NxTest do
                  [2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]
                ])
     end
+
+    test "with a pad value of a wider type" do
+      pad_value = Nx.tensor(0.5, type: :f64)
+
+      for type <- [f: 8, f8_e4m3fn: 8, f: 16, bf: 16, f: 32, f: 64] do
+        t = Nx.tensor([1.0, 2.0], type: type)
+        assert Nx.pad(t, pad_value, [{1, 0, 0}]) == Nx.tensor([0.5, 1.0, 2.0], type: :f64)
+      end
+
+      for kind <- [:s, :u], width <- [2, 4, 8, 16, 32, 64] do
+        t = Nx.tensor([0, 1], type: {kind, width})
+        assert Nx.pad(t, 0.5, [{1, 0, 0}]) == Nx.tensor([0.5, 0.0, 1.0])
+      end
+
+      t1 = Nx.tensor(1)
+      assert Nx.pad(t1, 0.5, []) == Nx.tensor(1.0)
+
+      t2 = Nx.tensor([[1, 2], [3, 4]])
+
+      assert Nx.pad(t2, 0.5, [{1, 0, 0}, {0, 1, 1}]) ==
+               Nx.tensor([
+                 [0.5, 0.5, 0.5, 0.5],
+                 [1.0, 0.5, 2.0, 0.5],
+                 [3.0, 0.5, 4.0, 0.5]
+               ])
+
+      t3 = Nx.tensor([1, 2], type: :u8)
+      assert Nx.pad(t3, -1, [{1, 1, 0}]) == Nx.tensor([-1, 1, 2, -1], type: :s16)
+    end
   end
 
   describe "bitshift" do

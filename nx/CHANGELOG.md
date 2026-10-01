@@ -9,6 +9,7 @@
   * [Nx] Make `Nx.Type.merge/2` independent of argument order for `:f8_e4m3fn`, and raise when merging it with `:f8`
   * [Nx] Keep the `:f8_e4m3fn` type in element-wise binary operations with a number, instead of returning `:f32`
   * [Nx] Support `:f8_e4m3fn` in `Nx.Type.cast_number!/2`
+  * [Nx.BinaryBackend] Pad in the merged type of the tensor and the pad value in `Nx.pad/3`
 
 ## v1.0.0 (2026-09-10)
 
