@@ -26,6 +26,10 @@ defmodule Nx.TypeTest do
       assert Nx.Type.integer?({:f8_e4m3fn, 8}) == false
     end
 
+    test "is not recognized as complex type" do
+      assert Nx.Type.complex?({:f8_e4m3fn, 8}) == false
+    end
+
     test "to_string returns correct representation" do
       assert Nx.Type.to_string({:f8_e4m3fn, 8}) == "f8_e4m3fn"
     end
@@ -75,6 +79,42 @@ defmodule Nx.TypeTest do
 
     test "smallest_positive_normal_binary returns 0x08" do
       assert Nx.Type.smallest_positive_normal_binary({:f8_e4m3fn, 8}) == <<0x08::8-native>>
+    end
+  end
+
+  describe "merge/2" do
+    test "merges a quantized type into a wider type of its base type in either order" do
+      for type <- [f: 16, f: 32, f: 64] do
+        assert Nx.Type.merge({:f8_e4m3fn, 8}, type) == type
+        assert Nx.Type.merge(type, {:f8_e4m3fn, 8}) == type
+      end
+    end
+
+    test "raises on different types with the same base type and size in either order" do
+      assert_raise ArgumentError,
+                   "cannot merge {:f8_e4m3fn, 8} and {:f, 8}, convert one of them with Nx.as_type/2 first",
+                   fn -> Nx.Type.merge({:f8_e4m3fn, 8}, {:f, 8}) end
+
+      assert_raise ArgumentError,
+                   "cannot merge {:f, 8} and {:f8_e4m3fn, 8}, convert one of them with Nx.as_type/2 first",
+                   fn -> Nx.Type.merge({:f, 8}, {:f8_e4m3fn, 8}) end
+    end
+
+    test "gives a quantized type the precedence of its base type in either order" do
+      for {type, expected} <- [
+            {{:u, 8}, {:f8_e4m3fn, 8}},
+            {{:s, 64}, {:f8_e4m3fn, 8}},
+            {{:bf, 16}, {:f8_e4m3fn, 8}},
+            {{:c, 64}, {:c, 64}},
+            {{:c, 128}, {:c, 128}}
+          ] do
+        assert Nx.Type.merge({:f8_e4m3fn, 8}, type) == expected
+        assert Nx.Type.merge(type, {:f8_e4m3fn, 8}) == expected
+      end
+    end
+
+    test "returns a quantized type unchanged when merged with itself" do
+      assert Nx.Type.merge({:f8_e4m3fn, 8}, {:f8_e4m3fn, 8}) == {:f8_e4m3fn, 8}
     end
   end
 end

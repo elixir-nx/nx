@@ -65,6 +65,13 @@ defmodule Nx.Type do
           | :c64
           | :c128
 
+  # List of available quantized variants of a given type.
+  quantizations = [
+    f: [
+      {:f8_e4m3fn, 8}
+    ]
+  ]
+
   @doc """
   Returns the minimum possible finite value for the given type.
   """
@@ -221,9 +228,11 @@ defmodule Nx.Type do
     defp validate(unquote(:"#{kind}#{size}")), do: unquote(type)
   end
 
-  # FP8 E4M3FN type support
-  defp validate({:f8_e4m3fn, 8}), do: {:f8_e4m3fn, 8}
-  defp validate(:f8_e4m3fn), do: {:f8_e4m3fn, 8}
+  for {_general_type, types} <- quantizations,
+      {name, _size} = quantization <- types do
+    defp validate(unquote(quantization)), do: unquote(quantization)
+    defp validate(unquote(name)), do: unquote(quantization)
+  end
 
   defp validate(_type), do: :error
 
@@ -247,10 +256,16 @@ defmodule Nx.Type do
       {:c, 64}
 
   """
-  def to_floating({:bf, size}), do: {:bf, size}
-  def to_floating({:f, size}), do: {:f, size}
-  def to_floating({:f8_e4m3fn, size}), do: {:f8_e4m3fn, size}
-  def to_floating({:c, size}), do: {:c, size}
+  def to_floating({:bf, _} = type), do: type
+  def to_floating({:f, _} = type), do: type
+  def to_floating({:c, _} = type), do: type
+
+  for {general_type, types} <- quantizations,
+      general_type in [:f, :bf, :c],
+      quantization <- types do
+    def to_floating(unquote(quantization)), do: unquote(quantization)
+  end
+
   def to_floating(type), do: merge(type, {:f, 32})
 
   @doc """
@@ -298,10 +313,22 @@ defmodule Nx.Type do
       iex> Nx.Type.to_real({:f, 64})
       {:f, 64}
   """
-  def to_real({:f, size}), do: {:f, size}
-  def to_real({:f8_e4m3fn, size}), do: {:f8_e4m3fn, size}
+  def to_real({:f, _} = type), do: type
   def to_real({:c, s}), do: {:f, div(s, 2)}
-  def to_real({:bf, size}), do: {:bf, size}
+  def to_real({:bf, _} = type), do: type
+
+  for {general_type, types} <- quantizations,
+      general_type in [:f, :bf],
+      quantization <- types do
+    def to_real(unquote(quantization)), do: unquote(quantization)
+  end
+
+  for {:c, types} <- quantizations, {_, size} = quantization <- types do
+    real = {:f, div(size, 2)}
+
+    def to_real(unquote(quantization)), do: unquote(real)
+  end
+
   def to_real(_type), do: {:f, 32}
 
   @doc """
@@ -384,6 +411,10 @@ defmodule Nx.Type do
   as long as the size of the `max(big, small * 2))` fits under 64
   bits. Otherwise it casts to f64.
 
+  Two different quantizations of the same data type and size do not merge,
+  as neither holds all of the other's values. Merging them raises an
+  `ArgumentError`, so convert one of them with `Nx.as_type/2` first.
+
   In the case of complex numbers, the maximum bit size is 128 bits
   because they are composed of two floats. Float types are promoted
   to c64 by default, with the exception of f64, which is promoted to
@@ -443,6 +474,13 @@ defmodule Nx.Type do
       iex> Nx.Type.merge({:f, 64}, {:bf, 16})
       {:f, 64}
 
+      iex> Nx.Type.merge({:f8_e4m3fn, 8}, {:f, 32})
+      {:f, 32}
+      iex> Nx.Type.merge({:f8_e4m3fn, 8}, {:s, 32})
+      {:f8_e4m3fn, 8}
+      iex> Nx.Type.merge({:f8_e4m3fn, 8}, {:f, 8})
+      ** (ArgumentError) cannot merge {:f8_e4m3fn, 8} and {:f, 8}, convert one of them with Nx.as_type/2 first
+
       iex> Nx.Type.merge({:f, 16}, {:c, 64})
       {:c, 64}
       iex> Nx.Type.merge({:f, 32}, {:c, 64})
@@ -457,11 +495,39 @@ defmodule Nx.Type do
       iex> Nx.Type.merge({:c, 128}, {:c, 64})
       {:c, 128}
   """
-  def merge({type, left_size}, {type, right_size}) do
+  def merge({type, _} = left, {type, _} = right) do
+    merge_general_type(left, right)
+  end
+
+  def merge({left_type, _} = left, {right_type, _} = right)
+      when left_type in [:c, :f, :bf, :s, :u] and right_type in [:c, :f, :bf, :s, :u] do
+    merge_general_type(left, right)
+  end
+
+  def merge({_, _} = left, {_, _} = right) do
+    left_generalized = left |> normalize!() |> generalize()
+    right_generalized = right |> normalize!() |> generalize()
+
+    if left_generalized == right_generalized do
+      raise(
+        ArgumentError,
+        "cannot merge #{inspect(left)} and #{inspect(right)}, " <>
+          "convert one of them with Nx.as_type/2 first"
+      )
+    end
+
+    case merge_general_type(left_generalized, right_generalized) do
+      ^left_generalized -> left
+      ^right_generalized -> right
+      merged -> merged
+    end
+  end
+
+  defp merge_general_type({type, left_size}, {type, right_size}) do
     {type, max(left_size, right_size)}
   end
 
-  def merge(left, right) do
+  defp merge_general_type(left, right) do
     case sort(left, right) do
       {{:u, size1}, {:s, size2}} -> {:s, max(min(size1 * 2, 64), size2)}
       {{:f, size1}, {:c, size2}} -> {:c, max(size1 * 2, size2)}
@@ -469,12 +535,22 @@ defmodule Nx.Type do
     end
   end
 
-  defp type_to_int(:c), do: 4
-  defp type_to_int(:f), do: 3
-  defp type_to_int(:f8_e4m3fn), do: 3
-  defp type_to_int(:bf), do: 2
-  defp type_to_int(:s), do: 1
-  defp type_to_int(:u), do: 0
+  type_precedence = [
+    :c,
+    :f,
+    :bf,
+    :s,
+    :u
+  ]
+
+  for {type, precedence} <- type_precedence |> Enum.reverse() |> Enum.with_index() do
+    defp type_to_int(unquote(type)), do: unquote(precedence)
+  end
+
+  defp type_to_int(type) do
+    raise ArgumentError,
+          "invalid numerical type: #{inspect(type)} (see Nx.Type docs for all supported types)"
+  end
 
   defp sort({left_type, _} = left, {right_type, _} = right) do
     if type_to_int(left_type) < type_to_int(right_type) do
@@ -483,6 +559,14 @@ defmodule Nx.Type do
       {right, left}
     end
   end
+
+  # Maps a quantized type to a generalized category for comparison and widening.
+  for {general_type, types} <- quantizations,
+      {_, size} = quantization <- types do
+    defp generalize(unquote(quantization)), do: {unquote(general_type), unquote(size)}
+  end
+
+  defp generalize(type), do: type
 
   @doc """
   Merges the given types with the type of a number.
@@ -570,6 +654,13 @@ defmodule Nx.Type do
   """
   def integer?({:u, _}), do: true
   def integer?({:s, _}), do: true
+
+  for {general_type, types} <- quantizations,
+      general_type in [:s, :u],
+      quantization <- types do
+    def integer?(unquote(quantization)), do: true
+  end
+
   def integer?({_, _}), do: false
 
   @doc """
@@ -585,9 +676,15 @@ defmodule Nx.Type do
       false
   """
   def float?({:f, _}), do: true
-  def float?({:f8_e4m3fn, _}), do: true
   def float?({:bf, _}), do: true
   def float?({:c, _}), do: true
+
+  for {general_type, types} <- quantizations,
+      general_type in [:f, :bf, :c],
+      quantization <- types do
+    def float?(unquote(quantization)), do: true
+  end
+
   def float?({_, _}), do: false
 
   @doc """
@@ -625,6 +722,11 @@ defmodule Nx.Type do
       false
   """
   def complex?({:c, _}), do: true
+
+  for {:c, types} <- quantizations, quantization <- types do
+    def complex?(unquote(quantization)), do: true
+  end
+
   def complex?({_, _}), do: false
 
   @doc """
@@ -657,7 +759,10 @@ defmodule Nx.Type do
       iex> Nx.Type.to_string({:f, 64})
       "f64"
   """
-  def to_string({:f8_e4m3fn, 8}), do: "f8_e4m3fn"
+  for {_general_type, types} <- quantizations, {name, _size} = quantization <- types do
+    def to_string(unquote(quantization)), do: unquote(Atom.to_string(name))
+  end
+
   def to_string({type, size}), do: Atom.to_string(type) <> Integer.to_string(size)
 
   @doc """
