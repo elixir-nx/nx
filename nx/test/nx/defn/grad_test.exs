@@ -2085,7 +2085,7 @@ defmodule Nx.Defn.GradTest do
   end
 
   for fun <-
-        [:cbrt, :cos, :exp, :expm1, :log, :log1p, :sigmoid] ++
+        [:cbrt, :cos, :exp, :expm1, :log, :log1p] ++
           [:mean, :negate, :rsqrt, :sin, :sqrt, :sum, :tanh] do
     describe "#{fun}" do
       grad_fun = :"grad_#{fun}"
@@ -2110,6 +2110,42 @@ defmodule Nx.Defn.GradTest do
           t = random_uniform(0.1, 10.0, type: {:c, 128})
           check_grads!(&Nx.unquote(fun)(&1), &(__MODULE__.unquote(grad_fun) / 1), t)
         end
+      end
+    end
+  end
+
+  describe "sigmoid" do
+    defn grad_sigmoid(t), do: grad(t, &Nx.sigmoid/1)
+    defn grad_x_times_sigmoid(t), do: grad(t, &Nx.sum(&1 * Nx.sigmoid(&1)))
+
+    test "computes gradient" do
+      for _ <- @iters, type <- @types do
+        t = random_uniform(0.1, 10.0, type: type)
+        check_grads!(&Nx.sigmoid/1, &grad_sigmoid/1, t)
+      end
+    end
+
+    test "is finite at the extremes of each float type" do
+      for type <- [{:f, 16}, {:bf, 16}, {:f, 32}, {:f, 64}] do
+        t =
+          Nx.stack([
+            Nx.Constants.neg_infinity(type),
+            Nx.Constants.min_finite(type),
+            Nx.tensor(-100.0, type: type),
+            Nx.Constants.max_finite(type),
+            Nx.Constants.infinity(type)
+          ])
+
+        assert_all_close(grad_sigmoid(t), Nx.tensor([0.0, 0.0, 0.0, 0.0, 0.0], type: type))
+
+        t =
+          Nx.stack([
+            Nx.Constants.min_finite(type),
+            Nx.tensor(-100.0, type: type),
+            Nx.Constants.max_finite(type)
+          ])
+
+        assert_all_close(grad_x_times_sigmoid(t), Nx.tensor([0.0, 0.0, 1.0], type: type))
       end
     end
   end

@@ -1179,12 +1179,7 @@ defmodule Nx.Defn.Grad do
   end
 
   defp grad(:sigmoid, [x], ans, g, _batch_count) do
-    gs =
-      x
-      |> Nx.negate()
-      |> Nx.exp()
-      |> Nx.multiply(ans)
-      |> Nx.multiply(ans)
+    gs = Nx.multiply(ans, Nx.subtract(1, ans))
 
     [{x, Nx.multiply(g, gs)}]
   end
