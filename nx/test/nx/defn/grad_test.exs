@@ -6136,6 +6136,11 @@ defmodule Nx.Defn.GradTest do
       assert grad_y.vectorized_axes == [batch: 2]
     end
 
+    test "finite difference of a vectorized cosine" do
+      x = Nx.tensor([[0.4, -0.7], [1.1, 0.2]], type: :f64) |> Nx.vectorize(:batch)
+      check_scalar_grad!(x, fn x -> Nx.sum(Nx.cos(x)) end)
+    end
+
     test "large vectorized batch" do
       x = Nx.iota({64, 4}, type: :f32) |> Nx.divide(256) |> Nx.add(0.1) |> Nx.vectorize(:batch)
 
@@ -6666,6 +6671,36 @@ defmodule Nx.Defn.GradTest do
           Nx.sum(Nx.window_reduce(t, a, {2}, fn x, acc -> Nx.max(x, acc) end))
         end)
       end
+    end
+  end
+
+  describe "finite differences" do
+    test "broadcast" do
+      x = Nx.tensor([0.5, -1.0, 1.5], type: :f64)
+      y = Nx.tensor([[1.0, 2.0, 3.0], [0.5, -0.5, 1.0]], type: :f64)
+
+      check_scalar_grad!(x, fn x ->
+        x |> Nx.reshape({1, 3}) |> Nx.multiply(y) |> Nx.sum()
+      end)
+    end
+
+    test "reductions" do
+      x = Nx.tensor([[0.5, 1.5], [0.25, 0.75]], type: :f64)
+      check_scalar_grad!(x, fn x -> Nx.sum(Nx.pow(x, 2)) end)
+      check_scalar_grad!(x, fn x -> Nx.product(Nx.add(x, 1)) end)
+    end
+
+    test "composition" do
+      x = Nx.tensor([0.2, -0.4, 0.6], type: :f64)
+
+      check_scalar_grad!(x, fn x ->
+        x |> Nx.multiply(0.25) |> Nx.exp() |> Nx.sin() |> Nx.sum()
+      end)
+    end
+
+    test "matrix product" do
+      x = Nx.tensor([[0.5, -0.2], [0.3, 0.8]], type: :f64)
+      check_scalar_grad!(x, fn x -> Nx.sum(Nx.dot(x, Nx.transpose(x))) end)
     end
   end
 end
