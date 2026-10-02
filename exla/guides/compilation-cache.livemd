@@ -1,0 +1,116 @@
+# Compilation cache
+
+EXLA compiles a `defn` the first time it sees a shape and keeps the executable. The same shape later is a cache hit. A different shape is a miss and compiles again.
+
+A benchmark that includes the first call measures compilation. The matmul is what the later calls do.
+
+## Setup
+
+```elixir
+Mix.install([
+  {:nx, "~> 1.0"},
+  {:exla, "~> 1.0"},
+  {:benchee, "~> 1.0"}
+])
+```
+
+```elixir
+defmodule Matmul do
+  import Nx.Defn
+
+  defn dot(a, b), do: Nx.dot(a, b)
+end
+
+defmodule CacheTrace do
+  def attach do
+    pid =
+      case Process.whereis(__MODULE__) do
+        nil ->
+          {:ok, pid} = Agent.start_link(fn -> [] end, name: __MODULE__)
+          pid
+
+        pid ->
+          pid
+      end
+
+    :telemetry.detach("exla-cache-notebook")
+
+    :telemetry.attach(
+      "exla-cache-notebook",
+      [:exla, :compilation],
+      fn _, measurements, _, _ ->
+        Agent.update(pid, &[measurements | &1])
+      end,
+      nil
+    )
+  end
+
+  def take do
+    Agent.get_and_update(__MODULE__, fn events -> {Enum.reverse(events), []} end)
+  end
+end
+
+CacheTrace.attach()
+EXLA.Client.fetch!(EXLA.Client.default_name())
+
+pair = fn n ->
+  left = Nx.iota({n, n}, type: :f32)
+  right = Nx.multiply(left, 0.001)
+
+  {
+    Nx.backend_transfer(left, EXLA.Backend),
+    Nx.backend_transfer(right, EXLA.Backend)
+  }
+end
+
+{left64, right64} = pair.(64)
+{left256, right256} = pair.(256)
+{left1024, right1024} = pair.(1024)
+
+jit = EXLA.jit(&Matmul.dot/2)
+
+# Transfers above are not this defn. Drop whatever they recorded.
+CacheTrace.take()
+
+time = fn label, fun ->
+  {microseconds, out} = :timer.tc(fun)
+  Nx.backend_deallocate(out)
+  events = CacheTrace.take()
+  ms = Float.round(microseconds / 1000, 1)
+  IO.puts("#{label}: #{ms} ms, compilation events #{length(events)}")
+end
+```
+
+The inputs are already on the host client, so a sample is not the copy onto the device. `[:exla, :compilation]` fires on a miss and stays quiet on a hit.
+
+## Miss, hit, and a new shape
+
+The first 64×64 call compiles. The next call of that same shape does not. 256×256 is a new shape, so it compiles too. Going back to 64×64 is a hit: the first executable is still cached.
+
+```elixir
+time.("64x64 first call", fn -> jit.(left64, right64) end)
+time.("64x64 same shape", fn -> jit.(left64, right64) end)
+time.("256x256 new shape", fn -> jit.(left256, right256) end)
+time.("64x64 cached shape", fn -> jit.(left64, right64) end)
+```
+
+The first call is the slow one. A hit is the matmul alone. A later miss still compiles, but the compiler itself is already loaded, so it is cheaper than the very first shape.
+
+## Warm benchmark
+
+`Benchee.run/2` takes `:warmup`. Those seconds run before it records samples, and that is where a new shape gets compiled. The table is the warm matmul. You do not have to call the function once yourself before starting it.
+
+64 and 256 were compiled in the cells above, so their warmup is only execution. 1024 has not been called yet. It compiles during warmup, and that time stays out of the table. The run waits until the result buffer is ready.
+
+```elixir
+Benchee.run(
+  %{
+    "64x64" => {fn -> jit.(left64, right64) end, after_each: &Nx.backend_deallocate/1},
+    "256x256" => {fn -> jit.(left256, right256) end, after_each: &Nx.backend_deallocate/1},
+    "1024x1024" => {fn -> jit.(left1024, right1024) end, after_each: &Nx.backend_deallocate/1}
+  },
+  warmup: 2,
+  time: 5,
+  memory_time: 0
+)
+```
