@@ -3,6 +3,12 @@ defmodule Nx.TypeTest do
 
   doctest Nx.Type
 
+  test "normalize! raises on an unknown type" do
+    assert_raise ArgumentError, ~r/invalid numerical type: \{:k, 8\}/, fn ->
+      apply(Nx.Type, :normalize!, [{:k, 8}])
+    end
+  end
+
   describe "fp8 E4M3FN type" do
     test "normalizes :f8_e4m3fn atom to tuple" do
       assert Nx.Type.normalize!(:f8_e4m3fn) == {:f8_e4m3fn, 8}

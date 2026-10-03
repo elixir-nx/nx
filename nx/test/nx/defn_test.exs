@@ -5,7 +5,7 @@ defmodule Nx.DefnTest do
   alias Nx.Defn.{Expr, Debug, Evaluator}
   alias Nx.DefnTest.Sample
   import Nx.Defn
-  import Nx.Helpers
+  import Nx.Testing
 
   defmacrop location(plus) do
     file = Path.relative_to_cwd(__CALLER__.file)

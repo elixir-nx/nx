@@ -194,9 +194,6 @@ defmodule Nx.Type do
       iex> Nx.Type.normalize!({:u, 0})
       ** (ArgumentError) invalid numerical type: {:u, 0} (see Nx.Type docs for all supported types)
 
-      iex> Nx.Type.normalize!({:k, 8})
-      ** (ArgumentError) invalid numerical type: {:k, 8} (see Nx.Type docs for all supported types)
-
   """
   def normalize!(type) do
     case validate(type) do

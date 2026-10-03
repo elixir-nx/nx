@@ -1,7 +1,7 @@
 defmodule Nx.RandomTest do
   use ExUnit.Case, async: true
 
-  import Nx.Helpers
+  import Nx.Testing
 
   doctest Nx.Random
 

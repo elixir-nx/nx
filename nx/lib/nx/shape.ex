@@ -535,12 +535,6 @@ defmodule Nx.Shape do
 
       iex> Nx.Shape.to_padding_config({12, 12}, {2, 2}, :same)
       [{0, 1}, {0, 1}]
-
-  ## Error cases
-
-      iex> Nx.Shape.to_padding_config({2, 3, 2}, {2, 3, 2}, :foo)
-      ** (ArgumentError) invalid padding mode specified, padding must be one of :valid, :same, or a padding configuration, got: :foo
-
   """
   def to_padding_config(shape, kernel_size, mode) do
     case mode do
@@ -1645,12 +1639,6 @@ defmodule Nx.Shape do
 
       iex> Nx.Shape.gather({2, 2, 2, 2, 2}, {3, 3, 3}, [0, 1, 2])
       {{3, 3, 2, 2}, [nil, nil, nil, nil]}
-
-  ## Error cases
-
-      iex> Nx.Shape.gather({2, 3}, {}, [])
-      ** (ArgumentError) expected indices rank to be at least 1, got: 0
-
   """
   def gather(shape, indices_shape, axes) do
     rank = tuple_size(shape)

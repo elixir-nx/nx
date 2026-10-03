@@ -5,7 +5,7 @@ defmodule Nx.NonFiniteTest do
   """
   use ExUnit.Case, async: true
 
-  import Nx.Helpers
+  import Nx.Testing
   import Nx, only: :sigils
 
   @arg Complex.new(:infinity, 3)

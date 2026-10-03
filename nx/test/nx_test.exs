@@ -1,7 +1,7 @@
 defmodule NxTest do
   use ExUnit.Case, async: true
 
-  import Nx.Helpers
+  import Nx.Testing
   import Nx, only: :sigils
 
   defp commute(a, b, fun) do
