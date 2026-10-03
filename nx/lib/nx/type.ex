@@ -393,6 +393,26 @@ defmodule Nx.Type do
   def cast_number!({type, _}, int) when type in [:s] and is_integer(int), do: int
   def cast_number!({type, _}, int) when type in [:f, :bf] and is_integer(int), do: int * 1.0
   def cast_number!({type, _}, float) when type in [:f, :bf] and is_float(float), do: float
+
+  for {general_type, types} <- quantizations,
+      general_type in [:f, :bf],
+      quantization <- types do
+    def cast_number!(unquote(quantization), int) when is_integer(int), do: int * 1.0
+    def cast_number!(unquote(quantization), float) when is_float(float), do: float
+  end
+
+  for {:u, types} <- quantizations, quantization <- types do
+    def cast_number!(unquote(quantization), int) when is_integer(int) and int >= 0, do: int
+  end
+
+  for {:s, types} <- quantizations, quantization <- types do
+    def cast_number!(unquote(quantization), int) when is_integer(int), do: int
+  end
+
+  for {:c, types} <- quantizations, quantization <- types do
+    def cast_number!(unquote(quantization), number), do: Complex.new(number)
+  end
+
   def cast_number!({:c, _}, number), do: Complex.new(number)
 
   def cast_number!(type, other) do

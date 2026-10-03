@@ -139,4 +139,12 @@ defmodule Nx.TypeTest do
       assert Nx.Type.merge_number({:f8_e4m3fn, 8}, 1.0) == {:f8_e4m3fn, 8}
     end
   end
+
+  describe "cast_number!/2" do
+    test "casts integers and floats to floats for a quantized float type" do
+      assert 10.0 = Nx.Type.cast_number!({:f8_e4m3fn, 8}, 10)
+      assert -10.0 = Nx.Type.cast_number!({:f8_e4m3fn, 8}, -10)
+      assert 1.5 = Nx.Type.cast_number!({:f8_e4m3fn, 8}, 1.5)
+    end
+  end
 end
