@@ -7,7 +7,8 @@ defmodule Nx.Helpers do
   You must hold the function constant on every other
   variable with a partial application of `func`.
   """
-  def check_grads!(func, grad_func, x, opts) when is_function(func) and is_function(grad_func) and is_list(opts) do
+  def check_grads!(func, grad_func, x, opts)
+      when is_function(func) and is_function(grad_func) and is_list(opts) do
     atol = opts[:atol] || 1.0e-7
     rtol = opts[:rtol] || 1.0e-4
     step = opts[:step] || 1.0e-4
@@ -37,5 +38,4 @@ defmodule Nx.Helpers do
       step
     )
   end
-
 end

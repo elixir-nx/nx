@@ -6679,9 +6679,12 @@ defmodule Nx.Defn.GradTest do
       x = Nx.tensor([0.5, -1.0, 1.5], type: :f64)
       y = Nx.tensor([[1.0, 2.0, 3.0], [0.5, -0.5, 1.0]], type: :f64)
 
-      check_grads!(fn x ->
-        x |> Nx.reshape({1, 3}) |> Nx.multiply(y) |> Nx.sum()
-      end, x)
+      check_grads!(
+        fn x ->
+          x |> Nx.reshape({1, 3}) |> Nx.multiply(y) |> Nx.sum()
+        end,
+        x
+      )
     end
 
     test "reductions" do
@@ -6693,9 +6696,12 @@ defmodule Nx.Defn.GradTest do
     test "composition" do
       x = Nx.tensor([0.2, -0.4, 0.6], type: :f64)
 
-      check_grads!(fn x ->
-        x |> Nx.multiply(0.25) |> Nx.exp() |> Nx.sin() |> Nx.sum()
-      end, x)
+      check_grads!(
+        fn x ->
+          x |> Nx.multiply(0.25) |> Nx.exp() |> Nx.sin() |> Nx.sum()
+        end,
+        x
+      )
     end
 
     test "matrix product" do
