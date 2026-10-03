@@ -117,4 +117,26 @@ defmodule Nx.TypeTest do
       assert Nx.Type.merge({:f8_e4m3fn, 8}, {:f8_e4m3fn, 8}) == {:f8_e4m3fn, 8}
     end
   end
+
+  describe "merge_number/2" do
+    test "keeps a complex type for numbers, complex numbers and non-finite values" do
+      for value <- [1, -1, 1.5, Complex.new(1, 2), :infinity, :neg_infinity, :nan] do
+        assert Nx.Type.merge_number({:c, 64}, value) == {:c, 64}
+        assert Nx.Type.merge_number({:c, 128}, value) == {:c, 128}
+      end
+    end
+
+    test "raises for a complex type and a value that is not a number" do
+      for value <- [nil, :x, "1"] do
+        assert_raise FunctionClauseError, fn -> Nx.Type.merge_number({:c, 64}, value) end
+      end
+    end
+
+    test "keeps a quantized float type" do
+      assert Nx.Type.merge_number({:f8_e4m3fn, 8}, 1) == {:f8_e4m3fn, 8}
+      assert Nx.Type.merge_number({:f8_e4m3fn, 8}, -1) == {:f8_e4m3fn, 8}
+      assert Nx.Type.merge_number({:f8_e4m3fn, 8}, 1_000_000) == {:f8_e4m3fn, 8}
+      assert Nx.Type.merge_number({:f8_e4m3fn, 8}, 1.0) == {:f8_e4m3fn, 8}
+    end
+  end
 end

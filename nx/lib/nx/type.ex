@@ -614,30 +614,62 @@ defmodule Nx.Type do
       {:f, 64}
 
   """
-  def merge_number({:u, size}, integer) when is_integer(integer) and integer >= 0 do
-    {:u, max(unsigned_size(integer), size)}
+  def merge_number({:u, _} = type, int) when is_integer(int), do: merge_integer(type, int)
+  def merge_number({:s, _} = type, int) when is_integer(int), do: merge_integer(type, int)
+  def merge_number({:bf, _} = type, number) when is_number(number), do: type
+  def merge_number({:f, _} = type, number) when is_number(number), do: type
+
+  def merge_number({:c, _} = type, number)
+      when is_number(number) or number in [:neg_infinity, :infinity, :nan],
+      do: type
+
+  def merge_number({:c, _} = type, %Complex{}), do: type
+
+  for {general_type, types} <- quantizations,
+      general_type in [:f, :bf],
+      quantization <- types do
+    def merge_number(unquote(quantization) = type, number) when is_number(number), do: type
   end
 
-  def merge_number({:u, size}, integer) when is_integer(integer) do
-    merge_number({:s, min(size * 2, 64)}, integer)
+  # An integer quantization merges with an integer the same way its general
+  # type does. If the general type comes back unchanged, the number fits and
+  # the quantization is kept. Otherwise the number needs a wider type, which
+  # is returned just as it would be for the general type.
+  for {general_type, types} <- quantizations,
+      general_type in [:s, :u],
+      {_, size} = quantization <- types do
+    type = {general_type, size}
+
+    def merge_number(unquote(quantization), integer) when is_integer(integer) do
+      case merge_integer(unquote(type), integer) do
+        unquote(type) -> unquote(quantization)
+        merged -> merged
+      end
+    end
   end
 
-  def merge_number({:s, size}, integer) when is_integer(integer) do
-    {:s, max(signed_size(integer), size)}
-  end
+  for {:c, types} <- quantizations, quantization <- types do
+    def merge_number(unquote(quantization) = type, number)
+        when is_number(number) or number in [:neg_infinity, :infinity, :nan],
+        do: type
 
-  def merge_number({:bf, size}, number) when is_number(number) do
-    {:bf, size}
+    def merge_number(unquote(quantization) = type, %Complex{}), do: type
   end
-
-  def merge_number({:f, size}, number) when is_number(number) do
-    {:f, size}
-  end
-
-  def merge_number({:c, size}, _number), do: {:c, size}
 
   def merge_number(_, number) when is_number(number) do
     {:f, 32}
+  end
+
+  defp merge_integer({:u, size}, integer) when integer >= 0 do
+    {:u, max(unsigned_size(integer), size)}
+  end
+
+  defp merge_integer({:u, size}, integer) do
+    {:s, max(signed_size(integer), min(size * 2, 64))}
+  end
+
+  defp merge_integer({:s, size}, integer) do
+    {:s, max(signed_size(integer), size)}
   end
 
   @doc """
