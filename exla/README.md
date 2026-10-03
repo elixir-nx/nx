@@ -152,6 +152,8 @@ Or you can run an example:
 mix run examples/regression.exs
 ```
 
+`guides/compilation-cache.livemd` times a matmul through a cache miss, a hit, and a warm Benchee run.
+
 To run tests:
 
 ```shell
