@@ -1,7 +1,7 @@
 defmodule Nx.LinAlgTest do
   use ExUnit.Case, async: true
 
-  import Nx.Helpers
+  import Nx.Testing
   import Nx, only: :sigils
 
   doctest Nx.LinAlg
@@ -774,7 +774,7 @@ defmodule Nx.LinAlgTest do
 
           # Eigenvalues and eigenvectors
           assert {evals, evecs} = Nx.LinAlg.eigh(a)
-          assert_all_close(evals_test, evals, atol: 0.1)
+          assert_all_close(Nx.broadcast(evals_test, Nx.shape(evals)), evals, atol: 0.1)
 
           # Eigenvalue equation
           evecs_evals = Nx.multiply(evecs, evals)

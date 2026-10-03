@@ -5,7 +5,7 @@ defmodule Nx.ComplexTest do
   """
   use ExUnit.Case, async: true
 
-  import Nx.Helpers
+  import Nx.Testing
 
   @arg Complex.new(2, 3)
   @arg2 Complex.new(-2, 7)

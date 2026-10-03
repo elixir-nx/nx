@@ -91,7 +91,7 @@ defmodule Nx.Testing do
     """)
   end
 
-  defp flunk_not_close(left, right, atol, rtol) do
+  defp flunk_not_close(left, right, atol, rtol, input) do
     abs_diff = left |> Nx.subtract(right) |> Nx.abs()
     max_abs = abs_diff |> Nx.devectorize() |> Nx.reduce_max() |> Nx.to_number()
 
@@ -118,7 +118,14 @@ defmodule Nx.Testing do
     right:
 
     #{inspect(right)}
+    #{input_section(input)}\
     """)
+  end
+
+  defp input_section(nil), do: ""
+
+  defp input_section(input) do
+    "\nfor input:\n\n#{inspect(input)}\n"
   end
 
   # Genuine shape mismatches are rejected, but we still allow a scalar
@@ -147,10 +154,17 @@ defmodule Nx.Testing do
 
     * `:atol` - The absolute tolerance. Defaults to 1.0e-4.
     * `:rtol` - The relative tolerance. Defaults to 1.0e-4.
+    * `:equal_nan` - If `true`, NaN values are considered equal.
+      Defaults to `false`.
+    * `:input` - An optional value printed in the failure message,
+      such as the input that produced `left` and `right`.
   """
   def assert_all_close(left, right, opts \\ []) do
-    atol = opts[:atol] || 1.0e-4
-    rtol = opts[:rtol] || 1.0e-4
+    opts = Keyword.validate!(opts, atol: 1.0e-4, rtol: 1.0e-4, equal_nan: false, input: nil)
+    atol = opts[:atol]
+    rtol = opts[:rtol]
+    equal_nan = opts[:equal_nan]
+    input = opts[:input]
 
     left_t = to_tensor(left)
     right_t = to_tensor(right)
@@ -165,13 +179,13 @@ defmodule Nx.Testing do
 
     equals =
       left_t
-      |> Nx.all_close(right_t, atol: atol, rtol: rtol)
+      |> Nx.all_close(right_t, atol: atol, rtol: rtol, equal_nan: equal_nan)
       |> Nx.backend_transfer(Nx.BinaryBackend)
       |> Nx.to_flat_list()
       |> Enum.all?(&(&1 == 1))
 
     if not equals do
-      flunk_not_close(left_t, right_t, atol, rtol)
+      flunk_not_close(left_t, right_t, atol, rtol, input)
     end
   end
 end
