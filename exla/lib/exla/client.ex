@@ -157,7 +157,8 @@ defmodule EXLA.Client do
     {:reply, client, state}
   end
 
-  defp build_client(name, options) do
+  @doc false
+  def build_client(name, options) do
     platform = Keyword.get(options, :platform)
     memory_fraction = Keyword.get(options, :memory_fraction, 0.9)
     preallocate = Keyword.get(options, :preallocate, true)
@@ -207,14 +208,18 @@ defmodule EXLA.Client do
           EXLA.NIF.get_c_api_client(device_type)
 
         _ ->
-          raise ArgumentError, "unknown EXLA platform: #{inspect(platform)}"
+          raise ArgumentError,
+                "unknown EXLA platform #{inspect(platform)} for client #{inspect(name)}, " <>
+                  "supported platforms: #{inspect(platforms)}"
       end
 
     device_count = EXLA.NIF.get_device_count(ref)
     default_device_id = Keyword.get(options, :default_device_id, 0)
 
     if default_device_id not in 0..(device_count - 1) do
-      raise ArgumentError, ":default_device_id must be a number between 0 and #{device_count - 1}"
+      raise ArgumentError,
+            ":default_device_id #{default_device_id} is outside 0..#{device_count - 1} " <>
+              "for client #{inspect(name)} on #{inspect(platform || :host)}"
     end
 
     automatic_transfers = Keyword.get(options, :automatic_transfers, platform == :host)
