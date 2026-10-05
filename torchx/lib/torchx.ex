@@ -260,6 +260,9 @@ defmodule Torchx do
   deftensor squeeze(tensor)
   deftensor squeeze(tensor, axis)
   deftensor broadcast_to(tensor, shape)
+
+  @doc false
+  deftensor expand(tensor, shape)
   deftensor transpose(tensor, dim0, dim1)
   deftensor permute(tensor, dims)
   deftensor split(tensor, split_size)

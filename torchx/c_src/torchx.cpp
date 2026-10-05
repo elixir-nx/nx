@@ -468,6 +468,17 @@ broadcast_to(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
 
 REGISTER_TENSOR_NIF(broadcast_to);
 
+// Shares storage with the input. Binary ops read this view and
+// allocate their own result.
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+expand(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
+       std::vector<int64_t> shape) {
+  return tensor_ok(
+      torch::broadcast_to(get_tensor(tensor), vec_to_array_ref(shape)));
+}
+
+REGISTER_TENSOR_NIF(expand);
+
 fine::Ok<fine::ResourcePtr<TorchTensor>>
 transpose(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor, int64_t dim0,
           int64_t dim1) {
