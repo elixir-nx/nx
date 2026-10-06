@@ -66,7 +66,7 @@ We recommend following the steps below:
      * Remember to save the compilation logs from this step for further debugging.
      * It is a good idea to save the `cache/<version>/libexla.so` file so that the team can inspect its contents if needed.
   2. If the error persists, look for the `** (RuntimeError) Failed to load NIF library.` exception on application start-up.
-    This exception should provide more information on what's the issue when loading the NIF. Share these logs in an issue on GitHub
+    This exception includes the path passed to the loader, the system architecture, `XLA_TARGET`, and the original loader message. Share these logs in an issue on GitHub
     so that the Nx team can investigate further.
 
 
