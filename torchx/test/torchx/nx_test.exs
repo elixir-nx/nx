@@ -96,11 +96,31 @@ defmodule Torchx.NxTest do
       end
     end
 
+    test "broadcast add leaves the operand unchanged" do
+      row = Nx.tensor([[1.0, 2.0, 3.0]])
+      col = Nx.tensor([[10.0], [20.0]])
+
+      assert_equal(Nx.add(row, col), Nx.tensor([[11.0, 12.0, 13.0], [21.0, 22.0, 23.0]]))
+      assert_equal(row, Nx.tensor([[1.0, 2.0, 3.0]]))
+      assert_equal(col, Nx.tensor([[10.0], [20.0]]))
+    end
+
     test "remainder with emulated u64 operands" do
       a = Nx.tensor([9_223_372_036_854_775_808, 18_446_744_073_709_551_321], type: :u64)
       b = Nx.tensor(10, type: :u64)
 
       assert_equal(Nx.remainder(a, b), Nx.tensor([8, 1]))
+
+      row = Nx.tensor([[9_223_372_036_854_775_808, 18_446_744_073_709_551_321]], type: :u64)
+      col = Nx.tensor([[10], [10]], type: :u64)
+
+      expected =
+        Nx.remainder(
+          Nx.backend_copy(row, Nx.BinaryBackend),
+          Nx.backend_copy(col, Nx.BinaryBackend)
+        )
+
+      assert_equal(Nx.remainder(row, col), expected)
     end
   end
 

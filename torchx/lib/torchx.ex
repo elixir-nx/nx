@@ -259,7 +259,9 @@ defmodule Torchx do
   deftensor to_type(tensor, type)
   deftensor squeeze(tensor)
   deftensor squeeze(tensor, axis)
-  deftensor broadcast_to(tensor, shape)
+  def broadcast_to(tensor, shape), do: broadcast_to(tensor, shape, nil)
+
+  deftensor broadcast_to(tensor, shape, clone)
   deftensor transpose(tensor, dim0, dim1)
   deftensor permute(tensor, dims)
   deftensor split(tensor, split_size)
