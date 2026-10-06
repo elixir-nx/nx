@@ -1047,9 +1047,7 @@ defmodule Torchx.Backend do
     {Nx.as_type(left, type), Nx.as_type(right, type)}
   end
 
-  # expand/2 shares storage with the input. Callers only read that view
-  # and allocate a new result, including u64 remainder, which reads it
-  # more than once.
+  # false keeps a view of the input. The op allocates its own result.
   defp maybe_broadcast_bin_args(out_shape, l, r) do
     l_tx =
       case l.shape do
@@ -1057,13 +1055,13 @@ defmodule Torchx.Backend do
           from_nx(l)
 
         _ ->
-          l |> from_nx() |> Torchx.expand(out_shape)
+          l |> from_nx() |> Torchx.broadcast_to(out_shape, false)
       end
 
     r_tx =
       case r.shape do
         ^out_shape -> from_nx(r)
-        _ -> r |> from_nx() |> Torchx.expand(out_shape)
+        _ -> r |> from_nx() |> Torchx.broadcast_to(out_shape, false)
       end
 
     {l_tx, r_tx}
