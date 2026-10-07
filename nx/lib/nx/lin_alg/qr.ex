@@ -45,12 +45,13 @@ defmodule Nx.LinAlg.QR do
 
   defnp qr_matrix(a, opts \\ []) do
     mode = opts[:mode]
-    eps = opts[:eps]
     {m_in, n_in} = Nx.shape(a)
 
     {a, m, _n, k, wide_mode, max_i} = wide_mode_extension(a)
 
     type = Nx.Type.to_floating(Nx.type(a))
+
+    eps = Nx.max(opts[:eps], Nx.Constants.smallest_positive_normal(Nx.Type.to_real(type)))
 
     base_h = Nx.eye({m, m}, type: type, vectorized_axes: a.vectorized_axes)
     column_iota = Nx.iota({Nx.axis_size(a, 0)}, vectorized_axes: a.vectorized_axes)
