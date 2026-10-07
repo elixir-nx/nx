@@ -928,20 +928,38 @@ defmodule Nx.BinaryBackend do
   end
 
   @impl true
-  def ceil(out, tensor), do: element_wise_unary_op(out, tensor, &:math.ceil/1)
+  def ceil(out, tensor) do
+    element_wise_unary_op(out, tensor, fn
+      x when is_number(x) -> :math.ceil(x)
+      x -> x
+    end)
+  end
 
   @impl true
-  def floor(out, tensor), do: element_wise_unary_op(out, tensor, &:math.floor/1)
+  def floor(out, tensor) do
+    element_wise_unary_op(out, tensor, fn
+      x when is_number(x) -> :math.floor(x)
+      x -> x
+    end)
+  end
 
   @impl true
   def negate(out, tensor), do: element_wise_unary_op(out, tensor, &Complex.negate/1)
 
   @impl true
-  def round(out, tensor), do: element_wise_unary_op(out, tensor, &:erlang.round/1)
+  def round(out, tensor) do
+    element_wise_unary_op(out, tensor, fn
+      x when is_number(x) -> :erlang.round(x)
+      x -> x
+    end)
+  end
 
   @impl true
   def sign(out, tensor), do: element_wise_unary_op(out, tensor, &element_sign/1)
 
+  defp element_sign(:nan), do: :nan
+  defp element_sign(:infinity), do: 1
+  defp element_sign(:neg_infinity), do: -1
   defp element_sign(n) when n < 0, do: -1
   defp element_sign(n) when n > 0, do: 1
   defp element_sign(n), do: n
