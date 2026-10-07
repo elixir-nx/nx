@@ -495,6 +495,20 @@ defmodule Nx.LinAlgTest do
       assert_all_close(r, expected_r, atol: 1.0e-6)
     end
 
+    test "factors wide and rank-deficient f16 matrices" do
+      # A column with no entries below the diagonal has a zero norm in the
+      # Householder step. The default eps must stay representable in f16
+      # for that guard to work, otherwise the reflector divides by zero.
+      for t <- [
+            Nx.iota({3, 4}, type: :f16),
+            Nx.tensor([[1, 0, 2], [3, 0, 4], [5, 0, 6]], type: :f16)
+          ] do
+        {q, r} = Nx.LinAlg.qr(t)
+        assert q.type == {:f, 16}
+        assert_all_close(Nx.dot(q, r), t, atol: 2.0e-2)
+      end
+    end
+
     test "works with complex matrix" do
       t = ~MAT[
         1 0 1i
