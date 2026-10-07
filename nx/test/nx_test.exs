@@ -2335,6 +2335,14 @@ defmodule NxTest do
       t = Nx.tensor([1.0, 2.0, 3.0])
       assert t == Nx.clip(t, Nx.Constants.neg_infinity(), Nx.Constants.infinity())
     end
+
+    test "propagates NaN from any argument" do
+      nan = Nx.Constants.nan()
+
+      assert Nx.clip(Nx.tensor([:nan, 1.0, 5.0]), 0.0, 2.0) == Nx.tensor([:nan, 1.0, 2.0])
+      assert Nx.clip(Nx.tensor(1.0), nan, 2.0) == nan
+      assert Nx.clip(Nx.tensor(1.0), 0.0, nan) == nan
+    end
   end
 
   describe "sign/1" do

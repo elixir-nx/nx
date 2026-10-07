@@ -1808,22 +1808,9 @@ defmodule Nx.BinaryBackend do
     min = binary_to_number(to_binary(min), min.type)
     max = binary_to_number(to_binary(max), max.type)
 
-    comparison_fn = fn x ->
-      clipped_min =
-        if element_greater(nil, x, min) == 1 do
-          x
-        else
-          min
-        end
+    clip_fn = fn x -> element_min(nil, element_max(nil, x, min), max) end
 
-      if element_less(nil, clipped_min, max) == 1 do
-        clipped_min
-      else
-        max
-      end
-    end
-
-    out_data = binary_to_binary(in_data, tensor.type, out.type, comparison_fn)
+    out_data = binary_to_binary(in_data, tensor.type, out.type, clip_fn)
     from_binary(out, out_data)
   end
 
