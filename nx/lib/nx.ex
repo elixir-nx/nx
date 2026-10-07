@@ -8753,6 +8753,12 @@ defmodule Nx do
         [-1, -1, 0, 1, 1]
       >
 
+      iex> Nx.sign(Nx.tensor([:neg_infinity, :infinity]))
+      #Nx.Tensor<
+        f32[2]
+        [-1.0, 1.0]
+      >
+
   """
   @doc type: :element
   def sign(tensor) do
@@ -9149,6 +9155,14 @@ defmodule Nx do
         #Nx.Tensor<
           f32[x: 4]
           [#{res1}, #{res2}, #{res3}, #{res4}]
+        >
+
+    NaN and infinities are returned as is:
+
+        iex> Nx.#{name}(Nx.tensor([:nan, :infinity, :neg_infinity]))
+        #Nx.Tensor<
+          f32[3]
+          [NaN, Inf, -Inf]
         >
 
     """

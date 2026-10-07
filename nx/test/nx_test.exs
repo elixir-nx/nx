@@ -2337,6 +2337,12 @@ defmodule NxTest do
     end
   end
 
+  describe "sign/1" do
+    test "returns NaN for NaN" do
+      assert Nx.sign(Nx.tensor([:nan, -2.0, 0.0, 2.0])) == Nx.tensor([:nan, -1.0, 0.0, 1.0])
+    end
+  end
+
   describe "concatenate/2" do
     test "middle axis" do
       t1 = Nx.iota({2, 2, 2})
