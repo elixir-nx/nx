@@ -768,7 +768,7 @@ defmodule Nx.Type do
   def epsilon_binary(type)
   def epsilon_binary({:bf, 16}), do: <<0, 60>>
   def epsilon_binary({:f, 8}), do: <<52>>
-  def epsilon_binary({:f8_e4m3fn, 8}), do: <<50>>
+  def epsilon_binary({:f8_e4m3fn, 8}), do: <<32>>
   def epsilon_binary({:f, 16}), do: <<0, 20>>
   def epsilon_binary({:f, 32}), do: <<0, 0, 0, 52>>
   def epsilon_binary({:f, 64}), do: <<0, 0, 0, 0, 0, 0, 176, 60>>
@@ -795,7 +795,7 @@ defmodule Nx.Type do
   def pi_binary(type)
   def pi_binary({:bf, 16}), do: <<73, 64>>
   def pi_binary({:f, 8}), do: <<66>>
-  def pi_binary({:f8_e4m3fn, 8}), do: <<66>>
+  def pi_binary({:f8_e4m3fn, 8}), do: <<69>>
   def pi_binary({:f, 16}), do: <<72, 66>>
   def pi_binary({:f, 32}), do: <<219, 15, 73, 64>>
   def pi_binary({:f, 64}), do: <<24, 45, 68, 84, 251, 33, 9, 64>>
@@ -809,7 +809,7 @@ defmodule Nx.Type do
   def e_binary(type)
   def e_binary({:bf, 16}), do: <<45, 64>>
   def e_binary({:f, 8}), do: <<65>>
-  def e_binary({:f8_e4m3fn, 8}), do: <<65>>
+  def e_binary({:f8_e4m3fn, 8}), do: <<67>>
   def e_binary({:f, 16}), do: <<112, 65>>
   def e_binary({:f, 32}), do: <<84, 248, 45, 64>>
   def e_binary({:f, 64}), do: <<105, 87, 20, 139, 10, 191, 5, 64>>
@@ -823,7 +823,7 @@ defmodule Nx.Type do
   def euler_gamma_binary(type)
   def euler_gamma_binary({:bf, 16}), do: <<19, 63>>
   def euler_gamma_binary({:f, 8}), do: <<56>>
-  def euler_gamma_binary({:f8_e4m3fn, 8}), do: <<56>>
+  def euler_gamma_binary({:f8_e4m3fn, 8}), do: <<49>>
   def euler_gamma_binary({:f, 16}), do: <<158, 56>>
   def euler_gamma_binary({:f, 32}), do: <<104, 196, 19, 63>>
   def euler_gamma_binary({:f, 64}), do: <<25, 182, 111, 252, 140, 120, 226, 63>>

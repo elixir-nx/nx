@@ -9,6 +9,7 @@
   * [Nx] Make `Nx.Type.merge/2` independent of argument order for `:f8_e4m3fn`, and raise when merging it with `:f8`
   * [Nx] Keep the `:f8_e4m3fn` type in element-wise binary operations with a number, instead of returning `:f32`
   * [Nx] Support `:f8_e4m3fn` in `Nx.Type.cast_number!/2`
+  * [Nx.Constants] Return the correct `:f8_e4m3fn` values from `epsilon/2`, `pi/2`, `e/2` and `euler_gamma/2`
 
 ## v1.0.0 (2026-09-10)
 
