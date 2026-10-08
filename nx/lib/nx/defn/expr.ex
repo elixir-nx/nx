@@ -832,18 +832,67 @@ defmodule Nx.Defn.Expr do
     {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
     {args, context} = to_exprs(args)
     context = context || :root
+
+    # Nodes store devectorized tensors, so the body is traced on the
+    # vectorized view and the result is vectorized again on the way out.
+    axes = Enum.map(args, & &1.vectorized_axes)
+    args = Enum.map(args, &Nx.devectorize/1)
     in_args = args ++ opts
     params = Enum.with_index(args, fn arg, pos -> parameter(arg, context, pos) end)
 
-    case apply(fun, [struct | params ++ opts]) do
+    traced = apply(fun, [struct | Enum.zip_with(params, axes, &vectorize_axes/2) ++ opts])
+    out_axes = [traced] |> Composite.flatten_list() |> Enum.map(& &1.vectorized_axes)
+    fun = vectorized_block_fun(fun, axes, length(opts))
+
+    case Composite.traverse(traced, &Nx.devectorize/1) do
       %{data: %{context: context}} = res ->
-        expr(res, context, :block, [struct, in_args, res, fun])
+        res
+        |> expr(context, :block, [struct, in_args, res, fun])
+        |> revectorize_block_result(out_axes)
 
       t when is_tuple(t) ->
         context = elem(t, 0).data.context
         out = tuple_out(tuple_size(t))
-        tuple(expr(out, context, :block, [struct, in_args, t, fun]), Tuple.to_list(t))
+        node = expr(out, context, :block, [struct, in_args, t, fun])
+        revectorize_block_result(tuple(node, Tuple.to_list(t)), out_axes)
     end
+  end
+
+  defp vectorize_axes(tensor, []), do: tensor
+  defp vectorize_axes(tensor, axes), do: Nx.vectorize(tensor, axes)
+
+  defp vectorized_block_fun(fun, axes, opts_count) do
+    if Enum.all?(axes, &(&1 == [])) do
+      fun
+    else
+      block_fun(length(axes) + opts_count, fn struct, args ->
+        {tensors, opts} = Enum.split(args, length(axes))
+        tensors = Enum.zip_with(tensors, axes, &vectorize_axes/2)
+        fun |> apply([struct | tensors ++ opts]) |> Composite.traverse(&Nx.devectorize/1)
+      end)
+    end
+  end
+
+  for arity <- 0..32 do
+    args = Macro.generate_arguments(arity, __MODULE__)
+
+    defp block_fun(unquote(arity), body) do
+      fn struct, unquote_splicing(args) -> body.(struct, [unquote_splicing(args)]) end
+    end
+  end
+
+  defp block_fun(arity, _body) do
+    raise ArgumentError,
+          "blocks with vectorized arguments support up to 32 arguments, got: #{arity}"
+  end
+
+  defp revectorize_block_result(result, out_axes) do
+    {result, []} =
+      Composite.traverse(result, out_axes, fn tensor, [axes | rest] ->
+        {vectorize_axes(tensor, axes), rest}
+      end)
+
+    result
   end
 
   @impl true

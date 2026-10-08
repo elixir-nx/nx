@@ -6,6 +6,7 @@
 
   * [Nx] Read Elixir number literals at the precision of element-wise binary operations
   * [Nx.Defn] Return finite gradients for `Nx.sigmoid/1` at very negative and non-finite inputs
+  * [Nx.Defn] Keep vectorized entries apart in `Nx.block/4` under `jit`
   * [Nx] Make `Nx.Type.merge/2` independent of argument order for `:f8_e4m3fn`, and raise when merging it with `:f8`
   * [Nx] Keep the `:f8_e4m3fn` type in element-wise binary operations with a number, instead of returning `:f32`
   * [Nx] Support `:f8_e4m3fn` in `Nx.Type.cast_number!/2`
