@@ -972,6 +972,26 @@ defmodule Nx.DefnTest do
         Nx.LinAlg.solve(mat, rhs)
       )
     end
+
+    defmodule PerEntrySum do
+      defstruct []
+    end
+
+    @tag compiler: Evaluator
+    test "keeps vectorized entries apart" do
+      input = Nx.tensor([[2.0, 1.0], [0.5, 3.0]]) |> Nx.vectorize(:batch)
+      body = fn _, x -> Nx.sum(Nx.sin(x)) end
+
+      parameter = Nx.Defn.jit(fn x -> Nx.block(%PerEntrySum{}, [x], nil, body) end).(input)
+      assert parameter.vectorized_axes == [batch: 2]
+      assert_all_close(parameter, Nx.sum(Nx.sin(input)))
+
+      intermediate =
+        Nx.Defn.jit(fn x -> Nx.block(%PerEntrySum{}, [Nx.cos(x)], nil, body) end).(input)
+
+      assert intermediate.vectorized_axes == [batch: 2]
+      assert_all_close(intermediate, Nx.sum(Nx.sin(Nx.cos(input))))
+    end
   end
 
   describe "macros" do
