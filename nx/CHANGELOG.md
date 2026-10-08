@@ -10,6 +10,7 @@
   * [Nx] Keep the `:f8_e4m3fn` type in element-wise binary operations with a number, instead of returning `:f32`
   * [Nx] Support `:f8_e4m3fn` in `Nx.Type.cast_number!/2`
   * [Nx.BinaryBackend] Pad in the merged type of the tensor and the pad value in `Nx.pad/3`
+  * [Nx.BinaryBackend] Fix trailing axis read size expansion in axis reductions
 
 ## v1.0.0 (2026-09-10)
 
