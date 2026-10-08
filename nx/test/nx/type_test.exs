@@ -26,6 +26,10 @@ defmodule Nx.TypeTest do
       assert Nx.Type.integer?({:f8_e4m3fn, 8}) == false
     end
 
+    test "is not recognized as complex type" do
+      assert Nx.Type.complex?({:f8_e4m3fn, 8}) == false
+    end
+
     test "to_string returns correct representation" do
       assert Nx.Type.to_string({:f8_e4m3fn, 8}) == "f8_e4m3fn"
     end
@@ -75,6 +79,72 @@ defmodule Nx.TypeTest do
 
     test "smallest_positive_normal_binary returns 0x08" do
       assert Nx.Type.smallest_positive_normal_binary({:f8_e4m3fn, 8}) == <<0x08::8-native>>
+    end
+  end
+
+  describe "merge/2" do
+    test "merges a quantized type into a wider type of its base type in either order" do
+      for type <- [f: 16, f: 32, f: 64] do
+        assert Nx.Type.merge({:f8_e4m3fn, 8}, type) == type
+        assert Nx.Type.merge(type, {:f8_e4m3fn, 8}) == type
+      end
+    end
+
+    test "raises on different types with the same base type and size in either order" do
+      assert_raise ArgumentError,
+                   "cannot merge {:f8_e4m3fn, 8} and {:f, 8}, convert one of them with Nx.as_type/2 first",
+                   fn -> Nx.Type.merge({:f8_e4m3fn, 8}, {:f, 8}) end
+
+      assert_raise ArgumentError,
+                   "cannot merge {:f, 8} and {:f8_e4m3fn, 8}, convert one of them with Nx.as_type/2 first",
+                   fn -> Nx.Type.merge({:f, 8}, {:f8_e4m3fn, 8}) end
+    end
+
+    test "gives a quantized type the precedence of its base type in either order" do
+      for {type, expected} <- [
+            {{:u, 8}, {:f8_e4m3fn, 8}},
+            {{:s, 64}, {:f8_e4m3fn, 8}},
+            {{:bf, 16}, {:f8_e4m3fn, 8}},
+            {{:c, 64}, {:c, 64}},
+            {{:c, 128}, {:c, 128}}
+          ] do
+        assert Nx.Type.merge({:f8_e4m3fn, 8}, type) == expected
+        assert Nx.Type.merge(type, {:f8_e4m3fn, 8}) == expected
+      end
+    end
+
+    test "returns a quantized type unchanged when merged with itself" do
+      assert Nx.Type.merge({:f8_e4m3fn, 8}, {:f8_e4m3fn, 8}) == {:f8_e4m3fn, 8}
+    end
+  end
+
+  describe "merge_number/2" do
+    test "keeps a complex type for numbers, complex numbers and non-finite values" do
+      for value <- [1, -1, 1.5, Complex.new(1, 2), :infinity, :neg_infinity, :nan] do
+        assert Nx.Type.merge_number({:c, 64}, value) == {:c, 64}
+        assert Nx.Type.merge_number({:c, 128}, value) == {:c, 128}
+      end
+    end
+
+    test "raises for a complex type and a value that is not a number" do
+      for value <- [nil, :x, "1"] do
+        assert_raise FunctionClauseError, fn -> Nx.Type.merge_number({:c, 64}, value) end
+      end
+    end
+
+    test "keeps a quantized float type" do
+      assert Nx.Type.merge_number({:f8_e4m3fn, 8}, 1) == {:f8_e4m3fn, 8}
+      assert Nx.Type.merge_number({:f8_e4m3fn, 8}, -1) == {:f8_e4m3fn, 8}
+      assert Nx.Type.merge_number({:f8_e4m3fn, 8}, 1_000_000) == {:f8_e4m3fn, 8}
+      assert Nx.Type.merge_number({:f8_e4m3fn, 8}, 1.0) == {:f8_e4m3fn, 8}
+    end
+  end
+
+  describe "cast_number!/2" do
+    test "casts integers and floats to floats for a quantized float type" do
+      assert 10.0 = Nx.Type.cast_number!({:f8_e4m3fn, 8}, 10)
+      assert -10.0 = Nx.Type.cast_number!({:f8_e4m3fn, 8}, -10)
+      assert 1.5 = Nx.Type.cast_number!({:f8_e4m3fn, 8}, 1.5)
     end
   end
 end
