@@ -320,10 +320,11 @@ defmodule Nx.BinaryBackend do
 
   ## Pad
 
-  # We ignore the out because we need to recur over the shape
-  # as we transpose and build the rest.
+  # The result is built by padding the last axis and transposing, one axis
+  # at a time, so only the type is used from out.
   @impl true
   def pad(out, t, pad_value, padding_config) do
+    t = as_type(%{t | type: out.type}, t)
     pad_value = %{pad_value | type: out.type} |> as_type(pad_value) |> to_binary()
 
     case t.shape do
