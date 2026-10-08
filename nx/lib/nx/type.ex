@@ -66,11 +66,7 @@ defmodule Nx.Type do
           | :c128
 
   # List of available quantized variants of a given type.
-  quantizations = [
-    f: [
-      {:f8_e4m3fn, 8}
-    ]
-  ]
+  @quantizations [{:f8_e4m3fn, 8}]
 
   @doc """
   Returns the minimum possible finite value for the given type.
@@ -228,8 +224,7 @@ defmodule Nx.Type do
     defp validate(unquote(:"#{kind}#{size}")), do: unquote(type)
   end
 
-  for {_general_type, types} <- quantizations,
-      {name, _size} = quantization <- types do
+  for {name, _size} = quantization <- @quantizations do
     defp validate(unquote(quantization)), do: unquote(quantization)
     defp validate(unquote(name)), do: unquote(quantization)
   end
@@ -260,9 +255,7 @@ defmodule Nx.Type do
   def to_floating({:f, _} = type), do: type
   def to_floating({:c, _} = type), do: type
 
-  for {general_type, types} <- quantizations,
-      general_type in [:f, :bf, :c],
-      quantization <- types do
+  for quantization <- @quantizations do
     def to_floating(unquote(quantization)), do: unquote(quantization)
   end
 
@@ -317,16 +310,8 @@ defmodule Nx.Type do
   def to_real({:c, s}), do: {:f, div(s, 2)}
   def to_real({:bf, _} = type), do: type
 
-  for {general_type, types} <- quantizations,
-      general_type in [:f, :bf],
-      quantization <- types do
+  for quantization <- @quantizations do
     def to_real(unquote(quantization)), do: unquote(quantization)
-  end
-
-  for {:c, types} <- quantizations, {_, size} = quantization <- types do
-    real = {:f, div(size, 2)}
-
-    def to_real(unquote(quantization)), do: unquote(real)
   end
 
   def to_real(_type), do: {:f, 32}
@@ -394,23 +379,9 @@ defmodule Nx.Type do
   def cast_number!({type, _}, int) when type in [:f, :bf] and is_integer(int), do: int * 1.0
   def cast_number!({type, _}, float) when type in [:f, :bf] and is_float(float), do: float
 
-  for {general_type, types} <- quantizations,
-      general_type in [:f, :bf],
-      quantization <- types do
+  for quantization <- @quantizations do
     def cast_number!(unquote(quantization), int) when is_integer(int), do: int * 1.0
     def cast_number!(unquote(quantization), float) when is_float(float), do: float
-  end
-
-  for {:u, types} <- quantizations, quantization <- types do
-    def cast_number!(unquote(quantization), int) when is_integer(int) and int >= 0, do: int
-  end
-
-  for {:s, types} <- quantizations, quantization <- types do
-    def cast_number!(unquote(quantization), int) when is_integer(int), do: int
-  end
-
-  for {:c, types} <- quantizations, quantization <- types do
-    def cast_number!(unquote(quantization), number), do: Complex.new(number)
   end
 
   def cast_number!({:c, _}, number), do: Complex.new(number)
@@ -581,9 +552,8 @@ defmodule Nx.Type do
   end
 
   # Maps a quantized type to a generalized category for comparison and widening.
-  for {general_type, types} <- quantizations,
-      {_, size} = quantization <- types do
-    defp generalize(unquote(quantization)), do: {unquote(general_type), unquote(size)}
+  for {_, size} = quantization <- @quantizations do
+    defp generalize(unquote(quantization)), do: {:f, unquote(size)}
   end
 
   defp generalize(type), do: type
@@ -645,35 +615,8 @@ defmodule Nx.Type do
 
   def merge_number({:c, _} = type, %Complex{}), do: type
 
-  for {general_type, types} <- quantizations,
-      general_type in [:f, :bf],
-      quantization <- types do
+  for quantization <- @quantizations do
     def merge_number(unquote(quantization) = type, number) when is_number(number), do: type
-  end
-
-  # An integer quantization merges with an integer the same way its general
-  # type does. If the general type comes back unchanged, the number fits and
-  # the quantization is kept. Otherwise the number needs a wider type, which
-  # is returned just as it would be for the general type.
-  for {general_type, types} <- quantizations,
-      general_type in [:s, :u],
-      {_, size} = quantization <- types do
-    type = {general_type, size}
-
-    def merge_number(unquote(quantization), integer) when is_integer(integer) do
-      case merge_integer(unquote(type), integer) do
-        unquote(type) -> unquote(quantization)
-        merged -> merged
-      end
-    end
-  end
-
-  for {:c, types} <- quantizations, quantization <- types do
-    def merge_number(unquote(quantization) = type, number)
-        when is_number(number) or number in [:neg_infinity, :infinity, :nan],
-        do: type
-
-    def merge_number(unquote(quantization) = type, %Complex{}), do: type
   end
 
   def merge_number(_, number) when is_number(number) do
@@ -707,12 +650,6 @@ defmodule Nx.Type do
   def integer?({:u, _}), do: true
   def integer?({:s, _}), do: true
 
-  for {general_type, types} <- quantizations,
-      general_type in [:s, :u],
-      quantization <- types do
-    def integer?(unquote(quantization)), do: true
-  end
-
   def integer?({_, _}), do: false
 
   @doc """
@@ -731,9 +668,7 @@ defmodule Nx.Type do
   def float?({:bf, _}), do: true
   def float?({:c, _}), do: true
 
-  for {general_type, types} <- quantizations,
-      general_type in [:f, :bf, :c],
-      quantization <- types do
+  for quantization <- @quantizations do
     def float?(unquote(quantization)), do: true
   end
 
@@ -775,10 +710,6 @@ defmodule Nx.Type do
   """
   def complex?({:c, _}), do: true
 
-  for {:c, types} <- quantizations, quantization <- types do
-    def complex?(unquote(quantization)), do: true
-  end
-
   def complex?({_, _}), do: false
 
   @doc """
@@ -811,7 +742,7 @@ defmodule Nx.Type do
       iex> Nx.Type.to_string({:f, 64})
       "f64"
   """
-  for {_general_type, types} <- quantizations, {name, _size} = quantization <- types do
+  for {name, _size} = quantization <- @quantizations do
     def to_string(unquote(quantization)), do: unquote(Atom.to_string(name))
   end
 
