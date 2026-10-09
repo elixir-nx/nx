@@ -257,8 +257,8 @@ defmodule Nx.Defn.Grad do
   defp reduce_args(:gather, %{data: %{args: [arg | _]}}, acc, fun),
     do: fun.(arg, acc)
 
-  defp reduce_args(:barrier, %{data: %{args: [tensors]}}, acc, fun),
-    do: Enum.reduce(tensors, acc, fun)
+  defp reduce_args(:barrier, %{data: %{args: [inputs]}}, acc, fun),
+    do: Enum.reduce(inputs, acc, fun)
 
   defp reduce_args(:io_call, %{data: %{args: [tensor_expr | _]}}, acc, fun),
     do: Composite.reduce(tensor_expr, acc, fun)
@@ -413,9 +413,9 @@ defmodule Nx.Defn.Grad do
     end
   end
 
-  defp update_grads(:barrier, [tensors], _ans, gs, _to_grad_ids, grads) do
-    Enum.zip_reduce(tensors, List.wrap(gs), grads, fn input, g, grads ->
-      Map.update(grads, input.data.id, [g], &[g | &1])
+  defp update_grads(:barrier, [inputs], _ans, gs, _to_grad_ids, grads) do
+    Enum.zip_reduce(inputs, gs, grads, fn input, input_grad, acc ->
+      Map.update(acc, input.data.id, [input_grad], &[input_grad | &1])
     end)
   end
 
@@ -674,7 +674,7 @@ defmodule Nx.Defn.Grad do
   defp tuple_primal(:metadata, [expr | _]), do: expr
   defp tuple_primal(:cond, [_, last]), do: last
   defp tuple_primal(:io_call, [tensor_expr | _]), do: tensor_expr
-  defp tuple_primal(:barrier, [tensors]), do: List.to_tuple(tensors)
+  defp tuple_primal(:barrier, [inputs]), do: List.to_tuple(inputs)
   defp tuple_primal(_, _), do: nil
 
   defp select_composite(pred, left, right) do
