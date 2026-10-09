@@ -926,6 +926,25 @@ defmodule Nx.Defn.Expr do
     result
   end
 
+  # A barrier is a metadata node with the `barrier: true` key, see
+  # `metadata/2`. The container is flattened so nested tuples go through one
+  # node and is rebuilt on the way out.
+  @doc false
+  def barrier(container) do
+    tensors = Composite.flatten_list([container])
+
+    outputs =
+      tensors
+      |> List.to_tuple()
+      |> metadata(%{barrier: true, inspect: :barrier})
+      |> Tuple.to_list()
+
+    {barriered, []} =
+      Composite.traverse(container, outputs, fn _tensor, [output | rest] -> {output, rest} end)
+
+    barriered
+  end
+
   @impl true
   def init(opts) do
     if opts != [] do
@@ -1952,6 +1971,11 @@ defmodule Nx.Defn.Expr do
 
   defp traverse_args(:while, [initial, _arg, _condition, _body], state),
     do: traverse_args([initial], state)
+
+  defp traverse_args(:block, [%Nx.Block.Checkpoint{}, in_args, _body, _callback], state) do
+    {in_args_io, state} = Enum.map_reduce(in_args, state, &recur_inspect/2)
+    {["checkpoint" | in_args_io], state}
+  end
 
   defp traverse_args(:block, [struct, in_args, _body, _callback], state) do
     {in_args_io, state} = Enum.map_reduce(in_args, state, &recur_inspect/2)
