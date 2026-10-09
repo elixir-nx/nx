@@ -851,14 +851,16 @@ defmodule Nx.Defn.Expr do
   @doc false
   def barrier(container) do
     {tensors, context} = to_exprs(Composite.flatten_list([container]))
-    axes = Enum.map(tensors, & &1.vectorized_axes)
-    tensors = Enum.map(tensors, &Nx.devectorize/1)
-    out = expr(tuple_out(length(tensors)), context || :root, :barrier, [tensors])
+    vectorized_axes = Enum.map(tensors, & &1.vectorized_axes)
+    devectorized_tensors = Enum.map(tensors, &Nx.devectorize/1)
+
+    size = length(devectorized_tensors)
+    out = expr(tuple_out(size), context || :root, :barrier, [devectorized_tensors])
 
     elems =
-      Enum.zip_with(Tuple.to_list(tuple(out, tensors)), axes, fn
+      Enum.zip_with(Tuple.to_list(tuple(out, devectorized_tensors)), vectorized_axes, fn
         elem, [] -> elem
-        elem, axes -> Nx.vectorize(elem, axes)
+        elem, vectorized_axes -> Nx.vectorize(elem, vectorized_axes)
       end)
 
     {result, []} = Composite.traverse(container, elems, fn _, [elem | rest] -> {elem, rest} end)
