@@ -992,6 +992,29 @@ defmodule Nx.DefnTest do
       assert intermediate.vectorized_axes == [batch: 2]
       assert_all_close(intermediate, Nx.sum(Nx.sin(Nx.cos(input))))
     end
+
+    @tag compiler: Evaluator
+    test "accepts a vectorized tensor captured from outside the function" do
+      captured = Nx.tensor([[0.5, 1.0], [1.5, 2.0], [2.5, 3.0]]) |> Nx.vectorize(:batch)
+      weight = Nx.tensor([[0.5, -0.3], [0.2, 0.8]])
+      body = fn _, x, w -> Nx.sin(Nx.dot(x, w)) end
+
+      forward =
+        Nx.Defn.jit(fn w -> Nx.block(%PerEntrySum{}, [captured, w], nil, body) end).(weight)
+
+      assert forward.vectorized_axes == [batch: 3]
+      assert_all_close(forward, Nx.sin(Nx.dot(captured, weight)))
+
+      gradient =
+        Nx.Defn.grad(weight, fn w ->
+          Nx.sum(Nx.block(%PerEntrySum{}, [captured, w], nil, body))
+        end)
+
+      assert_all_close(
+        gradient,
+        Nx.Defn.grad(weight, fn w -> Nx.sum(Nx.sin(Nx.dot(captured, w))) end)
+      )
+    end
   end
 
   describe "macros" do
