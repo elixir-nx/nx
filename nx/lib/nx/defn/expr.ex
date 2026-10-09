@@ -854,16 +854,18 @@ defmodule Nx.Defn.Expr do
     vectorized_axes = Enum.map(tensors, & &1.vectorized_axes)
     devectorized_tensors = Enum.map(tensors, &Nx.devectorize/1)
 
+    # One node carries every tensor through the barrier.
     size = length(devectorized_tensors)
-    out = expr(tuple_out(size), context || :root, :barrier, [devectorized_tensors])
+    node = expr(tuple_out(size), context || :root, :barrier, [devectorized_tensors])
 
-    elems =
-      Enum.zip_with(Tuple.to_list(tuple(out, devectorized_tensors)), vectorized_axes, fn
-        elem, [] -> elem
-        elem, vectorized_axes -> Nx.vectorize(elem, vectorized_axes)
-      end)
+    # Each output is an element of that node with its vectorized axes restored.
+    outputs = node |> tuple(devectorized_tensors) |> Tuple.to_list()
+    outputs = Enum.zip_with(outputs, vectorized_axes, &Nx.vectorize/2)
 
-    {result, []} = Composite.traverse(container, elems, fn _, [elem | rest] -> {elem, rest} end)
+    # Put the outputs back in the shape of the container that came in.
+    {result, []} =
+      Composite.traverse(container, outputs, fn _tensor, [output | rest] -> {output, rest} end)
+
     result
   end
 
