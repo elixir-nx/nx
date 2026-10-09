@@ -832,6 +832,28 @@ defmodule EXLA.Defn.ExprTest do
       assert_equal(predicate, Nx.greater(left, right))
     end
 
+    defmodule SameShapeBlock do
+      defstruct []
+    end
+
+    test "compiles blocks with the same struct and argument shapes separately" do
+      input = Nx.tensor([0.5, 1.0, 1.5])
+      sin = fn _, x -> Nx.sin(x) end
+      cos = fn _, x -> Nx.cos(x) end
+
+      {left, right} =
+        EXLA.jit_apply(
+          fn x ->
+            {Nx.block(%SameShapeBlock{}, [x], nil, sin),
+             Nx.block(%SameShapeBlock{}, [x], nil, cos)}
+          end,
+          [input]
+        )
+
+      assert_all_close(left, Nx.sin(input))
+      assert_all_close(right, Nx.cos(input))
+    end
+
     test "differentiates a nonlinear expression through a vectorized block" do
       input = Nx.tensor([[0.0, 1.0], [2.0, 3.0]]) |> Nx.vectorize(:batch)
 
