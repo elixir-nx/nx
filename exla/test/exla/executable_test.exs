@@ -138,6 +138,25 @@ defmodule EXLA.ExecutableTest do
     end
   end
 
+  describe "introspection" do
+    test "memory stats, optimized program and cost analysis" do
+      executable =
+        compile([s32_typespec(), s32_typespec()], [], [s32_typespec()], fn _, x, y ->
+          [Value.add(x, y, s32_typespec())]
+        end)
+
+      stats = Executable.memory_stats(executable)
+      assert stats.argument_size_in_bytes >= 8
+      assert stats.output_size_in_bytes >= 4
+      assert stats.temp_size_in_bytes >= 0
+
+      assert Executable.optimized_hlo(executable) =~ "HloModule"
+      assert Executable.optimized_hlo(executable) =~ "add"
+
+      assert Executable.cost_analysis(executable)["flops"] == 1.0
+    end
+  end
+
   describe "serialization" do
     test "run" do
       t1 = BinaryBuffer.from_binary(<<1::32-native>>, s32_typespec())

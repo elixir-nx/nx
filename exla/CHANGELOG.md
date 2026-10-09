@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Enhancements
+
+  * Add `EXLA.to_executable/3` to compile a function and return the executable without running it
+  * Add `EXLA.Executable.memory_stats/1`, `optimized_hlo/1` and `cost_analysis/1` to inspect a compiled executable
+
 ### Bug fixes
 
   * Compile every `Nx.block/4` body on its own instead of sharing one compiled body between blocks with the same struct and argument shapes

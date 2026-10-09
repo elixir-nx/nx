@@ -109,6 +109,34 @@ defmodule EXLA.Executable do
   end
 
   @doc """
+  Returns the memory the compiled executable needs, in bytes, as reported
+  by the runtime after buffer assignment. The `:temp_size_in_bytes` entry is
+  the peak scratch memory of the program, excluding arguments and outputs.
+  """
+  def memory_stats(%Executable{ref: ref}) do
+    EXLA.NIF.get_compiled_memory_stats(ref)
+  end
+
+  @doc """
+  Returns the optimized HLO of the compiled executable as text.
+  """
+  def optimized_hlo(%Executable{ref: ref}) do
+    EXLA.NIF.get_optimized_hlo(ref)
+  end
+
+  @doc """
+  Returns the runtime estimate of what the compiled executable costs.
+
+  The keys are the names the runtime uses, such as `"flops"`,
+  `"transcendentals"` and `"bytes accessed"`, with a breakdown per
+  argument and output. The values are estimates made from the optimized
+  program, not measurements.
+  """
+  def cost_analysis(%Executable{ref: ref}) do
+    EXLA.NIF.get_cost_analysis(ref)
+  end
+
+  @doc """
   Loads a previously dumped executable.
   """
   def load(client, data) do
