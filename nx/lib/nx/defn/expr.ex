@@ -835,45 +835,50 @@ defmodule Nx.Defn.Expr do
 
     # Nodes store devectorized tensors, so the body is traced on the
     # vectorized view and the result is vectorized again on the way out.
-    axes = Enum.map(args, & &1.vectorized_axes)
-    args = Enum.map(args, &Nx.devectorize/1)
-    in_args = args ++ opts
-    params = Enum.with_index(args, fn arg, pos -> parameter(arg, context, pos) end)
+    vectorized_axes = Enum.map(args, & &1.vectorized_axes)
+    devectorized_args = Enum.map(args, &Nx.devectorize/1)
+    in_args = devectorized_args ++ opts
 
-    traced = apply(fun, [struct | Enum.zip_with(params, axes, &vectorize_axes/2) ++ opts])
-    out_axes = [traced] |> Composite.flatten_list() |> Enum.map(& &1.vectorized_axes)
-    fun = vectorized_block_fun(fun, axes, length(opts))
+    params =
+      Enum.with_index(devectorized_args, fn arg, pos -> parameter(arg, context, pos) end)
+
+    vectorized_params = Enum.zip_with(params, vectorized_axes, &vectorize_axes/2)
+    traced = apply(fun, [struct | vectorized_params ++ opts])
+    out_vectorized_axes = [traced] |> Composite.flatten_list() |> Enum.map(& &1.vectorized_axes)
+    fun = vectorized_block_fun(fun, vectorized_axes, length(opts))
 
     case Composite.traverse(traced, &Nx.devectorize/1) do
       %{data: %{context: context}} = res ->
         res
         |> expr(context, :block, [struct, in_args, res, fun])
-        |> revectorize_block_result(out_axes)
+        |> revectorize_block_result(out_vectorized_axes)
 
       t when is_tuple(t) ->
         context = elem(t, 0).data.context
         out = tuple_out(tuple_size(t))
         node = expr(out, context, :block, [struct, in_args, t, fun])
-        revectorize_block_result(tuple(node, Tuple.to_list(t)), out_axes)
+        revectorize_block_result(tuple(node, Tuple.to_list(t)), out_vectorized_axes)
     end
   end
 
   defp vectorize_axes(tensor, []), do: tensor
   defp vectorize_axes(tensor, axes), do: Nx.vectorize(tensor, axes)
 
-  defp vectorized_block_fun(fun, axes, opts_count) do
-    if Enum.all?(axes, &(&1 == [])) do
+  defp vectorized_block_fun(fun, vectorized_axes, opts_count) do
+    if Enum.all?(vectorized_axes, &(&1 == [])) do
       fun
     else
-      block_fun(length(axes) + opts_count, fn struct, args ->
-        {tensors, opts} = Enum.split(args, length(axes))
-        tensors = Enum.zip_with(tensors, axes, &vectorize_axes/2)
+      tensors_count = length(vectorized_axes)
+
+      block_fun(tensors_count + opts_count, fn struct, args ->
+        {tensors, opts} = Enum.split(args, tensors_count)
+        tensors = Enum.zip_with(tensors, vectorized_axes, &vectorize_axes/2)
         fun |> apply([struct | tensors ++ opts]) |> Composite.traverse(&Nx.devectorize/1)
       end)
     end
   end
 
-  for arity <- 0..32 do
+  for arity <- 0..253 do
     args = Macro.generate_arguments(arity, __MODULE__)
 
     defp block_fun(unquote(arity), body) do
@@ -883,13 +888,13 @@ defmodule Nx.Defn.Expr do
 
   defp block_fun(arity, _body) do
     raise ArgumentError,
-          "blocks with vectorized arguments support up to 32 arguments, got: #{arity}"
+          "blocks with vectorized arguments support up to 253 arguments, got: #{arity}"
   end
 
-  defp revectorize_block_result(result, out_axes) do
+  defp revectorize_block_result(result, out_vectorized_axes) do
     {result, []} =
-      Composite.traverse(result, out_axes, fn tensor, [axes | rest] ->
-        {vectorize_axes(tensor, axes), rest}
+      Composite.traverse(result, out_vectorized_axes, fn tensor, [vectorized_axes | rest] ->
+        {vectorize_axes(tensor, vectorized_axes), rest}
       end)
 
     result
