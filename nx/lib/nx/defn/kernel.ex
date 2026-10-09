@@ -266,8 +266,9 @@ defmodule Nx.Defn.Kernel do
   compiler honors the hint depends on the backend; EXLA does on GPU.
 
   `inputs` is a single tensor or container, or a list of them when `fun`
-  takes several arguments. Every tensor `fun` uses must be passed in
-  `inputs`; it cannot read tensors from the enclosing scope:
+  takes several arguments. `fun` must return a tensor or a tuple of
+  tensors. Every tensor `fun` uses must be passed in `inputs`; it cannot
+  read tensors from the enclosing scope:
 
       defn layer(x, w, b) do
         checkpoint([x, w, b], fn x, w, b -> Nx.dot(x, w) + b end)
@@ -300,7 +301,7 @@ defmodule Nx.Defn.Kernel do
           {recomputed_arguments, []} =
             Enum.map_reduce(arguments, recomputed_leaves, &checkpoint_rebuild/2)
 
-          apply(fun, recomputed_arguments)
+          checkpoint_result(apply(fun, recomputed_arguments))
         end
 
         Nx.block(
@@ -310,6 +311,23 @@ defmodule Nx.Defn.Kernel do
           checkpoint_block_fun(length(leaves), rebuild)
         )
     end
+  end
+
+  defp checkpoint_result(%Nx.Tensor{} = tensor), do: tensor
+
+  defp checkpoint_result(tuple) when is_tuple(tuple) do
+    Kernel.if Enum.all?(Tuple.to_list(tuple), &is_struct(&1, Nx.Tensor)) do
+      tuple
+    else
+      checkpoint_result(Tuple.to_list(tuple))
+    end
+  end
+
+  defp checkpoint_result(other) do
+    Kernel.raise(
+      ArgumentError,
+      "the function given to checkpoint must return a tensor or a tuple of tensors, got: #{Kernel.inspect(other)}"
+    )
   end
 
   defp checkpoint_leaves(%Nx.Tensor{} = tensor, acc), do: [tensor | acc]
