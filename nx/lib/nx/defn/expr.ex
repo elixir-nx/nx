@@ -859,14 +859,14 @@ defmodule Nx.Defn.Expr do
     node = expr(tuple_out(size), context || :root, :barrier, [devectorized_tensors])
 
     # Each output is an element of that node with its vectorized axes restored.
-    outputs = node |> tuple(devectorized_tensors) |> Tuple.to_list()
-    outputs = Enum.zip_with(outputs, vectorized_axes, &Nx.vectorize/2)
+    elements = node |> tuple(devectorized_tensors) |> Tuple.to_list()
+    outputs = Enum.zip_with(elements, vectorized_axes, &Nx.vectorize/2)
 
     # Put the outputs back in the shape of the container that came in.
-    {result, []} =
+    {barriered, []} =
       Composite.traverse(container, outputs, fn _tensor, [output | rest] -> {output, rest} end)
 
-    result
+    barriered
   end
 
   @impl true
