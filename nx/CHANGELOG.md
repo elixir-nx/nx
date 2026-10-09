@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Enhancements
+
+  * [Nx.Defn] Add a barrier expression node that returns its inputs unchanged and keeps compilers from merging the computations on either side of it
+
 ### Bug fixes
 
   * [Nx] Read Elixir number literals at the precision of element-wise binary operations

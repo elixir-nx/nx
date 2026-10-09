@@ -846,6 +846,25 @@ defmodule Nx.Defn.Expr do
     end
   end
 
+  # Returns the container unchanged. A barrier marks a point that compilers
+  # keep intact: the computations before it and after it are not merged.
+  @doc false
+  def barrier(container) do
+    {tensors, context} = to_exprs(Composite.flatten_list([container]))
+    axes = Enum.map(tensors, & &1.vectorized_axes)
+    tensors = Enum.map(tensors, &Nx.devectorize/1)
+    out = expr(tuple_out(length(tensors)), context || :root, :barrier, [tensors])
+
+    elems =
+      Enum.zip_with(Tuple.to_list(tuple(out, tensors)), axes, fn
+        elem, [] -> elem
+        elem, axes -> Nx.vectorize(elem, axes)
+      end)
+
+    {result, []} = Composite.traverse(container, elems, fn _, [elem | rest] -> {elem, rest} end)
+    result
+  end
+
   @impl true
   def init(opts) do
     if opts != [] do
@@ -1872,6 +1891,8 @@ defmodule Nx.Defn.Expr do
 
   defp traverse_args(:while, [initial, _arg, _condition, _body], state),
     do: traverse_args([initial], state)
+
+  defp traverse_args(:barrier, [tensors], state), do: traverse_args(tensors, state)
 
   defp traverse_args(:block, [struct, in_args, _body, _callback], state) do
     {in_args_io, state} = Enum.map_reduce(in_args, state, &recur_inspect/2)
