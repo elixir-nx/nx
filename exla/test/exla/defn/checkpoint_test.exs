@@ -89,6 +89,23 @@ defmodule EXLA.Defn.CheckpointTest do
     Nx.sum(acc)
   end
 
+  defn vectorized_loss(x, w) do
+    Nx.sum(checkpoint([x, w], fn x, w -> Nx.sin(Nx.dot(x, w)) * x end))
+  end
+
+  defn vectorized_loss_plain(x, w) do
+    Nx.sum(Nx.sin(Nx.dot(x, w)) * x)
+  end
+
+  defn pair_loss(pair) do
+    {a, b} = checkpoint(pair, fn {a, b} -> {Nx.sin(a), Nx.cos(b)} end)
+    Nx.sum(a * b)
+  end
+
+  defn pair_loss_plain({a, b}) do
+    Nx.sum(Nx.sin(a) * Nx.cos(b))
+  end
+
   test "computes the same gradient as the plain function" do
     x = Nx.iota({16}, type: :f32) |> Nx.divide(16)
 
@@ -124,8 +141,10 @@ defmodule EXLA.Defn.CheckpointTest do
 
   @tag :rematerialization
   test "lowers the peak scratch memory of the gradient by at least one activation" do
-    n = 512
-    batch = 4096
+    # The activation has to be much larger than the workspaces the autotuner
+    # may pick for the matrix multiplications, which vary from run to run.
+    n = 256
+    batch = 65536
     ws = Nx.broadcast(Nx.tensor(0.01, type: :f32), {8, n, n})
     x = Nx.broadcast(Nx.tensor(0.5, type: :f32), {batch, n})
 
@@ -145,7 +164,7 @@ defmodule EXLA.Defn.CheckpointTest do
     %{temp_size_in_bytes: without_temp} = EXLA.Executable.memory_stats(without_checkpoint)
 
     # Each checkpointed pair of layers drops one f32 activation of {batch, n}
-    # from the saved set.
+    # from the saved set. The measured saving is about two of them.
     activation_bytes = batch * n * 4
     assert without_temp - with_temp >= activation_bytes
   end
@@ -166,6 +185,47 @@ defmodule EXLA.Defn.CheckpointTest do
   test "a checkpoint inside a while body computes the same gradient" do
     x = Nx.tensor([0.5, 1.0])
     assert_all_close(Nx.Defn.grad(x, &while_inside/1), Nx.Defn.grad(x, &while_plain/1))
+  end
+
+  test "a vectorized activation keeps its axes in the value and the gradient" do
+    x = Nx.tensor([[0.5, 1.0], [1.5, 2.0], [2.5, 3.0]]) |> Nx.vectorize(:batch)
+    w = Nx.tensor([[0.5, -0.3], [0.2, 0.8]])
+
+    value = vectorized_loss(x, w)
+    assert value.vectorized_axes == [batch: 3]
+    assert_all_close(value, vectorized_loss_plain(x, w))
+
+    gradient = Nx.Defn.grad(x, &vectorized_loss(&1, w))
+    assert gradient.vectorized_axes == [batch: 3]
+    assert_all_close(gradient, Nx.Defn.grad(x, &vectorized_loss_plain(&1, w)))
+  end
+
+  test "a tuple input is flattened into the block and rebuilt for the body" do
+    pair = {Nx.tensor([0.5, 1.0, 1.5]), Nx.tensor([2.0, 2.5, 3.0])}
+    assert_all_close(pair_loss(pair), pair_loss_plain(pair))
+    {grad_a, grad_b} = Nx.Defn.grad(pair, &pair_loss/1)
+    {plain_a, plain_b} = Nx.Defn.grad(pair, &pair_loss_plain/1)
+    assert_all_close(grad_a, plain_a)
+    assert_all_close(grad_b, plain_b)
+  end
+
+  @tag :rematerialization
+  test "the gradient recomputes the exponential it needs and nothing else" do
+    x = Nx.iota({1024}, type: :f32) |> Nx.divide(1024)
+
+    with_checkpoint =
+      EXLA.to_executable(fn x -> Nx.Defn.grad(x, &loss_with_checkpoint/1) end, [x])
+
+    without_checkpoint =
+      EXLA.to_executable(fn x -> Nx.Defn.grad(x, &loss_without_checkpoint/1) end, [x])
+
+    %{"transcendentals" => with_count} = EXLA.Executable.cost_analysis(with_checkpoint)
+    %{"transcendentals" => without_count} = EXLA.Executable.cost_analysis(without_checkpoint)
+
+    # The gradient of sin needs exp(x) again, so the recomputation adds one
+    # exponential per element. The recomputed sin feeds nothing and the
+    # compiler removes it.
+    assert with_count - without_count == 1024
   end
 
   @tag :rematerialization
