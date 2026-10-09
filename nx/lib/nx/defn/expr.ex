@@ -1952,6 +1952,11 @@ defmodule Nx.Defn.Expr do
 
   defp traverse_args(:barrier, [tensors], state), do: traverse_args(tensors, state)
 
+  defp traverse_args(:block, [%Nx.Block.Checkpoint{}, in_args, _body, _callback], state) do
+    {in_args_io, state} = Enum.map_reduce(in_args, state, &recur_inspect/2)
+    {["checkpoint" | in_args_io], state}
+  end
+
   defp traverse_args(:block, [struct, in_args, _body, _callback], state) do
     {in_args_io, state} = Enum.map_reduce(in_args, state, &recur_inspect/2)
     {[inspect(struct) | in_args_io], state}

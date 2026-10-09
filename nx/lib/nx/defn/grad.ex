@@ -210,6 +210,28 @@ defmodule Nx.Defn.Grad do
     end)
   end
 
+  # A checkpoint is differentiated once its incoming gradient is known, so
+  # only its inputs are registered here. The body is traversed at that point.
+  defp parents_args(
+         :block,
+         %{data: %{args: [%Nx.Block.Checkpoint{}, in_args, _expr, _callback]}},
+         id,
+         acc
+       ) do
+    Enum.reduce(in_args, acc, fn
+      opts, {parents, nodes} when is_list(opts) ->
+        {parents, nodes}
+
+      arg, {parents, nodes} ->
+        if arg.data.op in @constants do
+          {parents, nodes}
+        else
+          parents = Map.update(parents, arg.data.id, [id], &[id | &1])
+          recur_parents_tree(arg, {parents, nodes})
+        end
+    end)
+  end
+
   defp parents_args(:block, %{data: %{args: [struct, in_args, _expr, callback]}} = t, id, acc) do
     expr = apply(callback, [struct | in_args]) |> Composite.traverse(&Nx.devectorize/1)
 
@@ -423,6 +445,70 @@ defmodule Nx.Defn.Grad do
     update_in(grads[tuple.data.id], fn tuple ->
       tuple = tuple || Tuple.duplicate([], size)
       put_elem(tuple, pos, [g | elem(tuple, pos)])
+    end)
+  end
+
+  defp update_grads(
+         :block,
+         [%Nx.Block.Checkpoint{} = struct, in_args, _expr, callback],
+         _ans,
+         gs,
+         to_grad_ids,
+         grads
+       ) do
+    {inputs, opts} = Enum.split_while(in_args, &(not is_list(&1)))
+    gs = List.wrap(gs)
+
+    # The inputs and the incoming gradients go through one barrier, so the
+    # recomputation cannot be merged with the forward body and cannot run
+    # before the backward pass reaches this point.
+    {tied_inputs, tied_gs} = Expr.barrier({List.to_tuple(inputs), List.to_tuple(gs)})
+    tied_inputs = Tuple.to_list(tied_inputs)
+
+    recomputed =
+      apply(callback, [struct | tied_inputs ++ opts]) |> Composite.traverse(&Nx.devectorize/1)
+
+    stops = Map.new(tied_inputs, &{&1.data.id, :stop})
+    {parents, nodes} = parents_tree(recomputed, stops)
+
+    {body_grads, []} =
+      Composite.reduce(recomputed, {%{}, Tuple.to_list(tied_gs)}, fn out, {acc, [g | rest]} ->
+        {Map.put(acc, out.data.id, [g]), rest}
+      end)
+
+    # The body was devectorized above, so its gradients already have the
+    # layout the outer traversal expects.
+    {_nodes, body_grads} =
+      Enum.reduce(
+        [__MODULE__ | Enum.map(tied_inputs, & &1.data.id)],
+        {nodes, body_grads},
+        &traverse_parents(&1, to_grad_ids, parents, &2)
+      )
+
+    grads =
+      Enum.zip_reduce(inputs, tied_inputs, grads, fn input, tied_input, acc ->
+        case Map.fetch(body_grads, tied_input.data.id) do
+          {:ok, list} ->
+            input_grad = sum_grad(list)
+            Map.update(acc, input.data.id, [input_grad], &[input_grad | &1])
+
+          :error ->
+            acc
+        end
+      end)
+
+    # A cond inside the body differentiates its branches down to the
+    # top-level inputs itself and records those directly, so carry them over.
+    {_to_grad, ids, _batch_count} = to_grad_ids
+
+    Enum.reduce(ids, grads, fn {id, _}, acc ->
+      case Map.get(body_grads, id) do
+        list when is_list(list) and not is_map_key(stops, id) ->
+          Map.update(acc, id, list, &(list ++ &1))
+
+        _ ->
+          acc
+      end
     end)
   end
 

@@ -5,6 +5,7 @@
 ### Enhancements
 
   * [Nx.Defn] Add a barrier expression node that returns its inputs unchanged and keeps compilers from merging the computations on either side of it
+  * [Nx.Defn] Add `checkpoint/2`, which recomputes a function's intermediate results in the backward pass instead of keeping them
 
 ### Bug fixes
 
