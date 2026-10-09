@@ -656,15 +656,16 @@ FINE_NIF(deserialize_executable, 0);
 
 // Compiled executable introspection
 
-std::map<std::string, int64_t>
+std::map<fine::Atom, int64_t>
 get_compiled_memory_stats(ErlNifEnv *env,
                           fine::ResourcePtr<ExlaExecutable> executable) {
   auto stats = unwrap(executable->executable()->GetCompiledMemoryStats());
-  return {{"generated_code_size_in_bytes", stats.generated_code_size_in_bytes},
-          {"argument_size_in_bytes", stats.argument_size_in_bytes},
-          {"output_size_in_bytes", stats.output_size_in_bytes},
-          {"alias_size_in_bytes", stats.alias_size_in_bytes},
-          {"temp_size_in_bytes", stats.temp_size_in_bytes}};
+  return {{fine::Atom("generated_code_size_in_bytes"),
+           stats.generated_code_size_in_bytes},
+          {fine::Atom("argument_size_in_bytes"), stats.argument_size_in_bytes},
+          {fine::Atom("output_size_in_bytes"), stats.output_size_in_bytes},
+          {fine::Atom("alias_size_in_bytes"), stats.alias_size_in_bytes},
+          {fine::Atom("temp_size_in_bytes"), stats.temp_size_in_bytes}};
 }
 
 FINE_NIF(get_compiled_memory_stats, 0);

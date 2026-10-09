@@ -114,9 +114,7 @@ defmodule EXLA.Executable do
   the peak scratch memory of the program, excluding arguments and outputs.
   """
   def memory_stats(%Executable{ref: ref}) do
-    ref
-    |> EXLA.NIF.get_compiled_memory_stats()
-    |> Map.new(fn {key, value} -> {String.to_atom(key), value} end)
+    EXLA.NIF.get_compiled_memory_stats(ref)
   end
 
   @doc """
