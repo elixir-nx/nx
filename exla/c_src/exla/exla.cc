@@ -27,6 +27,7 @@
 #include "stablehlo/dialect/ChloOps.h"
 #include "stablehlo/dialect/StablehloOps.h"
 #include "xla/hlo/translate/hlo_to_mhlo/hlo_utils.h"
+#include "xla/hlo/ir/hlo_module.h"
 #include "xla/pjrt/pjrt_api.h"
 #include "xla/service/platform_util.h"
 #include "xla/tsl/platform/statusor.h"
@@ -652,6 +653,50 @@ deserialize_executable(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
 }
 
 FINE_NIF(deserialize_executable, 0);
+
+// Compiled executable introspection
+
+std::map<std::string, int64_t>
+get_compiled_memory_stats(ErlNifEnv *env,
+                          fine::ResourcePtr<ExlaExecutable> executable) {
+  auto stats = unwrap(executable->executable()->GetCompiledMemoryStats());
+  return {{"generated_code_size_in_bytes", stats.generated_code_size_in_bytes},
+          {"argument_size_in_bytes", stats.argument_size_in_bytes},
+          {"output_size_in_bytes", stats.output_size_in_bytes},
+          {"alias_size_in_bytes", stats.alias_size_in_bytes},
+          {"temp_size_in_bytes", stats.temp_size_in_bytes}};
+}
+
+FINE_NIF(get_compiled_memory_stats, 0);
+
+std::string get_optimized_hlo(ErlNifEnv *env,
+                              fine::ResourcePtr<ExlaExecutable> executable) {
+  auto modules = unwrap(executable->executable()->GetHloModules());
+  std::string text;
+  for (const auto &module : modules) {
+    text += module->ToString();
+  }
+  return text;
+}
+
+FINE_NIF(get_optimized_hlo, 0);
+
+std::map<std::string, double>
+get_cost_analysis(ErlNifEnv *env,
+                  fine::ResourcePtr<ExlaExecutable> executable) {
+  auto analysis = unwrap(executable->executable()->GetCostAnalysis());
+  std::map<std::string, double> result;
+  for (const auto &[name, value] : analysis) {
+    if (auto number = std::get_if<float>(&value)) {
+      result[name] = *number;
+    } else if (auto integer = std::get_if<int64_t>(&value)) {
+      result[name] = static_cast<double>(*integer);
+    }
+  }
+  return result;
+}
+
+FINE_NIF(get_cost_analysis, 0);
 
 // Memory tracking functions
 

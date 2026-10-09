@@ -110,7 +110,7 @@ defmodule EXLA.MLIR.Module do
         :to_mlir ->
           module.ref
 
-        :to_pjrt ->
+        compilation when compilation in [:to_pjrt, :to_executable] ->
           EXLA.NIF.mlir_compile(
             client.ref,
             module.ref,

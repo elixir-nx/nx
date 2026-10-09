@@ -73,6 +73,18 @@ defmodule EXLATest do
     end
   end
 
+  describe "to_executable/3" do
+    test "compiles the function and returns the executable" do
+      fun = fn x, y -> Nx.sum(Nx.multiply(Nx.sin(x), y)) end
+      args = [Nx.iota({16, 16}, type: :f32), Nx.iota({16, 16}, type: :f32)]
+
+      assert %EXLA.Executable{} = executable = EXLA.to_executable(fun, args)
+      assert EXLA.Executable.optimized_hlo(executable) =~ "sine"
+      assert EXLA.Executable.memory_stats(executable).argument_size_in_bytes >= 2 * 16 * 16 * 4
+      assert EXLA.Executable.cost_analysis(executable)["transcendentals"] == 16 * 16
+    end
+  end
+
   describe "callback server pid encoding" do
     test "encodes local pid to fixed-size binary" do
       encoded = EXLA.NIF.encode_local_pid(self())
