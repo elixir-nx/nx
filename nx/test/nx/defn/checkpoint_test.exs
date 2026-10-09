@@ -215,6 +215,33 @@ defmodule Nx.Defn.CheckpointTest do
   end
 
   describe "interaction with while" do
+    defn grad_checkpoint_inside_while(x) do
+      grad(x, fn x ->
+        {_i, acc} =
+          while {i = 0, acc = x}, Nx.less(i, 3) do
+            {i + 1, checkpoint(acc, fn acc -> Nx.sin(acc) * acc end)}
+          end
+
+        Nx.sum(acc)
+      end)
+    end
+
+    defn grad_inside_while_plain(x) do
+      grad(x, fn x ->
+        {_i, acc} =
+          while {i = 0, acc = x}, Nx.less(i, 3) do
+            {i + 1, Nx.sin(acc) * acc}
+          end
+
+        Nx.sum(acc)
+      end)
+    end
+
+    test "checkpoint inside a while body" do
+      x = Nx.tensor([0.5, 1.0])
+      assert_equal(grad_checkpoint_inside_while(x), grad_inside_while_plain(x))
+    end
+
     defn grad_checkpoint_with_while(x) do
       grad(x, fn x ->
         checkpoint(x, fn x ->
@@ -277,6 +304,53 @@ defmodule Nx.Defn.CheckpointTest do
   # --- Container inputs/outputs ---
 
   describe "container support" do
+    test "raises when the body returns a container other than a tuple" do
+      x = Nx.tensor([1.0, 2.0])
+
+      assert_raise ArgumentError, ~r/must return a tensor or a tuple of tensors/, fn ->
+        Nx.Defn.jit(fn x -> checkpoint(x, fn x -> %{value: x} end) end).(x)
+      end
+    end
+
+    defn grad_checkpoint_map_input(params, x) do
+      grad(params, fn params ->
+        checkpoint([params, x], fn params, x ->
+          Nx.sum(Nx.dot(x, params.w) + params.b)
+        end)
+      end)
+    end
+
+    defn grad_map_input_plain(params, x) do
+      grad(params, fn params -> Nx.sum(Nx.dot(x, params.w) + params.b) end)
+    end
+
+    test "map as checkpoint input" do
+      params = %{w: Nx.tensor([[0.5, -0.3], [0.2, 0.8]]), b: Nx.tensor([0.1, -0.1])}
+      x = Nx.tensor([1.0, 2.0])
+      assert_equal(grad_checkpoint_map_input(params, x), grad_map_input_plain(params, x))
+    end
+
+    defn grad_checkpoint_nested_container(x, y) do
+      grad({x, y}, fn {x, y} ->
+        {a, b, c} =
+          checkpoint({x, %{pair: {y, x}}}, fn {x, %{pair: {y, x_again}}} ->
+            {Nx.sin(x), Nx.cos(y), x_again * y}
+          end)
+
+        Nx.sum(a * b + c)
+      end)
+    end
+
+    defn grad_nested_container_plain(x, y) do
+      grad({x, y}, fn {x, y} -> Nx.sum(Nx.sin(x) * Nx.cos(y) + x * y) end)
+    end
+
+    test "nested container as input" do
+      x = Nx.tensor([0.5, 1.0])
+      y = Nx.tensor([1.5, 2.0])
+      assert_equal(grad_checkpoint_nested_container(x, y), grad_nested_container_plain(x, y))
+    end
+
     defn grad_checkpoint_tuple_output(x) do
       grad(x, fn x ->
         {a, b} =
@@ -327,6 +401,59 @@ defmodule Nx.Defn.CheckpointTest do
   # --- Edge cases ---
 
   describe "edge cases" do
+    defn grad_checkpoint_number_input(x) do
+      grad(x, fn x -> Nx.sum(checkpoint([x, 3.0], fn x, scale -> Nx.multiply(x, scale) end)) end)
+    end
+
+    test "a number among the inputs is passed through to the body" do
+      x = Nx.tensor([1.0, 2.0])
+      assert_equal(grad_checkpoint_number_input(x), Nx.tensor([3.0, 3.0]))
+    end
+
+    defn grad_checkpoint_constant_input(x) do
+      grad(x, fn x ->
+        Nx.sum(checkpoint([x, Nx.tensor([1.0, 2.0])], fn x, scale -> Nx.multiply(x, scale) end))
+      end)
+    end
+
+    test "a constant tensor among the inputs" do
+      x = Nx.tensor([1.0, 2.0])
+      assert_equal(grad_checkpoint_constant_input(x), Nx.tensor([1.0, 2.0]))
+    end
+
+    defn grad_checkpoint_same_input_twice(x) do
+      grad(x, fn x -> Nx.sum(checkpoint([x, x], fn a, b -> Nx.multiply(a, b) end)) end)
+    end
+
+    test "the same tensor passed as two inputs sums both gradients" do
+      x = Nx.tensor([1.0, 2.0, 3.0])
+      assert_equal(grad_checkpoint_same_input_twice(x), Nx.multiply(x, 2.0))
+    end
+
+    defn grad_checkpoint_unused_output(x) do
+      grad(x, fn x ->
+        _unused = checkpoint(x, fn x -> Nx.exp(x) end)
+        Nx.sum(Nx.sin(x))
+      end)
+    end
+
+    test "an unused checkpoint output contributes nothing" do
+      x = Nx.tensor([0.5, 1.0])
+      assert_equal(grad_checkpoint_unused_output(x), Nx.cos(x))
+    end
+
+    test "raises when the function arity does not match the inputs" do
+      x = Nx.tensor([1.0, 2.0])
+
+      assert_raise ArgumentError, ~r/expected a function of arity 2 for 2 input\(s\)/, fn ->
+        Nx.Defn.jit(fn x -> checkpoint([x, x], fn x -> x end) end).(x)
+      end
+    end
+
+    test "inputs without tensors call the function directly" do
+      assert checkpoint([], fn -> :no_tensors end) == :no_tensors
+    end
+
     defn grad_checkpoint_scalar(x) do
       grad(x, fn x ->
         checkpoint(x, fn x -> Nx.multiply(x, x) end)
@@ -382,6 +509,41 @@ defmodule Nx.Defn.CheckpointTest do
   # --- Gradient w.r.t. weights (training use case) ---
 
   describe "gradient w.r.t. weights" do
+    defn grad_shared_weight_two_checkpoints(w, x) do
+      grad(w, fn w ->
+        first = checkpoint([x, w], fn x, w -> Nx.dot(x, w) end)
+        second = checkpoint([first, w], fn first, w -> Nx.dot(first, w) end)
+        Nx.sum(second)
+      end)
+    end
+
+    defn grad_shared_weight_plain(w, x) do
+      grad(w, fn w -> Nx.sum(Nx.dot(Nx.dot(x, w), w)) end)
+    end
+
+    test "a weight shared by two checkpoints accumulates both gradients" do
+      w = Nx.tensor([[0.5, -0.3], [0.2, 0.8]])
+      x = Nx.tensor([1.0, 2.0])
+      assert_all_close(grad_shared_weight_two_checkpoints(w, x), grad_shared_weight_plain(w, x))
+    end
+
+    defn grad_of_grad_weight_checkpoint(w, x) do
+      grad(w, fn w ->
+        grad(w, fn w -> Nx.sum(checkpoint([x, w], fn x, w -> Nx.sin(Nx.dot(x, w)) end)) end)
+        |> Nx.sum()
+      end)
+    end
+
+    defn grad_of_grad_weight_plain(w, x) do
+      grad(w, fn w -> grad(w, fn w -> Nx.sum(Nx.sin(Nx.dot(x, w))) end) |> Nx.sum() end)
+    end
+
+    test "second-order gradient with respect to a weight" do
+      w = Nx.tensor([[0.5, -0.3], [0.2, 0.8]])
+      x = Nx.tensor([1.0, 2.0])
+      assert_all_close(grad_of_grad_weight_checkpoint(w, x), grad_of_grad_weight_plain(w, x))
+    end
+
     defn dense_layer(x, w) do
       Nx.dot(x, w) |> Nx.max(0)
     end
@@ -739,6 +901,60 @@ defmodule Nx.Defn.CheckpointTest do
   end
 
   describe "vectorized input" do
+    defn grad_checkpoint_vectorized_weight(x, w) do
+      grad(w, fn w -> Nx.sum(checkpoint([x, w], fn x, w -> Nx.sin(Nx.dot(x, w)) end)) end)
+    end
+
+    defn grad_vectorized_weight_plain(x, w) do
+      grad(w, fn w -> Nx.sum(Nx.sin(Nx.dot(x, w))) end)
+    end
+
+    test "vectorized activation with a plain weight sums the weight gradient over the batch" do
+      x = Nx.tensor([[0.5, 1.0], [1.5, 2.0], [2.5, 3.0]]) |> Nx.vectorize(:batch)
+      w = Nx.tensor([[0.5, -0.3], [0.2, 0.8]])
+
+      gradient = grad_checkpoint_vectorized_weight(x, w)
+      assert gradient.vectorized_axes == []
+      assert_all_close(gradient, grad_vectorized_weight_plain(x, w))
+    end
+
+    defn grad_checkpoint_vectorized_intermediate(x) do
+      grad(x, fn x ->
+        hidden = Nx.cos(x)
+        Nx.sum(checkpoint(hidden, fn hidden -> Nx.sin(hidden) * hidden end))
+      end)
+    end
+
+    defn grad_vectorized_intermediate_plain(x) do
+      grad(x, fn x ->
+        hidden = Nx.cos(x)
+        Nx.sum(Nx.sin(hidden) * hidden)
+      end)
+    end
+
+    test "vectorized intermediate as the checkpoint input" do
+      x = Nx.tensor([[0.5, 1.0], [1.5, 2.0]]) |> Nx.vectorize(:batch)
+
+      assert_equal(
+        grad_checkpoint_vectorized_intermediate(x),
+        grad_vectorized_intermediate_plain(x)
+      )
+    end
+
+    test "matches the gradient of each entry taken separately" do
+      x = Nx.tensor([[0.5, 1.0], [1.5, 2.0], [2.5, 3.0]])
+      vectorized = Nx.vectorize(x, :batch)
+
+      per_entry =
+        for i <- 0..2 do
+          grad_checkpoint_vectorized(x[i])
+        end
+        |> Nx.stack()
+        |> Nx.vectorize(:batch)
+
+      assert_equal(grad_checkpoint_vectorized(vectorized), per_entry)
+    end
+
     defn grad_checkpoint_vectorized(x) do
       grad(x, fn x -> Nx.sum(checkpoint(x, fn x -> Nx.sin(x) * x end)) end)
     end
