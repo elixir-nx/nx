@@ -206,7 +206,7 @@ defmodule Nx.Defn.Evaluator do
   ## Evaluation
 
   defp eval(%Nx.Tensor{data: %Expr{op: :tensor, args: [t]}}, _state, caches) do
-    {t, caches}
+    {Nx.devectorize(t), caches}
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :constant, args: [constant]}} = ans, _state, caches) do
