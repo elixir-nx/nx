@@ -226,7 +226,11 @@ defmodule EXLA.Defn.CheckpointTest do
     w = Nx.tensor([[0.5, -0.3], [0.2, 0.8]])
 
     assert_all_close(captured_loss(x, w), vectorized_loss(x, w))
-    assert_all_close(Nx.Defn.grad(w, &captured_loss(x, &1)), Nx.Defn.grad(w, &vectorized_loss(x, &1)))
+
+    assert_all_close(
+      Nx.Defn.grad(w, &captured_loss(x, &1)),
+      Nx.Defn.grad(w, &vectorized_loss(x, &1))
+    )
   end
 
   test "a captured vectorized tensor keeps its axes in the value and the gradient" do
