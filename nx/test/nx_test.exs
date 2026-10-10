@@ -1794,6 +1794,12 @@ defmodule NxTest do
                  :nan
                ])
     end
+
+    test "reduces across trailing contiguous axes" do
+      t = Nx.iota({2, 3, 4})
+      assert_equal(Nx.reduce_max(t, axes: [2]), Nx.tensor([[3, 7, 11], [15, 19, 23]]))
+      assert_equal(Nx.reduce_max(t, axes: [1, 2]), Nx.tensor([11, 23]))
+    end
   end
 
   describe "argmin/2" do
