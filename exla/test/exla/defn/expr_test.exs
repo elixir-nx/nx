@@ -872,6 +872,23 @@ defmodule EXLA.Defn.ExprTest do
     end
   end
 
+  describe "barrier" do
+    deftransformp barrier(container), do: Nx.Defn.Expr.barrier(container)
+
+    defn barrier_sum(x) do
+      {input, sine} = barrier({x, Nx.sin(x)})
+      Nx.sum(input * Nx.exp(sine))
+    end
+
+    test "returns the same values and compiles to an optimization barrier" do
+      x = Nx.tensor([0.1, 0.5, -1.0])
+      assert_all_close(barrier_sum(x), evaluate(&barrier_sum/1, [x]))
+
+      %{mlir_module: mlir_module} = EXLA.to_mlir_module(&barrier_sum/1, [x])
+      assert mlir_module =~ "stablehlo.optimization_barrier"
+    end
+  end
+
   describe "unary float ops" do
     @int_tensor Nx.tensor([1, 2, 3])
     @float_tensor Nx.tensor([1.0, 2.0, 3.0])
