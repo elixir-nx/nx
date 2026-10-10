@@ -6710,6 +6710,35 @@ defmodule Nx.Defn.GradTest do
     end
   end
 
+  describe "barrier" do
+    deftransformp barrier(container), do: Nx.Defn.Expr.barrier(container)
+
+    defn grad_through_barrier(t) do
+      grad(t, fn t ->
+        {input, sine} = barrier({t, Nx.sin(t)})
+        Nx.sum(input * Nx.exp(sine))
+      end)
+    end
+
+    defn grad_without_barrier(t) do
+      grad(t, fn t -> Nx.sum(t * Nx.exp(Nx.sin(t))) end)
+    end
+
+    test "passes gradients through unchanged" do
+      t = Nx.tensor([0.1, 0.5, -1.0])
+      assert_all_close(grad_through_barrier(t), grad_without_barrier(t))
+    end
+
+    test "supports vectorized tensors" do
+      t = Nx.tensor([[0.1, 0.5], [-1.0, 2.0]]) |> Nx.vectorize(:x)
+
+      check_vectorized_grad(t, fn t ->
+        {input, sine} = barrier({t, Nx.sin(t)})
+        Nx.sum(Nx.multiply(input, Nx.exp(sine)))
+      end)
+    end
+  end
+
   describe "finite differences" do
     test "broadcast" do
       x = Nx.tensor([0.5, -1.0, 1.5], type: :f64)
