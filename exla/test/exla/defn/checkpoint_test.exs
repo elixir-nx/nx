@@ -106,6 +106,18 @@ defmodule EXLA.Defn.CheckpointTest do
     Nx.sum(Nx.sin(a) * Nx.cos(b))
   end
 
+  defn captured_loss(x, w) do
+    Nx.sum(checkpoint(x, fn x -> Nx.sin(Nx.dot(x, w)) * x end))
+  end
+
+  defn captured_vectorized_loss(x, scale) do
+    Nx.sum(checkpoint(x, fn x -> Nx.multiply(Nx.sin(x), scale) end))
+  end
+
+  defn captured_vectorized_loss_plain(x, scale) do
+    Nx.sum(Nx.multiply(Nx.sin(x), scale))
+  end
+
   test "computes the same gradient as the plain function" do
     x = Nx.iota({16}, type: :f32) |> Nx.divide(16)
 
@@ -207,6 +219,27 @@ defmodule EXLA.Defn.CheckpointTest do
     {plain_a, plain_b} = Nx.Defn.grad(pair, &pair_loss_plain/1)
     assert_all_close(grad_a, plain_a)
     assert_all_close(grad_b, plain_b)
+  end
+
+  test "a weight captured by the body gets the same gradient as an explicit input" do
+    x = Nx.tensor([[0.5, 1.0], [1.5, 2.0], [2.5, 3.0]])
+    w = Nx.tensor([[0.5, -0.3], [0.2, 0.8]])
+
+    assert_all_close(captured_loss(x, w), vectorized_loss(x, w))
+    assert_all_close(Nx.Defn.grad(w, &captured_loss(x, &1)), Nx.Defn.grad(w, &vectorized_loss(x, &1)))
+  end
+
+  test "a captured vectorized tensor keeps its axes in the value and the gradient" do
+    x = Nx.tensor([0.5, 1.0])
+    scale = Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]) |> Nx.vectorize(:batch)
+
+    value = captured_vectorized_loss(x, scale)
+    assert value.vectorized_axes == [batch: 3]
+    assert_all_close(value, captured_vectorized_loss_plain(x, scale))
+
+    gradient = Nx.Defn.grad(scale, &captured_vectorized_loss(x, &1))
+    assert gradient.vectorized_axes == [batch: 3]
+    assert_all_close(gradient, Nx.Defn.grad(scale, &captured_vectorized_loss_plain(x, &1)))
   end
 
   @tag :rematerialization

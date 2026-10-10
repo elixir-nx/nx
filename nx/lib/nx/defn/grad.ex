@@ -450,7 +450,7 @@ defmodule Nx.Defn.Grad do
 
   defp update_grads(
          :block,
-         [%Nx.Block.Checkpoint{} = struct, in_args, _expr, callback],
+         [%Nx.Block.Checkpoint{saved: saved} = struct, in_args, _expr, callback],
          _ans,
          gs,
          to_grad_ids,
@@ -459,11 +459,16 @@ defmodule Nx.Defn.Grad do
     {inputs, opts} = Enum.split_while(in_args, &(not is_list(&1)))
     gs = List.wrap(gs)
 
-    # The inputs and the incoming gradients go through one barrier, so the
-    # recomputation cannot be merged with the forward body and cannot run
-    # before the backward pass reaches this point.
-    {tied_inputs, tied_gs} = Expr.barrier({List.to_tuple(inputs), List.to_tuple(gs)})
-    tied_inputs = Tuple.to_list(tied_inputs)
+    # The saved inputs and the incoming gradients go through one barrier, so
+    # the recomputation cannot be merged with the forward body and cannot run
+    # before the backward pass reaches this point. The other inputs are read
+    # as they are.
+    saved_inputs = Enum.map(saved, &Enum.fetch!(inputs, &1))
+    {tied_saved, tied_gs} = Expr.barrier({List.to_tuple(saved_inputs), List.to_tuple(gs)})
+    tied_by_position = Map.new(Enum.zip(saved, Tuple.to_list(tied_saved)))
+
+    tied_inputs =
+      Enum.with_index(inputs, fn input, pos -> Map.get(tied_by_position, pos, input) end)
 
     recomputed =
       apply(callback, [struct | tied_inputs ++ opts]) |> Composite.traverse(&Nx.devectorize/1)
