@@ -81,3 +81,18 @@ end
 defmodule Nx.Block.IRFFT do
   defstruct eps: nil, length: nil, axis: nil
 end
+
+defmodule Nx.Block.Checkpoint do
+  @moduledoc """
+  Marks a block whose intermediate results are not kept for the backward
+  pass. The gradient recomputes the body from the inputs when it reaches
+  the block. See `Nx.Defn.Kernel.checkpoint/2`.
+
+  `saved` lists the positions of the inputs the checkpoint stands in for,
+  usually activations. Those inputs are tied to the incoming gradient so
+  the recomputation cannot run before the backward pass needs it. The
+  other inputs, usually parameters, are alive for the whole program and are
+  read directly.
+  """
+  defstruct saved: []
+end

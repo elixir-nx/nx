@@ -250,6 +250,224 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Runs `fun` on `inputs` and marks its intermediate results as not worth
+  keeping for the backward pass.
+
+  Reverse-mode differentiation stores every intermediate result of the
+  forward pass until the backward pass has used it, so the memory of
+  `grad` grows with the depth of the function. A checkpoint trades compute
+  for that memory: the forward pass keeps only the inputs of `fun`, and the
+  backward pass runs `fun` again from them when it needs the intermediates.
+  Each checkpoint costs one extra evaluation of its body. Wrapping each
+  layer of a deep model is the usual pattern, and nothing changes in the
+  values computed.
+
+  Outside `grad` a checkpoint is the same as calling `fun`. Whether the
+  compiler honors the hint depends on the backend; EXLA does on GPU.
+
+  `inputs` is a single tensor or container, or a list of them when `fun`
+  takes several arguments. `fun` must return a tensor or a tuple of
+  tensors. When `fun` is written inline, the tensors it reads from the
+  enclosing scope are passed into the checkpoint as well, so weights and
+  other parameters do not need to be listed:
+
+      defn layer(x, w, b) do
+        checkpoint(x, fn x -> Nx.dot(x, w) + b end)
+      end
+
+  The gradient of a captured tensor flows through the checkpoint like the
+  gradient of any other input.
+
+  Pass the activations in `inputs` and read parameters from the enclosing
+  scope. The tensors in `inputs` stay in memory until the backward pass has
+  recomputed the body from them. Captured tensors are read as they are,
+  which suits parameters, since they are alive for the whole program
+  anyway. A captured variable is passed whole: `ws[0]` in the body passes
+  all of `ws`. Bind the slice outside the checkpoint when that matters.
+
+  When `fun` is not written inline, such as `&layer/3`, nothing is read
+  from the enclosing scope and every tensor must be passed in `inputs`.
+  """
+  defmacro checkpoint(inputs, fun), do: checkpoint_macro(inputs, fun, __CALLER__)
+
+  @doc """
+  Checkpoints a function whose tensors all come from the enclosing scope.
+  See `checkpoint/2`.
+
+      defn layer(x, w, b) do
+        checkpoint(fn -> Nx.dot(x, w) + b end)
+      end
+
+  With no explicit inputs, every captured tensor is kept until the backward
+  pass has recomputed the body. Pass the activation to `checkpoint/2`
+  instead when the captured tensors include large parameters.
+  """
+  defmacro checkpoint(fun), do: checkpoint_macro([], fun, __CALLER__)
+
+  defp checkpoint_macro(inputs, {:fn, meta, clauses}, caller) do
+    captures = checkpoint_captures(clauses, caller)
+
+    params =
+      Enum.map(captures, fn {name, var_meta, context} ->
+        {name, [generated: true] ++ var_meta, context}
+      end)
+
+    clauses =
+      Enum.map(clauses, fn {:->, clause_meta, [args, body]} ->
+        {:->, clause_meta, [args ++ params, body]}
+      end)
+
+    quote do
+      Nx.Defn.Kernel.__checkpoint__(
+        unquote(inputs),
+        [unquote_splicing(captures)],
+        unquote({:fn, meta, clauses})
+      )
+    end
+  end
+
+  defp checkpoint_macro([], fun, _caller) do
+    Kernel.raise(
+      ArgumentError,
+      "checkpoint/1 expects an inline fn so the tensors it uses can be found, got: #{Macro.to_string(fun)}"
+    )
+  end
+
+  defp checkpoint_macro(inputs, fun, _caller) do
+    quote do
+      Nx.Defn.Kernel.__checkpoint__(unquote(inputs), [], unquote(fun))
+    end
+  end
+
+  # Variables read by the fn body that are bound in the caller and not by
+  # the fn head. A variable the body rebinds under a name from the caller
+  # is collected too, which only adds an unused input.
+  defp checkpoint_captures(clauses, caller) do
+    scope = MapSet.new(Macro.Env.vars(caller))
+
+    bound =
+      MapSet.new(
+        Enum.flat_map(clauses, fn {:->, _, [args, _]} -> checkpoint_vars(args) end),
+        &checkpoint_var_key/1
+      )
+
+    referenced = Enum.flat_map(clauses, fn {:->, _, [_, body]} -> checkpoint_vars(body) end)
+
+    Enum.filter(Enum.uniq_by(referenced, &checkpoint_var_key/1), fn var ->
+      key = checkpoint_var_key(var)
+      Kernel.and(MapSet.member?(scope, key), Kernel.not(MapSet.member?(bound, key)))
+    end)
+  end
+
+  defp checkpoint_vars(ast) do
+    {_ast, vars} =
+      Macro.prewalk(ast, [], fn
+        {name, _meta, context} = var, acc when Kernel.and(is_atom(name), is_atom(context)) ->
+          {var, [var | acc]}
+
+        node, acc ->
+          {node, acc}
+      end)
+
+    Enum.reverse(vars)
+  end
+
+  defp checkpoint_var_key({name, _meta, context}), do: {name, context}
+
+  @doc false
+  def __checkpoint__(inputs, captures, fun) do
+    arguments = List.wrap(inputs)
+    values = arguments ++ captures
+    inputs_count = length(arguments)
+
+    unless is_function(fun, length(values)) do
+      Kernel.raise(
+        ArgumentError,
+        "checkpoint expected a function of arity #{inputs_count} for #{inputs_count} input(s), got: #{Kernel.inspect(fun)}"
+      )
+    end
+
+    input_leaves = Enum.reverse(Enum.reduce(arguments, [], &checkpoint_leaves/2))
+    captured_leaves = Enum.reverse(Enum.reduce(captures, [], &checkpoint_leaves/2))
+    leaves = input_leaves ++ captured_leaves
+
+    case leaves do
+      [] ->
+        apply(fun, values)
+
+      _ ->
+        rebuild = fn recomputed_leaves ->
+          {recomputed_values, []} =
+            Enum.map_reduce(values, recomputed_leaves, &checkpoint_rebuild/2)
+
+          checkpoint_result(apply(fun, recomputed_values))
+        end
+
+        # With no explicit inputs every captured tensor is saved.
+        saved =
+          case input_leaves do
+            [] -> Enum.with_index(leaves, fn _leaf, pos -> pos end)
+            _ -> Enum.with_index(input_leaves, fn _leaf, pos -> pos end)
+          end
+
+        Nx.block(
+          %Nx.Block.Checkpoint{saved: saved},
+          leaves,
+          nil,
+          checkpoint_block_fun(length(leaves), rebuild)
+        )
+    end
+  end
+
+  defp checkpoint_result(%Nx.Tensor{} = tensor), do: tensor
+
+  defp checkpoint_result(tuple) when is_tuple(tuple) do
+    Kernel.if Enum.all?(Tuple.to_list(tuple), &is_struct(&1, Nx.Tensor)) do
+      tuple
+    else
+      checkpoint_result(Tuple.to_list(tuple))
+    end
+  end
+
+  defp checkpoint_result(other) do
+    Kernel.raise(
+      ArgumentError,
+      "the function given to checkpoint must return a tensor or a tuple of tensors, got: #{Kernel.inspect(other)}"
+    )
+  end
+
+  defp checkpoint_leaves(%Nx.Tensor{} = tensor, acc), do: [tensor | acc]
+
+  defp checkpoint_leaves(container, acc)
+       when Kernel.or(is_tuple(container), is_map(container)),
+       do: Nx.Container.reduce(container, acc, &checkpoint_leaves/2)
+
+  defp checkpoint_leaves(_other, acc), do: acc
+
+  defp checkpoint_rebuild(%Nx.Tensor{}, [leaf | leaves]), do: {leaf, leaves}
+
+  defp checkpoint_rebuild(container, leaves)
+       when Kernel.or(is_tuple(container), is_map(container)),
+       do: Nx.Container.traverse(container, leaves, &checkpoint_rebuild/2)
+
+  defp checkpoint_rebuild(other, leaves), do: {other, leaves}
+
+  # The block callback takes the struct and one argument per tensor. It
+  # also captures rebuild, and the struct and the capture both count toward
+  # the 255 arguments a function can take.
+  for arity <- 1..253 do
+    args = Macro.generate_arguments(arity, __MODULE__)
+
+    defp checkpoint_block_fun(unquote(arity), rebuild) do
+      fn %Nx.Block.Checkpoint{}, unquote_splicing(args) -> rebuild.([unquote_splicing(args)]) end
+    end
+  end
+
+  defp checkpoint_block_fun(arity, _rebuild) do
+    Kernel.raise(ArgumentError, "checkpoint supports at most 253 tensors, got: #{arity}")
+  end
+
+  @doc """
   Defines a custom gradient for the given expression.
 
   It also expects a list of inputs of the gradient and a `fun`

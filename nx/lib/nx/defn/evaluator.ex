@@ -206,7 +206,7 @@ defmodule Nx.Defn.Evaluator do
   ## Evaluation
 
   defp eval(%Nx.Tensor{data: %Expr{op: :tensor, args: [t]}}, _state, caches) do
-    {t, caches}
+    {Nx.devectorize(t), caches}
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :constant, args: [constant]}} = ans, _state, caches) do
@@ -273,6 +273,11 @@ defmodule Nx.Defn.Evaluator do
       %Nx.Tensor{} = tensor ->
         {Nx.devectorize(tensor), caches}
     end
+  end
+
+  defp eval_apply(:barrier, [tensors], _ans, state, caches) do
+    {values, caches} = Enum.map_reduce(tensors, caches, &eval(&1, state, &2))
+    {List.to_tuple(values), caches}
   end
 
   defp eval_apply(:elem, [tuple, i], _ans, state, caches) do
