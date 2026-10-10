@@ -2501,8 +2501,11 @@ defmodule Nx.BinaryBackend do
 
     path =
       case reverse_pos do
-        [] -> Enum.reverse(reverse_pre)
-        _ -> Enum.reverse(reverse_pre, [(&:erlang.list_to_bitstring/1) | Enum.reverse(reverse_pos)])
+        [] ->
+          Enum.reverse(reverse_pre)
+
+        _ ->
+          Enum.reverse(reverse_pre, [(&:erlang.list_to_bitstring/1) | Enum.reverse(reverse_pos)])
       end
 
     {chunk_size, read_size, path}
