@@ -591,4 +591,27 @@ defmodule Nx.Defn.ExprTest do
              """
     end
   end
+
+  describe "barrier" do
+    test "returns the container it is given" do
+      x = Nx.tensor([1.0, 2.0])
+      fun = fn x -> Expr.barrier({x, %{exp: Nx.exp(x)}}) end
+      {input, %{exp: exponential}} = Nx.Defn.jit(fun, compiler: Nx.Defn.Evaluator).(x)
+      Nx.Testing.assert_equal(input, x)
+      Nx.Testing.assert_all_close(exponential, Nx.exp(x))
+    end
+
+    test "keeps vectorized axes" do
+      x = Nx.tensor([[1.0, 2.0], [3.0, 4.0]]) |> Nx.vectorize(:batch)
+      result = Nx.Defn.jit(&Expr.barrier/1, compiler: Nx.Defn.Evaluator).(x)
+      assert result.vectorized_axes == [batch: 2]
+      Nx.Testing.assert_equal(result, x)
+    end
+
+    test "inspects as barrier" do
+      param = Expr.parameter(nil, {:f, 32}, {2}, 0)
+      {_, exponential} = Expr.barrier({param, Nx.exp(param)})
+      assert inspect(exponential, safe: false) =~ "barrier a, b"
+    end
+  end
 end

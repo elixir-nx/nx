@@ -779,6 +779,11 @@ defmodule EXLA.Defn do
      ), cache}
   end
 
+  defp cached_recur_operator(:barrier, %T{data: %Expr{args: [tensors]}}, state, cache) do
+    {values, cache} = Enum.map_reduce(tensors, cache, &recur_operator(&1, state, &2))
+    {Value.optimization_barrier(values), cache}
+  end
+
   # C-backed custom_call blocks (QR, Eigh, …): `EXLA.CustomCall`; else compile default callback.
   defp cached_recur_operator(
          :block,

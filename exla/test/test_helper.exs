@@ -20,10 +20,14 @@ Nx.Defn.global_default_options(compiler: EXLA)
 exclude_multi_device =
   if client.device_count > 1 and client.platform == :host, do: [], else: [:multi_device]
 
+# The pinned XLA expands optimization barriers before common subexpression
+# elimination on the CPU, so the recomputation a checkpoint asks for is merged
+# back into the forward pass there. Drop this exclusion once EXLA moves past
+# openxla 5e9201ee3.
 exclude =
   case client.platform do
     :tpu -> [:unsupported_dilated_window_reduce, :unsupported_64_bit_op]
-    :host -> []
+    :host -> [:rematerialization]
     _ -> [:conditional_inside_map_reduce]
   end
 
