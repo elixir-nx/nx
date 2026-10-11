@@ -1366,11 +1366,12 @@ defmodule Torchx.Backend do
 
   @impl true
   def pad(out, tensor, constant, input_config) do
+    tensor_tx = tensor |> from_nx() |> to_typed_ref(tensor.type, out.type)
+    constant_tx = constant |> from_nx() |> to_typed_ref(constant.type, out.type)
+
     # Handle empty padding config (no-op)
     if input_config == [] do
-      tensor
-      |> from_nx()
-      |> to_nx(out)
+      to_nx(tensor_tx, out)
     else
       config =
         input_config
@@ -1384,11 +1385,10 @@ defmodule Torchx.Backend do
         |> Enum.reverse()
         |> List.flatten()
 
-      tensor
-      |> from_nx()
+      tensor_tx
       |> pad_internal(input_config)
       |> slice_negative_padding(input_config)
-      |> Torchx.pad(from_nx(constant), config)
+      |> Torchx.pad(constant_tx, config)
       |> to_nx(out)
     end
   end

@@ -59,8 +59,15 @@ defmodule EXLA.Defn do
     {executable, {used_inputs, outputs, outfeed, _input_typespecs?}} =
       compile(key, vars, fun, compile_options, 0, [], callback)
 
-    if compile_options[:module_compilation] == :to_mlir do
-      throw({:mlir_module, executable.ref, MapSet.new(Map.keys(used_inputs)), outputs})
+    case compile_options[:module_compilation] do
+      :to_mlir ->
+        throw({:mlir_module, executable.ref, MapSet.new(Map.keys(used_inputs)), outputs})
+
+      :to_executable ->
+        throw({:executable, executable})
+
+      _ ->
+        :ok
     end
 
     fn [args] ->
@@ -986,26 +993,9 @@ defmodule EXLA.Defn do
     # Block callbacks can return vectorized tensors. The compiled function
     # signature includes those axes, just like its input operands.
     expr = Composite.traverse(expr, &Nx.devectorize/1)
-    %module{} = struct
-    key = computation_key(module, [struct | call_args])
 
     {call_body, cache} =
-      case cache do
-        %{^key => computation} ->
-          {computation, cache}
-
-        %{} ->
-          {computation, cache} =
-            block_computation(
-              block_subfunction_description(struct),
-              call_args,
-              expr,
-              state,
-              cache
-            )
-
-          {computation, Map.put(cache, key, computation)}
-      end
+      block_computation(block_subfunction_description(struct), call_args, expr, state, cache)
 
     if token = get_token(cache) do
       typespecs = [Typespec.token() | container_to_typespecs(expr)]
@@ -1984,21 +1974,6 @@ defmodule EXLA.Defn do
     end
 
     {function, merge_outfeed(cache, comp_cache)}
-  end
-
-  # The cache is built on top of call args because we need to handle pred/u8.
-  defp computation_key(op, args) do
-    keys =
-      Enum.map(args, fn
-        %Value{} = op ->
-          %Typespec{type: type, shape: shape} = Value.get_typespec(op)
-          {shape, type}
-
-        opts ->
-          opts
-      end)
-
-    {op, keys}
   end
 
   defp computation_arg_param({tuple, params}) when is_tuple(tuple) and is_list(params) do

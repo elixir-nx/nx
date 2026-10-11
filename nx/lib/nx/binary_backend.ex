@@ -320,10 +320,11 @@ defmodule Nx.BinaryBackend do
 
   ## Pad
 
-  # We ignore the out because we need to recur over the shape
-  # as we transpose and build the rest.
+  # The result is built by padding the last axis and transposing, one axis
+  # at a time, so only the type is used from out.
   @impl true
   def pad(out, t, pad_value, padding_config) do
+    t = as_type(%{t | type: out.type}, t)
     pad_value = %{pad_value | type: out.type} |> as_type(pad_value) |> to_binary()
 
     case t.shape do
@@ -2498,7 +2499,15 @@ defmodule Nx.BinaryBackend do
     {reverse_pos, read_size} =
       aggregate_read(reverse_pos, tuple_size(shape) - 1, Enum.reverse(axes), size)
 
-    path = Enum.reverse(reverse_pre, [(&:erlang.list_to_bitstring/1) | Enum.reverse(reverse_pos)])
+    path =
+      case reverse_pos do
+        [] ->
+          Enum.reverse(reverse_pre)
+
+        _ ->
+          Enum.reverse(reverse_pre, [(&:erlang.list_to_bitstring/1) | Enum.reverse(reverse_pos)])
+      end
+
     {chunk_size, read_size, path}
   end
 
@@ -2510,10 +2519,10 @@ defmodule Nx.BinaryBackend do
 
   defp aggregate_path([], [], _i, pre, pos), do: {pre, pos}
 
-  defp aggregate_read([{axis, weight} | shape], i, [i | axis], _size),
-    do: aggregate_read(shape, i - 1, axis, axis * weight)
+  defp aggregate_read([{dim, weight} | shape], i, [i | axes], _size),
+    do: aggregate_read(shape, i - 1, axes, dim * weight)
 
-  defp aggregate_read(shape, _i, _axis, size),
+  defp aggregate_read(shape, _i, _axes, size),
     do: {shape, size}
 
   ## Weighted shapes

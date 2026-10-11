@@ -443,6 +443,18 @@ defmodule EXLA do
   end
 
   @doc """
+  Compiles `function` for `args` and returns the `EXLA.Executable` instead of
+  a callable, so the compiled program can be inspected with
+  `EXLA.Executable.memory_stats/1` and `EXLA.Executable.optimized_hlo/1`.
+  """
+  def to_executable(function, args, options \\ []) do
+    opts = Keyword.merge(options, module_compilation: :to_executable, compiler: EXLA)
+    Nx.Defn.compile(function, args, opts)
+  catch
+    {:executable, executable} -> executable
+  end
+
+  @doc """
   Checks if the compilation of function with args is cached.
 
   Note that the `:hooks` option is part of the cache, and
