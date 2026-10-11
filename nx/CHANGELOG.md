@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Enhancements
+
+  * [Nx.Defn.Evaluator] Mark values as donatable at their last use, so backends that run operations eagerly can reuse their buffers
+
 ### Bug fixes
 
   * [Nx] Read Elixir number literals at the precision of element-wise binary operations

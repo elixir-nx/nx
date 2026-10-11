@@ -4,6 +4,16 @@ defmodule Nx.Defn.Evaluator do
   that evaluates the expression tree against the
   tensor backend.
 
+  ## Buffer donation
+
+  The evaluator counts how many times each node is used. When a node
+  is passed to an operation for the last time, the evaluator marks that
+  argument with `Nx.donatable/1`, so backends that run operations eagerly
+  may reuse its buffer. A user argument marked as donatable is only
+  handed over at its last use. Nodes that may still be reachable through
+  another node's result (such as values returned by a `cond` branch)
+  and results of the function are never marked.
+
   ## Options
 
   The following options are specific to this compiler:
@@ -22,6 +32,14 @@ defmodule Nx.Defn.Evaluator do
 
   @behaviour Nx.Defn.Compiler
   alias Nx.Defn.{Composite, Expr, Tree}
+
+  # Ops whose result is the value of some inner expression, so they keep the
+  # `donatable?` mark that evaluating that expression produced.
+  @keep_mark_ops [:parameter, :cond, :while, :elem]
+
+  # Ops whose result may alias one of their arguments or comes from user code,
+  # so they never hand their result over for donation.
+  @never_donate_ops [:block, :optional, :runtime_call, :io_call, :fun]
 
   @creation_ops [:eye, :iota, :from_binary]
   @list_ops [:concatenate, :stack]
@@ -47,13 +65,15 @@ defmodule Nx.Defn.Evaluator do
     hooks = Keyword.get(opts, :hooks, %{})
 
     gc? = Keyword.get(opts, :garbage_collect, false)
-    {expr, output, cache} = precompile(fun, vars, hooks)
+    {expr, output, cache, aliased_ids} = precompile(fun, vars, hooks)
 
     fn [params] ->
       state = %{
         params: params,
         gc: gc?,
-        hooks: hooks
+        hooks: hooks,
+        aliased_ids: aliased_ids,
+        held: %{}
       }
 
       [expr |> composite_eval(state, [cache]) |> apply_output(output)]
@@ -68,7 +88,7 @@ defmodule Nx.Defn.Evaluator do
   defp apply_output({result, _cache}, output) do
     {result, []} =
       Composite.traverse(result, output, fn result, [out | acc] ->
-        {%{out | data: result.data}, acc}
+        {%{out | data: result.data, donatable?: false}, acc}
       end)
 
     result
@@ -81,8 +101,74 @@ defmodule Nx.Defn.Evaluator do
       |> Composite.traverse([], &{Nx.devectorize(&1), [Nx.to_template(&1) | &2]})
 
     state = %{hooks: hooks, parent_ids: nil, current_ids: nil}
+    aliased_ids = aliased_ids(expr)
     {expr, cache} = init_compute_cache(expr, state)
-    {expr, Enum.reverse(output), cache}
+    {expr, Enum.reverse(output), cache, aliased_ids}
+  end
+
+  # Collects the ids whose buffer may still be reachable through another
+  # node's result. Branches of a cond, the initial value of a while, and the
+  # inputs of io_call, runtime_call and block can return or keep their input
+  # under a different id, so the use count of the original id undercounts the
+  # references to its buffer.
+  defp aliased_ids(expr), do: expr |> collect_aliased({%{}, %{}}) |> elem(1)
+
+  defp collect_aliased(composite, acc) do
+    Composite.reduce(composite, acc, &collect_aliased_node/2)
+  end
+
+  defp collect_aliased_node(%Nx.Tensor{data: %Expr{op: op}}, acc)
+       when op in [:constant, :tensor],
+       do: acc
+
+  defp collect_aliased_node(%Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _]}}, acc) do
+    collect_aliased(expr, acc)
+  end
+
+  defp collect_aliased_node(%Nx.Tensor{data: %Expr{id: id, op: op, args: args}} = tensor, acc) do
+    {seen, aliased} = acc
+
+    if is_map_key(seen, id) do
+      acc
+    else
+      acc = {Map.put(seen, id, true), add_aliased(op, args, aliased)}
+
+      {_, acc} =
+        Tree.apply_args(tensor, :all, acc, fn arg, acc ->
+          {arg, collect_aliased_node(arg, acc)}
+        end)
+
+      acc
+    end
+  end
+
+  defp collect_aliased_node(_other, acc), do: acc
+
+  defp add_aliased(:cond, [clauses, last], aliased) do
+    Enum.reduce([last | Enum.map(clauses, &elem(&1, 1))], aliased, &add_leaf_ids/2)
+  end
+
+  defp add_aliased(:while, [initial | _], aliased), do: add_leaf_ids(initial, aliased)
+
+  defp add_aliased(op, [tensor_expr | _], aliased) when op in [:io_call, :runtime_call],
+    do: add_leaf_ids(tensor_expr, aliased)
+
+  defp add_aliased(:block, [_struct, in_args | _], aliased),
+    do: Enum.reduce(in_args, aliased, &add_leaf_ids/2)
+
+  defp add_aliased(_op, _args, aliased), do: aliased
+
+  defp add_leaf_ids(composite, aliased) do
+    Composite.reduce(composite, aliased, fn
+      %Nx.Tensor{data: %Expr{op: :metadata, args: [expr, _]}}, aliased ->
+        add_leaf_ids(expr, aliased)
+
+      %Nx.Tensor{data: %Expr{id: id}}, aliased ->
+        Map.put(aliased, id, true)
+
+      _other, aliased ->
+        aliased
+    end)
   end
 
   defp init_compute_cache(expr, state) do
@@ -205,8 +291,9 @@ defmodule Nx.Defn.Evaluator do
 
   ## Evaluation
 
+  # Tensors embedded in the expression outlive this evaluation.
   defp eval(%Nx.Tensor{data: %Expr{op: :tensor, args: [t]}}, _state, caches) do
-    {t, caches}
+    {%{t | donatable?: false}, caches}
   end
 
   defp eval(%Nx.Tensor{data: %Expr{op: :constant, args: [constant]}} = ans, _state, caches) do
@@ -219,10 +306,11 @@ defmodule Nx.Defn.Evaluator do
       %{^id => {:args, count, args}} ->
         {res, [cache | caches]} = eval_apply(op, args, ans, state, [cache | caches])
         state.gc && :erlang.garbage_collect(self())
-        {res, [decrement_cache(cache, id, count, res) | caches]}
+        res = store_mark(res, op)
+        {mark(res, op, id, count, state), [decrement_cache(cache, id, count, res) | caches]}
 
       %{^id => {:result, count, res}} ->
-        {res, [decrement_cache(cache, id, count, res) | caches]}
+        {mark(res, op, id, count, state), [decrement_cache(cache, id, count, res) | caches]}
 
       %{} ->
         # If we don't find the tensor in the current scope,
@@ -233,18 +321,50 @@ defmodule Nx.Defn.Evaluator do
     end
   end
 
+  # The mark stored in the cache is the one the result came with. Backends may
+  # copy the `donatable?` flag of their input into the result, so only ops that
+  # return an inner value keep it.
+  defp store_mark(%Nx.Tensor{} = res, op) when op in @keep_mark_ops, do: res
+  defp store_mark(%Nx.Tensor{} = res, _op), do: %{res | donatable?: false}
+  defp store_mark(res, _op), do: res
+
+  defp not_donatable(%Nx.Tensor{} = res), do: %{res | donatable?: false}
+  defp not_donatable(res), do: res
+
+  # The value handed to a consumer is donatable only at its last use. A node
+  # held by an operation that is still collecting its arguments, or one that
+  # may be reachable through another result, is never donatable.
+  defp mark(%Nx.Tensor{} = res, op, id, count, state) do
+    donatable? =
+      cond do
+        count > 1 -> false
+        is_map_key(state.held, id) -> false
+        is_map_key(state.aliased_ids, id) -> false
+        op in @keep_mark_ops -> res.donatable?
+        op in @never_donate_ops -> false
+        true -> true
+      end
+
+    %{res | donatable?: donatable?}
+  end
+
+  defp mark(res, _op, _id, _count, _state), do: res
+
   defp decrement_cache(cache, id, 1, _res), do: Map.delete(cache, id)
   defp decrement_cache(cache, id, counter, res), do: %{cache | id => {:result, counter - 1, res}}
 
   defp eval_parent([cache | caches], id, op, ans, state, acc) do
     case cache do
       %{^id => {:result, _count, res}} ->
-        {res, Enum.reverse(acc, [cache | caches])}
+        {not_donatable(res), Enum.reverse(acc, [cache | caches])}
 
       %{^id => {:args, count, args}} ->
         {res, [cache | caches]} = eval_apply(op, args, ans, state, [cache | caches])
         state.gc && :erlang.garbage_collect(self())
-        {res, Enum.reverse(acc, [Map.put(cache, id, {:result, count, res}) | caches])}
+        res = store_mark(res, op)
+
+        {not_donatable(res),
+         Enum.reverse(acc, [Map.put(cache, id, {:result, count, res}) | caches])}
 
       %{} ->
         eval_parent(caches, id, op, ans, state, [cache | acc])
@@ -276,8 +396,8 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp eval_apply(:elem, [tuple, i], _ans, state, caches) do
-    {tuple, caches} = composite_eval(tuple, state, caches)
-    {elem(tuple, i), caches}
+    {value, caches} = composite_eval(tuple, state, caches)
+    {tuple_element(elem(value, i), tuple), caches}
   end
 
   defp eval_apply(:io_call, [tensor_expr, callback_spec, out_template, _ref], _ans, state, caches) do
@@ -304,14 +424,17 @@ defmodule Nx.Defn.Evaluator do
       case length do
         1 ->
           fn arg1 ->
-            params = [fn -> Nx.to_tensor(arg1) end]
+            params = [fn -> not_donatable(Nx.to_tensor(arg1)) end]
             {result, _} = composite_eval(expr, %{state | params: params}, [expr_cache])
             result
           end
 
         2 ->
           fn arg1, arg2 ->
-            params = [fn -> Nx.to_tensor(arg1) end, fn -> Nx.to_tensor(arg2) end]
+            params = [
+              fn -> not_donatable(Nx.to_tensor(arg1)) end,
+              fn -> not_donatable(Nx.to_tensor(arg2)) end
+            ]
             {result, _} = composite_eval(expr, %{state | params: params}, [expr_cache])
             result
           end
@@ -362,7 +485,13 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval_apply(op, args, ans, state, caches) do
     ans = put_in(ans.data.args, args)
-    {args, caches} = Tree.apply_args(ans, caches, &eval(&1, state, &2))
+    # Arguments evaluated so far are held until the op runs, so no argument
+    # evaluated later may consume them.
+    {args, {caches, _held}} =
+      Tree.apply_args(ans, {caches, state.held}, fn arg, {caches, held} ->
+        {value, caches} = eval(arg, %{state | held: held}, caches)
+        {value, {caches, hold(held, arg)}}
+      end)
 
     {mod, args} =
       cond do
@@ -386,6 +515,17 @@ defmodule Nx.Defn.Evaluator do
 
     {apply(mod, op, args), caches}
   end
+
+  # Elements of a tuple returned by an operation are not donated, as several
+  # elem nodes may read the same element.
+  defp tuple_element(%Nx.Tensor{} = element, %Nx.Tensor{data: %Expr{op: op}})
+       when op in [:cond, :while],
+       do: element
+
+  defp tuple_element(element, _tuple), do: not_donatable(element)
+
+  defp hold(held, %Nx.Tensor{data: %Expr{id: id}}), do: Map.put(held, id, true)
+  defp hold(held, _other), do: held
 
   defp run_io_call_side_effect(callback_spec, tensor_value, state, caches) do
     case resolve_io_call(callback_spec, state.hooks) do
@@ -436,8 +576,9 @@ defmodule Nx.Defn.Evaluator do
     Enum.reduce(Tuple.to_list(tuple), acc, &composite_to_params/2)
   end
 
+  # The loop state is read by the condition and the body, so it is never donated.
   defp composite_to_params(other, acc) do
-    [fn -> other end | acc]
+    [fn -> not_donatable(other) end | acc]
   end
 
   defp resolve_io_call({:fn, fun}, _hooks), do: fun

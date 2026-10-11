@@ -1045,6 +1045,9 @@ defmodule Nx do
   to its caller, who has not asked to donate it, so results are never
   donatable, not even when the result is a donated argument returned as is.
 
+  `Nx.Defn.Evaluator` also marks intermediate values at their last use, for
+  backends that run operations eagerly.
+
   ## Examples
 
       iex> t = Nx.donatable(Nx.tensor([1, 2, 3]))
