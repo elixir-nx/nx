@@ -435,6 +435,7 @@ defmodule Nx.Defn.Evaluator do
               fn -> not_donatable(Nx.to_tensor(arg1)) end,
               fn -> not_donatable(Nx.to_tensor(arg2)) end
             ]
+
             {result, _} = composite_eval(expr, %{state | params: params}, [expr_cache])
             result
           end
