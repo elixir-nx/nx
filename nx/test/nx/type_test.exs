@@ -80,6 +80,22 @@ defmodule Nx.TypeTest do
     test "smallest_positive_normal_binary returns 0x08" do
       assert Nx.Type.smallest_positive_normal_binary({:f8_e4m3fn, 8}) == <<0x08::8-native>>
     end
+
+    test "epsilon_binary returns 0x20 (0.125)" do
+      assert Nx.Type.epsilon_binary({:f8_e4m3fn, 8}) == <<0x20::8-native>>
+    end
+
+    test "pi_binary returns 0x45 (3.25)" do
+      assert Nx.Type.pi_binary({:f8_e4m3fn, 8}) == <<0x45::8-native>>
+    end
+
+    test "e_binary returns 0x43 (2.75)" do
+      assert Nx.Type.e_binary({:f8_e4m3fn, 8}) == <<0x43::8-native>>
+    end
+
+    test "euler_gamma_binary returns 0x31 (0.5625)" do
+      assert Nx.Type.euler_gamma_binary({:f8_e4m3fn, 8}) == <<0x31::8-native>>
+    end
   end
 
   describe "merge/2" do
