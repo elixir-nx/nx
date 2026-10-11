@@ -17876,7 +17876,7 @@ defmodule Nx do
   """
   @doc type: :element
   def log2(tensor) do
-    divide(log(tensor), log(2))
+    log(tensor, 2)
   end
 
   @doc """
@@ -17898,7 +17898,7 @@ defmodule Nx do
   """
   @doc type: :element
   def log10(tensor) do
-    divide(log(tensor), log(10))
+    log(tensor, 10)
   end
 
   @doc """
@@ -17919,12 +17919,18 @@ defmodule Nx do
       >
   """
   @doc type: :element
-  def log(tensor, base) do
-    if is_number(base) and (base <= 0 or base == 1) do
+  def log(tensor, base) when is_number(base) do
+    if base <= 0 or base == 1 do
       raise ArgumentError,
             "expected base to be greater than 0 and different than 1, got: #{inspect(base)}"
     end
 
+    logarithm = log(tensor)
+    base_tensor = Nx.tensor(base, type: logarithm.type)
+    divide(logarithm, log(base_tensor))
+  end
+
+  def log(tensor, base) do
     divide(log(tensor), log(base))
   end
 
