@@ -35,7 +35,7 @@ defmodule Nx.Defn.Evaluator do
 
   # Ops whose result is the value of some inner expression, so they keep the
   # `donatable?` mark that evaluating that expression produced.
-  @keep_mark_ops [:parameter, :cond, :while, :elem]
+  @keep_donatable_flag_ops [:parameter, :cond, :while, :elem]
 
   # Ops whose result may alias one of their arguments or comes from user code,
   # so they never hand their result over for donation.
@@ -145,7 +145,8 @@ defmodule Nx.Defn.Evaluator do
   defp collect_aliased_node(_other, acc), do: acc
 
   defp add_aliased(:cond, [clauses, last], aliased) do
-    Enum.reduce([last | Enum.map(clauses, &elem(&1, 1))], aliased, &add_leaf_ids/2)
+    clause_bodies = Enum.map(clauses, fn {_pred, body} -> body end)
+    Enum.reduce([last | clause_bodies], aliased, &add_leaf_ids/2)
   end
 
   defp add_aliased(:while, [initial | _], aliased), do: add_leaf_ids(initial, aliased)
@@ -324,7 +325,7 @@ defmodule Nx.Defn.Evaluator do
   # The mark stored in the cache is the one the result came with. Backends may
   # copy the `donatable?` flag of their input into the result, so only ops that
   # return an inner value keep it.
-  defp store_mark(%Nx.Tensor{} = res, op) when op in @keep_mark_ops, do: res
+  defp store_mark(%Nx.Tensor{} = res, op) when op in @keep_donatable_flag_ops, do: res
   defp store_mark(%Nx.Tensor{} = res, _op), do: %{res | donatable?: false}
   defp store_mark(res, _op), do: res
 
@@ -340,7 +341,7 @@ defmodule Nx.Defn.Evaluator do
         count > 1 -> false
         is_map_key(state.held, id) -> false
         is_map_key(state.aliased_ids, id) -> false
-        op in @keep_mark_ops -> res.donatable?
+        op in @keep_donatable_flag_ops -> res.donatable?
         op in @never_donate_ops -> false
         true -> true
       end
