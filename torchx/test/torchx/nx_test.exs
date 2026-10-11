@@ -786,6 +786,20 @@ defmodule Torchx.NxTest do
   end
 
   describe "pad" do
+    test "pads in the merged type of tensor and pad value" do
+      Nx.tensor([1])
+      |> Nx.pad(0.5, [{1, 0, 0}])
+      |> assert_equal(Nx.tensor([0.5, 1.0]))
+
+      Nx.tensor([1, 2], type: :u8)
+      |> Nx.pad(-1, [{1, 1, 0}])
+      |> assert_equal(Nx.tensor([-1, 1, 2, -1], type: :s16))
+
+      Nx.tensor([1.0], type: :f32)
+      |> Nx.pad(Nx.tensor(1.0, type: :f64), [{1, 0, 0}])
+      |> assert_equal(Nx.tensor([1.0, 1.0], type: :f64))
+    end
+
     test "2d" do
       Nx.tensor(1)
       |> Nx.pad(0, [])
