@@ -9,10 +9,10 @@ defmodule Nx.Defn.Evaluator do
   The evaluator counts how many times each node is used. When a node
   is passed to an operation for the last time, the evaluator marks that
   argument with `Nx.donatable/1`, so backends that run operations eagerly
-  may reuse its buffer. A user argument marked as donatable is only
+  may reuse its buffer. Similarly, a user argument marked as donatable is only
   handed over at its last use. Nodes that may still be reachable through
   another node's result (such as values returned by a `cond` branch)
-  and results of the function are never marked.
+  and results of the function are never marked due to runtime-value constraints.
 
   ## Options
 
