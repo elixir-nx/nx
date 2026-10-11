@@ -75,6 +75,18 @@ tensor_ok(const torch::Tensor &tensor) {
   return fine::Ok(fine::make_resource<TorchTensor>(tensor));
 }
 
+// Gives the storage of `view`, a view of the tensor in `input`, to the result.
+// Views of floating point tensors keep the tensor they view alive, so the
+// result is detached from it and `input` is taken to leave the result as the
+// only owner of the storage.
+torch::Tensor hand_over(torch::Tensor view,
+                        fine::ResourcePtr<TorchTensor> &input) {
+  torch::Tensor result = view.detach();
+  view = torch::Tensor();
+  input->take();
+  return result;
+}
+
 // Helper for vector of int64 to IntArrayRef conversion
 c10::IntArrayRef vec_to_array_ref(const std::vector<int64_t> &vec) {
   return c10::IntArrayRef(vec);
@@ -419,17 +431,29 @@ REGISTER_TENSOR_NIF(split);
 
 fine::Ok<fine::ResourcePtr<TorchTensor>>
 reshape(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
-        std::vector<int64_t> shape) {
-  return tensor_ok(torch::reshape(get_tensor(tensor), vec_to_array_ref(shape)));
+        std::vector<int64_t> shape, bool donate) {
+  bool owned = donate && tensor->is_unique();
+  auto result = torch::reshape(get_tensor(tensor), vec_to_array_ref(shape));
+  if (owned) {
+    return tensor_ok(hand_over(std::move(result), tensor));
+  }
+  return tensor_ok(result);
 }
 
 REGISTER_TENSOR_NIF(reshape);
 
 fine::Ok<fine::ResourcePtr<TorchTensor>>
 to_type(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
-        fine::Atom type_atom) {
+        fine::Atom type_atom, bool donate) {
   auto type = string2type(type_atom.to_string());
-  return tensor_ok(get_tensor(tensor).toType(type));
+  // Converting to the same type shares the buffer, so a donated input
+  // hands it over instead.
+  bool owned = donate && tensor->is_unique();
+  auto result = get_tensor(tensor).toType(type);
+  if (owned) {
+    return tensor_ok(hand_over(std::move(result), tensor));
+  }
+  return tensor_ok(result);
 }
 
 REGISTER_TENSOR_NIF(to_type);
@@ -449,22 +473,30 @@ REGISTER_TENSOR_NIF(to_device);
 
 std::variant<fine::Ok<fine::ResourcePtr<TorchTensor>>>
 squeeze(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
-        std::optional<int64_t> dim) {
-  if (dim.has_value()) {
-    return tensor_ok(torch::squeeze(get_tensor(tensor), dim.value()));
-  } else {
-    return tensor_ok(torch::squeeze(get_tensor(tensor)));
+        std::optional<int64_t> dim, bool donate) {
+  bool owned = donate && tensor->is_unique();
+  auto result = dim.has_value() ? torch::squeeze(get_tensor(tensor), dim.value())
+                                : torch::squeeze(get_tensor(tensor));
+  if (owned) {
+    return tensor_ok(hand_over(std::move(result), tensor));
   }
+  return tensor_ok(result);
 }
 
 REGISTER_TENSOR_NIF(squeeze);
 
-// nil and true copy. false returns a view of the input.
+// nil and true copy. false returns a view of the input. A donated input is
+// not copied, as nothing else reads its buffer.
 fine::Ok<fine::ResourcePtr<TorchTensor>>
 broadcast_to(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
-             std::vector<int64_t> shape, std::optional<bool> clone) {
+             std::vector<int64_t> shape, std::optional<bool> clone,
+             bool donate) {
+  bool owned = donate && tensor->is_unique();
   auto result =
       torch::broadcast_to(get_tensor(tensor), vec_to_array_ref(shape));
+  if (owned) {
+    return tensor_ok(hand_over(std::move(result), tensor));
+  }
   if (!clone || *clone) {
     result = result.clone();
   }
@@ -475,8 +507,13 @@ REGISTER_TENSOR_NIF(broadcast_to);
 
 fine::Ok<fine::ResourcePtr<TorchTensor>>
 transpose(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor, int64_t dim0,
-          int64_t dim1) {
-  return tensor_ok(torch::transpose(get_tensor(tensor), dim0, dim1));
+          int64_t dim1, bool donate) {
+  bool owned = donate && tensor->is_unique();
+  auto result = torch::transpose(get_tensor(tensor), dim0, dim1);
+  if (owned) {
+    return tensor_ok(hand_over(std::move(result), tensor));
+  }
+  return tensor_ok(result);
 }
 
 REGISTER_TENSOR_NIF(transpose);
@@ -484,8 +521,9 @@ REGISTER_TENSOR_NIF(transpose);
 fine::Ok<fine::ResourcePtr<TorchTensor>>
 slice(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> input,
       std::vector<int64_t> starts, std::vector<int64_t> lengths,
-      std::vector<int64_t> strides) {
+      std::vector<int64_t> strides, bool donate) {
 
+  bool owned = donate && input->is_unique();
   torch::Tensor result = get_tensor(input);
   auto shape = result.sizes();
 
@@ -498,7 +536,11 @@ slice(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> input,
     result = result.slice(dim, start, end, stride);
   }
 
-  // Clone the result to ensure memory ownership
+  // Clone the result to ensure memory ownership, unless the input is donated
+  // and the result can keep its buffer.
+  if (owned) {
+    return tensor_ok(hand_over(std::move(result), input));
+  }
   return tensor_ok(result.clone());
 }
 
@@ -528,7 +570,8 @@ REGISTER_TENSOR_NIF(gather);
 fine::Ok<fine::ResourcePtr<TorchTensor>>
 index_put(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> input,
           std::vector<fine::ResourcePtr<TorchTensor>> indices,
-          fine::ResourcePtr<TorchTensor> values, bool accumulate) {
+          fine::ResourcePtr<TorchTensor> values, bool accumulate,
+          bool donate) {
   TORCH_CATCH_ERROR(
       [&]() {
         c10::List<std::optional<at::Tensor>> torch_indices;
@@ -536,7 +579,10 @@ index_put(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> input,
           torch_indices.push_back(get_tensor(idx));
         }
 
-        torch::Tensor result = get_tensor(input).clone();
+        bool in_place = donate && input->is_writable() &&
+                        !get_tensor(values).is_alias_of(get_tensor(input));
+        torch::Tensor result =
+            in_place ? input->take() : get_tensor(input).clone();
         result.index_put_(torch_indices, get_tensor(values), accumulate);
         return tensor_ok(result);
       }(),
@@ -588,17 +634,25 @@ REGISTER_TENSOR_NIF(flip);
 
 fine::Ok<fine::ResourcePtr<TorchTensor>>
 unfold(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> input, int64_t dim,
-       int64_t size, int64_t step) {
-  return tensor_ok(get_tensor(input).unfold(dim, size, step));
+       int64_t size, int64_t step, bool donate) {
+  bool owned = donate && input->is_unique();
+  auto result = get_tensor(input).unfold(dim, size, step);
+  if (owned) {
+    return tensor_ok(hand_over(std::move(result), input));
+  }
+  return tensor_ok(result);
 }
 
 REGISTER_TENSOR_NIF(unfold);
 
 fine::Ok<fine::ResourcePtr<TorchTensor>>
 put(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> input,
-    std::vector<int64_t> indices, fine::ResourcePtr<TorchTensor> source) {
+    std::vector<int64_t> indices, fine::ResourcePtr<TorchTensor> source,
+    bool donate) {
 
-  torch::Tensor output = get_tensor(input).clone();
+  bool in_place = donate && input->is_writable() &&
+                  !get_tensor(source).is_alias_of(get_tensor(input));
+  torch::Tensor output = in_place ? input->take() : get_tensor(input).clone();
   torch::Tensor destination = output;
 
   auto source_shape = get_tensor(source).sizes();
@@ -619,8 +673,13 @@ REGISTER_TENSOR_NIF(put);
 
 fine::Ok<fine::ResourcePtr<TorchTensor>>
 permute(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> input,
-        std::vector<int64_t> permutation) {
-  return tensor_ok(get_tensor(input).permute(vec_to_array_ref(permutation)));
+        std::vector<int64_t> permutation, bool donate) {
+  bool owned = donate && input->is_unique();
+  auto result = get_tensor(input).permute(vec_to_array_ref(permutation));
+  if (owned) {
+    return tensor_ok(hand_over(std::move(result), input));
+  }
+  return tensor_ok(result);
 }
 
 REGISTER_TENSOR_NIF(permute);
@@ -747,11 +806,6 @@ REGISTER_TENSOR_NIF(full);
   }                                                                            \
   REGISTER_TENSOR_NIF(NAME)
 
-BINARY_OP(bitwise_and, bitwise_and);
-BINARY_OP(bitwise_or, bitwise_or);
-BINARY_OP(bitwise_xor, bitwise_xor);
-BINARY_OP(left_shift, __lshift__);
-BINARY_OP(right_shift, __rshift__);
 BINARY_OP(equal, eq);
 BINARY_OP(not_equal, not_equal);
 BINARY_OP(greater, greater);
@@ -761,18 +815,61 @@ BINARY_OP(less_equal, less_equal);
 BINARY_OP(logical_and, logical_and);
 BINARY_OP(logical_or, logical_or);
 BINARY_OP(logical_xor, logical_xor);
-BINARY_OP(add, add);
-BINARY_OP(subtract, subtract);
-BINARY_OP(divide, divide);
-BINARY_OP(remainder, remainder);
-BINARY_OP(quotient, floor_divide);
-BINARY_OP(multiply, multiply);
-BINARY_OP(pow, pow);
-BINARY_OP(atan2, atan2);
-BINARY_OP(min, min);
-BINARY_OP(max, max);
-BINARY_OP(fmod, fmod);
 
+// Whether `a` can hold the result of `a OP b`: its buffer is not shared, and
+// the result has the type and shape of `a`. Ops that return floats for
+// integer inputs pass floating_only.
+bool can_write_binary(fine::ResourcePtr<TorchTensor> &a,
+                      const torch::Tensor &rhs, bool floating_only) {
+  if (!a->is_writable()) {
+    return false;
+  }
+  const torch::Tensor &lhs = a->tensor();
+  if (rhs.is_alias_of(lhs)) {
+    return false;
+  }
+  if (floating_only && !(lhs.is_floating_point() || lhs.is_complex())) {
+    return false;
+  }
+  return at::result_type(lhs, rhs) == lhs.scalar_type() &&
+         c10::IntArrayRef(at::infer_size(lhs.sizes(), rhs.sizes())) ==
+             lhs.sizes();
+}
+
+// Binary op that writes into `a` when `donate` is set and `a` can hold the
+// result. Otherwise it allocates a new result.
+#define BINARY_OP_INPLACE(NAME, TORCH_OP, INPLACE_EXPR, FLOATING_ONLY)         \
+  fine::Ok<fine::ResourcePtr<TorchTensor>> NAME(                               \
+      ErlNifEnv *env, fine::ResourcePtr<TorchTensor> a,                        \
+      fine::ResourcePtr<TorchTensor> b, bool donate) {                         \
+    torch::Tensor &lhs = get_tensor(a);                                        \
+    const torch::Tensor &rhs = get_tensor(b);                                  \
+    if (donate && can_write_binary(a, rhs, FLOATING_ONLY)) {                   \
+      INPLACE_EXPR;                                                            \
+      return tensor_ok(a->take());                                             \
+    }                                                                          \
+    return tensor_ok(torch::TORCH_OP(lhs, rhs));                               \
+  }                                                                            \
+  REGISTER_TENSOR_NIF(NAME)
+
+BINARY_OP_INPLACE(bitwise_and, bitwise_and, torch::bitwise_and_out(lhs, lhs, rhs), false);
+BINARY_OP_INPLACE(bitwise_or, bitwise_or, torch::bitwise_or_out(lhs, lhs, rhs), false);
+BINARY_OP_INPLACE(bitwise_xor, bitwise_xor, torch::bitwise_xor_out(lhs, lhs, rhs), false);
+BINARY_OP_INPLACE(left_shift, __lshift__, lhs.__ilshift__(rhs), false);
+BINARY_OP_INPLACE(right_shift, __rshift__, lhs.__irshift__(rhs), false);
+BINARY_OP_INPLACE(add, add, torch::add_out(lhs, lhs, rhs), false);
+BINARY_OP_INPLACE(subtract, subtract, torch::subtract_out(lhs, lhs, rhs), false);
+BINARY_OP_INPLACE(divide, divide, torch::divide_out(lhs, lhs, rhs), true);
+BINARY_OP_INPLACE(remainder, remainder, torch::remainder_out(lhs, lhs, rhs), false);
+BINARY_OP_INPLACE(quotient, floor_divide, torch::floor_divide_out(lhs, lhs, rhs), false);
+BINARY_OP_INPLACE(multiply, multiply, torch::multiply_out(lhs, lhs, rhs), false);
+BINARY_OP_INPLACE(pow, pow, torch::pow_out(lhs, lhs, rhs), false);
+BINARY_OP_INPLACE(atan2, atan2, torch::atan2_out(lhs, lhs, rhs), true);
+BINARY_OP_INPLACE(min, min, torch::minimum_out(lhs, lhs, rhs), false);
+BINARY_OP_INPLACE(max, max, torch::maximum_out(lhs, lhs, rhs), false);
+BINARY_OP_INPLACE(fmod, fmod, torch::fmod_out(lhs, lhs, rhs), false);
+
+#undef BINARY_OP_INPLACE
 #undef BINARY_OP
 
 // ============================================================================
@@ -786,36 +883,57 @@ BINARY_OP(fmod, fmod);
   }                                                                            \
   REGISTER_TENSOR_NIF(NAME)
 
-UNARY_OP(abs, abs);
-UNARY_OP(ceil, ceil);
-UNARY_OP(floor, floor);
-UNARY_OP(negate, neg);
-UNARY_OP(round, round);
-UNARY_OP(sign, sign);
-UNARY_OP(exp, exp);
-UNARY_OP(expm1, expm1);
-UNARY_OP(sqrt, sqrt);
-UNARY_OP(rsqrt, rsqrt);
-UNARY_OP(log, log);
-UNARY_OP(log1p, log1p);
-UNARY_OP(bitwise_not, bitwise_not);
 UNARY_OP(logical_not, logical_not);
-UNARY_OP(sigmoid, sigmoid);
-UNARY_OP(sin, sin);
-UNARY_OP(asin, asin);
-UNARY_OP(sinh, sinh);
-UNARY_OP(asinh, asinh);
-UNARY_OP(cos, cos);
-UNARY_OP(acos, acos);
-UNARY_OP(cosh, cosh);
-UNARY_OP(acosh, acosh);
-UNARY_OP(tan, tan);
-UNARY_OP(atan, atan);
-UNARY_OP(tanh, tanh);
-UNARY_OP(atanh, atanh);
-UNARY_OP(erf, erf);
-UNARY_OP(erfc, erfc);
-UNARY_OP(erf_inv, erfinv);
+
+// Unary op that writes into `a` when `donate` is set, `a` is not shared and
+// the in-place version keeps the type of `a` (CONDITION, written in terms of
+// `t`). Otherwise it allocates a new result.
+#define UNARY_OP_INPLACE(NAME, TORCH_OP, INPLACE_OP, CONDITION)                \
+  fine::Ok<fine::ResourcePtr<TorchTensor>> NAME(                               \
+      ErlNifEnv *env, fine::ResourcePtr<TorchTensor> a, bool donate) {         \
+    torch::Tensor &t = get_tensor(a);                                          \
+    if (donate && a->is_writable() && (CONDITION)) {                           \
+      t.INPLACE_OP();                                                          \
+      return tensor_ok(a->take());                                             \
+    }                                                                          \
+    return tensor_ok(torch::TORCH_OP(t));                                      \
+  }                                                                            \
+  REGISTER_TENSOR_NIF(NAME)
+
+#define FLOATING_OR_COMPLEX (t.is_floating_point() || t.is_complex())
+
+UNARY_OP_INPLACE(abs, abs, abs_, !t.is_complex());
+UNARY_OP_INPLACE(ceil, ceil, ceil_, t.is_floating_point());
+UNARY_OP_INPLACE(floor, floor, floor_, t.is_floating_point());
+UNARY_OP_INPLACE(negate, neg, neg_, true);
+UNARY_OP_INPLACE(round, round, round_, t.is_floating_point());
+UNARY_OP_INPLACE(sign, sign, sign_, !t.is_complex() && t.scalar_type() != torch::kBool);
+UNARY_OP_INPLACE(exp, exp, exp_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(expm1, expm1, expm1_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(sqrt, sqrt, sqrt_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(rsqrt, rsqrt, rsqrt_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(log, log, log_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(log1p, log1p, log1p_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(bitwise_not, bitwise_not, bitwise_not_, true);
+UNARY_OP_INPLACE(sigmoid, sigmoid, sigmoid_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(sin, sin, sin_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(asin, asin, asin_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(sinh, sinh, sinh_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(asinh, asinh, asinh_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(cos, cos, cos_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(acos, acos, acos_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(cosh, cosh, cosh_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(acosh, acosh, acosh_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(tan, tan, tan_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(atan, atan, atan_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(tanh, tanh, tanh_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(atanh, atanh, atanh_, FLOATING_OR_COMPLEX);
+UNARY_OP_INPLACE(erf, erf, erf_, t.is_floating_point());
+UNARY_OP_INPLACE(erfc, erfc, erfc_, t.is_floating_point());
+UNARY_OP_INPLACE(erf_inv, erfinv, erfinv_, t.is_floating_point());
+
+#undef FLOATING_OR_COMPLEX
+#undef UNARY_OP_INPLACE
 // cbrt is not in torch namespace, needs custom implementation
 fine::Ok<fine::ResourcePtr<TorchTensor>>
 cbrt(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor) {
@@ -830,10 +948,27 @@ cbrt(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor) {
 REGISTER_TENSOR_NIF(cbrt);
 UNARY_OP(is_nan, isnan);
 UNARY_OP(is_infinity, isinf);
-UNARY_OP(view_as_real, view_as_real);
-// conjugate needs special handling - conj() returns a view, must clone
+
 fine::Ok<fine::ResourcePtr<TorchTensor>>
-conjugate(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> a) {
+view_as_real(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> a, bool donate) {
+  bool owned = donate && a->is_unique();
+  auto result = torch::view_as_real(get_tensor(a));
+  if (owned) {
+    return tensor_ok(hand_over(std::move(result), a));
+  }
+  return tensor_ok(result);
+}
+
+REGISTER_TENSOR_NIF(view_as_real);
+
+// conjugate needs special handling - conj() returns a view, must clone. A
+// donated input is conjugated in place instead.
+fine::Ok<fine::ResourcePtr<TorchTensor>>
+conjugate(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> a, bool donate) {
+  if (donate && a->is_writable()) {
+    get_tensor(a).conj_physical_();
+    return tensor_ok(a->take());
+  }
   at::Tensor conjugated = get_tensor(a).conj();
   return tensor_ok(conjugated.clone(conjugated.suggest_memory_format()));
 }
@@ -882,7 +1017,7 @@ tensordot(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> a,
     if (!impl) {
       throw std::runtime_error("unable to get tensordot result");
     }
-    result = torch::clone(impl->value());
+    result = impl->value();
   } else {
     result =
         torch::tensordot(get_tensor(a), get_tensor(b), vec_to_array_ref(axes_a),

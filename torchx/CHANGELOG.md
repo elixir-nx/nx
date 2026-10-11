@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Enhancements
+
+  * Reuse the buffer of donatable tensors in elementwise, indexing and view operations instead of copying them
+  * Drop the copy of the batched `Nx.dot/6` result
+  * Broadcast `Nx.eye/2` and `Nx.iota/2` results as views
+
 ## v1.0.0 (2026-09-10)
 
   * Update to latest Nx
