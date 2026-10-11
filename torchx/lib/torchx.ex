@@ -43,7 +43,8 @@ defmodule Torchx.Macro do
   @doc """
   Generates a call that returns a tensor (or a tuple/list of tensors).
 
-  All tensor variables must start with the name tensor.
+  All tensor variables must start with the name tensor. Arguments
+  may have default values, as in `donate \\\\ false`.
   """
   defmacro deftensor(call) do
     defcall(call, :unwrap_tensor!, [Macro.var(:device, __MODULE__)])
@@ -59,7 +60,11 @@ defmodule Torchx.Macro do
   end
 
   defp defcall(call, unwrapper, extra) do
-    {name, args} = Macro.decompose_call(call)
+    {name, args_with_defaults} = Macro.decompose_call(call)
+
+    # Arguments may have defaults, as in `donate \\ false`. The NIF always
+    # receives every argument.
+    args = Enum.map(args_with_defaults, &strip_default/1)
     tensors = tensors(args)
 
     if tensors == [] do
@@ -68,7 +73,7 @@ defmodule Torchx.Macro do
 
     quote do
       @torch_function {unquote(name), unquote(length(args))}
-      def unquote(name)(unquote_splicing(args)) do
+      def unquote(name)(unquote_splicing(args_with_defaults)) do
         {unquote(tensors), device} = prepare_tensors!(unquote(tensors))
 
         case device do
@@ -79,6 +84,9 @@ defmodule Torchx.Macro do
       end
     end
   end
+
+  defp strip_default({:\\, _, [arg, _default]}), do: arg
+  defp strip_default(arg), do: arg
 
   defp has_device?(args) do
     Enum.any?(args, &match?({:device, _, nil}, &1))
@@ -259,38 +267,25 @@ defmodule Torchx do
   # tensor shares the buffer of the input, the op reuses that buffer and the
   # input can no longer be used. Otherwise it allocates as usual.
 
-  def reshape(tensor, shape), do: reshape(tensor, shape, false)
-  deftensor reshape(tensor, shape, donate)
-  def to_type(tensor, type), do: to_type(tensor, type, false)
-  deftensor to_type(tensor, type, donate)
+  deftensor reshape(tensor, shape, donate \\ false)
+  deftensor to_type(tensor, type, donate \\ false)
   deftensor squeeze(tensor)
-  def squeeze(tensor, axis), do: squeeze(tensor, axis, false)
-  deftensor squeeze(tensor, axis, donate)
-  def broadcast_to(tensor, shape), do: broadcast_to(tensor, shape, nil, false)
-  def broadcast_to(tensor, shape, clone), do: broadcast_to(tensor, shape, clone, false)
+  deftensor squeeze(tensor, axis, donate \\ false)
 
-  deftensor broadcast_to(tensor, shape, clone, donate)
-  def transpose(tensor, dim0, dim1), do: transpose(tensor, dim0, dim1, false)
-  deftensor transpose(tensor, dim0, dim1, donate)
-  def permute(tensor, dims), do: permute(tensor, dims, false)
-  deftensor permute(tensor, dims, donate)
+  deftensor broadcast_to(tensor, shape, clone \\ nil, donate \\ false)
+  deftensor transpose(tensor, dim0, dim1, donate \\ false)
+  deftensor permute(tensor, dims, donate \\ false)
   deftensor split(tensor, split_size)
-  def slice(tensor, starts, lengths, strides), do: slice(tensor, starts, lengths, strides, false)
-  deftensor slice(tensor, starts, lengths, strides, donate)
+  deftensor slice(tensor, starts, lengths, strides, donate \\ false)
   deftensor concatenate(tensors, axis)
   deftensor gather(tensor_input, tensor_indices, axis)
   deftensor index(tensor_input, tensor_indices)
 
-  def index_put(tensor_input, tensor_indices, tensor_updates, accumulate),
-    do: index_put(tensor_input, tensor_indices, tensor_updates, accumulate, false)
-
-  deftensor index_put(tensor_input, tensor_indices, tensor_updates, accumulate, donate)
+  deftensor index_put(tensor_input, tensor_indices, tensor_updates, accumulate, donate \\ false)
   deftensor argsort(tensor, axis, is_descending, stable)
   deftensor flip(tensor, axis)
-  def unfold(tensor, dimension, size, step), do: unfold(tensor, dimension, size, step, false)
-  deftensor unfold(tensor, dimension, size, step, donate)
-  def put(tensor_input, index, tensor_source), do: put(tensor_input, index, tensor_source, false)
-  deftensor put(tensor_input, index, tensor_source, donate)
+  deftensor unfold(tensor, dimension, size, step, donate \\ false)
+  deftensor put(tensor_input, index, tensor_source, donate \\ false)
   deftensor where(tensorA, tensorB, tensorC)
 
   ## Aggregation
@@ -313,33 +308,20 @@ defmodule Torchx do
 
   ## Binary ops
 
-  def add(tensorA, tensorB), do: add(tensorA, tensorB, false)
-  deftensor add(tensorA, tensorB, donate)
-  def subtract(tensorA, tensorB), do: subtract(tensorA, tensorB, false)
-  deftensor subtract(tensorA, tensorB, donate)
-  def multiply(tensorA, tensorB), do: multiply(tensorA, tensorB, false)
-  deftensor multiply(tensorA, tensorB, donate)
-  def pow(tensorA, tensorB), do: pow(tensorA, tensorB, false)
-  deftensor pow(tensorA, tensorB, donate)
-  def remainder(tensorA, tensorB), do: remainder(tensorA, tensorB, false)
-  deftensor remainder(tensorA, tensorB, donate)
-  def fmod(tensorA, tensorB), do: fmod(tensorA, tensorB, false)
-  deftensor fmod(tensorA, tensorB, donate)
-  def divide(tensorA, tensorB), do: divide(tensorA, tensorB, false)
-  deftensor divide(tensorA, tensorB, donate)
-  def atan2(tensorA, tensorB), do: atan2(tensorA, tensorB, false)
-  deftensor atan2(tensorA, tensorB, donate)
-  def min(tensorA, tensorB), do: min(tensorA, tensorB, false)
-  deftensor min(tensorA, tensorB, donate)
-  def max(tensorA, tensorB), do: max(tensorA, tensorB, false)
-  deftensor max(tensorA, tensorB, donate)
-  def quotient(tensorA, tensorB), do: quotient(tensorA, tensorB, false)
-  deftensor quotient(tensorA, tensorB, donate)
+  deftensor add(tensorA, tensorB, donate \\ false)
+  deftensor subtract(tensorA, tensorB, donate \\ false)
+  deftensor multiply(tensorA, tensorB, donate \\ false)
+  deftensor pow(tensorA, tensorB, donate \\ false)
+  deftensor remainder(tensorA, tensorB, donate \\ false)
+  deftensor fmod(tensorA, tensorB, donate \\ false)
+  deftensor divide(tensorA, tensorB, donate \\ false)
+  deftensor atan2(tensorA, tensorB, donate \\ false)
+  deftensor min(tensorA, tensorB, donate \\ false)
+  deftensor max(tensorA, tensorB, donate \\ false)
+  deftensor quotient(tensorA, tensorB, donate \\ false)
 
-  def left_shift(tensorA, tensorB), do: left_shift(tensorA, tensorB, false)
-  deftensor left_shift(tensorA, tensorB, donate)
-  def right_shift(tensorA, tensorB), do: right_shift(tensorA, tensorB, false)
-  deftensor right_shift(tensorA, tensorB, donate)
+  deftensor left_shift(tensorA, tensorB, donate \\ false)
+  deftensor right_shift(tensorA, tensorB, donate \\ false)
 
   deftensor equal(tensorA, tensorB)
   deftensor not_equal(tensorA, tensorB)
@@ -353,12 +335,9 @@ defmodule Torchx do
   deftensor logical_xor(tensorA, tensorB)
   deftensor logical_not(tensorA)
 
-  def bitwise_and(tensorA, tensorB), do: bitwise_and(tensorA, tensorB, false)
-  deftensor bitwise_and(tensorA, tensorB, donate)
-  def bitwise_or(tensorA, tensorB), do: bitwise_or(tensorA, tensorB, false)
-  deftensor bitwise_or(tensorA, tensorB, donate)
-  def bitwise_xor(tensorA, tensorB), do: bitwise_xor(tensorA, tensorB, false)
-  deftensor bitwise_xor(tensorA, tensorB, donate)
+  deftensor bitwise_and(tensorA, tensorB, donate \\ false)
+  deftensor bitwise_or(tensorA, tensorB, donate \\ false)
+  deftensor bitwise_xor(tensorA, tensorB, donate \\ false)
 
   deftensor amax(tensor, axes, keep_axes)
   deftensor amin(tensor, axes, keep_axes)
@@ -371,54 +350,30 @@ defmodule Torchx do
 
   ## Unary ops
 
-  def exp(tensor), do: exp(tensor, false)
-  deftensor exp(tensor, donate)
-  def expm1(tensor), do: expm1(tensor, false)
-  deftensor expm1(tensor, donate)
-  def log(tensor), do: log(tensor, false)
-  deftensor log(tensor, donate)
-  def log1p(tensor), do: log1p(tensor, false)
-  deftensor log1p(tensor, donate)
-  def sigmoid(tensor), do: sigmoid(tensor, false)
-  deftensor sigmoid(tensor, donate)
-  def view_as_real(tensor), do: view_as_real(tensor, false)
-  deftensor view_as_real(tensor, donate)
-  def conjugate(tensor), do: conjugate(tensor, false)
-  deftensor conjugate(tensor, donate)
-  def cos(tensor), do: cos(tensor, false)
-  deftensor cos(tensor, donate)
-  def sin(tensor), do: sin(tensor, false)
-  deftensor sin(tensor, donate)
-  def tan(tensor), do: tan(tensor, false)
-  deftensor tan(tensor, donate)
-  def cosh(tensor), do: cosh(tensor, false)
-  deftensor cosh(tensor, donate)
-  def sinh(tensor), do: sinh(tensor, false)
-  deftensor sinh(tensor, donate)
-  def tanh(tensor), do: tanh(tensor, false)
-  deftensor tanh(tensor, donate)
-  def acos(tensor), do: acos(tensor, false)
-  deftensor acos(tensor, donate)
-  def asin(tensor), do: asin(tensor, false)
-  deftensor asin(tensor, donate)
-  def atan(tensor), do: atan(tensor, false)
-  deftensor atan(tensor, donate)
-  def acosh(tensor), do: acosh(tensor, false)
-  deftensor acosh(tensor, donate)
-  def asinh(tensor), do: asinh(tensor, false)
-  deftensor asinh(tensor, donate)
-  def atanh(tensor), do: atanh(tensor, false)
-  deftensor atanh(tensor, donate)
-  def sqrt(tensor), do: sqrt(tensor, false)
-  deftensor sqrt(tensor, donate)
-  def rsqrt(tensor), do: rsqrt(tensor, false)
-  deftensor rsqrt(tensor, donate)
-  def erf(tensor), do: erf(tensor, false)
-  deftensor erf(tensor, donate)
-  def erfc(tensor), do: erfc(tensor, false)
-  deftensor erfc(tensor, donate)
-  def erf_inv(tensor), do: erf_inv(tensor, false)
-  deftensor erf_inv(tensor, donate)
+  deftensor exp(tensor, donate \\ false)
+  deftensor expm1(tensor, donate \\ false)
+  deftensor log(tensor, donate \\ false)
+  deftensor log1p(tensor, donate \\ false)
+  deftensor sigmoid(tensor, donate \\ false)
+  deftensor view_as_real(tensor, donate \\ false)
+  deftensor conjugate(tensor, donate \\ false)
+  deftensor cos(tensor, donate \\ false)
+  deftensor sin(tensor, donate \\ false)
+  deftensor tan(tensor, donate \\ false)
+  deftensor cosh(tensor, donate \\ false)
+  deftensor sinh(tensor, donate \\ false)
+  deftensor tanh(tensor, donate \\ false)
+  deftensor acos(tensor, donate \\ false)
+  deftensor asin(tensor, donate \\ false)
+  deftensor atan(tensor, donate \\ false)
+  deftensor acosh(tensor, donate \\ false)
+  deftensor asinh(tensor, donate \\ false)
+  deftensor atanh(tensor, donate \\ false)
+  deftensor sqrt(tensor, donate \\ false)
+  deftensor rsqrt(tensor, donate \\ false)
+  deftensor erf(tensor, donate \\ false)
+  deftensor erfc(tensor, donate \\ false)
+  deftensor erf_inv(tensor, donate \\ false)
   deftensor cbrt(tensor)
   deftensor fft(tensor, length, axis)
   deftensor ifft(tensor, length, axis)
@@ -427,20 +382,13 @@ defmodule Torchx do
   deftensor fft2(tensor, lengths, axes)
   deftensor ifft2(tensor, lengths, axes)
 
-  def abs(tensor), do: abs(tensor, false)
-  deftensor abs(tensor, donate)
-  def bitwise_not(tensor), do: bitwise_not(tensor, false)
-  deftensor bitwise_not(tensor, donate)
-  def ceil(tensor), do: ceil(tensor, false)
-  deftensor ceil(tensor, donate)
-  def floor(tensor), do: floor(tensor, false)
-  deftensor floor(tensor, donate)
-  def negate(tensor), do: negate(tensor, false)
-  deftensor negate(tensor, donate)
-  def round(tensor), do: round(tensor, false)
-  deftensor round(tensor, donate)
-  def sign(tensor), do: sign(tensor, false)
-  deftensor sign(tensor, donate)
+  deftensor abs(tensor, donate \\ false)
+  deftensor bitwise_not(tensor, donate \\ false)
+  deftensor ceil(tensor, donate \\ false)
+  deftensor floor(tensor, donate \\ false)
+  deftensor negate(tensor, donate \\ false)
+  deftensor round(tensor, donate \\ false)
+  deftensor sign(tensor, donate \\ false)
   deftensor is_nan(tensor)
   deftensor is_infinity(tensor)
 
