@@ -111,6 +111,11 @@ defmodule Nx.Defn.Evaluator do
   # inputs of io_call, runtime_call and block can return or keep their input
   # under a different id, so the use count of the original id undercounts the
   # references to its buffer.
+  #
+  # This is a separate pass because `init_compute_cache/2` builds one cache per
+  # scope, and the cond clause above splits and merges those caches by id. The
+  # aliased ids are global to all scopes, so keeping them in a cache would need
+  # a new kind of entry that this merging has to skip.
   defp aliased_ids(expr), do: expr |> collect_aliased({%{}, %{}}) |> elem(1)
 
   defp collect_aliased(composite, acc) do
