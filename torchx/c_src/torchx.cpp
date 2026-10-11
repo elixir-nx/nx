@@ -475,8 +475,9 @@ std::variant<fine::Ok<fine::ResourcePtr<TorchTensor>>>
 squeeze(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> tensor,
         std::optional<int64_t> dim, bool donate) {
   bool owned = donate && tensor->is_unique();
-  auto result = dim.has_value() ? torch::squeeze(get_tensor(tensor), dim.value())
-                                : torch::squeeze(get_tensor(tensor));
+  auto result = dim.has_value()
+                    ? torch::squeeze(get_tensor(tensor), dim.value())
+                    : torch::squeeze(get_tensor(tensor));
   if (owned) {
     return tensor_ok(hand_over(std::move(result), tensor));
   }
@@ -852,17 +853,31 @@ bool can_write_binary(fine::ResourcePtr<TorchTensor> &a,
   }                                                                            \
   REGISTER_TENSOR_NIF(NAME)
 
-BINARY_OP_INPLACE(bitwise_and, bitwise_and, torch::bitwise_and_out(lhs, lhs, rhs), false);
-BINARY_OP_INPLACE(bitwise_or, bitwise_or, torch::bitwise_or_out(lhs, lhs, rhs), false);
-BINARY_OP_INPLACE(bitwise_xor, bitwise_xor, torch::bitwise_xor_out(lhs, lhs, rhs), false);
+BINARY_OP_INPLACE(bitwise_and, bitwise_and,
+                    torch::bitwise_and_out(lhs, lhs, rhs),
+                    false);
+BINARY_OP_INPLACE(bitwise_or, bitwise_or,
+                    torch::bitwise_or_out(lhs, lhs, rhs),
+                    false);
+BINARY_OP_INPLACE(bitwise_xor, bitwise_xor,
+                    torch::bitwise_xor_out(lhs, lhs, rhs),
+                    false);
 BINARY_OP_INPLACE(left_shift, __lshift__, lhs.__ilshift__(rhs), false);
 BINARY_OP_INPLACE(right_shift, __rshift__, lhs.__irshift__(rhs), false);
 BINARY_OP_INPLACE(add, add, torch::add_out(lhs, lhs, rhs), false);
-BINARY_OP_INPLACE(subtract, subtract, torch::subtract_out(lhs, lhs, rhs), false);
+BINARY_OP_INPLACE(subtract, subtract,
+                    torch::subtract_out(lhs, lhs, rhs),
+                    false);
 BINARY_OP_INPLACE(divide, divide, torch::divide_out(lhs, lhs, rhs), true);
-BINARY_OP_INPLACE(remainder, remainder, torch::remainder_out(lhs, lhs, rhs), false);
-BINARY_OP_INPLACE(quotient, floor_divide, torch::floor_divide_out(lhs, lhs, rhs), false);
-BINARY_OP_INPLACE(multiply, multiply, torch::multiply_out(lhs, lhs, rhs), false);
+BINARY_OP_INPLACE(remainder, remainder,
+                    torch::remainder_out(lhs, lhs, rhs),
+                    false);
+BINARY_OP_INPLACE(quotient, floor_divide,
+                    torch::floor_divide_out(lhs, lhs, rhs),
+                    false);
+BINARY_OP_INPLACE(multiply, multiply,
+                    torch::multiply_out(lhs, lhs, rhs),
+                    false);
 BINARY_OP_INPLACE(pow, pow, torch::pow_out(lhs, lhs, rhs), false);
 BINARY_OP_INPLACE(atan2, atan2, torch::atan2_out(lhs, lhs, rhs), true);
 BINARY_OP_INPLACE(min, min, torch::minimum_out(lhs, lhs, rhs), false);
@@ -907,7 +922,8 @@ UNARY_OP_INPLACE(ceil, ceil, ceil_, t.is_floating_point());
 UNARY_OP_INPLACE(floor, floor, floor_, t.is_floating_point());
 UNARY_OP_INPLACE(negate, neg, neg_, true);
 UNARY_OP_INPLACE(round, round, round_, t.is_floating_point());
-UNARY_OP_INPLACE(sign, sign, sign_, !t.is_complex() && t.scalar_type() != torch::kBool);
+UNARY_OP_INPLACE(sign, sign, sign_,
+                 !t.is_complex() && t.scalar_type() != torch::kBool);
 UNARY_OP_INPLACE(exp, exp, exp_, FLOATING_OR_COMPLEX);
 UNARY_OP_INPLACE(expm1, expm1, expm1_, FLOATING_OR_COMPLEX);
 UNARY_OP_INPLACE(sqrt, sqrt, sqrt_, FLOATING_OR_COMPLEX);
