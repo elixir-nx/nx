@@ -8,6 +8,13 @@ defmodule EXLA.Defn.DonationTest do
   end
 
   describe "Nx.donatable/1" do
+    test "eager ops on a donatable tensor do not donate it" do
+      x = Nx.donatable(on_device([1, 2, 3, 4]))
+
+      assert Nx.to_number(Nx.sum(x)) == 10
+      assert Nx.to_flat_list(x) == [1, 2, 3, 4]
+    end
+
     test "donates a single argument and consumes its buffer" do
       x = Nx.donatable(on_device([1, 2, 3, 4]))
       %EXLA.Backend{buffer: %DeviceBuffer{} = orig} = x.data

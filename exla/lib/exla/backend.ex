@@ -427,8 +427,18 @@ defmodule EXLA.Backend do
   defp jit(opts, fun, args), do: jit(opts, fun, args, args)
 
   defp jit(opts, fun, tensors, args) do
+    # A single eager op has no output to donate an input to, and a donated
+    # input without a matching output raises at compile time.
+    args = Enum.map(args, &clear_donatable/1)
     EXLA.jit_apply(fun, args, [on_conflict: :force] ++ jit_opts(tensors, opts))
   end
+
+  defp clear_donatable(%T{} = tensor), do: %{tensor | donatable?: false}
+
+  defp clear_donatable(tuple) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> Enum.map(&clear_donatable/1) |> List.to_tuple()
+
+  defp clear_donatable(other), do: other
 
   defp jit_opts(tensors, opts) do
     {priority_client, priority_did, backup_client, backup_did} =

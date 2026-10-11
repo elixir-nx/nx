@@ -1,6 +1,66 @@
 defmodule Nx.Defn.DonationTest do
   use ExUnit.Case, async: true
 
+  import Nx.Defn
+  import Nx.Testing
+
+  defn once(x), do: Nx.exp(Nx.add(x, 1))
+
+  defn twice(x) do
+    y = Nx.add(x, 1)
+    Nx.multiply(y, y)
+  end
+
+  defn two_branches(x), do: Nx.add(Nx.exp(x), Nx.negate(x))
+
+  defn shared(x) do
+    y = Nx.add(x, 1)
+    Nx.add(Nx.exp(y), Nx.negate(y))
+  end
+
+  defn held_argument(x), do: Nx.add(x, Nx.negate(x))
+
+  defn cond_alias(pred, x) do
+    y = Nx.add(x, 1)
+
+    z =
+      if pred do
+        y
+      else
+        Nx.exp(y)
+      end
+
+    Nx.add(z, Nx.negate(y))
+  end
+
+  defn loop(x) do
+    {_, acc} =
+      while {i = 0, acc = x}, i < 2 do
+        {i + 1, Nx.exp(acc)}
+      end
+
+    acc
+  end
+
+  defn hooked(x) do
+    y = print_value(Nx.add(x, 1))
+    Nx.exp(y)
+  end
+
+  defp record(fun, args) do
+    RecordingBackend.reset()
+
+    result =
+      Nx.with_default_backend(RecordingBackend, fn ->
+        args = Enum.map(args, &Nx.backend_transfer(&1, RecordingBackend))
+        apply(Nx.Defn.jit(fun, compiler: Nx.Defn.Evaluator), args)
+      end)
+
+    {result, RecordingBackend.recorded()}
+  end
+
+  defp flags_of(recorded, op), do: for({^op, flags} <- recorded, do: flags)
+
   describe "Nx.donatable/1" do
     test "marks a tensor as donatable and is idempotent" do
       t = Nx.tensor([1, 2, 3])
@@ -105,6 +165,82 @@ defmodule Nx.Defn.DonationTest do
       assert_raise ArgumentError, ~r"compiled with donatable\?: false but got true", fn ->
         fun.(Nx.donatable(Nx.tensor([1, 2, 3])))
       end
+    end
+  end
+
+  describe "evaluator last-use marks" do
+    test "an intermediate used once is donatable" do
+      {result, recorded} = record(&once/1, [Nx.tensor([1.0, 2.0])])
+
+      assert flags_of(recorded, :add) == [[false, false]]
+      assert flags_of(recorded, :exp) == [[true]]
+      refute Nx.donatable?(result)
+    end
+
+    test "an intermediate used twice is donatable only at its last use" do
+      {result, recorded} = record(&shared/1, [Nx.tensor([1.0, 2.0])])
+
+      # Exactly one of the two readers (whichever runs last) may consume.
+      flags = flags_of(recorded, :exp) ++ flags_of(recorded, :negate)
+      assert Enum.sort(flags) == [[false], [true]]
+      assert_all_close(result, Nx.tensor([:math.exp(2.0) - 2.0, :math.exp(3.0) - 3.0]))
+    end
+
+    test "the same value twice in one op is never donatable" do
+      {_result, recorded} = record(&twice/1, [Nx.tensor([1.0, 2.0])])
+      assert flags_of(recorded, :multiply) == [[false, false]]
+    end
+
+    test "a donated argument is only donatable at its last use" do
+      x = Nx.donatable(Nx.tensor([1.0, 2.0]))
+
+      {_, recorded} = record(&two_branches/1, [x])
+      assert flags_of(recorded, :exp) == [[false]]
+      assert flags_of(recorded, :negate) == [[true]]
+
+      {_, recorded} = record(&once/1, [x])
+      assert flags_of(recorded, :add) == [[false, true]]
+    end
+
+    test "a value held by the op being built is not donatable by a later argument" do
+      x = Nx.donatable(Nx.tensor([1.0, 2.0]))
+      {result, recorded} = record(&held_argument/1, [x])
+
+      assert flags_of(recorded, :negate) == [[false]]
+      assert flags_of(recorded, :add) == [[false, true]]
+      assert Nx.to_flat_list(result) == [0.0, 0.0]
+    end
+
+    test "a value returned by a cond branch is not donatable" do
+      {result, recorded} = record(&cond_alias/2, [Nx.tensor(1), Nx.tensor([1.0, 2.0])])
+
+      assert flags_of(recorded, :negate) == [[false]]
+      assert Nx.to_flat_list(result) == [0.0, 0.0]
+    end
+
+    test "while loop state is never donatable" do
+      {result, recorded} = record(&loop/1, [Nx.donatable(Nx.tensor([0.0]))])
+
+      assert flags_of(recorded, :exp) == [[false], [false]]
+      assert_all_close(result, Nx.tensor([:math.exp(:math.exp(0.0))]))
+    end
+
+    test "values seen by hooks are not donatable" do
+      {_result, recorded} =
+        ExUnit.CaptureIO.with_io(fn ->
+          record(&hooked/1, [Nx.tensor([1.0])])
+        end)
+        |> elem(0)
+
+      assert flags_of(recorded, :exp) == [[false]]
+    end
+
+    test "results are not donatable" do
+      {result, _} = record(&once/1, [Nx.donatable(Nx.tensor([1.0]))])
+      refute Nx.donatable?(result)
+
+      {result, _} = record(fn x -> x end, [Nx.donatable(Nx.tensor([1.0]))])
+      refute Nx.donatable?(result)
     end
   end
 end

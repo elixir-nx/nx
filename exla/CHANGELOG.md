@@ -9,6 +9,7 @@
 
 ### Bug fixes
 
+  * Do not donate the inputs of eager `EXLA.Backend` operations, which raised for donatable tensors passed to operations that change their shape
   * Compile every `Nx.block/4` body on its own instead of sharing one compiled body between blocks with the same struct and argument shapes
 
 ## v1.0.0 (2026-09-10)
