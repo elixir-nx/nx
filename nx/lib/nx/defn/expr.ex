@@ -97,6 +97,10 @@ defmodule Nx.Defn.Expr do
   it will be used to annotate the metadata when inspected.
   Otherwise the metadata node does not appear during
   inspection.
+
+  A `barrier: true` key asks compilers to keep the computations
+  before and after the node from being merged or reordered across
+  it. Compilers without such a mechanism ignore the key.
   """
   def metadata(expr, metadata) when is_map(metadata) do
     case to_container_expr(expr) do

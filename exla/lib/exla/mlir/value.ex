@@ -752,6 +752,11 @@ defmodule EXLA.MLIR.Value do
     )
   end
 
+  def optimization_barrier([%Value{function: func} | _] = operands) do
+    typespecs = Enum.map(operands, &get_typespec/1)
+    op(func, "stablehlo.optimization_barrier", operands, typespecs_to_mlir_types(typespecs))
+  end
+
   def call(%Function{} = func, args, %Function{} = computation, typespecs) do
     result_types = typespecs_to_mlir_types(typespecs)
     attributes = [callee: attr_symbol_reference(computation.name)]
