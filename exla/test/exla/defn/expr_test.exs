@@ -1384,12 +1384,12 @@ defmodule EXLA.Defn.ExprTest do
       assert_equal(add_with_stop_grad(1, 2), Nx.tensor(3))
     end
 
-    deftransformp barrier(container) do
+    deftransformp with_barrier(container) do
       Nx.Defn.Expr.metadata(container, %{barrier: true, inspect: :barrier})
     end
 
     defn barrier_sum(x) do
-      {input, sine} = barrier({x, Nx.sin(x)})
+      {input, sine} = with_barrier({x, Nx.sin(x)})
       Nx.sum(input * Nx.exp(sine))
     end
 
