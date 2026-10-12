@@ -259,6 +259,57 @@ defmodule Nx.Defn.GradTest do
         Nx.sum(Nx.multiply(input, Nx.exp(sine)))
       end)
     end
+
+    defn tuple_meta_two_inputs(a, b) do
+      grad({a, b}, fn {a, b} ->
+        {a, b} = tuple_meta_transform({a, b})
+        Nx.sum(a * Nx.exp(b))
+      end)
+    end
+
+    defn tuple_meta_two_inputs_plain(a, b) do
+      grad({a, b}, fn {a, b} -> Nx.sum(a * Nx.exp(b)) end)
+    end
+
+    test "gives each element of a metadata tuple its own gradient" do
+      a = Nx.tensor([0.1, 0.5, -1.0])
+      b = Nx.tensor([2.0, -0.5, 1.5])
+      {grad_a, grad_b} = tuple_meta_two_inputs(a, b)
+      {plain_a, plain_b} = tuple_meta_two_inputs_plain(a, b)
+      assert_all_close(grad_a, plain_a)
+      assert_all_close(grad_b, plain_b)
+    end
+
+    defn tuple_meta_unused(t) do
+      grad(t, fn t ->
+        {input, _sine} = tuple_meta_transform({t, Nx.sin(t)})
+        Nx.sum(Nx.exp(input))
+      end)
+    end
+
+    test "passes gradients through a metadata tuple with an unused element" do
+      t = Nx.tensor([0.1, 0.5, -1.0])
+      assert_all_close(tuple_meta_unused(t), Nx.exp(t))
+    end
+
+    defn tuple_meta_second_order(t) do
+      grad(t, fn t ->
+        grad(t, fn t ->
+          {input, sine} = tuple_meta_transform({t, Nx.sin(t)})
+          Nx.sum(input * Nx.exp(sine))
+        end)
+        |> Nx.sum()
+      end)
+    end
+
+    defn tuple_meta_second_order_plain(t) do
+      grad(t, fn t -> grad(t, fn t -> Nx.sum(t * Nx.exp(Nx.sin(t))) end) |> Nx.sum() end)
+    end
+
+    test "passes second-order gradients through a metadata tuple" do
+      t = Nx.tensor([0.1, 0.5, -1.0])
+      assert_all_close(tuple_meta_second_order(t), tuple_meta_second_order_plain(t))
+    end
   end
 
   describe "cache" do
