@@ -232,6 +232,33 @@ defmodule Nx.Defn.GradTest do
     test "ignores unknown metadata" do
       assert random_meta(Nx.tensor(1)) == Nx.exp(1)
     end
+
+    defn tuple_meta(t) do
+      grad(t, fn t ->
+        {input, sine} = tuple_meta_transform({t, Nx.sin(t)})
+        Nx.sum(input * Nx.exp(sine))
+      end)
+    end
+
+    defn tuple_meta_plain(t), do: grad(t, fn t -> Nx.sum(t * Nx.exp(Nx.sin(t))) end)
+
+    deftransformp tuple_meta_transform(container) do
+      Nx.Defn.Expr.metadata(container, %{oops: true})
+    end
+
+    test "passes gradients through metadata on a tuple" do
+      t = Nx.tensor([0.1, 0.5, -1.0])
+      assert_all_close(tuple_meta(t), tuple_meta_plain(t))
+    end
+
+    test "passes gradients through metadata on a tuple of vectorized tensors" do
+      t = Nx.tensor([[0.1, 0.5], [-1.0, 2.0]]) |> Nx.vectorize(:x)
+
+      check_vectorized_grad(t, fn t ->
+        {input, sine} = tuple_meta_transform({t, Nx.sin(t)})
+        Nx.sum(Nx.multiply(input, Nx.exp(sine)))
+      end)
+    end
   end
 
   describe "cache" do

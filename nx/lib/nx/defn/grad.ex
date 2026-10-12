@@ -694,6 +694,10 @@ defmodule Nx.Defn.Grad do
     Enum.zip(inputs, args)
   end
 
+  defp grad(:metadata, [expr, _], _ans, g, _batch_count) when is_tuple(expr) do
+    Enum.zip(Tuple.to_list(expr), g)
+  end
+
   defp grad(:metadata, [expr, _], _ans, g, _batch_count) do
     [{expr, g}]
   end
