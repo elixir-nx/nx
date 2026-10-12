@@ -558,11 +558,16 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp cond_clause([{{pred, body}, cache} | clauses], last_cache, state, caches) do
-    {pred, pred_caches} = eval(pred, state, [cache | caches])
+    # Whichever clause runs continues from the caches the predicate left, so
+    # results the predicate computed in parent scopes are not computed again
+    {
+      pred_result,
+      [_ | parent_caches] = pred_caches
+    } = eval(pred, state, [cache | caches])
 
-    if Nx.to_number(pred) != 0,
+    if Nx.to_number(pred_result) != 0,
       do: {body, pred_caches},
-      else: cond_clause(clauses, last_cache, state, caches)
+      else: cond_clause(clauses, last_cache, state, parent_caches)
   end
 
   defp cond_clause([], {last, last_cache}, _state, caches) do

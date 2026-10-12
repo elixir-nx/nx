@@ -538,6 +538,26 @@ defmodule Nx.Defn.EvaluatorTest do
   describe "cond cache" do
     # The goal of those tests is to show that expressions inside cond are cached,
     # regardless of evaluation order.
+    defn cond_cache_predicate(threshold, a, b) do
+      res = io_call(a + b, :example, &send_to_self({:io_call, &1}))
+
+      if res > threshold do
+        res
+      else
+        res + 1
+      end
+    end
+
+    test "an expression used by the predicate and by a branch is evaluated once" do
+      assert cond_cache_predicate(0, 1, 2) == Nx.tensor(3)
+      assert_received {:io_call, _}
+      refute_received {:io_call, _}
+
+      assert cond_cache_predicate(10, 1, 2) == Nx.tensor(4)
+      assert_received {:io_call, _}
+      refute_received {:io_call, _}
+    end
+
     defn cond_cache_left(bool, a, b) do
       res = io_call(a + b, :example, &send_to_self({:io_call, &1}))
 
@@ -733,7 +753,7 @@ defmodule Nx.Defn.EvaluatorTest do
       t = Nx.iota({2, 3}, vectorized_axes: [a: 1], type: :s32)
 
       message = """
-      test/nx/defn/evaluator_test.exs:702: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
+      test/nx/defn/evaluator_test.exs:722: the do-block in while must return tensors with the same shape, type, and names as the initial arguments.
 
       {\e[32m
        <<<<< Body (do-block) <<<<<
@@ -765,7 +785,7 @@ defmodule Nx.Defn.EvaluatorTest do
 
       error =
         """
-        test/nx/defn/evaluator_test.exs:702: condition must be a scalar tensor, got: #Nx.Tensor<
+        test/nx/defn/evaluator_test.exs:722: condition must be a scalar tensor, got: #Nx.Tensor<
           vectorized[x: 1]
           u8[1]
         \s\s
