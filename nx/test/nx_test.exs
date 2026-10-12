@@ -2386,6 +2386,58 @@ defmodule NxTest do
     end
   end
 
+  describe "log2/1" do
+    test "equals log/2 with base 2" do
+      for type <- [f: 16, f: 64, c: 64] do
+        t = Nx.tensor([2, 8, 1024], type: type)
+        assert Nx.log2(t) == Nx.log(t, 2)
+      end
+    end
+  end
+
+  describe "log10/1" do
+    test "equals log/2 with base 10" do
+      for type <- [f: 16, f: 64, c: 64] do
+        t = Nx.tensor([10, 100, 1000], type: type)
+        assert Nx.log10(t) == Nx.log(t, 10)
+      end
+    end
+  end
+
+  describe "log/2" do
+    test "keeps the input tensor's type when given a number base" do
+      for type <- [f: 8, f8_e4m3fn: 8, f: 16, bf: 16, f: 32, f: 64, c: 64, c: 128] do
+        t = Nx.tensor([3, 9], type: type)
+        assert Nx.type(Nx.log(t, 3)) == type
+      end
+    end
+
+    test "keeps the input tensor's f64 precision when given a number base" do
+      t = Nx.tensor([2.0, 8.0, 1024.0], type: :f64)
+
+      assert_all_close(Nx.log(t, 2), Nx.tensor([1.0, 3.0, 10.0], type: :f64),
+        atol: 1.0e-15,
+        rtol: 1.0e-15
+      )
+    end
+
+    test "merges types with a tensor base" do
+      t = Nx.tensor([4.0, 8.0])
+      result = Nx.log(t, Nx.tensor(2.0, type: :f64))
+
+      assert Nx.type(result) == {:f, 64}
+      assert_all_close(result, Nx.tensor([2.0, 3.0], type: :f64))
+    end
+
+    test "raises for a base that is not greater than 0 and different than 1" do
+      for base <- [0, -2, 1] do
+        assert_raise ArgumentError,
+                     "expected base to be greater than 0 and different than 1, got: #{inspect(base)}",
+                     fn -> Nx.log(Nx.tensor([2.0]), base) end
+      end
+    end
+  end
+
   describe "concatenate/2" do
     test "middle axis" do
       t1 = Nx.iota({2, 2, 2})
