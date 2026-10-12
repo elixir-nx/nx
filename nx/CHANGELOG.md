@@ -15,6 +15,7 @@
   * [Nx] Support `:f8_e4m3fn` in `Nx.Type.cast_number!/2`
   * [Nx.Constants] Return the correct `:f8_e4m3fn` values from `epsilon/2`, `pi/2`, `e/2` and `euler_gamma/2`
   * [Nx.BinaryBackend] Pad in the merged type of the tensor and the pad value in `Nx.pad/3`
+  * [Nx.Defn.Evaluator] Evaluate expressions used by both a `cond` predicate and its branches once, instead of again when the predicate is false
   * [Nx] Keep the input type in `Nx.log2/1`, `Nx.log10/1` and `Nx.log/2` with a number base, instead of returning f32 for every float type narrower than f32, and compute them at f64 precision for f64 input
 
 ## v1.0.0 (2026-09-10)
