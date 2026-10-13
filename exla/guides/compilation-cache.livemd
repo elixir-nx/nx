@@ -1,11 +1,5 @@
 # Compilation cache
 
-EXLA compiles a `defn` the first time it sees a shape and keeps the executable. The same shape later is a cache hit. A different shape is a miss and compiles again.
-
-A benchmark that includes the first call measures compilation. The matmul is what the later calls do.
-
-## Setup
-
 ```elixir
 Mix.install([
   {:nx, "~> 1.0"},
@@ -14,70 +8,77 @@ Mix.install([
 ])
 ```
 
+## Introduction
+
+EXLA compiles a `defn` the first time it sees its input shape and type combination and keeps the resulting executable.
+We call the input shape and type combination the input template, or template for short.
+Furthermore, compiling the same template later results in a cache hit.
+
+Below, we'll set up, run and discuss a benchmark of this compilation cache structure.
+
+## Benchmarked module
+
+Below, we define the `Matmul` module which performs regular `Nx.dot/2` between 2 inputs.
+
+However, we a `delay` function that is defined via `deftransform` to introduce a 1 second delay to the compilation path, which will help us analyze what happens in the extreme case when compilation takes significant time to happen.
+
 ```elixir
 defmodule Matmul do
   import Nx.Defn
 
-  defn dot(a, b), do: Nx.dot(a, b)
-end
-
-defmodule CacheTrace do
-  def attach do
-    pid =
-      case Process.whereis(__MODULE__) do
-        nil ->
-          {:ok, pid} = Agent.start_link(fn -> [] end, name: __MODULE__)
-          pid
-
-        pid ->
-          pid
-      end
-
-    :telemetry.detach("exla-cache-notebook")
-
-    :telemetry.attach(
-      "exla-cache-notebook",
-      [:exla, :compilation],
-      fn _, measurements, _, _ ->
-        Agent.update(pid, &[measurements | &1])
-      end,
-      nil
-    )
+  defn dot(a, b) do 
+    a = delay(a, 1000)
+    Nx.dot(a, b)
   end
 
-  def take do
-    Agent.get_and_update(__MODULE__, fn events -> {Enum.reverse(events), []} end)
+  deftransform delay(t, n) do
+    :timer.sleep(n)
+    t
   end
 end
-
-CacheTrace.attach()
-EXLA.Client.fetch!(EXLA.Client.default_name())
 
 pair = fn n ->
-  left = Nx.iota({n, n}, type: :f32)
+  left = Nx.iota({n, n}, type: :f32, backend: EXLA.Backend)
   right = Nx.multiply(left, 0.001)
 
-  {
-    Nx.backend_transfer(left, EXLA.Backend),
-    Nx.backend_transfer(right, EXLA.Backend)
-  }
+  {left, right}
 end
 
 {left64, right64} = pair.(64)
-{left256, right256} = pair.(256)
-{left1024, right1024} = pair.(1024)
+{left256, right256} = pair.(256) 
+left256f64 = Nx.as_type(left256, :f64)
+right256f64 = Nx.as_type(right256, :f64)
+
 
 jit = EXLA.jit(&Matmul.dot/2)
 
-# Transfers above are not this defn. Drop whatever they recorded.
-CacheTrace.take()
+# We attach to the telemetry event now so that we avoid measuring the compilation instances above
+# for the input pair setup
+
+:telemetry.attach(
+  "exla-cache-notebook",
+  [:exla, :compilation],
+  fn _, measurements, _, _ ->
+    stored = :persistent_term.get(:exla_cache_notebook, [])
+    :persistent_term.put(:exla_cache_notebook, [measurements | stored])
+  end,
+  nil
+)
+
 
 time = fn label, fun ->
+  events = :persistent_term.get(:exla_cache_notebook, [])
+  n = length(events)
+  
   {microseconds, out} = :timer.tc(fun)
   Nx.backend_deallocate(out)
-  events = CacheTrace.take()
+  events = :persistent_term.get(:exla_cache_notebook)
+
+  compiled = length(events) != n
   ms = Float.round(microseconds / 1000, 1)
-  IO.puts("#{label}: #{ms} ms, compilation events #{length(events)}")
+  IO.puts("#{label}: #{ms} ms")
+  IO.puts("Compiled: #{compiled}")
+  IO.puts("Compilation events seen so far: #{length(events)}")
 end
 ```
 
@@ -89,28 +90,41 @@ The first 64×64 call compiles. The next call of that same shape does not. 256×
 
 ```elixir
 time.("64x64 first call", fn -> jit.(left64, right64) end)
+IO.puts("")
+
 time.("64x64 same shape", fn -> jit.(left64, right64) end)
+IO.puts("")
+
 time.("256x256 new shape", fn -> jit.(left256, right256) end)
-time.("64x64 cached shape", fn -> jit.(left64, right64) end)
+IO.puts("")
+
+time.("256x256 cached shape", fn -> jit.(left256, right256) end)
+IO.puts("")
 ```
 
-The first call is the slow one. A hit is the matmul alone. A later miss still compiles, but the compiler itself is already loaded, so it is cheaper than the very first shape.
+Through the usage of `:timer.tc/1` we can see that the first call for each template is the slow one.
 
-## Warm benchmark
+A cache hit will calculate the defn operation alone, with some time for retrieving the precompiled artifact.
 
-`Benchee.run/2` takes `:warmup`. Those seconds run before it records samples, and that is where a new shape gets compiled. The table is the warm matmul. You do not have to call the function once yourself before starting it.
+Because some of EXLA's native code is already loaded, the second compilation is a bit cheaper, which we can see by comparing the 2 compilation calls above.
 
-64 and 256 were compiled in the cells above, so their warmup is only execution. 1024 has not been called yet. It compiles during warmup, and that time stays out of the table. The run waits until the result buffer is ready.
+## Benchmarking techniques
+
+`Benchee.run/2` provides the `:warmup` option. If given, it specifies the number of seconds that are ran before samples are recorded. We can use this to mitigate the impact of compilation noise on our benchmarks. The table below benchmarks the computation using this technique.
+
+The 256 template has already been compiled in the cells above, so it doesn't matter if we use `:warmup` for that entry, but the `:f64` one has not been called yet. Therefore, it will be compiled during warmup.
+
+As an exercise, compare the deviation and 99th percentile when using `:warmup` and not using it. It is important to restart the livebook instance when doing so.
 
 ```elixir
 Benchee.run(
   %{
-    "64x64" => {fn -> jit.(left64, right64) end, after_each: &Nx.backend_deallocate/1},
     "256x256" => {fn -> jit.(left256, right256) end, after_each: &Nx.backend_deallocate/1},
-    "1024x1024" => {fn -> jit.(left1024, right1024) end, after_each: &Nx.backend_deallocate/1}
+    "256x256 f64" => {fn -> jit.(left256f64, right256f64) end, after_each: &Nx.backend_deallocate/1}
   },
   warmup: 2,
-  time: 5,
-  memory_time: 0
+  time: 4
 )
+
+:ok
 ```
