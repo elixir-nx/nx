@@ -2356,12 +2356,27 @@ defmodule Nx.BinaryBackend do
       end
 
     for axis <- view, into: <<>> do
-      {result, _} =
-        for <<bin::size(^size)-bitstring <- axis>>, reduce: {<<>>, acc} do
-          {_, acc} -> fun.(bin, acc)
-        end
-
+      result = bin_reduce_axis(axis, size, <<>>, acc, fun)
       scalar_to_binary!(result, type)
+    end
+  end
+
+  defp bin_reduce_axis(axis, size, res, acc, fun) do
+    case axis do
+      <<b1::size(^size)-bitstring, b2::size(^size)-bitstring, b3::size(^size)-bitstring,
+        b4::size(^size)-bitstring, rest::bitstring>> ->
+        {_, a1} = fun.(b1, acc)
+        {_, a2} = fun.(b2, a1)
+        {_, a3} = fun.(b3, a2)
+        {r4, a4} = fun.(b4, a3)
+        bin_reduce_axis(rest, size, r4, a4, fun)
+
+      <<b::size(^size)-bitstring, rest::bitstring>> ->
+        {r, a} = fun.(b, acc)
+        bin_reduce_axis(rest, size, r, a, fun)
+
+      <<>> ->
+        res
     end
   end
 
@@ -2372,7 +2387,7 @@ defmodule Nx.BinaryBackend do
     v1 = aggregate_axes(to_binary(t1), axes1, t1.shape, s1)
     v2 = aggregate_axes(to_binary(t2), axes2, t2.shape, s2)
 
-    for b1 <- v1, b2 <- v2 do
+    for b1 <- v1, b2 <- v2, into: <<>> do
       {bin, _acc} = bin_zip_reduce_axis(b1, b2, s1, s2, <<>>, acc, fun)
       scalar_to_binary!(bin, type)
     end
@@ -2380,14 +2395,26 @@ defmodule Nx.BinaryBackend do
 
   # Helper for reducing down a single axis over two tensors,
   # returning tensor data and a final accumulator.
-  defp bin_zip_reduce_axis(<<>>, <<>>, _s1, _s2, bin, acc, _fun),
-    do: {bin, acc}
+  defp bin_zip_reduce_axis(b1, b2, s1, s2, bin, acc, fun) do
+    case {b1, b2} do
+      {<<x1::size(^s1)-bitstring, x2::size(^s1)-bitstring, x3::size(^s1)-bitstring,
+         x4::size(^s1)-bitstring, rest1::bitstring>>,
+       <<y1::size(^s2)-bitstring, y2::size(^s2)-bitstring, y3::size(^s2)-bitstring,
+         y4::size(^s2)-bitstring, rest2::bitstring>>} ->
+        {_, a1} = fun.(x1, y1, acc)
+        {_, a2} = fun.(x2, y2, a1)
+        {_, a3} = fun.(x3, y3, a2)
+        {r4, a4} = fun.(x4, y4, a3)
+        bin_zip_reduce_axis(rest1, rest2, s1, s2, r4, a4, fun)
 
-  defp bin_zip_reduce_axis(b1, b2, s1, s2, _bin, acc, fun) do
-    <<x::size(^s1)-bitstring, rest1::bitstring>> = b1
-    <<y::size(^s2)-bitstring, rest2::bitstring>> = b2
-    {bin, acc} = fun.(x, y, acc)
-    bin_zip_reduce_axis(rest1, rest2, s1, s2, bin, acc, fun)
+      {<<x::size(^s1)-bitstring, rest1::bitstring>>,
+       <<y::size(^s2)-bitstring, rest2::bitstring>>} ->
+        {bin, acc} = fun.(x, y, acc)
+        bin_zip_reduce_axis(rest1, rest2, s1, s2, bin, acc, fun)
+
+      {<<>>, <<>>} ->
+        {bin, acc}
+    end
   end
 
   ## Conversion helpers
