@@ -2407,8 +2407,7 @@ defmodule Nx.BinaryBackend do
         {r4, a4} = fun.(x4, y4, a3)
         bin_zip_reduce_axis(rest1, rest2, s1, s2, r4, a4, fun)
 
-      {<<x::size(^s1)-bitstring, rest1::bitstring>>,
-       <<y::size(^s2)-bitstring, rest2::bitstring>>} ->
+      {<<x::size(^s1)-bitstring, rest1::bitstring>>, <<y::size(^s2)-bitstring, rest2::bitstring>>} ->
         {bin, acc} = fun.(x, y, acc)
         bin_zip_reduce_axis(rest1, rest2, s1, s2, bin, acc, fun)
 
