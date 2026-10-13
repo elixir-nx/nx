@@ -122,6 +122,32 @@ defmodule Nx.LinAlgTest do
   end
 
   describe "invert" do
+    test "keeps the input type" do
+      for type <- [bf: 16, f: 16, f: 32, f: 64] do
+        t =
+          Nx.tensor(
+            [
+              [2, 0],
+              [0, 4]
+            ],
+            type: type
+          )
+
+        expected =
+          Nx.tensor(
+            [
+              [0.5, 0],
+              [0, 0.25]
+            ],
+            type: type
+          )
+
+        result = Nx.LinAlg.invert(t)
+        assert result.type == type
+        assert_equal(result, expected)
+      end
+    end
+
     test "works with batched input" do
       a = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
       expected_result = Nx.tensor([[[-2, 1], [1.5, -0.5]], [[-4, 3], [3.5, -2.5]]])
