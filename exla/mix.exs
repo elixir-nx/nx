@@ -88,6 +88,7 @@ defmodule EXLA.MixProject do
       source_url_pattern: "#{@source_url}/blob/v#{@version}/exla/%{path}#L%{line}",
       extras: [
         "guides/rotating-image.livemd",
+        "guides/compilation-cache.livemd",
         "CHANGELOG.md",
         "guides/backend_documentation/index.md": [
           filename: "backend_documentation"
