@@ -974,6 +974,47 @@ defmodule Nx.Defn.CheckpointTest do
       assert gradient.vectorized_axes == [batch: 3]
       assert_equal(gradient, grad_vectorized_plain(x))
     end
+
+    defn grad_checkpoint_vectorized_scale(x, scale) do
+      grad(scale, fn scale ->
+        Nx.sum(checkpoint([x, scale], fn x, scale -> Nx.multiply(Nx.sin(x), scale) end))
+      end)
+    end
+
+    defn grad_vectorized_scale_plain(x, scale) do
+      grad(scale, fn scale -> Nx.sum(Nx.multiply(Nx.sin(x), scale)) end)
+    end
+
+    test "gradient with respect to a vectorized input when the activation is plain" do
+      x = Nx.tensor([0.5, 1.0])
+      scale = Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]) |> Nx.vectorize(:batch)
+
+      gradient = grad_checkpoint_vectorized_scale(x, scale)
+      assert gradient.vectorized_axes == [batch: 3]
+      assert_equal(gradient, grad_vectorized_scale_plain(x, scale))
+    end
+
+    defn grad_checkpoint_vectorized_constant(x) do
+      grad(x, fn x ->
+        scale = Nx.vectorize(Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]), :batch)
+        Nx.sum(checkpoint([x, scale], fn x, scale -> Nx.multiply(Nx.sin(x), scale) end))
+      end)
+    end
+
+    defn grad_vectorized_constant_plain(x) do
+      grad(x, fn x ->
+        scale = Nx.vectorize(Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]), :batch)
+        Nx.sum(Nx.multiply(Nx.sin(x), scale))
+      end)
+    end
+
+    test "a vectorized constant built inside defn as a checkpoint input" do
+      x = Nx.tensor([0.5, 1.0])
+
+      gradient = grad_checkpoint_vectorized_constant(x)
+      assert gradient.vectorized_axes == [batch: 3]
+      assert_equal(gradient, grad_vectorized_constant_plain(x))
+    end
   end
 
   # --- JIT compilation ---

@@ -97,6 +97,14 @@ defmodule EXLA.Defn.CheckpointTest do
     Nx.sum(Nx.sin(Nx.dot(x, w)) * x)
   end
 
+  defn vectorized_scale_loss(x, scale) do
+    Nx.sum(checkpoint([x, scale], fn x, scale -> Nx.multiply(Nx.sin(x), scale) end))
+  end
+
+  defn vectorized_scale_loss_plain(x, scale) do
+    Nx.sum(Nx.multiply(Nx.sin(x), scale))
+  end
+
   defn pair_loss(pair) do
     {a, b} = checkpoint(pair, fn {a, b} -> {Nx.sin(a), Nx.cos(b)} end)
     Nx.sum(a * b)
@@ -198,6 +206,19 @@ defmodule EXLA.Defn.CheckpointTest do
     gradient = Nx.Defn.grad(x, &vectorized_loss(&1, w))
     assert gradient.vectorized_axes == [batch: 3]
     assert_all_close(gradient, Nx.Defn.grad(x, &vectorized_loss_plain(&1, w)))
+  end
+
+  test "a vectorized input keeps its axes in the gradient when the activation is plain" do
+    x = Nx.tensor([0.5, 1.0])
+    scale = Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]) |> Nx.vectorize(:batch)
+
+    value = vectorized_scale_loss(x, scale)
+    assert value.vectorized_axes == [batch: 3]
+    assert_all_close(value, vectorized_scale_loss_plain(x, scale))
+
+    gradient = Nx.Defn.grad(scale, &vectorized_scale_loss(x, &1))
+    assert gradient.vectorized_axes == [batch: 3]
+    assert_all_close(gradient, Nx.Defn.grad(scale, &vectorized_scale_loss_plain(x, &1)))
   end
 
   test "a tuple input is flattened into the block and rebuilt for the body" do
