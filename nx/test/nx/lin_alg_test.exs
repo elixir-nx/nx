@@ -356,7 +356,7 @@ defmodule Nx.LinAlgTest do
     end
 
     test "inverts bf16 diagonal and block-diagonal matrices at sizes where the tolerance is large" do
-      # the tolerance is 0.5 at n = 32 and 1 at n = 64 in bf16; a pivot that
+      # the tolerance is 0.18 at n = 32 and 0.25 at n = 64 in bf16; a pivot that
       # nothing was subtracted from still counts as nonsingular
       identity = Nx.eye(64, type: :bf16)
       assert_equal(Nx.LinAlg.invert(identity), identity)
@@ -388,6 +388,57 @@ defmodule Nx.LinAlgTest do
       expected = block_diagonal.(inverse_block)
 
       assert_equal(Nx.LinAlg.invert(t), expected)
+    end
+
+    test "inverts well-conditioned matrices in every type" do
+      # LAPACK's test suite builds random matrices with a prescribed condition
+      # number and expects systems with cond * epsilon <= 0.1 to be solvable,
+      # after the perturbation bound of Higham, Accuracy and Stability of
+      # Numerical Algorithms, 2nd ed., SIAM, 2002, ch. 7; these are its cond 2
+      # and cond 0.1 / epsilon types
+      for type <- [f: 64, f: 32, f: 16, bf: 16], n <- [4, 8, 16] do
+        epsilon =
+          type
+          |> Nx.Constants.epsilon()
+          |> Nx.to_number()
+
+        for cond <- [2.0, 0.1 / epsilon] do
+          matrices = conditioned_matrices(n, cond, 10, type)
+          inverses = Nx.LinAlg.invert(matrices)
+
+          has_nan =
+            inverses
+            |> Nx.is_nan()
+            |> Nx.any()
+            |> Nx.to_number()
+
+          assert has_nan == 0
+
+          for i <- 0..9 do
+            t = matrices[i]
+            inverse = inverses[i]
+            product = Nx.dot(t, inverse)
+
+            assert relative_residual(product, Nx.eye(n), t, inverse) <= 32 * n * epsilon
+          end
+        end
+      end
+
+      # The Hadamard matrix (Higham, ACM TOMS 17(3), 1991,
+      # doi:10.1145/114697.116805) has entries of 1 and -1 and is orthogonal
+      # up to scaling, so its inverse is its transpose over n. Its elimination
+      # is exact integer arithmetic that cancels many products at each pivot,
+      # which the criterion must not mistake for rounding noise.
+      for type <- [f: 64, f: 32, f: 16, bf: 16], n <- [4, 8, 16] do
+        t = hadamard(n, type)
+
+        expected =
+          t
+          |> Nx.transpose()
+          |> Nx.divide(n)
+
+        assert_equal(Nx.LinAlg.invert(t), expected)
+      end
     end
 
     test "returns NaN when the elimination overflows the type" do
@@ -1565,6 +1616,43 @@ defmodule Nx.LinAlgTest do
       Integer.pow(-1, j) * x * exact_determinant(minor)
     end)
     |> Enum.sum()
+  end
+
+  # Random n-by-n matrices with the given condition number in the given type,
+  # built as LAPACK's test generator does: random orthogonal factors around
+  # singular values spread geometrically from 1 to 1 / cond (Stewart, SIAM J.
+  # Numer. Anal. 17(3), 1980, doi:10.1137/0717034).
+  defp conditioned_matrices(n, cond, count, type) do
+    key = Nx.Random.key(42)
+    {left, key} = Nx.Random.normal(key, shape: {count, n, n}, type: :f64)
+    {right, _} = Nx.Random.normal(key, shape: {count, n, n}, type: :f64)
+    {u, _} = Nx.LinAlg.qr(left)
+    {v, _} = Nx.LinAlg.qr(right)
+    ratios = for i <- 0..(n - 1), do: cond ** (-i / max(n - 1, 1))
+    singular_values = Nx.tensor(ratios)
+
+    u
+    |> Nx.multiply(singular_values)
+    |> Nx.dot([2], [0], v, [2], [0])
+    |> Nx.as_type(type)
+  end
+
+  # The Sylvester Hadamard matrix of order n, a power of two, with entries of
+  # 1 and -1: each order doubles the previous one into four blocks, the last
+  # negated.
+  defp hadamard(n, type) do
+    n
+    |> hadamard_rows()
+    |> Nx.tensor(type: type)
+  end
+
+  defp hadamard_rows(1), do: [[1]]
+
+  defp hadamard_rows(n) do
+    half = hadamard_rows(div(n, 2))
+    top = Enum.map(half, &(&1 ++ &1))
+    bottom = Enum.map(half, fn row -> row ++ Enum.map(row, &(-&1)) end)
+    top ++ bottom
   end
 
   # The Wilkinson matrix: ones on the diagonal and in the last column, minus

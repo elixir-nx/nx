@@ -1026,9 +1026,16 @@ defmodule Nx.LinAlg do
   end
 
   # The rounding error to allow for after n operations in the type, as a
-  # multiple of its epsilon: twice the worst case (Rump and Jeannerod, SIAM
-  # J. Matrix Anal. Appl. 35(2), 2014, doi:10.1137/130927231), since errors
-  # in earlier pivots propagate into later ones.
+  # multiple of its epsilon. The worst case grows with n (Rump and Jeannerod,
+  # SIAM J. Matrix Anal. Appl. 35(2), 2014, doi:10.1137/130927231) and is
+  # used for 32-bit and wider types, where it stays far below 1 at any
+  # practical size. In 16-bit and narrower types it reaches 1 at n = 64 in
+  # bf16, so once the typical error, which grows with the square root of n
+  # (Higham and Mary, SIAM J. Sci. Comput. 41(5), 2019,
+  # doi:10.1137/18M1226312), is the smaller of the two, that is used instead.
+  deftransformp rounding_error_multiplier({_, size}, n) when size <= 16,
+    do: min(2 * n, 4 * :math.sqrt(n))
+
   deftransformp rounding_error_multiplier(_type, n), do: 2 * n
 
   deftransformp invert_shape(tensor) do
