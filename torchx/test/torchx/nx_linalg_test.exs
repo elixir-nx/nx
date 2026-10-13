@@ -202,6 +202,36 @@ defmodule Torchx.NxLinAlgTest do
         Nx.broadcast(:nan, {4, 4})
       )
     end
+
+    test "returns NaN for singular matrices alone and in a batch, with an exactly zero pivot or not" do
+      # linalg_lu_factor raises on the exactly zero pivot of the first matrix;
+      # lu/2 factors through the _ex variant instead. The determinant of the
+      # second rounds away from zero, and its last pivot is tiny but nonzero.
+      zero_pivot =
+        Nx.tensor([
+          [1, 2, 0, 0],
+          [2, 4, 0, 0],
+          [0, 0, 1, 0],
+          [0, 0, 0, 1]
+        ])
+
+      rounded =
+        Nx.tensor([
+          [2, -1, -1, 0],
+          [2, 0, -1, 1],
+          [-1, 0, 1, 1],
+          [1, 2, -2, -2]
+        ])
+
+      nan = Nx.broadcast(:nan, {4, 4})
+
+      assert_equal(Nx.LinAlg.invert(zero_pivot), nan)
+      assert_equal(Nx.LinAlg.invert(rounded), nan)
+
+      eye = Nx.eye(4)
+      batch = Nx.stack([eye, zero_pivot, rounded])
+      assert_equal(Nx.LinAlg.invert(batch), Nx.stack([eye, nan, nan]))
+    end
   end
 
   describe "qr" do

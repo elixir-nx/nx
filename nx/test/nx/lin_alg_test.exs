@@ -122,32 +122,6 @@ defmodule Nx.LinAlgTest do
   end
 
   describe "invert" do
-    test "keeps the input type" do
-      for type <- [bf: 16, f: 16, f: 32, f: 64] do
-        t =
-          Nx.tensor(
-            [
-              [2, 0],
-              [0, 4]
-            ],
-            type: type
-          )
-
-        expected =
-          Nx.tensor(
-            [
-              [0.5, 0],
-              [0, 0.25]
-            ],
-            type: type
-          )
-
-        result = Nx.LinAlg.invert(t)
-        assert result.type == type
-        assert_equal(result, expected)
-      end
-    end
-
     test "works with batched input" do
       a = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
       expected_result = Nx.tensor([[[-2, 1], [1.5, -0.5]], [[-4, 3], [3.5, -2.5]]])
@@ -203,6 +177,240 @@ defmodule Nx.LinAlgTest do
 
       invq = Nx.LinAlg.invert(q)
       assert_all_close(Nx.dot(invq, q), Nx.eye(q.shape), atol: 1.0e-15)
+    end
+
+    test "keeps the input type" do
+      for type <- [bf: 16, f: 16, f: 32, f: 64] do
+        t =
+          Nx.tensor(
+            [
+              [2, 0],
+              [0, 4]
+            ],
+            type: type
+          )
+
+        expected =
+          Nx.tensor(
+            [
+              [0.5, 0],
+              [0, 0.25]
+            ],
+            type: type
+          )
+
+        result = Nx.LinAlg.invert(t)
+        assert result.type == type
+        assert_equal(result, expected)
+      end
+    end
+
+    test "returns NaN in the input type for singular matrices" do
+      for type <- [bf: 16, f: 16, f: 32, f: 64] do
+        # rows in arithmetic progression, so the matrix is exactly singular
+        t =
+          Nx.tensor(
+            [
+              [1, 2, 3],
+              [4, 5, 6],
+              [7, 8, 9]
+            ],
+            type: type
+          )
+
+        result = Nx.LinAlg.invert(t)
+        assert result.type == type
+        assert_equal(result, Nx.broadcast(:nan, {3, 3}))
+      end
+    end
+
+    test "returns NaN for a singular matrix whose determinant rounds away from zero" do
+      # exactly singular, but rounding leaves a tiny pivot instead of zero
+      t =
+        Nx.tensor([
+          [2, -1, -1, 0],
+          [2, 0, -1, 1],
+          [-1, 0, 1, 1],
+          [1, 2, -2, -2]
+        ])
+
+      in_f64 = Nx.as_type(t, :f64)
+      nan = Nx.broadcast(:nan, {4, 4})
+
+      assert_equal(Nx.LinAlg.invert(t), nan)
+      assert_equal(Nx.LinAlg.invert(in_f64), nan)
+    end
+
+    test "returns NaN for singular matrices in a batch" do
+      a =
+        Nx.tensor([
+          [
+            [2, 0],
+            [0, 4]
+          ],
+          [
+            [1, 2],
+            [2, 4]
+          ]
+        ])
+
+      expected =
+        Nx.tensor([
+          [
+            [0.5, 0],
+            [0, 0.25]
+          ],
+          [
+            [:nan, :nan],
+            [:nan, :nan]
+          ]
+        ])
+
+      vectorized = Nx.vectorize(a, :x)
+      expected_vectorized = Nx.vectorize(expected, :x)
+
+      assert_equal(Nx.LinAlg.invert(a), expected)
+      assert_equal(Nx.LinAlg.invert(vectorized), expected_vectorized)
+    end
+
+    test "inverts well-conditioned matrices with small entries" do
+      a =
+        Nx.tensor(
+          [
+            [0.2, 0],
+            [0, 0.2]
+          ],
+          type: :f16
+        )
+
+      expected =
+        Nx.tensor(
+          [
+            [5, 0],
+            [0, 5]
+          ],
+          type: :f16
+        )
+
+      assert_equal(Nx.LinAlg.invert(a), expected)
+
+      identity = Nx.eye(10)
+      scaled = Nx.multiply(identity, 1.0e-4)
+      expected_scaled = Nx.multiply(identity, 1.0e4)
+
+      assert_all_close(Nx.LinAlg.invert(scaled), expected_scaled)
+    end
+
+    test "inverts a graded matrix whose smallest pivot is far below its largest" do
+      # the tiny pivot is an entry of the matrix, not the result of cancellation
+      t =
+        Nx.tensor([
+          [1.0, 0.0],
+          [1.0, 1.0e-6]
+        ])
+
+      expected =
+        Nx.tensor([
+          [1.0, 0.0],
+          [-1.0e6, 1.0e6]
+        ])
+
+      assert_equal(Nx.LinAlg.invert(t), expected)
+    end
+
+    test "inverts bf16 diagonal and block-diagonal matrices at sizes where the tolerance is large" do
+      # the tolerance is 0.5 at n = 32 and 1 at n = 64 in bf16; a pivot that
+      # nothing was subtracted from still counts as nonsingular
+      identity = Nx.eye(64, type: :bf16)
+      assert_equal(Nx.LinAlg.invert(identity), identity)
+
+      # the 32x32 block-diagonal matrix with sixteen copies of a 2x2 block on
+      # its diagonal: the Kronecker product of the identity with the block
+      block_diagonal = fn block ->
+        eye = Nx.eye(16, type: :bf16)
+        eye_axes = Nx.reshape(eye, {16, 1, 16, 1})
+
+        block
+        |> Nx.tensor(type: :bf16)
+        |> Nx.reshape({1, 2, 1, 2})
+        |> Nx.multiply(eye_axes)
+        |> Nx.reshape({32, 32})
+      end
+
+      block = [
+        [1, 1],
+        [1, 2]
+      ]
+
+      inverse_block = [
+        [2, -1],
+        [-1, 1]
+      ]
+
+      t = block_diagonal.(block)
+      expected = block_diagonal.(inverse_block)
+
+      assert_equal(Nx.LinAlg.invert(t), expected)
+    end
+
+    test "returns NaN when the elimination overflows the type" do
+      # The Wilkinson matrix is the classic example of pivot growth (Wilkinson,
+      # J. ACM 8(3), 1961, doi:10.1145/321075.321076): every elimination step
+      # doubles its last column, so the last pivot is 2 ** (n - 1), beyond f16
+      # from n = 17.
+      t = wilkinson(17, :f16)
+      assert_equal(Nx.LinAlg.invert(t), Nx.broadcast(:nan, {17, 17}))
+    end
+
+    test "inverts matrices holding the minimum of a signed integer type" do
+      # the absolute value of the minimum wraps around in the integer type, so
+      # the row magnitudes must be taken after the cast to the floating type
+      for width <- [8, 16, 32, 64] do
+        minimum = -(2 ** (width - 1))
+
+        t =
+          Nx.tensor(
+            [
+              [minimum, 0],
+              [0, 1]
+            ],
+            type: {:s, width}
+          )
+
+        expected =
+          Nx.tensor([
+            [1 / minimum, 0.0],
+            [0.0, 1.0]
+          ])
+
+        assert_equal(Nx.LinAlg.invert(t), expected)
+      end
+    end
+
+    test "inverts a matrix whose rows are below the normal range of f64" do
+      # the row scale is clamped to the largest power of two of the type
+      m = 2.0 ** -1024
+      big = 2.0 ** 1023
+
+      t =
+        Nx.tensor(
+          [
+            [m, m],
+            [m, -m]
+          ],
+          type: :f64
+        )
+
+      expected =
+        Nx.tensor(
+          [
+            [big, big],
+            [big, -big]
+          ],
+          type: :f64
+        )
+
+      assert_equal(Nx.LinAlg.invert(t), expected)
     end
   end
 
@@ -1242,5 +1450,23 @@ defmodule Nx.LinAlgTest do
           key
       end
     end
+  end
+
+  # The Wilkinson matrix: ones on the diagonal and in the last column, minus
+  # ones below the diagonal, zeros elsewhere.
+  defp wilkinson(n, type) do
+    entries =
+      for i <- 1..n, j <- 1..n do
+        cond do
+          j == n -> 1
+          i == j -> 1
+          j < i -> -1
+          true -> 0
+        end
+      end
+
+    entries
+    |> Nx.tensor(type: type)
+    |> Nx.reshape({n, n})
   end
 end

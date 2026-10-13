@@ -696,6 +696,9 @@ defmodule Nx.LinAlg do
 
       iex> Nx.LinAlg.solve(Nx.tensor([[3, 0, 0, 0], [2, 1, 0, 0], [1, 1, 1, 1]]), Nx.tensor([4]))
       ** (ArgumentError) `a` tensor has incompatible dimensions, expected a square matrix or a batch of square matrices, got: {3, 4}
+
+      iex> Nx.LinAlg.solve(Nx.tensor([[1, 2], [2, 4]]), Nx.tensor([1, 1]))
+      ** (ArgumentError) can't solve for singular matrix
   """
   # IMPORTANT: This function cannot be a defn because
   # optional needs to work on the actual backend.
@@ -836,7 +839,10 @@ defmodule Nx.LinAlg do
         ]
       >
 
-  If a singular matrix is passed, the result will silently fail.
+  If a singular matrix is passed, the result will silently fail. Matrices
+  that are singular to working precision return NaN too, and so does one
+  with a pivot that overflows the type. In a batch, only the singular
+  matrices are NaN.
 
       iex> Nx.LinAlg.invert(Nx.tensor([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [1, 1, 1, 1]]))
       #Nx.Tensor<
@@ -887,11 +893,6 @@ defmodule Nx.LinAlg do
     vectorized_axes = tensor.vectorized_axes
     input_shape = Nx.shape(tensor)
 
-    # proof of equivalence:
-    # norm_t = t / det
-    # norm_t ** -1 = (t / det) ** -1 = t ** -1 * det
-    # t ** -1 = norm_t ** -1 / det
-
     tensor =
       case input_shape do
         {_, _} ->
@@ -904,39 +905,131 @@ defmodule Nx.LinAlg do
           Nx.revectorize(tensor, [collapsed_batch: :auto], target_shape: {m, n})
       end
 
-    det = Nx.LinAlg.determinant(tensor)
+    type =
+      tensor
+      |> Nx.type()
+      |> Nx.Type.to_real()
 
-    type = Nx.Type.to_real(Nx.type(tensor))
-    eps = Nx.Constants.smallest_positive_normal(type) * 1.0e3
+    # The magnitudes are taken in the floating type the matrix is factored
+    # in: the absolute value of an integer type's minimum wraps around.
+    floating_type =
+      tensor
+      |> Nx.type()
+      |> Nx.Type.to_floating()
+
+    floating = Nx.as_type(tensor, floating_type)
+
+    # Scale each row by the power of two nearest its largest absolute value,
+    # so the singularity check below doesn't depend on the magnitude of the
+    # entries. Powers of two scale exactly, so an exactly singular matrix
+    # stays exactly singular; LAPACK's ?geequb scales by powers of the radix
+    # for the same reason (Demmel, Hida, Kahan, Li, Mukherjee and Riedy, ACM
+    # TOMS 32(2), 2006, doi:10.1145/1141885.1141894).
+    # Rounding rather than flooring the exponent keeps the scaled rows near 1
+    # when log2 is computed in a narrow type and lands just below an integer.
+    # The exponent is clipped to the normal range of the type, since some
+    # backends flush a subnormal scale to zero and a scale beyond the largest
+    # power of two overflows; 2 / smallest normal is that largest power.
+    row_max =
+      floating
+      |> Nx.abs()
+      |> Nx.reduce_max(axes: [1], keep_axes: true)
+
+    smallest_normal = Nx.Constants.smallest_positive_normal(type)
+
+    min_exponent =
+      smallest_normal
+      |> Nx.log2()
+      |> Nx.round()
+
+    max_exponent =
+      (2 / smallest_normal)
+      |> Nx.log2()
+      |> Nx.round()
+
+    exponent =
+      row_max
+      |> Nx.log2()
+      |> Nx.round()
+      |> Nx.clip(-max_exponent, -min_exponent)
+
+    scaling_matrix = 2 ** -exponent
+    # don't rescale for 0-norm rows
+    scaling_matrix = Nx.select(row_max == 0, 1, scaling_matrix)
+    normalized_tensor = scaling_matrix * floating
+
+    {p, l, u} = Nx.LinAlg.lu(normalized_tensor)
+
+    # A matrix is singular to working precision when a pivot is no larger
+    # than the rounding error of its own computation, taken as the rounding
+    # error allowed for n operations in the type times the sum of the
+    # magnitudes of the products subtracted to form it. That is the backward
+    # error bound |A - LU| <= n u |L||U| of the factorization (Rump and
+    # Jeannerod, SIAM J. Matrix Anal. Appl. 35(2), 2014,
+    # doi:10.1137/130927231), applied to each pivot. That covers an
+    # exactly zero pivot and the rounding noise an exactly singular matrix
+    # can leave in its place, while a pivot that is small because the matrix
+    # is graded still counts. The pivot itself is left out of the sum, so a
+    # pivot nothing was subtracted from never counts as singular, however
+    # large the tolerance. A pivot that overflowed the type counts as
+    # singular too.
+    pivots =
+      u
+      |> Nx.take_diagonal()
+      |> Nx.abs()
+
+    lower_magnitudes =
+      l
+      |> Nx.tril(k: -1)
+      |> Nx.abs()
+
+    upper_column_magnitudes =
+      u
+      |> Nx.transpose()
+      |> Nx.abs()
+
+    # Row i sums |l[i][j]| * |u[j][i]| over j < i, the magnitudes of the
+    # products subtracted from a[i][i] to form pivot i.
+    magnitude_product_sums = Nx.sum(lower_magnitudes * upper_column_magnitudes, axes: [1])
+    tolerance = rounding_error_multiplier(type, n) * Nx.Constants.epsilon(type)
+    overflowed = Nx.is_infinity(pivots)
+    singular = Nx.any(pivots <= tolerance * magnitude_product_sums or overflowed)
 
     inverse =
-      if Nx.abs(det) <= eps do
+      if singular do
         Nx.Constants.nan(type)
       else
-        # matrix is possibly invertible but ill-conditioned
-        # we normalize it by the determinant
-
-        scaling_matrix = Nx.reduce_max(Nx.abs(tensor), axes: [1], keep_axes: true)
-        # don't rescale for 0-norm rows
-        scaling_matrix = 1 / Nx.select(scaling_matrix == 0, 1, scaling_matrix)
-
         # We can think of the implementation as a system of equations.
         # Since we're scaling the left side by scaling_matrix[i] for each row i,
         # we need to also scale the right side.
         # This is achieved by scaling each row of an identity matrix, which is,
         # in fact, the same as putting the scaling values in the diagonal of the
         # right-side matrix.
+        right_side =
+          scaling_matrix
+          |> Nx.squeeze(axes: [1])
+          |> Nx.make_diagonal()
 
-        normalized_tensor = scaling_matrix * tensor
+        permuted = Nx.dot(p, [0], right_side, [0])
 
-        Nx.LinAlg.solve(
-          normalized_tensor,
-          Nx.make_diagonal(Nx.squeeze(scaling_matrix, axes: [1]))
-        )
+        # With vectorized input both branches run on every matrix, and
+        # solving a singular factor raises on some backends, so the identity
+        # takes its place.
+        identity = Nx.eye(n)
+        lower = Nx.select(singular, identity, l)
+        upper = Nx.select(singular, identity, u)
+        y = Nx.LinAlg.triangular_solve(lower, permuted, lower: true)
+        Nx.LinAlg.triangular_solve(upper, y, lower: false)
       end
 
     Nx.revectorize(inverse, vectorized_axes, target_shape: input_shape)
   end
+
+  # The rounding error to allow for after n operations in the type, as a
+  # multiple of its epsilon: twice the worst case (Rump and Jeannerod, SIAM
+  # J. Matrix Anal. Appl. 35(2), 2014, doi:10.1137/130927231), since errors
+  # in earlier pivots propagate into later ones.
+  deftransformp rounding_error_multiplier(_type, n), do: 2 * n
 
   deftransformp invert_shape(tensor) do
     shape = Nx.shape(tensor)
@@ -1836,8 +1929,8 @@ defmodule Nx.LinAlg do
             [2.75, -0.75]
           ],
           [
-            [-110.37471, 76.87479],
-            [92.24976, -64.24983]
+            [-110.375, 76.875],
+            [92.25, -64.25]
           ]
         ]
       >
