@@ -99,6 +99,43 @@ defmodule Nx.LinAlgTest do
                Nx.tensor([1.0, 1.0, -1.0])
     end
 
+    test "raises for singular matrices from the exhaustively checked domains" do
+      # every 2x2 matrix with entries in -5..5 and every 3x3 matrix with
+      # entries in -1..1 was checked; the test samples those domains
+      for type <- [bf: 16, f: 16, f: 32, f: 64], {n, lo, hi} <- [{2, -5, 5}, {3, -1, 1}] do
+        b = Nx.broadcast(1, {n})
+
+        for {rows, 0} <- small_integer_matrices(n, lo, hi, 50) do
+          t = Nx.tensor(rows, type: type)
+
+          assert_raise ArgumentError, "can't solve for singular matrix", fn ->
+            Nx.LinAlg.solve(t, b)
+          end
+        end
+      end
+    end
+
+    test "is accurate for nonsingular small integer matrices" do
+      for type <- [f: 32, f: 64],
+          {n, lo, hi, count} <- [{2, -5, 5, 50}, {3, -3, 3, 50}, {4, -2, 2, 20}, {5, -1, 1, 10}] do
+        epsilon =
+          type
+          |> Nx.Constants.epsilon()
+          |> Nx.to_number()
+
+        tolerance = 32 * n * epsilon
+
+        for {rows, exact} <- small_integer_matrices(n, lo, hi, count), exact != 0 do
+          t = Nx.tensor(rows, type: type)
+          b = Nx.broadcast(1, {n})
+          x = Nx.LinAlg.solve(t, b)
+          product = Nx.dot(t, x)
+
+          assert relative_residual(product, b, t, x) <= tolerance
+        end
+      end
+    end
+
     test "works with batched input" do
       a = Nx.tensor([[[1, 3, -2], [3, 5, 6], [2, 4, 3]], [[1, 1, 1], [6, -4, 5], [5, 2, 2]]])
       b = Nx.tensor([[5, 7, 8], [2, 31, 13]])
@@ -411,6 +448,64 @@ defmodule Nx.LinAlgTest do
         )
 
       assert_equal(Nx.LinAlg.invert(t), expected)
+    end
+
+    test "returns NaN for singular matrices from the exhaustively checked domains, alone and in a batch" do
+      # every 2x2 matrix with entries in -5..5 and every 3x3 matrix with
+      # entries in -1..1 was checked; the test samples those domains
+      for type <- [bf: 16, f: 16, f: 32, f: 64], {n, lo, hi} <- [{2, -5, 5}, {3, -1, 1}] do
+        matrices = small_integer_matrices(n, lo, hi, 50)
+        nan = Nx.broadcast(:nan, {n, n})
+
+        for {rows, 0} <- matrices do
+          t = Nx.tensor(rows, type: type)
+          assert_equal(Nx.LinAlg.invert(t), nan)
+        end
+
+        # a batch mixing singular and nonsingular matrices
+        batch =
+          matrices
+          |> Enum.map(&elem(&1, 0))
+          |> Nx.tensor(type: type)
+
+        inverses = Nx.LinAlg.invert(batch)
+
+        for {{rows, exact}, i} <- Enum.with_index(matrices) do
+          if exact == 0 do
+            assert_equal(inverses[i], nan)
+          else
+            t = Nx.tensor(rows, type: type)
+            assert_all_close(inverses[i], Nx.LinAlg.invert(t))
+          end
+        end
+      end
+    end
+
+    test "is accurate for nonsingular small integer matrices, alone and in a batch" do
+      for type <- [f: 32, f: 64],
+          {n, lo, hi, count} <- [{2, -5, 5, 50}, {3, -3, 3, 50}, {4, -2, 2, 20}, {5, -1, 1, 10}] do
+        epsilon =
+          type
+          |> Nx.Constants.epsilon()
+          |> Nx.to_number()
+
+        tolerance = 32 * n * epsilon
+
+        matrices =
+          for {rows, exact} <- small_integer_matrices(n, lo, hi, count), exact != 0, do: rows
+
+        batch = Nx.tensor(matrices, type: type)
+        inverses = Nx.LinAlg.invert(batch)
+
+        for {rows, i} <- Enum.with_index(matrices) do
+          t = Nx.tensor(rows, type: type)
+          inverse = Nx.LinAlg.invert(t)
+          product = Nx.dot(t, inverse)
+
+          assert relative_residual(product, Nx.eye(n), t, inverse) <= tolerance
+          assert_all_close(inverses[i], inverse)
+        end
+      end
     end
   end
 
@@ -1452,6 +1547,26 @@ defmodule Nx.LinAlgTest do
     end
   end
 
+  # Random n-by-n integer matrices with entries in lo..hi, paired with their
+  # exact determinant, so a test knows which ones are singular.
+  defp small_integer_matrices(n, lo, hi, count) do
+    key = Nx.Random.key(42)
+    {ints, _} = Nx.Random.randint(key, lo, hi + 1, shape: {count, n, n})
+    for rows <- Nx.to_list(ints), do: {rows, exact_determinant(rows)}
+  end
+
+  defp exact_determinant([[a]]), do: a
+
+  defp exact_determinant([first | rest]) do
+    first
+    |> Enum.with_index()
+    |> Enum.map(fn {x, j} ->
+      minor = Enum.map(rest, &List.delete_at(&1, j))
+      Integer.pow(-1, j) * x * exact_determinant(minor)
+    end)
+    |> Enum.sum()
+  end
+
   # The Wilkinson matrix: ones on the diagonal and in the last column, minus
   # ones below the diagonal, zeros elsewhere.
   defp wilkinson(n, type) do
@@ -1468,5 +1583,21 @@ defmodule Nx.LinAlgTest do
     entries
     |> Nx.tensor(type: type)
     |> Nx.reshape({n, n})
+  end
+
+  # The backward-error style residual |product - expected| / (|a| |x| + |expected|),
+  # in the max norm and in f64, so it means the same thing for every type
+  defp relative_residual(product, expected, a, x) do
+    norm = fn t ->
+      t
+      |> Nx.abs()
+      |> Nx.reduce_max()
+      |> Nx.to_number()
+    end
+
+    product_f64 = Nx.as_type(product, :f64)
+    expected_f64 = Nx.as_type(expected, :f64)
+    residual = Nx.subtract(product_f64, expected_f64)
+    norm.(residual) / (norm.(a) * norm.(x) + norm.(expected))
   end
 end
