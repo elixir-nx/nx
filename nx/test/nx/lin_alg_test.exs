@@ -356,7 +356,7 @@ defmodule Nx.LinAlgTest do
     end
 
     test "inverts bf16 diagonal and block-diagonal matrices at sizes where the tolerance is large" do
-      # the tolerance is 0.18 at n = 32 and 0.25 at n = 64 in bf16; a pivot that
+      # the tolerance is 0.094 at n = 32 and at n = 64 in bf16; a pivot that
       # nothing was subtracted from still counts as nonsingular
       identity = Nx.eye(64, type: :bf16)
       assert_equal(Nx.LinAlg.invert(identity), identity)
@@ -429,7 +429,7 @@ defmodule Nx.LinAlgTest do
       # up to scaling, so its inverse is its transpose over n. Its elimination
       # is exact integer arithmetic that cancels many products at each pivot,
       # which the criterion must not mistake for rounding noise.
-      for type <- [f: 64, f: 32, f: 16, bf: 16], n <- [4, 8, 16] do
+      for type <- [f: 64, f: 32, f: 16, bf: 16], n <- [4, 8, 16, 32] do
         t = hadamard(n, type)
 
         expected =

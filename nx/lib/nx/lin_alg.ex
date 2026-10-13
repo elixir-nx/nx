@@ -1033,6 +1033,14 @@ defmodule Nx.LinAlg do
   # bf16, so once the typical error, which grows with the square root of n
   # (Higham and Mary, SIAM J. Sci. Comput. 41(5), 2019,
   # doi:10.1137/18M1226312), is the smaller of the two, that is used instead.
+  # In bf16 the nonzero pivot that rounding produces for an exactly singular
+  # matrix is at most about 12 epsilon times the sum of the products
+  # subtracted to form it, from 16x16 to 64x64, apart from about one matrix
+  # in five hundred, so the allowance is capped at 12 there. In f16 that
+  # ratio reaches 22 to 27, so f16 keeps the square root rule.
+  deftransformp rounding_error_multiplier({:bf, 16}, n),
+    do: Enum.min([2 * n, 4 * :math.sqrt(n), 12])
+
   deftransformp rounding_error_multiplier({_, size}, n) when size <= 16,
     do: min(2 * n, 4 * :math.sqrt(n))
 
