@@ -1,6 +1,8 @@
 #ifndef TORCHX_NIF_UTIL_H_
 #define TORCHX_NIF_UTIL_H_
 
+#include <ATen/ExpandUtils.h>
+#include <ATen/MemoryOverlap.h>
 #include <fine.hpp>
 #include <torch/torch.h>
 #include <map>
@@ -91,6 +93,30 @@ public:
   }
 
   bool is_deallocated() const { return deallocated_; }
+
+  // True when no other tensor or view shares the storage of this tensor, so
+  // its buffer can be given to a result.
+  bool is_unique() const {
+    return !deallocated_ && tensor_.defined() && tensor_.has_storage() &&
+           tensor_.use_count() == 1 && tensor_.storage().use_count() == 1;
+  }
+
+  // Like is_unique, and the elements can also be overwritten in place.
+  bool is_writable() const {
+    return is_unique() &&
+           at::has_internal_overlap(tensor_) == at::MemOverlap::No;
+  }
+
+  // Moves the tensor out of this resource, which is deallocated afterwards.
+  torch::Tensor take() {
+    if (deallocated_) {
+      throw std::runtime_error("Tensor has been deallocated");
+    }
+    deallocated_ = true;
+    torch::Tensor result = std::move(tensor_);
+    tensor_ = torch::Tensor();
+    return result;
+  }
 
   // Replace the tensor owned by this BEAM resource (e.g. after materializing
   // a contiguous copy before exporting a data pointer).
