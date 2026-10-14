@@ -362,7 +362,7 @@ get_buffer_device_pointer(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
     // the old XLA-managed memory, avoiding double memory usage.
     auto shape = unwrap(buffer->buffer()->logical_on_device_shape());
     auto device = unwrap(client->client()->LookupDevice(
-        xla::PjRtGlobalDeviceId(buffer->device_id())));
+        xla::GlobalDeviceId(buffer->device_id())));
     auto memory_space = unwrap(device->default_memory_space());
 
     auto on_delete = [fd, ipc_ptr, device_size, handle_name]() {
@@ -429,7 +429,7 @@ fine::ResourcePtr<ExlaBuffer> create_buffer_from_device_pointer(
   }
 
   auto device = unwrap(
-      client->client()->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
+      client->client()->LookupDevice(xla::GlobalDeviceId(device_id)));
   auto memory_space = unwrap(device->default_memory_space());
   auto buffer = unwrap(client->client()->CreateViewOfDeviceBuffer(
       ptr, shape, memory_space, on_delete_callback));
@@ -518,7 +518,7 @@ copy_buffer_to_device(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client,
   auto buffer = decode_exla_buffer(env, buffer_term);
 
   auto device = unwrap(
-      client->client()->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
+      client->client()->LookupDevice(xla::GlobalDeviceId(device_id)));
 
   return unwrap(buffer->CopyToDevice(device));
 }
