@@ -911,7 +911,7 @@ defmodule Nx.LinAlg do
 
     inverse =
       if Nx.abs(det) <= eps do
-        Nx.tensor(:nan)
+        Nx.Constants.nan(type)
       else
         # matrix is possibly invertible but ill-conditioned
         # we normalize it by the determinant

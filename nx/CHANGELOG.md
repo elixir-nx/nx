@@ -19,6 +19,7 @@
   * [Nx.BinaryBackend] Pad in the merged type of the tensor and the pad value in `Nx.pad/3`
   * [Nx.Defn.Evaluator] Evaluate expressions used by both a `cond` predicate and its branches once, instead of again when the predicate is false
   * [Nx] Keep the input type in `Nx.log2/1`, `Nx.log10/1` and `Nx.log/2` with a number base, instead of returning f32 for every float type narrower than f32, and compute them at f64 precision for f64 input
+  * [Nx.LinAlg] Keep the input type in `Nx.LinAlg.invert/1` for f16 and bf16 matrices, instead of returning f32
 
 ## v1.0.0 (2026-09-10)
 
