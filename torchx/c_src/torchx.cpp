@@ -1258,8 +1258,8 @@ fine::Ok<
                fine::ResourcePtr<TorchTensor>>>
 lu(ErlNifEnv *env, fine::ResourcePtr<TorchTensor> t) {
   try {
-    std::tuple<torch::Tensor, torch::Tensor> lu_result =
-        torch::linalg_lu_factor(get_tensor(t));
+    std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> lu_result =
+        torch::linalg_lu_factor_ex(get_tensor(t));
     std::tuple<torch::Tensor, torch::Tensor, torch::Tensor> plu =
         torch::lu_unpack(std::get<0>(lu_result), std::get<1>(lu_result));
     return fine::Ok(
