@@ -1081,6 +1081,17 @@ defmodule EXLA.Defn do
 
   ## to_operator others
 
+  defp to_operator(:metadata, [op, %{barrier: true}], _ans, _state) do
+    case op do
+      %Value{} ->
+        [value] = Value.optimization_barrier([op])
+        value
+
+      op when is_tuple(op) ->
+        Value.optimization_barrier(Tuple.to_list(op))
+    end
+  end
+
   defp to_operator(:metadata, [op, _metadata], _ans, _state) do
     case op do
       %Value{} ->

@@ -1383,6 +1383,23 @@ defmodule EXLA.Defn.ExprTest do
     test "ignores metadata nodes" do
       assert_equal(add_with_stop_grad(1, 2), Nx.tensor(3))
     end
+
+    deftransformp with_barrier(container) do
+      Nx.Defn.Expr.metadata(container, %{barrier: true, inspect: :barrier})
+    end
+
+    defn barrier_sum(x) do
+      {input, sine} = with_barrier({x, Nx.sin(x)})
+      Nx.sum(input * Nx.exp(sine))
+    end
+
+    test "lowers a barrier key to an optimization barrier" do
+      x = Nx.tensor([0.1, 0.5, -1.0])
+      assert_all_close(barrier_sum(x), evaluate(&barrier_sum/1, [x]))
+
+      %{mlir_module: mlir_module} = EXLA.to_mlir_module(&barrier_sum/1, [x])
+      assert mlir_module =~ "stablehlo.optimization_barrier"
+    end
   end
 
   describe "cond" do
