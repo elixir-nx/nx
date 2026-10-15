@@ -1138,41 +1138,65 @@ defmodule EXLA.Defn do
     )
   end
 
+  # XLA on CUDA rejects complex convolutions, so we split them into real
+  # ones, as Torchx does. A convolution is a sliding dot product, so we can
+  # decompose the dot product of a complex-valued pair of tensors into dot
+  # products of their real and imaginary components.
+  #
+  # For example, given a tensor v = [a1+b1i c1+d1i] and a
+  # kernel k = [a2+b2i c2+d2i], we can expand the dot product into
+  # (a1+b1i)(a2+b2i) + (c1+d1i)(c2+d2i)
+  # = (a1a2 - b1b2) + (a1b2+a2b1)i + (c1c2 - d1d2) + (c1d2+c2d1)i
+  # = (a1a2 + c1c2) - (b1b2 + d1d2) + i[(a1b2 + c1d2) + (a2b1 + c2d1)]
+  # = ([a1 c1].[a2 c2] - [b1 d1].[b2 d2]) + i([a1 c1].[b2 d2] + [a2 c2].[b1 d1])
+  # = (real(v).real(k) - imag(v).imag(k)) + i(real(v).imag(k) + imag(v).real(k))
+  #
+  # With the result above, z = conv(t, k), where either t or k is complex, becomes:
+  #
+  #     real = conv(re(t), re(k)) - conv(im(t), im(k))
+  #     imag = conv(re(t), im(k)) + conv(im(t), re(k))
+  #     z = complex(real, imag)
+  defp to_operator(
+         :conv,
+         [operand, kernel, opts],
+         %{type: {:c, _} = output_type} = ans,
+         %{client: %EXLA.Client{platform: :cuda}} = state
+       ) do
+    real_type = Nx.Type.to_real(output_type)
+
+    operand = to_type(operand, output_type)
+    kernel = to_type(kernel, output_type)
+
+    operand_ts = Typespec.to_type(Value.get_typespec(operand), real_type)
+    kernel_ts = Typespec.to_type(Value.get_typespec(kernel), real_type)
+    part_ts = Typespec.to_type(expr_to_typespec(ans), real_type)
+
+    re_t = Value.real(operand, operand_ts)
+    im_t = Value.imag(operand, operand_ts)
+    re_k = Value.real(kernel, kernel_ts)
+    im_k = Value.imag(kernel, kernel_ts)
+
+    conv = &convolution(&1, &2, opts, state, part_ts)
+
+    real_part = Value.subtract(conv.(re_t, re_k), conv.(im_t, im_k), part_ts)
+    imag_part = Value.add(conv.(re_t, im_k), conv.(im_t, re_k), part_ts)
+
+    Value.complex(real_part, imag_part, expr_to_typespec(ans))
+  end
+
   defp to_operator(
          :conv,
          [operand, kernel, opts],
          ans,
          state
        ) do
-    padding = opts[:padding]
-    strides = opts[:strides]
-    input_dilation = opts[:input_dilation]
-    kernel_dilation = opts[:kernel_dilation]
-    feature_group_count = opts[:feature_group_size]
-    batch_group_count = opts[:batch_group_size]
-
     %{type: output_type} = ans
-
-    dimension_numbers =
-      {opts[:input_permutation], opts[:kernel_permutation], opts[:output_permutation]}
 
     # Ensure both types are floating
     operand = to_type(operand, output_type)
     kernel = to_type(kernel, output_type)
 
-    Value.convolution(
-      operand,
-      kernel,
-      strides,
-      padding,
-      input_dilation,
-      kernel_dilation,
-      dimension_numbers,
-      feature_group_count,
-      batch_group_count,
-      state.precision,
-      expr_to_typespec(ans)
-    )
+    convolution(operand, kernel, opts, state, expr_to_typespec(ans))
   end
 
   defp to_operator(
@@ -2323,6 +2347,25 @@ defmodule EXLA.Defn do
   defp op_type(%Value{} = op), do: Value.get_typespec(op).type
 
   defp op_shape(%Value{} = op), do: Value.get_typespec(op).shape
+
+  defp convolution(operand, kernel, opts, state, typespec) do
+    dimension_numbers =
+      {opts[:input_permutation], opts[:kernel_permutation], opts[:output_permutation]}
+
+    Value.convolution(
+      operand,
+      kernel,
+      opts[:strides],
+      opts[:padding],
+      opts[:input_dilation],
+      opts[:kernel_dilation],
+      dimension_numbers,
+      opts[:feature_group_size],
+      opts[:batch_group_size],
+      state.precision,
+      typespec
+    )
+  end
 
   defp to_type(%Value{} = op, type) do
     typespec = Value.get_typespec(op)

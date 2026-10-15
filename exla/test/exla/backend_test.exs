@@ -23,11 +23,216 @@ defmodule EXLA.BackendTest do
     logsumexp: 2,
     exp: 1,
     expm1: 1,
-    rsqrt: 1
+    rsqrt: 1,
+    # Differ from the expected output in the last float digit on some platforms
+    cbrt: 1,
+    covariance: 3,
+    log10: 1,
+    # Doctests copied below as regular tests, so the ones that differ in the
+    # last float digit on CUDA can be tagged :skip_cuda
+    atan2: 2,
+    phase: 1,
+    standard_deviation: 2,
+    variance: 2,
+    weighted_mean: 3,
+    reduce: 4
   ]
 
   doctest Nx,
     except: [:moduledoc] ++ @excluded_doctests
+
+  describe "doctests that differ on CUDA" do
+    # These doctests differ from the expected output in the last float digit
+    # on CUDA, so they are tagged :skip_cuda.
+
+    test "Nx.atan2/2" do
+      neg_and_pos_zero_columns = Nx.tensor([[-0.0], [0.0]], type: :f64)
+      neg_and_pos_zero_rows = Nx.tensor([-0.0, 0.0], type: :f64)
+
+      assert_equal(
+        Nx.atan2(neg_and_pos_zero_columns, neg_and_pos_zero_rows),
+        Nx.tensor([[-3.141592653589793, -0.0], [3.141592653589793, 0.0]], type: :f64)
+      )
+    end
+
+    @tag :skip_cuda
+    test "Nx.atan2/2 between scalars" do
+      assert_equal(Nx.atan2(1, 2), Nx.tensor(0.4636476))
+    end
+
+    @tag :skip_cuda
+    test "Nx.atan2/2 between tensors and scalars" do
+      assert_equal(
+        Nx.atan2(Nx.tensor([1, 2, 3], names: [:data]), 1),
+        Nx.tensor([0.7853982, 1.1071488, 1.2490457], names: [:data])
+      )
+
+      assert_equal(
+        Nx.atan2(1, Nx.tensor([1.0, 2.0, 3.0], names: [:data])),
+        Nx.tensor([0.7853982, 0.4636476, 0.32175055], names: [:data])
+      )
+    end
+
+    test "Nx.phase/1" do
+      assert_equal(Nx.phase(1), Nx.tensor(0.0))
+    end
+
+    @tag :skip_cuda
+    test "Nx.phase/1 of complex numbers" do
+      assert_equal(Nx.phase(Complex.new(1, 2)), Nx.tensor(1.1071488))
+      assert_equal(Nx.phase(~VEC[1+2i -2+1i]), Nx.tensor([1.1071488, 2.6779451]))
+    end
+
+    test "Nx.weighted_mean/3" do
+      assert_equal(Nx.weighted_mean(Nx.tensor(42), Nx.tensor(2)), Nx.tensor(42.0))
+
+      assert_equal(
+        Nx.weighted_mean(Nx.tensor([1, 2, 3], names: [:x]), Nx.tensor([4, 5, 6]), axes: [0]),
+        Nx.tensor(2.1333334)
+      )
+
+      assert_equal(
+        Nx.weighted_mean(Nx.tensor([1, 2, 3], type: :u8, names: [:x]), Nx.tensor([1, 3, 5]),
+          axes: [:x]
+        ),
+        Nx.tensor(2.4444444)
+      )
+
+      assert_equal(
+        Nx.weighted_mean(Nx.iota({3, 4}), Nx.tensor([1, 2, 3, 4]), axes: [1]),
+        Nx.tensor([2.0, 6.0, 10.0])
+      )
+
+      assert_equal(
+        Nx.weighted_mean(Nx.iota({2, 4, 4, 1}), Nx.broadcast(2, {4, 4}), axes: [1, 2]),
+        Nx.tensor([[7.5], [23.5]])
+      )
+
+      t = Nx.tensor([[1, 2, 3], [1, 1, 1]]) |> Nx.vectorize(:x)
+      w = Nx.tensor([[1, 1, 1], [0, 0, 1]]) |> Nx.vectorize(:y)
+
+      assert_equal(
+        Nx.weighted_mean(t, w),
+        Nx.tensor([[2.0, 3.0], [1.0, 1.0]]) |> Nx.vectorize([:x, :y])
+      )
+    end
+
+    @tag :skip_cuda
+    test "Nx.weighted_mean/3 with float rounding" do
+      assert_equal(
+        Nx.weighted_mean(Nx.tensor([1, 2, 3]), Nx.tensor([3, 2, 1])),
+        Nx.tensor(1.6666666)
+      )
+
+      t = Nx.tensor(Nx.iota({2, 2, 3}), names: [:x, :y, :z])
+      weights = Nx.tensor([[[0, 1, 2], [1, 1, 0]], [[-1, 1, -1], [1, 1, -1]]])
+
+      assert_equal(
+        Nx.weighted_mean(t, weights, axes: [-1], keep_axes: true),
+        Nx.tensor([[[1.6666666], [3.5]], [[7.0], [8.0]]], names: [:x, :y, :z])
+      )
+    end
+
+    test "Nx.variance/2" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+
+      assert_equal(Nx.variance(t), Nx.tensor(1.25))
+      assert_equal(Nx.variance(t, axes: [0]), Nx.tensor([1.0, 1.0]))
+      assert_equal(Nx.variance(t, axes: [1]), Nx.tensor([0.25, 0.25]))
+      assert_equal(Nx.variance(t, axes: [0], ddof: 1), Nx.tensor([2.0, 2.0]))
+      assert_equal(Nx.variance(t, axes: [1], ddof: 1), Nx.tensor([0.5, 0.5]))
+      assert_equal(Nx.variance(t, axes: [1], keep_axes: true), Nx.tensor([[0.25], [0.25]]))
+
+      assert_equal(
+        Nx.variance(Nx.tensor([[1, 2], [0, 4]]) |> Nx.vectorize(:x)),
+        Nx.tensor([0.25, 4.0]) |> Nx.vectorize(:x)
+      )
+    end
+
+    @tag :skip_cuda
+    test "Nx.variance/2 with ddof" do
+      assert_equal(Nx.variance(Nx.tensor([[1, 2], [3, 4]]), ddof: 1), Nx.tensor(1.6666666))
+    end
+
+    test "Nx.standard_deviation/2" do
+      t = Nx.tensor([[1, 2], [10, 20]])
+
+      assert_equal(Nx.standard_deviation(t, axes: [0]), Nx.tensor([4.5, 9.0]))
+      assert_equal(Nx.standard_deviation(t, axes: [1]), Nx.tensor([0.5, 5.0]))
+
+      assert_equal(
+        Nx.standard_deviation(t, axes: [1], ddof: 1),
+        Nx.tensor([0.70710677, 7.071068])
+      )
+
+      assert_equal(Nx.standard_deviation(t, keep_axes: true), Nx.tensor([[7.628073]]))
+
+      assert_equal(
+        Nx.standard_deviation(Nx.tensor([[1, 2], [0, 4]]) |> Nx.vectorize(:x)),
+        Nx.tensor([0.5, 2.0]) |> Nx.vectorize(:x)
+      )
+    end
+
+    @tag :skip_cuda
+    test "Nx.standard_deviation/2 with float rounding" do
+      t = Nx.tensor([[1, 2], [3, 4]])
+
+      assert_equal(Nx.standard_deviation(t), Nx.tensor(1.118034))
+      assert_equal(Nx.standard_deviation(t, ddof: 1), Nx.tensor(1.2909944))
+
+      assert_equal(
+        Nx.standard_deviation(Nx.tensor([[1, 2], [10, 20]]), axes: [0], ddof: 1),
+        Nx.tensor([6.363961, 12.727922])
+      )
+    end
+
+    test "Nx.reduce/4" do
+      t = Nx.tensor([1, 2, 3], names: [:x])
+      assert_equal(Nx.reduce(t, 0, [axes: [:x]], fn x, y -> Nx.add(x, y) end), Nx.tensor(6))
+
+      t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]], names: [:x, :y, :z])
+
+      assert_equal(
+        Nx.reduce(t, 0, [axes: [:x]], fn x, y -> Nx.add(x, y) end),
+        Nx.tensor([[8, 10, 12], [14, 16, 18]], names: [:y, :z])
+      )
+
+      assert_equal(
+        Nx.reduce(t, 0, [axes: [:y]], fn x, y -> Nx.add(x, y) end),
+        Nx.tensor([[5, 7, 9], [17, 19, 21]], names: [:x, :z])
+      )
+
+      assert_equal(
+        Nx.reduce(t, 0, [axes: [:x, 2]], fn x, y -> Nx.add(x, y) end),
+        Nx.tensor([30, 48], names: [:y])
+      )
+
+      assert_equal(
+        Nx.reduce(t, 0, [axes: [-1]], fn x, y -> Nx.add(x, y) end),
+        Nx.tensor([[6, 15], [24, 33]], names: [:x, :y])
+      )
+
+      assert_equal(
+        Nx.reduce(t, 0, [axes: [:x], keep_axes: true], fn x, y -> Nx.add(x, y) end),
+        Nx.tensor([[[8, 10, 12], [14, 16, 18]]], names: [:x, :y, :z])
+      )
+    end
+
+    # The init value must be an identity of the reduction. Here 10 is not an
+    # identity of add, and XLA applies init values at implementation-defined
+    # positions, so CUDA adds it more than once. See the XLA operation
+    # semantics for Reduce and the StableHLO spec for reduce. This is tracked
+    # as a separate issue.
+    @tag :skip_cuda
+    test "Nx.reduce/4 with a non-identity init value" do
+      t = Nx.tensor([[[1, 2, 3], [4, 5, 6]], [[10, 20, 30], [40, 50, 60]]]) |> Nx.vectorize(:x)
+
+      assert_equal(
+        Nx.reduce(t, 10, [axes: [1]], &Nx.add/2),
+        Nx.tensor([[16, 25], [70, 160]]) |> Nx.vectorize(:x)
+      )
+    end
+  end
 
   test "Nx.to_binary/1" do
     t = Nx.tensor([1, 2, 3, 4], backend: EXLA.Backend)

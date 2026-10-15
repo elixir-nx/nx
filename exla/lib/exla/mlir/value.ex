@@ -29,6 +29,7 @@ defmodule EXLA.MLIR.Value do
     max: "stablehlo.maximum",
     remainder: "stablehlo.remainder",
     atan2: "stablehlo.atan2",
+    complex: "stablehlo.complex",
     bitwise_and: "stablehlo.and",
     bitwise_or: "stablehlo.or",
     bitwise_xor: "stablehlo.xor",
