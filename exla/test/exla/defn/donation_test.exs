@@ -4,7 +4,7 @@ defmodule EXLA.Defn.DonationTest do
   alias EXLA.DeviceBuffer
 
   defp on_device(value) do
-    Nx.backend_transfer(Nx.tensor(value), {EXLA.Backend, client: :host})
+    Nx.backend_transfer(Nx.tensor(value), {EXLA.Backend, client: EXLAHelpers.client().name})
   end
 
   describe "Nx.donatable/1" do

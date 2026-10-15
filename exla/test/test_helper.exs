@@ -22,9 +22,14 @@ exclude_multi_device =
 
 exclude =
   case client.platform do
-    :tpu -> [:unsupported_dilated_window_reduce, :unsupported_64_bit_op]
-    :host -> []
-    _ -> [:conditional_inside_map_reduce]
+    :tpu ->
+      [:unsupported_dilated_window_reduce, :unsupported_64_bit_op, :host_custom_call]
+
+    :host ->
+      []
+
+    _ ->
+      [:conditional_inside_map_reduce, :host_custom_call]
   end
 
 case {:os.type(), List.to_string(:erlang.system_info(:system_architecture))} do

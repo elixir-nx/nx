@@ -5,25 +5,20 @@ defmodule EXLA.MLIR.CustomCallTest do
   alias EXLA.MLIR.Module
   alias EXLA.MLIR.Value
 
+  # The CPU custom call is more precise than the generic QR used on other platforms
+  # f16 machine epsilon is ~9.77e-4; atol must be above that
+  defp tol_opts({:f, 16}, _platform), do: [atol: 7.0e-3, rtol: 7.0e-3]
+  defp tol_opts({:bf, 16}, :host), do: [atol: 6.0e-2, rtol: 6.0e-2]
+  defp tol_opts({:bf, 16}, _platform), do: [atol: 2.5e-1, rtol: 2.5e-1]
+  defp tol_opts({:f, 64}, _platform), do: [atol: 1.0e-14, rtol: 1.0e-15]
+  defp tol_opts({:f, 32}, :host), do: [atol: 1.0e-6, rtol: 1.0e-6]
+  defp tol_opts({:f, 32}, _platform), do: [atol: 1.0e-5, rtol: 1.0e-5]
+
   describe "qr" do
     for type <- [bf: 16, f: 16, f: 32, f: 64] do
-      tol_opts =
-        case type do
-          {:f, 16} ->
-            # f16 machine epsilon is ~9.77e-4; atol must be above that
-            [atol: 7.0e-3, rtol: 7.0e-3]
-
-          {:bf, 16} ->
-            [atol: 6.0e-2, rtol: 6.0e-2]
-
-          {:f, 64} ->
-            [atol: 1.0e-14, rtol: 1.0e-15]
-
-          {:f, 32} ->
-            [atol: 1.0e-6, rtol: 1.0e-6]
-        end
-
       test "works for input type #{inspect(type)}" do
+        tol_opts = tol_opts(unquote(type), EXLAHelpers.client().platform)
+
         square = Nx.iota({4, 4}, type: unquote(type))
         tall = Nx.iota({4, 3}, type: unquote(type))
         wide = Nx.iota({3, 4}, type: unquote(type))
@@ -34,9 +29,9 @@ defmodule EXLA.MLIR.CustomCallTest do
             Nx.dot(q, r)
           end)
 
-        assert_all_close(fun.(square), square, unquote(tol_opts))
-        assert_all_close(fun.(tall), tall, unquote(tol_opts))
-        assert_all_close(fun.(wide), wide, unquote(tol_opts))
+        assert_all_close(fun.(square), square, tol_opts)
+        assert_all_close(fun.(tall), tall, tol_opts)
+        assert_all_close(fun.(wide), wide, tol_opts)
       end
     end
   end

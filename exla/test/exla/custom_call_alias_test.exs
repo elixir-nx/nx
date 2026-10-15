@@ -1,6 +1,9 @@
 defmodule EXLA.CustomCallAliasTest do
   use EXLA.Case, async: false
 
+  # The QR and Eigh custom calls these tests look for only exist on the host client
+  @moduletag :host_custom_call
+
   import Nx.Defn
 
   alias EXLA.Test.QRAliasBlock
