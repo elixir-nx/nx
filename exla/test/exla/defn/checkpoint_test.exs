@@ -259,4 +259,32 @@ defmodule EXLA.Defn.CheckpointTest do
     assert count(EXLA.Executable.optimized_hlo(plain), "exponential(") == 1
     assert count(EXLA.Executable.optimized_hlo(nested), "exponential(") == 3
   end
+
+  defn duplicated_outputs(x) do
+    checkpoint(x, fn x ->
+      y = x * x
+      {y, y}
+    end)
+  end
+
+  test "duplicated outputs accumulate their gradient contributions" do
+    x = Nx.tensor([2.0, 3.0])
+
+    gradient =
+      grad(x, fn x ->
+        {a, b} = duplicated_outputs(x)
+        Nx.sum(Nx.add(a, Nx.multiply(3, b)))
+      end)
+
+    assert_equal(gradient, Nx.tensor([16.0, 24.0]))
+  end
+
+  test "either duplicated output can be used without the other" do
+    x = Nx.tensor([2.0, 3.0])
+
+    for index <- [0, 1] do
+      gradient = grad(x, fn x -> Nx.sum(elem(duplicated_outputs(x), index)) end)
+      assert_equal(gradient, Nx.tensor([4.0, 6.0]))
+    end
+  end
 end

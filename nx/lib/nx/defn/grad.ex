@@ -464,7 +464,7 @@ defmodule Nx.Defn.Grad do
 
     {body_grads, []} =
       Composite.reduce(recomputed, {%{}, Tuple.to_list(tied_gs)}, fn out, {acc, [g | rest]} ->
-        {Map.put(acc, out.data.id, [g]), rest}
+        {Map.update(acc, out.data.id, [g], &[g | &1]), rest}
       end)
 
     # The body was devectorized above, so its gradients already have the
