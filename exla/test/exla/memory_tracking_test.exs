@@ -143,8 +143,8 @@ defmodule EXLA.MemoryTrackingTest do
   end
 
   test "untracks donated buffers after execution" do
-    client = Client.fetch!(:host)
-    Nx.default_backend({EXLA.Backend, client: :host})
+    client = EXLAHelpers.client()
+    Nx.default_backend({EXLA.Backend, client: client.name})
     :erlang.garbage_collect()
 
     assert %{allocated: baseline} = Client.get_memory_statistics(client)

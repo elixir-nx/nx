@@ -135,7 +135,7 @@ PjRtBufferFromBinary(xla::PjRtClient *client, ERL_NIF_TERM source_term,
 
   EXLA_ASSIGN_OR_RETURN(
       xla::PjRtDevice * device,
-      client->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
+      client->LookupDevice(xla::GlobalDeviceId(device_id)));
   EXLA_ASSIGN_OR_RETURN(auto memory_space, device->default_memory_space());
   // Passing std::nullopt should work, but it fails for subbyte types,
   // so we build the default strides. See
@@ -339,7 +339,7 @@ ExlaExecutable::Run(ErlNifEnv *env, ExlaExecutable::RunArguments arguments,
     // guaranteed this executable only has 1 replica
     EXLA_ASSIGN_OR_RETURN(
         xla::PjRtDevice * device,
-        client_->client()->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
+        client_->client()->LookupDevice(xla::GlobalDeviceId(device_id)));
     // because this is a portable executable, it only has 1 replica and so we
     // only need to get the arguments at the first position of the input buffers
     std::vector<xla::PjRtBuffer *> portable_args = input_buffers.at(0);
@@ -461,7 +461,8 @@ tsl::StatusOr<fine::ResourcePtr<ExlaExecutable>> ExlaClient::Compile(
 
   EXLA_ASSIGN_OR_RETURN(
       std::unique_ptr<xla::PjRtLoadedExecutable> executable,
-      client_->CompileAndLoad(module, std::move(compile_opts)));
+      client_->CompileAndLoad(xla::MaybeOwningMlirModule(module),
+                              std::move(compile_opts)));
   EXLA_ASSIGN_OR_RETURN(absl::optional<std::string> fingerprint,
                         ExecutableFingerprint(executable));
 
@@ -511,7 +512,7 @@ tsl::Status ExlaClient::TransferToInfeed(ErlNifEnv *env,
 
   EXLA_ASSIGN_OR_RETURN(
       xla::PjRtDevice * device,
-      client_->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
+      client_->LookupDevice(xla::GlobalDeviceId(device_id)));
 
   tsl::Status status = device->TransferToInfeed(literal);
 
@@ -523,7 +524,7 @@ tsl::StatusOr<ERL_NIF_TERM> ExlaClient::TransferFromOutfeed(ErlNifEnv *env,
                                                             xla::Shape &shape) {
   EXLA_ASSIGN_OR_RETURN(
       xla::PjRtDevice * device,
-      client_->LookupDevice(xla::PjRtGlobalDeviceId(device_id)));
+      client_->LookupDevice(xla::GlobalDeviceId(device_id)));
 
   auto literal = std::make_shared<xla::Literal>(shape);
 

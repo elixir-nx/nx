@@ -3,6 +3,7 @@
 #ifndef EXLA_PROD
 
 #include "xla/ffi/api/api.h"
+#include "xla/ffi/ffi.h"
 #include "xla/ffi/ffi_api.h"
 
 namespace ffi = xla::ffi;

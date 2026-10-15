@@ -448,7 +448,9 @@ defmodule Nx.Defn.Expr do
     [%T{data: %Expr{context: context}} | _] =
       Composite.flatten_list([tensor_expr])
 
-    ref = make_ref()
+    # Records the order in which io_calls are defined, so compilers can
+    # keep that order for calls with no data dependency
+    ref = System.unique_integer([:monotonic])
     user_template = Nx.to_template(tensor_or_container)
     leaf_count = Composite.reduce(user_template, 0, fn _, acc -> acc + 1 end)
 

@@ -22,10 +22,17 @@ exclude_multi_device =
 
 exclude =
   case client.platform do
-    :tpu -> [:unsupported_dilated_window_reduce, :unsupported_64_bit_op]
-    :host -> []
-    _ -> [:conditional_inside_map_reduce]
+    :tpu ->
+      [:unsupported_dilated_window_reduce, :unsupported_64_bit_op, :host_custom_call]
+
+    :host ->
+      []
+
+    _ ->
+      [:conditional_inside_map_reduce, :host_custom_call]
   end
+
+exclude_cuda = if client.platform == :cuda, do: [:skip_cuda], else: []
 
 case {:os.type(), List.to_string(:erlang.system_info(:system_architecture))} do
   {{:unix, :darwin}, "aarch64" <> _} ->
@@ -74,7 +81,7 @@ distributed_exclude =
 ExUnit.start(
   exclude:
     [:platform, :integration] ++
-      exclude_multi_device ++ exclude ++ cuda_required ++ distributed_exclude,
+      exclude_multi_device ++ exclude ++ exclude_cuda ++ cuda_required ++ distributed_exclude,
   include: [platform: String.to_atom(target)],
   assert_receive_timeout: 1000
 )
