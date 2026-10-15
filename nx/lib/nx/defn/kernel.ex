@@ -264,7 +264,7 @@ defmodule Nx.Defn.Kernel do
   floating point differences a compiler may introduce by reordering
   operations. The memory saving is not guaranteed: it depends on the
   compiler keeping the recomputation separate from the forward pass and
-  running it late in the backward pass. EXLA does so on GPU. Outside
+  running it late in the backward pass. EXLA does. Outside
   `grad` a checkpoint is the same as calling `fun`.
 
   The inputs and outputs of a checkpoint keep whatever lifetime they
