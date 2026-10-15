@@ -270,8 +270,7 @@ defmodule Nx.Defn.Kernel do
   The inputs and outputs of a checkpoint keep whatever lifetime they
   have in the surrounding computation. Only the values created inside
   `fun` become candidates for recomputation, so a checkpoint helps most
-  when its body creates large intermediates that nothing outside needs.
-  Wrapping each block of a deep model is the usual placement:
+  when its body creates large intermediates that nothing outside needs:
 
       defn block(x, w1, w2) do
         checkpoint([x, w1, w2], fn x, w1, w2 ->
@@ -281,9 +280,8 @@ defmodule Nx.Defn.Kernel do
 
   Here `x`, the weights and the block's output are kept for the backward
   pass, while the hidden activation between the two matrix multiplications
-  is recomputed. Parameters are usually live for the whole program anyway,
-  so passing them adds little. A slice of a parameter is a new tensor that
-  would be kept, so pass the parameter whole and slice it inside `fun`.
+  is recomputed. A slice of a parameter is a new tensor that would be kept,
+  so pass the parameter whole and slice it inside `fun`.
 
   `inputs` is a tensor or container, or a list of them when `fun` takes
   several arguments, with at most 253 tensors in total. `fun` must return
