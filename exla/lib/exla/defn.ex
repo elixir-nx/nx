@@ -1856,7 +1856,7 @@ defmodule EXLA.Defn do
     {_seen, io_calls} = Composite.reduce(expr, {%{}, []}, &collect_io_calls/2)
 
     io_calls
-    |> Enum.sort_by(fn %T{data: %Expr{args: [_, _, _, {order, _ref}]}} -> order end)
+    |> Enum.sort_by(fn %T{data: %Expr{args: [_, _, _, order]}} -> order end)
     |> Enum.reduce(cache, fn io_call, cache ->
       {_, cache} = recur_operator(io_call, state, cache)
       cache
