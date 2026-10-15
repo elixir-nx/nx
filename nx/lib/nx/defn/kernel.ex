@@ -250,34 +250,49 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
-  Runs `fun` on `inputs` and marks its intermediate results as not worth
-  keeping for the backward pass.
+  Runs `fun` on `inputs` and asks the gradient to recompute the body
+  instead of keeping its intermediate results.
 
-  Reverse-mode differentiation stores every intermediate result of the
-  forward pass until the backward pass has used it, so the memory of
-  `grad` grows with the depth of the function. A checkpoint trades compute
-  for that memory: the forward pass keeps only the inputs of `fun`, and the
-  backward pass runs `fun` again from them when it needs the intermediates.
-  Each checkpoint costs one extra evaluation of its body. Wrapping each
-  layer of a deep model is the usual pattern, and nothing changes in the
-  values computed.
+  Reverse-mode differentiation keeps the intermediate results of the
+  forward pass until the backward pass has used them, so the memory
+  `grad` needs grows with the depth of the function. Inside a checkpoint
+  the backward pass instead reconstructs the intermediates it needs by
+  running `fun` again from its inputs. This trades extra computation,
+  usually one more evaluation of the body, for memory.
 
-  Outside `grad` a checkpoint is the same as calling `fun`. Whether the
-  compiler honors the hint depends on the backend; EXLA does on GPU.
+  The gradient is the same with or without the checkpoint, up to the
+  floating point differences a compiler may introduce by reordering
+  operations. The memory saving is not guaranteed: it depends on the
+  compiler keeping the recomputation separate from the forward pass and
+  running it late in the backward pass. EXLA does so on GPU. Outside
+  `grad` a checkpoint is the same as calling `fun`.
 
-  `inputs` is a single tensor or container, or a list of them when `fun`
-  takes several arguments. `fun` must return a tensor or a tuple of
-  tensors. Every tensor `fun` uses must be passed in `inputs`; it cannot
-  read tensors from the enclosing scope:
+  The inputs and outputs of a checkpoint keep whatever lifetime they
+  have in the surrounding computation. Only the values created inside
+  `fun` become candidates for recomputation, so a checkpoint helps most
+  when its body creates large intermediates that nothing outside needs.
+  Wrapping each block of a deep model is the usual placement:
 
-      defn layer(x, w, b) do
-        checkpoint([x, w, b], fn x, w, b -> Nx.dot(x, w) + b end)
+      defn block(x, w1, w2) do
+        checkpoint([x, w1, w2], fn x, w1, w2 ->
+          x |> Nx.dot(w1) |> Nx.relu() |> Nx.dot(w2)
+        end)
       end
 
-  Each input stays in memory until the backward pass has recomputed the
-  body from it. Parameters are alive for the whole program anyway, so
-  passing them costs nothing. A slice of a parameter is a new tensor that
+  Here `x`, the weights and the block's output are kept for the backward
+  pass, while the hidden activation between the two matrix multiplications
+  is recomputed. Parameters are usually live for the whole program anyway,
+  so passing them adds little. A slice of a parameter is a new tensor that
   would be kept, so pass the parameter whole and slice it inside `fun`.
+
+  `inputs` is a tensor or container, or a list of them when `fun` takes
+  several arguments, with at most 253 tensors in total. `fun` must return
+  a tensor or a flat tuple of tensors, and every tensor it uses must come
+  from its arguments; it cannot read tensors from the enclosing scope.
+
+  `fun` may run more than once, so it must produce the same values from
+  the same inputs. Random numbers inside the body need their `Nx.Random`
+  key passed as an input.
   """
   def checkpoint(inputs, fun) when is_function(fun) do
     arguments = List.wrap(inputs)
