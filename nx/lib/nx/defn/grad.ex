@@ -295,9 +295,7 @@ defmodule Nx.Defn.Grad do
 
   defp to_grad(arg, to_grad_ids, parents, acc, output_vectorized_axes) do
     id = arg.data.id
-    acc = traverse_parents(__MODULE__, to_grad_ids, parents, acc)
-    acc = traverse_parents(id, to_grad_ids, parents, acc)
-    {nodes, grads} = acc
+    {nodes, grads} = traverse_into(id, to_grad_ids, parents, acc)
 
     res = sum_grad(Map.get(grads, id, []))
     res = normalize_vectorized_shape(res)
@@ -395,6 +393,15 @@ defmodule Nx.Defn.Grad do
     |> Enum.reduce(acc, &recur_to_grad(&1, to_grad_ids, parents, &2))
   end
 
+  # Collects the gradient pieces for `id` by walking back from its consumers.
+  # Conds are registered under the module name by parents_args(:cond) and go
+  # first, because their rule writes gradients for the variables being
+  # differentiated directly instead of handing them to the cond's consumers.
+  defp traverse_into(id, to_grad_ids, parents, acc) do
+    acc = traverse_parents(__MODULE__, to_grad_ids, parents, acc)
+    traverse_parents(id, to_grad_ids, parents, acc)
+  end
+
   defp recur_to_grad(id, to_grad_ids, parents, {nodes, grads}) do
     case nodes do
       %{^id => _} ->
@@ -461,7 +468,22 @@ defmodule Nx.Defn.Grad do
     recomputed =
       apply(callback, [struct | tied_inputs ++ opts]) |> Composite.traverse(&Nx.devectorize/1)
 
-    body_grads = checkpoint_body_grads(recomputed, tied_inputs, tied_gs, to_grad_ids)
+    # Differentiate the recomputed body on its own. The tied inputs are marked
+    # visited so the walk stays inside the body.
+    stops = Map.new(tied_inputs, &{&1.data.id, :stop})
+    {parents, nodes} = parents_tree(recomputed, stops)
+
+    {seeded, []} =
+      Composite.reduce(recomputed, {%{}, tied_gs}, fn out, {acc, [g | rest]} ->
+        {Map.update(acc, out.data.id, [g], &[g | &1]), rest}
+      end)
+
+    {_nodes, body_grads} =
+      Enum.reduce(
+        tied_inputs,
+        {nodes, seeded},
+        &traverse_into(&1.data.id, to_grad_ids, parents, &2)
+      )
 
     # Hand each input's gradient back to the enclosing traversal under the
     # original input's id.
@@ -717,27 +739,6 @@ defmodule Nx.Defn.Grad do
       g = clear_axis_names(g)
       Map.update(grads, child.data.id, [g], &[g | &1])
     end)
-  end
-
-  # Differentiates the recomputed body on its own. The tied inputs are marked
-  # visited so the walk stays inside the body.
-  defp checkpoint_body_grads(recomputed, tied_inputs, tied_gs, to_grad_ids) do
-    stops = Map.new(tied_inputs, &{&1.data.id, :stop})
-    {parents, nodes} = parents_tree(recomputed, stops)
-
-    {seeded, []} =
-      Composite.reduce(recomputed, {%{}, tied_gs}, fn out, {acc, [g | rest]} ->
-        {Map.update(acc, out.data.id, [g], &[g | &1]), rest}
-      end)
-
-    # Conds register under the module name as a placeholder parent, see
-    # parents_args(:cond). They go first, as in to_grad.
-    acc = traverse_parents(__MODULE__, to_grad_ids, parents, {nodes, seeded})
-
-    {_nodes, body_grads} =
-      Enum.reduce(tied_inputs, acc, &traverse_parents(&1.data.id, to_grad_ids, parents, &2))
-
-    body_grads
   end
 
   # Unused tuple outputs get a rank-0 zero from `sum_grad([])`. Broadcast
