@@ -1377,6 +1377,32 @@ defmodule Nx.Defn.CheckpointTest do
         grad_matmul_chain_plain(w1, w2, w3, x)
       )
     end
+
+    defnp dropout(x, key) do
+      {mask, _key} = Nx.Random.uniform(key, shape: Nx.shape(x))
+      Nx.multiply(x, Nx.greater(mask, 0.5))
+    end
+
+    defn dropout_checkpoint_value_and_grad(x, key) do
+      value_and_grad(x, fn x -> Nx.sum(checkpoint([x, key], fn x, key -> dropout(x, key) end)) end)
+    end
+
+    defn dropout_plain_value_and_grad(x, key) do
+      value_and_grad(x, fn x -> Nx.sum(dropout(x, key)) end)
+    end
+
+    test "a random mask from an explicit key is the same in the recomputed body" do
+      x = Nx.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0])
+      key = Nx.Random.key(42)
+
+      {value, gradient} = dropout_checkpoint_value_and_grad(x, key)
+      {plain_value, plain_gradient} = dropout_plain_value_and_grad(x, key)
+      assert_equal(value, plain_value)
+      assert_equal(gradient, plain_gradient)
+
+      kept = Nx.to_number(Nx.sum(gradient))
+      assert kept > 0 and kept < 8
+    end
   end
 
   # --- An input is also the grad target ---
