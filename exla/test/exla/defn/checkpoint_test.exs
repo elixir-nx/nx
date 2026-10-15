@@ -133,7 +133,6 @@ defmodule EXLA.Defn.CheckpointTest do
     )
   end
 
-  @tag :rematerialization
   test "keeps the recomputed body in the compiled gradient" do
     x = Nx.iota({1024}, type: :f32) |> Nx.divide(1024)
 
@@ -147,7 +146,6 @@ defmodule EXLA.Defn.CheckpointTest do
     assert count(EXLA.Executable.optimized_hlo(with_checkpoint), "exponential(") == 2
   end
 
-  @tag :rematerialization
   test "lowers the peak scratch memory of the gradient by at least one activation" do
     # The activation has to be much larger than the workspaces the autotuner
     # may pick for the matrix multiplications, which vary from run to run.
@@ -230,7 +228,6 @@ defmodule EXLA.Defn.CheckpointTest do
     assert_all_close(grad_b, plain_b)
   end
 
-  @tag :rematerialization
   test "the gradient recomputes the exponential it needs and nothing else" do
     x = Nx.iota({1024}, type: :f32) |> Nx.divide(1024)
 
@@ -249,7 +246,6 @@ defmodule EXLA.Defn.CheckpointTest do
     assert with_count - without_count == 1024
   end
 
-  @tag :rematerialization
   test "a nested checkpoint recomputes its body once per enclosing recomputation" do
     x = Nx.iota({1024}, type: :f32) |> Nx.divide(1024)
 
@@ -286,5 +282,33 @@ defmodule EXLA.Defn.CheckpointTest do
       gradient = grad(x, fn x -> Nx.sum(elem(duplicated_outputs(x), index)) end)
       assert_equal(gradient, Nx.tensor([4.0, 6.0]))
     end
+  end
+
+  defnp dropout(x, key) do
+    {mask, _key} = Nx.Random.uniform(key, shape: Nx.shape(x))
+    Nx.multiply(x, Nx.greater(mask, 0.5))
+  end
+
+  defn dropout_loss(x, key) do
+    Nx.sum(checkpoint([x, key], fn x, key -> dropout(x, key) end))
+  end
+
+  defn dropout_loss_plain(x, key), do: Nx.sum(dropout(x, key))
+
+  defn dropout_grad(x, key), do: grad(x, fn x -> dropout_loss(x, key) end)
+
+  defn dropout_grad_plain(x, key), do: grad(x, fn x -> dropout_loss_plain(x, key) end)
+
+  test "a random mask from an explicit key is the same in the recomputed body" do
+    x = Nx.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0])
+    key = Nx.Random.key(42)
+
+    assert_all_close(dropout_loss(x, key), dropout_loss_plain(x, key))
+
+    gradient = dropout_grad(x, key)
+    assert_all_close(gradient, dropout_grad_plain(x, key))
+
+    kept = Nx.to_number(Nx.sum(gradient))
+    assert kept > 0 and kept < 8
   end
 end
