@@ -299,7 +299,9 @@ defmodule Nx.Defn.Grad do
 
   defp to_grad(arg, to_grad_ids, parents, acc, output_vectorized_axes) do
     id = arg.data.id
-    {nodes, grads} = traverse_into(id, to_grad_ids, parents, acc)
+    acc = traverse_parents(__MODULE__, to_grad_ids, parents, acc)
+    acc = traverse_parents(id, to_grad_ids, parents, acc)
+    {nodes, grads} = acc
 
     res = sum_grad(Map.get(grads, id, []))
 
@@ -380,15 +382,6 @@ defmodule Nx.Defn.Grad do
     |> Enum.reduce(acc, &recur_to_grad(&1, to_grad_ids, parents, &2))
   end
 
-  # Collects the gradient pieces for `id` by walking back from its consumers.
-  # Conds are registered under the module name by parents_args(:cond) and go
-  # first, because their rule writes gradients for the variables being
-  # differentiated directly instead of handing them to the cond's consumers.
-  defp traverse_into(id, to_grad_ids, parents, acc) do
-    acc = traverse_parents(__MODULE__, to_grad_ids, parents, acc)
-    traverse_parents(id, to_grad_ids, parents, acc)
-  end
-
   defp recur_to_grad(id, to_grad_ids, parents, {nodes, grads}) do
     case nodes do
       %{^id => _} ->
@@ -465,12 +458,13 @@ defmodule Nx.Defn.Grad do
         {Map.update(acc, out.data.id, [g], &[g | &1]), rest}
       end)
 
+    # Conds are registered under the module name by parents_args(:cond) and go
+    # first, as in to_grad, because their rule writes gradients for the
+    # variables being differentiated directly.
+    acc = traverse_parents(__MODULE__, to_grad_ids, parents, {nodes, seeded})
+
     {_nodes, body_grads} =
-      Enum.reduce(
-        tied_inputs,
-        {nodes, seeded},
-        &traverse_into(&1.data.id, to_grad_ids, parents, &2)
-      )
+      Enum.reduce(tied_inputs, acc, &traverse_parents(&1.data.id, to_grad_ids, parents, &2))
 
     # Hand each input's gradient back to the enclosing traversal under the
     # original input's id.
