@@ -489,27 +489,6 @@ defmodule Nx.Defn.Grad do
     end)
   end
 
-  # Differentiates the recomputed body on its own. The tied inputs are marked
-  # visited so the walk stays inside the body.
-  defp checkpoint_body_grads(recomputed, tied_inputs, tied_gs, to_grad_ids) do
-    stops = Map.new(tied_inputs, &{&1.data.id, :stop})
-    {parents, nodes} = parents_tree(recomputed, stops)
-
-    {seeded, []} =
-      Composite.reduce(recomputed, {%{}, tied_gs}, fn out, {acc, [g | rest]} ->
-        {Map.update(acc, out.data.id, [g], &[g | &1]), rest}
-      end)
-
-    # Conds register under the module name as a placeholder parent, see
-    # parents_args(:cond). They go first, as in to_grad.
-    acc = traverse_parents(__MODULE__, to_grad_ids, parents, {nodes, seeded})
-
-    {_nodes, body_grads} =
-      Enum.reduce(tied_inputs, acc, &traverse_parents(&1.data.id, to_grad_ids, parents, &2))
-
-    body_grads
-  end
-
   defp update_grads(:block, [_struct, _in_args, expr, _callback], _ans, gs, _to_grad_ids, grads) do
     gs = List.wrap(gs)
 
@@ -738,6 +717,27 @@ defmodule Nx.Defn.Grad do
       g = clear_axis_names(g)
       Map.update(grads, child.data.id, [g], &[g | &1])
     end)
+  end
+
+  # Differentiates the recomputed body on its own. The tied inputs are marked
+  # visited so the walk stays inside the body.
+  defp checkpoint_body_grads(recomputed, tied_inputs, tied_gs, to_grad_ids) do
+    stops = Map.new(tied_inputs, &{&1.data.id, :stop})
+    {parents, nodes} = parents_tree(recomputed, stops)
+
+    {seeded, []} =
+      Composite.reduce(recomputed, {%{}, tied_gs}, fn out, {acc, [g | rest]} ->
+        {Map.update(acc, out.data.id, [g], &[g | &1]), rest}
+      end)
+
+    # Conds register under the module name as a placeholder parent, see
+    # parents_args(:cond). They go first, as in to_grad.
+    acc = traverse_parents(__MODULE__, to_grad_ids, parents, {nodes, seeded})
+
+    {_nodes, body_grads} =
+      Enum.reduce(tied_inputs, acc, &traverse_parents(&1.data.id, to_grad_ids, parents, &2))
+
+    body_grads
   end
 
   # Unused tuple outputs get a rank-0 zero from `sum_grad([])`. Broadcast
