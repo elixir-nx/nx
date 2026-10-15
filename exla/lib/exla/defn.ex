@@ -127,7 +127,8 @@ defmodule EXLA.Defn do
       callback_pid_value: callback_pid_value
     }
 
-    {res, cache} = recur_flatten(expr, state, new_cache(outfeed))
+    cache = lower_io_calls_in_order(expr, state, new_cache(outfeed))
+    {res, cache} = recur_flatten(expr, state, cache)
     outfeed = cache |> get_outfeed() |> Outfeed.close(function)
     Value.func_return(function, res)
     outfeed
@@ -866,8 +867,15 @@ defmodule EXLA.Defn do
       raise "internal bug: io_call callback pid operand is missing"
     end
 
+    # Independent io_calls have no data dependency, so the compiler may run them in any
+    # order. Tie this one to the output of the previous io_call to keep the defined order.
+    [callback_pid_value | arg_values] =
+      order_after_last_io_call([callback_pid_value | arg_values], cache)
+
     aliased_outputs =
       Value.host_callback([callback_pid_value | arg_values], leaf_typespecs, id, num_aliased)
+
+    cache = put_last_io_call(cache, aliased_outputs)
 
     {wrap_tuple_result(aliased_outputs, io_call_expr), cache}
   end
@@ -1800,6 +1808,51 @@ defmodule EXLA.Defn do
 
   defp get_token(%{__MODULE__ => outfeed}), do: outfeed.token
 
+  # The output of the last io_call lowered in the current region. Regions
+  # start from a fresh cache, so it never leaks into another function.
+  defp order_after_last_io_call(operands, cache) do
+    case cache do
+      %{{__MODULE__, :last_io_call} => %Value{} = last} ->
+        [_last | operands] = Value.optimization_barrier([last | operands])
+        operands
+
+      %{} ->
+        operands
+    end
+  end
+
+  defp put_last_io_call(cache, [%Value{} = output | _]),
+    do: Map.put(cache, {__MODULE__, :last_io_call}, output)
+
+  defp put_last_io_call(cache, _outputs), do: cache
+
+  # Lowers the io_calls of a region in the order they were defined, so that
+  # each one can wait for the previous one. Nested scopes lower their own.
+  defp lower_io_calls_in_order(expr, state, cache) do
+    {_seen, io_calls} = Composite.reduce(expr, {%{}, []}, &collect_io_calls/2)
+
+    io_calls
+    |> Enum.sort_by(fn %T{data: %Expr{args: [_, _, _, {order, _ref}]}} -> order end)
+    |> Enum.reduce(cache, fn io_call, cache ->
+      {_, cache} = recur_operator(io_call, state, cache)
+      cache
+    end)
+  end
+
+  # A cond runs only one branch, so its io_calls must stay inside the branch
+  defp collect_io_calls(%T{data: %Expr{id: id, op: :cond}}, {seen, io_calls}),
+    do: {Map.put(seen, id, true), io_calls}
+
+  defp collect_io_calls(%T{data: %Expr{id: id, op: op}} = t, {seen, io_calls}) do
+    if is_map_key(seen, id) do
+      {seen, io_calls}
+    else
+      acc = {Map.put(seen, id, true), if(op == :io_call, do: [t | io_calls], else: io_calls)}
+      {_, acc} = Tree.apply_args(t, :scope, acc, &{&1, collect_io_calls(&1, &2)})
+      acc
+    end
+  end
+
   defp get_outfeed(%{__MODULE__ => value}), do: value
 
   defp put_outfeed(cache, outfeed), do: %{cache | __MODULE__ => outfeed}
@@ -1915,7 +1968,8 @@ defmodule EXLA.Defn do
         expr
       end
 
-    {res, comp_cache} = recur_composite(expr, & &1, state, reset_token(cache, inner_token))
+    comp_cache = lower_io_calls_in_order(expr, state, reset_token(cache, inner_token))
+    {res, comp_cache} = recur_composite(expr, & &1, state, comp_cache)
 
     res =
       if type == :with_token do
@@ -1976,7 +2030,8 @@ defmodule EXLA.Defn do
         scope_ids: Tree.scope_ids(expr)
     }
 
-    {res, comp_cache} = recur_composite(expr, state, reset_token(cache, inner_token))
+    comp_cache = lower_io_calls_in_order(expr, state, reset_token(cache, inner_token))
+    {res, comp_cache} = recur_composite(expr, state, comp_cache)
 
     if outer_token do
       Value.func_return(function, [get_token(comp_cache) | List.flatten(res)])
