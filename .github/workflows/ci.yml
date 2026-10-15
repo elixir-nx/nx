@@ -76,6 +76,9 @@ jobs:
     env:
       MIX_ENV: test
       XLA_FLAGS: --xla_force_host_platform_device_count=4
+      # The XLA headers do not compile with GCC, so EXLA builds with clang.
+      CC: ${{ matrix.working_directory == 'exla' && 'clang' || 'gcc' }}
+      CXX: ${{ matrix.working_directory == 'exla' && 'clang++' || 'g++' }}
     steps:
       - name: Set conditional variables
         working-directory: .
