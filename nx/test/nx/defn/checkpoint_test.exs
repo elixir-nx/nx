@@ -304,6 +304,23 @@ defmodule Nx.Defn.CheckpointTest do
   # --- Container inputs/outputs ---
 
   describe "container support" do
+    defn mixed_output_loss(x) do
+      {value, mask} = checkpoint(x, fn x -> {Nx.sin(x), x > 0} end)
+      Nx.sum(value * mask)
+    end
+
+    defn mixed_output_loss_plain(x) do
+      Nx.sum(Nx.sin(x) * (x > 0))
+    end
+
+    test "a boolean output used as a mask does not require a gradient" do
+      x = Nx.tensor([-0.7, 0.3, 0.7])
+      expected = Nx.select(Nx.greater(x, 0), Nx.cos(x), 0)
+
+      assert_all_close(grad(x, &mixed_output_loss_plain/1), expected)
+      assert_all_close(grad(x, &mixed_output_loss/1), expected)
+    end
+
     defn duplicated_outputs(x) do
       checkpoint(x, fn x ->
         y = x * x
@@ -703,6 +720,32 @@ defmodule Nx.Defn.CheckpointTest do
   # --- Higher-order gradients ---
 
   describe "higher-order gradients" do
+    defn conditional_power(x) do
+      if x > 0, do: x * x, else: x * x * x
+    end
+
+    defn nested_conditional_loss(x) do
+      y =
+        checkpoint(x, fn x ->
+          y = checkpoint(x * x, &conditional_power/1)
+          y * y + conditional_power(x)
+        end)
+
+      y * y
+    end
+
+    @tag timeout: 5_000
+    test "second-order gradient through nested checkpoints with conditionals" do
+      # Bound memory use if the nested gradient expands repeatedly during evaluation.
+      Process.flag(:max_heap_size, %{size: 8_000_000, kill: true, error_logger: false})
+
+      second_derivative = grad(grad(&nested_conditional_loss/1))
+
+      # For x > 0 the loss is (x^8 + x^2)^2, whose second derivative is
+      # 240*x^14 + 180*x^8 + 12*x^2.
+      assert_equal(second_derivative.(Nx.tensor(0.5)), Nx.tensor(3.7177734375))
+    end
+
     defn grad_of_grad_checkpoint(x) do
       grad(x, fn x ->
         grad(x, fn x ->
