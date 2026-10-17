@@ -199,6 +199,10 @@ defmodule Nx.Defn.Grad do
     acc
   end
 
+  defp parents_args(op, _expr, _id, acc) when op in @constants do
+    acc
+  end
+
   defp parents_args(:io_call, t, id, acc) do
     reduce_args(:io_call, t, acc, fn arg, {parents, nodes} ->
       if arg.data.op in @constants do

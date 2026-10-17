@@ -8,6 +8,7 @@
 
 ### Bug fixes
 
+  * [Nx.Defn] Stop gradients through nondifferentiable operations returned directly from blocks
   * [Nx.Defn] Pass gradients through metadata nodes on tuples
   * [Nx] Read Elixir number literals at the precision of element-wise binary operations
   * [Nx.Defn] Return finite gradients for `Nx.sigmoid/1` at very negative and non-finite inputs
