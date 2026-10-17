@@ -940,10 +940,12 @@ defmodule Nx.DefnTest do
     @tag compiler: Evaluator
     test "returns zero gradient for a block whose output is a comparison" do
       input = Nx.tensor([-0.7, 0.3, 0.7])
-      body = fn _, x -> Nx.greater(x, 0) end
+      body = fn _, argument -> Nx.greater(argument, 0) end
 
       gradient =
-        grad(input, fn x -> Nx.sum(Nx.block(%VectorizedNonlinear{}, [x], nil, body)) end)
+        grad(input, fn argument ->
+          Nx.sum(Nx.block(%VectorizedNonlinear{}, [argument], nil, body))
+        end)
 
       assert_equal(gradient, Nx.broadcast(0.0, {3}))
     end
@@ -951,15 +953,19 @@ defmodule Nx.DefnTest do
     @tag compiler: Evaluator
     test "differentiates a block returning a value and a boolean mask" do
       input = Nx.tensor([-0.7, 0.3, 0.7])
-      body = fn _, x -> {Nx.sin(x), Nx.greater(x, 0)} end
+      body = fn _, argument -> {Nx.sin(argument), Nx.greater(argument, 0)} end
 
-      plain = grad(input, fn x -> Nx.sum(Nx.multiply(Nx.sin(x), Nx.greater(x, 0))) end)
+      plain =
+        grad(input, fn argument ->
+          Nx.sum(Nx.multiply(Nx.sin(argument), Nx.greater(argument, 0)))
+        end)
+
       expected = Nx.select(Nx.greater(input, 0), Nx.cos(input), 0)
       assert_all_close(plain, expected)
 
       gradient =
-        grad(input, fn x ->
-          {value, mask} = Nx.block(%VectorizedNonlinear{}, [x], nil, body)
+        grad(input, fn argument ->
+          {value, mask} = Nx.block(%VectorizedNonlinear{}, [argument], nil, body)
           Nx.sum(Nx.multiply(value, mask))
         end)
 
@@ -971,10 +977,10 @@ defmodule Nx.DefnTest do
       input = Nx.tensor([-0.7, 0.3, 0.7])
 
       gradient =
-        grad(input, fn x ->
+        grad(input, fn argument ->
           {value, _mask} =
-            Nx.block(%VectorizedNonlinear{}, [x], nil, fn _, x ->
-              {Nx.sin(x), Nx.greater(x, 0)}
+            Nx.block(%VectorizedNonlinear{}, [argument], nil, fn _, argument ->
+              {Nx.sin(argument), Nx.greater(argument, 0)}
             end)
 
           Nx.sum(value)
@@ -988,8 +994,12 @@ defmodule Nx.DefnTest do
       input = Nx.tensor([-0.7, 0.3, 1.7])
 
       gradient =
-        grad(input, fn x ->
-          Nx.sum(Nx.block(%VectorizedNonlinear{}, [x], nil, fn _, x -> Nx.floor(x) end))
+        grad(input, fn argument ->
+          Nx.sum(
+            Nx.block(%VectorizedNonlinear{}, [argument], nil, fn _, argument ->
+              Nx.floor(argument)
+            end)
+          )
         end)
 
       assert_equal(gradient, Nx.broadcast(0.0, {3}))
@@ -1000,10 +1010,10 @@ defmodule Nx.DefnTest do
       input = Nx.tensor([[-0.7, 0.3], [0.7, -0.3]]) |> Nx.vectorize(:batch)
 
       gradient =
-        grad(input, fn x ->
+        grad(input, fn argument ->
           {value, mask} =
-            Nx.block(%VectorizedNonlinear{}, [x], nil, fn _, x ->
-              {Nx.sin(x), Nx.greater(x, 0)}
+            Nx.block(%VectorizedNonlinear{}, [argument], nil, fn _, argument ->
+              {Nx.sin(argument), Nx.greater(argument, 0)}
             end)
 
           Nx.sum(Nx.multiply(value, mask))
@@ -1018,10 +1028,10 @@ defmodule Nx.DefnTest do
       input = Nx.tensor([-0.7, 0.3, 0.7])
 
       gradient =
-        grad(input, fn x ->
+        grad(input, fn argument ->
           Nx.sum(
-            Nx.block(%VectorizedNonlinear{}, [x], nil, fn _, x ->
-              Nx.multiply(Nx.sin(x), Nx.greater(x, 0))
+            Nx.block(%VectorizedNonlinear{}, [argument], nil, fn _, argument ->
+              Nx.multiply(Nx.sin(argument), Nx.greater(argument, 0))
             end)
           )
         end)
