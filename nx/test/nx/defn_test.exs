@@ -938,6 +938,98 @@ defmodule Nx.DefnTest do
     end
 
     @tag compiler: Evaluator
+    test "returns zero gradient for a block whose output is a comparison" do
+      input = Nx.tensor([-0.7, 0.3, 0.7])
+      body = fn _, x -> Nx.greater(x, 0) end
+
+      gradient =
+        grad(input, fn x -> Nx.sum(Nx.block(%VectorizedNonlinear{}, [x], nil, body)) end)
+
+      assert_equal(gradient, Nx.broadcast(0.0, {3}))
+    end
+
+    @tag compiler: Evaluator
+    test "differentiates a block returning a value and a boolean mask" do
+      input = Nx.tensor([-0.7, 0.3, 0.7])
+      body = fn _, x -> {Nx.sin(x), Nx.greater(x, 0)} end
+
+      plain = grad(input, fn x -> Nx.sum(Nx.multiply(Nx.sin(x), Nx.greater(x, 0))) end)
+      expected = Nx.select(Nx.greater(input, 0), Nx.cos(input), 0)
+      assert_all_close(plain, expected)
+
+      gradient =
+        grad(input, fn x ->
+          {value, mask} = Nx.block(%VectorizedNonlinear{}, [x], nil, body)
+          Nx.sum(Nx.multiply(value, mask))
+        end)
+
+      assert_all_close(gradient, expected)
+    end
+
+    @tag compiler: Evaluator
+    test "ignores an unused boolean block output when differentiating" do
+      input = Nx.tensor([-0.7, 0.3, 0.7])
+
+      gradient =
+        grad(input, fn x ->
+          {value, _mask} =
+            Nx.block(%VectorizedNonlinear{}, [x], nil, fn _, x ->
+              {Nx.sin(x), Nx.greater(x, 0)}
+            end)
+
+          Nx.sum(value)
+        end)
+
+      assert_all_close(gradient, Nx.cos(input))
+    end
+
+    @tag compiler: Evaluator
+    test "returns zero gradient for a floating-point nondifferentiable block output" do
+      input = Nx.tensor([-0.7, 0.3, 1.7])
+
+      gradient =
+        grad(input, fn x ->
+          Nx.sum(Nx.block(%VectorizedNonlinear{}, [x], nil, fn _, x -> Nx.floor(x) end))
+        end)
+
+      assert_equal(gradient, Nx.broadcast(0.0, {3}))
+    end
+
+    @tag compiler: Evaluator
+    test "differentiates mixed block outputs with vectorized inputs" do
+      input = Nx.tensor([[-0.7, 0.3], [0.7, -0.3]]) |> Nx.vectorize(:batch)
+
+      gradient =
+        grad(input, fn x ->
+          {value, mask} =
+            Nx.block(%VectorizedNonlinear{}, [x], nil, fn _, x ->
+              {Nx.sin(x), Nx.greater(x, 0)}
+            end)
+
+          Nx.sum(Nx.multiply(value, mask))
+        end)
+
+      assert gradient.vectorized_axes == [batch: 2]
+      assert_all_close(gradient, Nx.select(Nx.greater(input, 0), Nx.cos(input), 0))
+    end
+
+    @tag compiler: Evaluator
+    test "differentiates a mask consumed inside the block" do
+      input = Nx.tensor([-0.7, 0.3, 0.7])
+
+      gradient =
+        grad(input, fn x ->
+          Nx.sum(
+            Nx.block(%VectorizedNonlinear{}, [x], nil, fn _, x ->
+              Nx.multiply(Nx.sin(x), Nx.greater(x, 0))
+            end)
+          )
+        end)
+
+      assert_all_close(gradient, Nx.select(Nx.greater(input, 0), Nx.cos(input), 0))
+    end
+
+    @tag compiler: Evaluator
     test "differentiates nonlinear vectorized block outputs" do
       input = Nx.tensor([[0.0, 1.0], [2.0, 3.0]]) |> Nx.vectorize(:batch)
 
