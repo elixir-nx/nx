@@ -3823,27 +3823,27 @@ defmodule Nx.Defn.GradTest do
       )
     end
 
-    defn conditional_power(x) do
-      if x > 0, do: x * x, else: x * x * x
+    defn conditional_power(input) do
+      if input > 0, do: input * input, else: input * input * input
     end
 
-    defn squared_conditional(x) do
-      y = conditional_power(x)
-      y * y
+    defn squared_conditional(input) do
+      value = conditional_power(input)
+      value * value
     end
 
-    defn squared_conditional_with_sibling(x) do
-      squared_conditional(x) + x * x
+    defn squared_conditional_with_sibling(input) do
+      squared_conditional(input) + input * input
     end
 
-    defn sibling_conditionals(x) do
-      a = conditional_power(x)
-      b = if x > 0, do: x * x * x, else: x * x
-      a + b
+    defn sibling_conditionals(input) do
+      first = conditional_power(input)
+      second = if input > 0, do: input * input * input, else: input * input
+      first + second
     end
 
-    defn squared_conditional_of_square(x) do
-      squared_conditional(x * x)
+    defn squared_conditional_of_square(input) do
+      squared_conditional(input * input)
     end
 
     test "first-order gradient of a squared conditional" do
