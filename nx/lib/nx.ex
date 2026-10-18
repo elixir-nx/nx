@@ -7841,7 +7841,7 @@ defmodule Nx do
       if pred_shape == {} do
         Nx.Shape.binary_broadcast(on_true.shape, on_true.names, on_false.shape, on_false.names)
       else
-        # The names come from pred, as before, so on_true and on_false names are not merged.
+        # The names come from pred, so on_true and on_false names are not merged.
         nil_true = List.duplicate(nil, tuple_size(on_true.shape))
         nil_false = List.duplicate(nil, tuple_size(on_false.shape))
 
