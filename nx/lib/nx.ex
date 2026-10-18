@@ -7685,11 +7685,8 @@ defmodule Nx do
   `pred` and returning either the corresponding element from
   `on_true` or `on_false`.
 
-  `pred` must either be `1` or `0` or a tensor of predicates
-  with a shape that matches the largest shape between `s1` or `s2`.
-
-  If the shape of `on_true` or `on_false` do not match the shape of
-  `pred`, attempts to broadcast both so they match the shape of `pred`.
+  All three inputs broadcast against each other. The output shape
+  is the broadcast of `pred`, `on_true`, and `on_false`.
 
   ## Examples
 
@@ -7738,6 +7735,20 @@ defmodule Nx do
       #Nx.Tensor<
         s32[x: 5]
         [2, 3, 2, 7, 2]
+      >
+
+  `pred` can be smaller than `on_true` and `on_false` and will broadcast:
+
+      iex> pred = Nx.tensor([[1], [0]], type: :u8)
+      iex> on_true = Nx.tensor([[10, 20, 30], [40, 50, 60]])
+      iex> on_false = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      iex> Nx.select(pred, on_true, on_false)
+      #Nx.Tensor<
+        s32[2][3]
+        [
+          [10, 20, 30],
+          [4, 5, 6]
+        ]
       >
 
   If the tensor has other values, any non-zero value is considered true:
@@ -7830,7 +7841,15 @@ defmodule Nx do
       if pred_shape == {} do
         Nx.Shape.binary_broadcast(on_true.shape, on_true.names, on_false.shape, on_false.names)
       else
-        {pred.shape, pred.names}
+        # The names come from pred, as before, so on_true and on_false names are not merged.
+        nil_true = List.duplicate(nil, tuple_size(on_true.shape))
+        nil_false = List.duplicate(nil, tuple_size(on_false.shape))
+
+        {tf_shape, _} =
+          Nx.Shape.binary_broadcast(on_true.shape, nil_true, on_false.shape, nil_false)
+
+        nil_tf = List.duplicate(nil, tuple_size(tf_shape))
+        Nx.Shape.binary_broadcast(pred.shape, pred.names, tf_shape, nil_tf)
       end
 
     _ =
@@ -7849,14 +7868,14 @@ defmodule Nx do
 
     out = %{pred | shape: output_shape, type: output_type, names: output_names}
 
-    if vectorized_axes != [] do
-      pred =
-        if pred.shape != output_shape do
-          broadcast(pred, output_shape)
-        else
-          pred
-        end
+    pred =
+      if pred.shape != output_shape and (pred_shape != {} or vectorized_axes != []) do
+        broadcast(pred, output_shape)
+      else
+        pred
+      end
 
+    if vectorized_axes != [] do
       result = impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
       vectorize(result, vectorized_axes)
     else

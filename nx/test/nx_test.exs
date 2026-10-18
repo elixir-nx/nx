@@ -3482,6 +3482,25 @@ defmodule NxTest do
   end
 
   describe "select" do
+    test "broadcasts pred, on_true and on_false together" do
+      pred = Nx.tensor([1, 0, 1], type: :u8)
+      on_true = Nx.tensor([[10], [20]])
+      on_false = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+
+      assert_equal(Nx.select(pred, on_true, on_false), Nx.tensor([[10, 2, 10], [20, 5, 20]]))
+    end
+
+    test "broadcasts a vectorized pred" do
+      pred = Nx.tensor([[[1], [0]], [[0], [1]]], type: :u8) |> Nx.vectorize(:x)
+      on_true = Nx.tensor([[10, 20, 30], [40, 50, 60]])
+      on_false = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+
+      expected =
+        Nx.tensor([[[10, 20, 30], [4, 5, 6]], [[1, 2, 3], [40, 50, 60]]]) |> Nx.vectorize(:x)
+
+      assert_equal(Nx.select(pred, on_true, on_false), expected)
+    end
+
     test "works with vectorized scalar pred" do
       pred = Nx.tensor([0, 1]) |> Nx.vectorize(x: 2)
       on_true = Nx.tensor([[0, 1, 2]])
