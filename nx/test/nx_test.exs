@@ -2028,6 +2028,40 @@ defmodule NxTest do
       assert Nx.dot(t, [2], [0], t, [2], [0]) == Nx.tensor([[[14, 32], [32, 77]]])
     end
 
+    test "batch axes that are not leading" do
+      t1 = Nx.iota({2, 3, 4})
+      t2 = Nx.iota({4, 5, 3})
+
+      expected =
+        Nx.dot(
+          Nx.transpose(t1, axes: [1, 0, 2]),
+          [2],
+          [0],
+          Nx.transpose(t2, axes: [2, 0, 1]),
+          [1],
+          [0]
+        )
+
+      assert_equal(Nx.dot(t1, [2], [1], t2, [0], [2]), expected)
+    end
+
+    test "batch axes that are not leading with vectorized tensors" do
+      t1 = Nx.iota({2, 2, 3, 4}) |> Nx.vectorize(:x)
+      t2 = Nx.iota({4, 3, 5})
+
+      expected =
+        Nx.dot(
+          Nx.transpose(t1, axes: [1, 0, 2]),
+          [2],
+          [0],
+          Nx.transpose(t2, axes: [1, 0, 2]),
+          [1],
+          [0]
+        )
+
+      assert_equal(Nx.dot(t1, [2], [1], t2, [0], [1]), expected)
+    end
+
     test "vectorization regression" do
       l = Nx.tensor([[[[0, 1, 2], [0, -1, -2]]]]) |> Nx.tile([5, 1, 1, 1]) |> Nx.vectorize(x: 5)
 

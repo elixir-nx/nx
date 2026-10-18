@@ -12985,10 +12985,9 @@ defmodule Nx do
 
   Specifying batch axes will compute a vectorized dot product
   along the given batch dimensions. The length of `batch_axes1`
-  and `batch_axes2` must match. Additionally, `batch_axes1` and
-  `batch_axes2` must be a list of successive dimension numbers,
-  where each batch axis matches the dimension of the corresponding
-  batch axis in the other input.
+  and `batch_axes2` must match, and each batch axis pair must have
+  the same size. The batch axes can be any axes of their tensor.
+  The batch axes come first in the output.
 
   The contracting axes must be dot-product compatible and the
   batch dimensions must always have the same number of elements.
@@ -13149,16 +13148,6 @@ defmodule Nx do
 
       iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
       iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
-      iex> Nx.dot(u, [2], [1], v, [1], [0])
-      ** (ArgumentError) invalid dot batch axis for the left tensor, batch axes must be successive dimensions starting from 0, got [1]
-
-      iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
-      iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
-      iex> Nx.dot(u, [2], [0], v, [1], [1])
-      ** (ArgumentError) invalid dot batch axis for the right tensor, batch axes must be successive dimensions starting from 0, got [1]
-
-      iex> u = Nx.tensor([[[1, 1]], [[2, 2]]])
-      iex> v = Nx.tensor([[[3], [3]], [[4], [4]]])
       iex> Nx.dot(u, [0], [0], v, [1], [0])
       ** (ArgumentError) dot batch axes for left tensor ([0]) cannot be in contract axes ([0])
 
@@ -13185,6 +13174,13 @@ defmodule Nx do
     b1 = Nx.Shape.normalize_axes(s1, batch_axes1, names1)
     b2 = Nx.Shape.normalize_axes(s2, batch_axes2, names2)
 
+    # Backends get the batch axes as the leading axes.
+    {t1, c1, b1} = leading_batch_axes(t1, c1, b1)
+    {t2, c2, b2} = leading_batch_axes(t2, c2, b2)
+
+    %{shape: s1, names: names1} = t1
+    %{shape: s2, names: names2} = t2
+
     {output_shape, output_names} = Nx.Shape.dot(s1, c1, names1, b1, s2, c2, names2, b2)
 
     out = %{t1 | type: output_type, names: output_names, shape: output_shape}
@@ -13205,6 +13201,21 @@ defmodule Nx do
       vectorize(res, vectorized_axes)
     else
       impl!(t1, t2).dot(out, t1, c1, b1, t2, c2, b2)
+    end
+  end
+
+  defp leading_batch_axes(tensor, contract_axes, batch_axes) do
+    leading = Enum.to_list(0..(length(batch_axes) - 1)//1)
+
+    if batch_axes == leading do
+      {tensor, contract_axes, batch_axes}
+    else
+      order = batch_axes ++ (Enum.to_list(0..(rank(tensor) - 1)) -- batch_axes)
+
+      contract_axes =
+        Enum.map(contract_axes, fn axis -> Enum.find_index(order, &(&1 == axis)) end)
+
+      {transpose(tensor, axes: order), contract_axes, leading}
     end
   end
 

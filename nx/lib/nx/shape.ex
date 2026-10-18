@@ -1871,23 +1871,6 @@ defmodule Nx.Shape do
               "right batch axes #{inspect(b2)}"
     end
 
-    # batch axes must be increasing starting from 0
-    valid_batch_axes = Enum.to_list(0..(length(b1) - 1)//1)
-
-    # ensure normalized batch axis of left is valid value
-    if left_batched? and b1 != valid_batch_axes do
-      raise ArgumentError,
-            "invalid dot batch axis for the left tensor, batch axes must be successive" <>
-              " dimensions starting from 0, got #{inspect(b1)}"
-    end
-
-    # ensure normalized batch axis of right is valid value
-    if right_batched? and b2 != valid_batch_axes do
-      raise ArgumentError,
-            "invalid dot batch axis for the right tensor, batch axes must be successive" <>
-              " dimensions starting from 0, got #{inspect(b2)}"
-    end
-
     b1_sizes = Enum.map(b1, &elem(s1, &1))
     b2_sizes = Enum.map(b2, &elem(s2, &1))
 
