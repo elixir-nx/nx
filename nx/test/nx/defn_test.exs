@@ -938,6 +938,108 @@ defmodule Nx.DefnTest do
     end
 
     @tag compiler: Evaluator
+    test "applies gradients for a block whose output is a constant-creating comparison" do
+      input = Nx.tensor([-0.7, 0.3, 0.7])
+      body = fn _, argument -> Nx.greater(argument, 0) end
+
+      gradient =
+        grad(input, fn argument ->
+          Nx.sum(Nx.block(%VectorizedNonlinear{}, [argument], nil, body))
+        end)
+
+      assert_equal(gradient, Nx.broadcast(0.0, {3}))
+    end
+
+    @tag compiler: Evaluator
+    test "applies gradients for a block returning a value and a constant-creating mask" do
+      input = Nx.tensor([-0.7, 0.3, 0.7])
+      body = fn _, argument -> {Nx.sin(argument), Nx.greater(argument, 0)} end
+
+      plain =
+        grad(input, fn argument ->
+          Nx.sum(Nx.multiply(Nx.sin(argument), Nx.greater(argument, 0)))
+        end)
+
+      expected = Nx.select(Nx.greater(input, 0), Nx.cos(input), 0)
+      assert_all_close(plain, expected)
+
+      gradient =
+        grad(input, fn argument ->
+          {value, mask} = Nx.block(%VectorizedNonlinear{}, [argument], nil, body)
+          Nx.sum(Nx.multiply(value, mask))
+        end)
+
+      assert_all_close(gradient, expected)
+    end
+
+    @tag compiler: Evaluator
+    test "applies gradients when a constant-creating block output is unused" do
+      input = Nx.tensor([-0.7, 0.3, 0.7])
+
+      gradient =
+        grad(input, fn argument ->
+          {value, _mask} =
+            Nx.block(%VectorizedNonlinear{}, [argument], nil, fn _, argument ->
+              {Nx.sin(argument), Nx.greater(argument, 0)}
+            end)
+
+          Nx.sum(value)
+        end)
+
+      assert_all_close(gradient, Nx.cos(input))
+    end
+
+    @tag compiler: Evaluator
+    test "applies gradients for a block whose output is a constant-creating floor" do
+      input = Nx.tensor([-0.7, 0.3, 1.7])
+
+      gradient =
+        grad(input, fn argument ->
+          Nx.sum(
+            Nx.block(%VectorizedNonlinear{}, [argument], nil, fn _, argument ->
+              Nx.floor(argument)
+            end)
+          )
+        end)
+
+      assert_equal(gradient, Nx.broadcast(0.0, {3}))
+    end
+
+    @tag compiler: Evaluator
+    test "applies gradients for blocks with constant-creating outputs and vectorized inputs" do
+      input = Nx.tensor([[-0.7, 0.3], [0.7, -0.3]]) |> Nx.vectorize(:batch)
+
+      gradient =
+        grad(input, fn argument ->
+          {value, mask} =
+            Nx.block(%VectorizedNonlinear{}, [argument], nil, fn _, argument ->
+              {Nx.sin(argument), Nx.greater(argument, 0)}
+            end)
+
+          Nx.sum(Nx.multiply(value, mask))
+        end)
+
+      assert gradient.vectorized_axes == [batch: 2]
+      assert_all_close(gradient, Nx.select(Nx.greater(input, 0), Nx.cos(input), 0))
+    end
+
+    @tag compiler: Evaluator
+    test "applies gradients for a constant-creating mask consumed inside the block" do
+      input = Nx.tensor([-0.7, 0.3, 0.7])
+
+      gradient =
+        grad(input, fn argument ->
+          Nx.sum(
+            Nx.block(%VectorizedNonlinear{}, [argument], nil, fn _, argument ->
+              Nx.multiply(Nx.sin(argument), Nx.greater(argument, 0))
+            end)
+          )
+        end)
+
+      assert_all_close(gradient, Nx.select(Nx.greater(input, 0), Nx.cos(input), 0))
+    end
+
+    @tag compiler: Evaluator
     test "differentiates nonlinear vectorized block outputs" do
       input = Nx.tensor([[0.0, 1.0], [2.0, 3.0]]) |> Nx.vectorize(:batch)
 

@@ -8,6 +8,7 @@
 
 ### Bug fixes
 
+  * [Nx.Defn] Apply gradients for operations that create constants inside blocks
   * [Nx.Defn] Preserve tensor dimensions that match vectorized axis sizes in conditional gradients
   * [Nx.Defn] Pass gradients through metadata nodes on tuples
   * [Nx] Read Elixir number literals at the precision of element-wise binary operations
