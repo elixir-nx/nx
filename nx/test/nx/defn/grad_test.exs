@@ -4007,6 +4007,34 @@ defmodule Nx.Defn.GradTest do
       end
     end
 
+    defn three_way_conditional(input) do
+      value =
+        cond do
+          input > 1 -> Nx.sin(input) * Nx.sin(input)
+          input > -1 -> -(input * input * input)
+          true -> Nx.cos(input) * Nx.cos(input) * Nx.cos(input)
+        end
+
+      Nx.sin(value)
+    end
+
+    defn sin_of_negated_cube(input), do: Nx.sin(-(input * input * input))
+
+    test "gradients through a conditional with three clauses" do
+      for {input, reference} <- [
+            {Nx.tensor(2.0), &sin_of_sin_squared/1},
+            {Nx.tensor(0.5), &sin_of_negated_cube/1},
+            {Nx.tensor(-2.0), &sin_of_cos_cubed/1}
+          ] do
+        assert_all_close(grad(&three_way_conditional/1).(input), grad(reference).(input))
+
+        assert_all_close(
+          grad(grad(&three_way_conditional/1)).(input),
+          grad(grad(reference)).(input)
+        )
+      end
+    end
+
     defn grad_if(t), do: grad(t, fn t -> if(t + 1, do: Nx.pow(t, 2), else: Nx.pow(t, 3)) end)
 
     defn grad_sum_if(t) do
