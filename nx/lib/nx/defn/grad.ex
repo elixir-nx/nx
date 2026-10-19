@@ -452,42 +452,31 @@ defmodule Nx.Defn.Grad do
     # visited so the walk stays inside the body.
     stops = Map.new(tied_inputs, &{&1.data.id, :stop})
     {parents, nodes} = parents_tree(recomputed, stops)
+    {_to_grad, _ids, batch_count} = to_grad_ids
+    body_to_grad_ids = {List.to_tuple(tied_inputs), stops, batch_count}
 
     {seeded, []} =
       Composite.reduce(recomputed, {%{}, tied_gs}, fn out, {acc, [g | rest]} ->
         {Map.update(acc, out.data.id, [g], &[g | &1]), rest}
       end)
 
-    # Conds are registered under the module name by parents_args(:cond) and go
-    # first, as in to_grad, because their rule writes gradients for the
-    # variables being differentiated directly.
-    acc = traverse_parents(__MODULE__, to_grad_ids, parents, {nodes, seeded})
+    # Conds are registered under the module name by parents_args(:cond).
+    # Differentiate their branches with respect to the checkpoint inputs.
+    acc = traverse_parents(__MODULE__, body_to_grad_ids, parents, {nodes, seeded})
 
     {_nodes, body_grads} =
-      Enum.reduce(tied_inputs, acc, &traverse_parents(&1.data.id, to_grad_ids, parents, &2))
+      Enum.reduce(tied_inputs, acc, &traverse_parents(&1.data.id, body_to_grad_ids, parents, &2))
 
     # Hand each input's gradient back to the enclosing traversal under the
     # original input's id.
-    grads =
-      Enum.zip_reduce(inputs, tied_inputs, grads, fn input, tied_input, grads ->
-        case Map.fetch(body_grads, tied_input.data.id) do
-          {:ok, pieces} ->
-            input_grad = sum_grad(pieces)
-            Map.update(grads, input.data.id, [input_grad], &[input_grad | &1])
+    Enum.zip_reduce(inputs, tied_inputs, grads, fn input, tied_input, grads ->
+      case Map.fetch(body_grads, tied_input.data.id) do
+        {:ok, pieces} ->
+          input_grad = sum_grad(pieces)
+          Map.update(grads, input.data.id, [input_grad], &[input_grad | &1])
 
-          :error ->
-            grads
-        end
-      end)
-
-    # A cond inside the body records gradients for the top-level variables
-    # directly, so carry those over too.
-    {_to_grad, ids, _batch_count} = to_grad_ids
-
-    Enum.reduce(ids, grads, fn {id, _}, grads ->
-      case body_grads do
-        %{^id => pieces} -> Map.update(grads, id, pieces, &(pieces ++ &1))
-        %{} -> grads
+        :error ->
+          grads
       end
     end)
   end
