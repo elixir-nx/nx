@@ -746,6 +746,43 @@ defmodule Nx.Defn.CheckpointTest do
       assert_equal(second_derivative.(Nx.tensor(0.5)), Nx.tensor(3.7177734375))
     end
 
+    defn nonlinear_conditional(x) do
+      if x > 0, do: Nx.sin(x) * Nx.sin(x), else: Nx.cos(x) * Nx.cos(x) * Nx.cos(x)
+    end
+
+    defn nested_nonlinear_conditional_loss(x) do
+      y =
+        checkpoint(x, fn x ->
+          y = checkpoint(Nx.sin(x), &nonlinear_conditional/1)
+          Nx.sin(y) + nonlinear_conditional(x)
+        end)
+
+      Nx.sin(y)
+    end
+
+    defn nested_nonlinear_conditional_loss_without_checkpoint(x) do
+      y = nonlinear_conditional(Nx.sin(x))
+      Nx.sin(Nx.sin(y) + nonlinear_conditional(x))
+    end
+
+    @tag timeout: 5_000
+    test "gradients through nested checkpoints with nonlinear conditionals" do
+      Process.flag(:max_heap_size, %{size: 8_000_000, kill: true, error_logger: false})
+
+      first_derivative = grad(&nested_nonlinear_conditional_loss/1)
+      second_derivative = grad(first_derivative)
+      expected_first = grad(&nested_nonlinear_conditional_loss_without_checkpoint/1)
+      expected_second = grad(expected_first)
+
+      # At 0.5 both conditionals take the first branch, at -2.0 both take the
+      # second, and at 3.5 the outer takes the first while sin(3.5) < 0 sends
+      # the inner to the second.
+      for input <- [Nx.tensor(0.5), Nx.tensor(-2.0), Nx.tensor(3.5)] do
+        assert_all_close(first_derivative.(input), expected_first.(input))
+        assert_all_close(second_derivative.(input), expected_second.(input))
+      end
+    end
+
     defn grad_of_grad_checkpoint(x) do
       grad(x, fn x ->
         grad(x, fn x ->
