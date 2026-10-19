@@ -938,7 +938,7 @@ defmodule Nx.DefnTest do
     end
 
     @tag compiler: Evaluator
-    test "returns zero gradient for a block whose output is a comparison" do
+    test "applies gradients for a block whose output is a constant-creating comparison" do
       input = Nx.tensor([-0.7, 0.3, 0.7])
       body = fn _, argument -> Nx.greater(argument, 0) end
 
@@ -951,7 +951,7 @@ defmodule Nx.DefnTest do
     end
 
     @tag compiler: Evaluator
-    test "differentiates a block returning a value and a boolean mask" do
+    test "applies gradients for a block returning a value and a constant-creating mask" do
       input = Nx.tensor([-0.7, 0.3, 0.7])
       body = fn _, argument -> {Nx.sin(argument), Nx.greater(argument, 0)} end
 
@@ -973,7 +973,7 @@ defmodule Nx.DefnTest do
     end
 
     @tag compiler: Evaluator
-    test "ignores an unused boolean block output when differentiating" do
+    test "applies gradients when a constant-creating block output is unused" do
       input = Nx.tensor([-0.7, 0.3, 0.7])
 
       gradient =
@@ -990,7 +990,7 @@ defmodule Nx.DefnTest do
     end
 
     @tag compiler: Evaluator
-    test "returns zero gradient for a floating-point nondifferentiable block output" do
+    test "applies gradients for a block whose output is a constant-creating floor" do
       input = Nx.tensor([-0.7, 0.3, 1.7])
 
       gradient =
@@ -1006,7 +1006,7 @@ defmodule Nx.DefnTest do
     end
 
     @tag compiler: Evaluator
-    test "differentiates mixed block outputs with vectorized inputs" do
+    test "applies gradients for blocks with constant-creating outputs and vectorized inputs" do
       input = Nx.tensor([[-0.7, 0.3], [0.7, -0.3]]) |> Nx.vectorize(:batch)
 
       gradient =
@@ -1024,7 +1024,7 @@ defmodule Nx.DefnTest do
     end
 
     @tag compiler: Evaluator
-    test "differentiates a mask consumed inside the block" do
+    test "applies gradients for a constant-creating mask consumed inside the block" do
       input = Nx.tensor([-0.7, 0.3, 0.7])
 
       gradient =
