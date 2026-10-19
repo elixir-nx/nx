@@ -7737,7 +7737,7 @@ defmodule Nx do
         [2, 3, 2, 7, 2]
       >
 
-  `pred` can be smaller than `on_true` and `on_false` and will broadcast:
+  `pred` can be of a shape different than that of `on_true` and of `on_false` and will broadcast:
 
       iex> pred = Nx.tensor([[1], [0]], type: :u8)
       iex> on_true = Nx.tensor([[10, 20, 30], [40, 50, 60]])
