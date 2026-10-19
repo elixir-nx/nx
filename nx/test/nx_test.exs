@@ -3482,23 +3482,36 @@ defmodule NxTest do
   end
 
   describe "select" do
-    test "broadcasts pred, on_true and on_false together" do
-      pred = Nx.tensor([1, 0, 1], type: :u8)
-      on_true = Nx.tensor([[10], [20]])
-      on_false = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+    # pred {2, 1} is smaller than the output, and on_false is smaller than, larger than or
+    # equal to on_true.
+    for {size, on_true, on_false, expected, vectorized} <- [
+          {"smaller", [[10, 20, 30], [40, 50, 60]], [1, 2, 3], [[10, 20, 30], [1, 2, 3]],
+           [[[10, 20, 30], [1, 2, 3]], [[1, 2, 3], [40, 50, 60]]]},
+          {"larger", [10, 20, 30], [[1, 2, 3], [4, 5, 6]], [[10, 20, 30], [4, 5, 6]],
+           [[[10, 20, 30], [4, 5, 6]], [[1, 2, 3], [10, 20, 30]]]},
+          {"equal", [[10, 20, 30], [40, 50, 60]], [[1, 2, 3], [4, 5, 6]],
+           [[10, 20, 30], [4, 5, 6]], [[[10, 20, 30], [4, 5, 6]], [[1, 2, 3], [40, 50, 60]]]}
+        ] do
+      test "broadcasts a smaller pred when on_false is #{size} than on_true" do
+        pred = Nx.tensor([[1], [0]], type: :u8)
+        result = Nx.select(pred, Nx.tensor(unquote(on_true)), Nx.tensor(unquote(on_false)))
+        assert_equal(result, Nx.tensor(unquote(expected)))
+      end
 
-      assert_equal(Nx.select(pred, on_true, on_false), Nx.tensor([[10, 2, 10], [20, 5, 20]]))
+      test "broadcasts a smaller vectorized pred when on_false is #{size} than on_true" do
+        pred = Nx.tensor([[[1], [0]], [[0], [1]]], type: :u8) |> Nx.vectorize(:x)
+        result = Nx.select(pred, Nx.tensor(unquote(on_true)), Nx.tensor(unquote(on_false)))
+        assert_equal(result, unquote(vectorized) |> Nx.tensor() |> Nx.vectorize(:x))
+      end
     end
 
-    test "broadcasts a vectorized pred" do
-      pred = Nx.tensor([[[1], [0]], [[0], [1]]], type: :u8) |> Nx.vectorize(:x)
-      on_true = Nx.tensor([[10, 20, 30], [40, 50, 60]])
-      on_false = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+    test "merges the names of the inputs as other element-wise operations" do
+      pred = Nx.tensor([1, 0, 1], type: :u8, names: [:y])
+      assert Nx.select(pred, Nx.iota({2, 3}, names: [:x, nil]), 0).names == [:x, :y]
 
-      expected =
-        Nx.tensor([[[10, 20, 30], [4, 5, 6]], [[1, 2, 3], [40, 50, 60]]]) |> Nx.vectorize(:x)
-
-      assert_equal(Nx.select(pred, on_true, on_false), expected)
+      assert_raise ArgumentError, ~r/cannot merge name :y on axis 1 with name :z/, fn ->
+        Nx.select(pred, Nx.iota({2, 3}, names: [nil, :z]), 0)
+      end
     end
 
     test "works with vectorized scalar pred" do

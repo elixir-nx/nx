@@ -7685,8 +7685,10 @@ defmodule Nx do
   `pred` and returning either the corresponding element from
   `on_true` or `on_false`.
 
-  All three inputs broadcast against each other. The output shape
-  is the broadcast of `pred`, `on_true`, and `on_false`.
+  All three inputs broadcast against each other, as in other
+  element-wise operations. The output shape is the broadcast of
+  `pred`, `on_true`, and `on_false`, and the output names merge
+  the names of the three inputs.
 
   ## Examples
 
@@ -7715,7 +7717,7 @@ defmodule Nx do
 
   When the first argument is a tensor:
 
-      iex> Nx.select(Nx.tensor([0, 1, 0], names: [:x]), Nx.tensor([1, 2, 3], names: [:y]), Nx.tensor([4, 5, 6], names: [:z]))
+      iex> Nx.select(Nx.tensor([0, 1, 0], names: [:x]), Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6], names: [:x]))
       #Nx.Tensor<
         s32[x: 3]
         [4, 2, 6]
@@ -7723,7 +7725,7 @@ defmodule Nx do
 
       iex> x = Nx.tensor([2, 4, 6], names: [:x])
       iex> y = Nx.tensor([3, 2, 1])
-      iex> Nx.select(Nx.greater(x, y), Nx.tensor([2, 4, 6], names: [:i]), Nx.tensor([1, 3, 5], names: [:j]))
+      iex> Nx.select(Nx.greater(x, y), Nx.tensor([2, 4, 6]), Nx.tensor([1, 3, 5]))
       #Nx.Tensor<
         s32[x: 3]
         [1, 4, 6]
@@ -7825,8 +7827,7 @@ defmodule Nx do
   """
   @doc type: :element
   def select(pred, on_true, on_false) do
-    %T{shape: pred_shape} = pred = to_tensor(pred)
-
+    pred = to_tensor(pred)
     [pred, on_true, on_false] = broadcast_vectors([pred, on_true, on_false], align_ranks: true)
 
     %T{vectorized_axes: vectorized_axes} = pred
@@ -7837,50 +7838,19 @@ defmodule Nx do
 
     output_type = binary_type(on_true, on_false)
 
+    {shape, names} =
+      Nx.Shape.binary_broadcast(on_true.shape, on_true.names, on_false.shape, on_false.names)
+
     {output_shape, output_names} =
-      if pred_shape == {} do
-        Nx.Shape.binary_broadcast(on_true.shape, on_true.names, on_false.shape, on_false.names)
-      else
-        # The names come from pred, so on_true and on_false names are not merged.
-        nil_true = List.duplicate(nil, tuple_size(on_true.shape))
-        nil_false = List.duplicate(nil, tuple_size(on_false.shape))
-
-        {tf_shape, _} =
-          Nx.Shape.binary_broadcast(on_true.shape, nil_true, on_false.shape, nil_false)
-
-        nil_tf = List.duplicate(nil, tuple_size(tf_shape))
-        Nx.Shape.binary_broadcast(pred.shape, pred.names, tf_shape, nil_tf)
-      end
-
-    _ =
-      Nx.Shape.broadcast!(
-        on_true.shape,
-        output_shape,
-        Nx.Shape.broadcast_axes(on_true.shape, output_shape)
-      )
-
-    _ =
-      Nx.Shape.broadcast!(
-        on_false.shape,
-        output_shape,
-        Nx.Shape.broadcast_axes(on_false.shape, output_shape)
-      )
+      Nx.Shape.binary_broadcast(pred.shape, pred.names, shape, names)
 
     out = %{pred | shape: output_shape, type: output_type, names: output_names}
 
-    pred =
-      if pred.shape != output_shape and (pred_shape != {} or vectorized_axes != []) do
-        broadcast(pred, output_shape)
-      else
-        pred
-      end
+    # Backends take a scalar pred, which selects a whole input, or a pred of the output shape.
+    pred = if pred.shape in [{}, output_shape], do: pred, else: broadcast(pred, output_shape)
+    result = impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
 
-    if vectorized_axes != [] do
-      result = impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
-      vectorize(result, vectorized_axes)
-    else
-      impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
-    end
+    if vectorized_axes != [], do: vectorize(result, vectorized_axes), else: result
   end
 
   @doc """
