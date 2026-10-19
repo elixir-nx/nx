@@ -823,6 +823,8 @@ defmodule Nx do
     tensor(arg, type, opts)
   end
 
+  defp infer_type([]), do: {:f, 32}
+
   defp infer_type([head | tail]) when is_list(tail) do
     Enum.reduce(tail, infer_type(head), &Nx.Type.merge(infer_type(&1), &2))
   end
@@ -872,11 +874,6 @@ defmodule Nx do
 
   defp tensor(arg, type, opts) when is_list(arg) do
     {shape, data} = flatten_list(arg, type)
-
-    if data == "" do
-      raise "cannot build empty tensor"
-    end
-
     names = Nx.Shape.named_axes!(opts[:names], shape)
     {backend, backend_options} = backend_from_options!(opts) || default_backend()
     backend.from_binary(%T{shape: shape, type: type, names: names}, data, backend_options)
@@ -2055,10 +2052,6 @@ defmodule Nx do
     opts = keyword!(opts, [:backend])
     {_, size} = type = Nx.Type.normalize!(type)
     dim = div(Kernel.bit_size(binary), size)
-
-    if binary == "" do
-      raise ArgumentError, "cannot build an empty tensor"
-    end
 
     if rem(Kernel.bit_size(binary), size) != 0 do
       raise ArgumentError, "binary does not match the given size"
@@ -3397,7 +3390,7 @@ defmodule Nx do
   defp tile_valid_repetitions?(reps) when not is_list(reps), do: false
 
   defp tile_valid_repetitions?(reps) do
-    Enum.all?(reps, &(is_integer(&1) and &1 >= 1))
+    Enum.all?(reps, &(is_integer(&1) and &1 >= 0))
   end
 
   @doc """
