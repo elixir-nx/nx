@@ -8,6 +8,7 @@
 
 ### Bug fixes
 
+  * [Nx.Defn] Preserve tensor dimensions that match vectorized axis sizes in conditional gradients
   * [Nx.Defn] Pass gradients through metadata nodes on tuples
   * [Nx] Read Elixir number literals at the precision of element-wise binary operations
   * [Nx.Defn] Return finite gradients for `Nx.sigmoid/1` at very negative and non-finite inputs

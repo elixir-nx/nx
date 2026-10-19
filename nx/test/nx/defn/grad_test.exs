@@ -3701,6 +3701,128 @@ defmodule Nx.Defn.GradTest do
   end
 
   describe "if" do
+    defn conditional_vector_power(input) do
+      if Nx.sum(input) > 0, do: input * input, else: input * input * input
+    end
+
+    defn conditional_vector_loss(input), do: Nx.sum(conditional_vector_power(input))
+
+    defn scaled_conditional_vector_loss(input, scale) do
+      Nx.sum(conditional_vector_power(input) * scale)
+    end
+
+    defn fourth_power_vector_loss(input), do: Nx.sum(input * input * input * input)
+
+    test "conditional gradient keeps a tensor dimension equal to the batch size" do
+      input = Nx.tensor([[1.0, 2.0], [-1.0, -2.0]]) |> Nx.vectorize(:batch)
+      gradient = grad(&conditional_vector_loss/1).(input)
+
+      assert gradient.shape == input.shape
+      assert gradient.vectorized_axes == input.vectorized_axes
+      assert_equal(gradient, Nx.tensor([[2.0, 4.0], [3.0, 12.0]]) |> Nx.vectorize(:batch))
+    end
+
+    test "second-order conditional gradient keeps a tensor dimension equal to the batch size" do
+      input = Nx.tensor([[1.0, 2.0], [-1.0, -2.0]]) |> Nx.vectorize(:batch)
+
+      second_derivative =
+        grad(fn argument -> Nx.sum(grad(&conditional_vector_loss/1).(argument)) end)
+
+      gradient = second_derivative.(input)
+      assert gradient.shape == input.shape
+      assert gradient.vectorized_axes == input.vectorized_axes
+      assert_equal(gradient, Nx.tensor([[2.0, 2.0], [-6.0, -12.0]]) |> Nx.vectorize(:batch))
+    end
+
+    test "conditional gradients work when tensor and batch dimensions differ" do
+      input = Nx.tensor([[1.0, 2.0], [-1.0, -2.0], [3.0, 4.0]]) |> Nx.vectorize(:batch)
+      first_derivative = grad(&conditional_vector_loss/1)
+      second_derivative = grad(fn argument -> Nx.sum(first_derivative.(argument)) end)
+
+      assert_equal(
+        first_derivative.(input),
+        Nx.tensor([[2.0, 4.0], [3.0, 12.0], [6.0, 8.0]]) |> Nx.vectorize(:batch)
+      )
+
+      assert_equal(
+        second_derivative.(input),
+        Nx.tensor([[2.0, 2.0], [-6.0, -12.0], [2.0, 2.0]]) |> Nx.vectorize(:batch)
+      )
+    end
+
+    test "conditional gradients keep tensor dimensions matching multiple vectorized axes" do
+      input =
+        Nx.iota({2, 3, 2, 3}, type: :f32)
+        |> Nx.add(1)
+        |> Nx.multiply(Nx.reshape(Nx.tensor([1.0, -1.0]), {2, 1, 1, 1}))
+        |> Nx.vectorize(group: 2, batch: 3)
+
+      positive = Nx.greater(Nx.sum(input), 0)
+      first_derivative = grad(&conditional_vector_loss/1)
+      second_derivative = grad(fn argument -> Nx.sum(first_derivative.(argument)) end)
+
+      assert_equal(
+        first_derivative.(input),
+        Nx.select(positive, Nx.multiply(2, input), Nx.multiply(3, Nx.pow(input, 2)))
+      )
+
+      assert_equal(second_derivative.(input), Nx.select(positive, 2, Nx.multiply(6, input)))
+    end
+
+    test "conditional gradients preserve tensor dimensions with mixed vectorized inputs" do
+      input =
+        Nx.iota({2, 2, 3}, type: :f32)
+        |> Nx.add(1)
+        |> Nx.multiply(Nx.reshape(Nx.tensor([1.0, -1.0]), {2, 1, 1}))
+        |> Nx.vectorize(:batch)
+
+      scale = Nx.tensor([2.0, 3.0, 4.0]) |> Nx.vectorize(:sample)
+
+      {input_gradient, scale_gradient} =
+        grad({input, scale}, fn {argument, factor} ->
+          scaled_conditional_vector_loss(argument, factor)
+        end)
+
+      positive = Nx.greater(Nx.sum(input), 0)
+
+      expected_input =
+        Nx.multiply(
+          Nx.select(positive, Nx.multiply(2, input), Nx.multiply(3, Nx.pow(input, 2))),
+          scale
+        )
+
+      expected_scale = Nx.sum(Nx.select(positive, Nx.pow(input, 2), Nx.pow(input, 3)))
+      [expected_input, expected_scale] = Nx.broadcast_vectors([expected_input, expected_scale])
+
+      assert_equal(input_gradient, expected_input)
+      assert_equal(scale_gradient, expected_scale)
+    end
+
+    test "conditional gradients work for vectorized scalar entries" do
+      input = Nx.tensor([1.0, -2.0]) |> Nx.vectorize(:batch)
+      first_derivative = grad(&conditional_vector_loss/1)
+      second_derivative = grad(fn argument -> Nx.sum(first_derivative.(argument)) end)
+
+      assert_equal(first_derivative.(input), Nx.tensor([2.0, 12.0]) |> Nx.vectorize(:batch))
+      assert_equal(second_derivative.(input), Nx.tensor([2.0, -12.0]) |> Nx.vectorize(:batch))
+    end
+
+    test "nonconditional gradients keep tensor dimensions equal to the batch size" do
+      input = Nx.tensor([[1.0, 2.0], [-1.0, -2.0]]) |> Nx.vectorize(:batch)
+      first_derivative = grad(&fourth_power_vector_loss/1)
+      second_derivative = grad(fn argument -> Nx.sum(first_derivative.(argument)) end)
+
+      assert_equal(
+        first_derivative.(input),
+        Nx.tensor([[4.0, 32.0], [-4.0, -32.0]]) |> Nx.vectorize(:batch)
+      )
+
+      assert_equal(
+        second_derivative.(input),
+        Nx.tensor([[12.0, 48.0], [12.0, 48.0]]) |> Nx.vectorize(:batch)
+      )
+    end
+
     defn grad_if(t), do: grad(t, fn t -> if(t + 1, do: Nx.pow(t, 2), else: Nx.pow(t, 3)) end)
 
     defn grad_sum_if(t) do
