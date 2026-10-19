@@ -393,6 +393,22 @@ defmodule Nx.FloatingTest do
       assert Nx.Floating.dump_f8(-0.0) == <<0x80>>
       assert Nx.Floating.load_f8(<<0x80>>) == -0.0
     end
+
+    test "subnormals" do
+      assert Nx.Floating.load_f8(<<0x01>>) == :math.pow(2, -16)
+      assert Nx.Floating.load_f8(<<0x03>>) == 3 * :math.pow(2, -16)
+      assert Nx.Floating.load_f8(<<0x83>>) == -3 * :math.pow(2, -16)
+      assert Nx.Floating.load_f8(<<0x04>>) == :math.pow(2, -14)
+    end
+
+    test "load_f8 reverses dump_f8 for every finite value" do
+      for byte <- 0..255,
+          byte not in [0x7C, 0xFC],
+          byte not in 0x7D..0x7F,
+          byte not in 0xFD..0xFF do
+        assert Nx.Floating.dump_f8(Nx.Floating.load_f8(<<byte>>)) == <<byte>>
+      end
+    end
   end
 
   describe "bf16" do
