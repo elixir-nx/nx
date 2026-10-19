@@ -825,17 +825,10 @@ defmodule Nx.Shape do
 
   defp do_conv_spatial_dims([], [], []), do: []
 
+  # The number of windows that fit, which is 0 when the filter is larger than the input.
   defp do_conv_spatial_dims([cur | spatial], [f | filters], [s | strides]) do
-    dim = floor((cur - f) / s) + 1
-
-    if dim <= 0 do
-      raise ArgumentError,
-            "conv would result in empty tensor which is" <>
-              " not currently supported in Nx, please open an" <>
-              " issue if you'd like this behavior to change"
-    else
-      [dim | do_conv_spatial_dims(spatial, filters, strides)]
-    end
+    dim = max(floor((cur - f) / s) + 1, 0)
+    [dim | do_conv_spatial_dims(spatial, filters, strides)]
   end
 
   @doc """
@@ -849,10 +842,12 @@ defmodule Nx.Shape do
     iex> Nx.Shape.pool({3, 2, 3}, {2, 1, 1}, [1, 2, 1], :same, [1, 1, 1])
     {{3, 1, 3}, [{0, 1}, {0, 0}, {0, 0}]}
 
-  ## Error cases
+  A window that is larger than the input fits 0 times:
 
     iex> Nx.Shape.pool({1, 2, 3}, {2, 1, 1}, [1, 1, 1], :valid, [1, 1, 1])
-    ** (ArgumentError) window dimensions would result in empty tensor which is not currently supported in Nx, please open an issue if you'd like this behavior to change
+    {{0, 2, 3}, [{0, 0}, {0, 0}, {0, 0}]}
+
+  ## Error cases
 
     iex> Nx.Shape.pool({1, 2, 3}, {2, 1}, [1, 1, 1], :valid, [1, 1, 1])
     ** (ArgumentError) invalid window dimensions, rank of shape (3) does not match rank of window (2)
@@ -876,15 +871,8 @@ defmodule Nx.Shape do
   defp do_pool([s | strides], shape, window, pos) do
     dim = elem(shape, pos)
     w = elem(window, pos)
-    new_dim = div(dim - w, s) + 1
-
-    if new_dim <= 0 do
-      raise ArgumentError,
-            "window dimensions would result in empty tensor" <>
-              " which is not currently supported in Nx, please" <>
-              " open an issue if you'd like this behavior to change"
-    end
-
+    # The number of windows that fit, which is 0 when the window is larger than the input.
+    new_dim = max(div(dim - w, s) + 1, 0)
     [new_dim | do_pool(strides, shape, window, pos + 1)]
   end
 
@@ -2223,9 +2211,9 @@ defmodule Nx.Shape do
       ** (ArgumentError) top_k input last axis size must be greater than or equal to k, got size=1 and k=2
 
       iex> Nx.Shape.top_k({2, 3, 1}, [:a, :b, :c], -1)
-      ** (ArgumentError) top_k k must be an integer greater than or equal to 1, got k=-1
+      ** (ArgumentError) top_k k must be an integer greater than or equal to 0, got k=-1
   """
-  def top_k(shape, names, k) when is_integer(k) and k >= 1 do
+  def top_k(shape, names, k) when is_integer(k) and k >= 0 do
     case shape do
       {} ->
         raise ArgumentError, "top_k input must have at least rank 1"
@@ -2245,7 +2233,7 @@ defmodule Nx.Shape do
   end
 
   def top_k(_shape, _names, k),
-    do: raise(ArgumentError, "top_k k must be an integer greater than or equal to 1, got k=#{k}")
+    do: raise(ArgumentError, "top_k k must be an integer greater than or equal to 0, got k=#{k}")
 
   @doc """
   Merges names, raising on mismatch.

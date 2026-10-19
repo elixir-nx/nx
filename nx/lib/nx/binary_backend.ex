@@ -571,9 +571,7 @@ defmodule Nx.BinaryBackend do
     {right, right_contract_axes} = bin_dot_transpose_contract_axes(right, contract_axes2)
 
     bin_zip_reduce(left, left_contract_axes, right, right_contract_axes, type, 0, fn
-      lhs, rhs, acc ->
-        res = binary_to_number(lhs, t1) * binary_to_number(rhs, t2) + acc
-        {res, res}
+      lhs, rhs, acc -> binary_to_number(lhs, t1) * binary_to_number(rhs, t2) + acc
     end)
   end
 
@@ -1150,9 +1148,6 @@ defmodule Nx.BinaryBackend do
 
     %T{shape: padded_shape} = padded_t = Nx.pad(t, 0, padding_config)
 
-    single_data_dims = Tuple.delete_at(padded_shape, 0)
-    batch_size = Nx.size(single_data_dims) * input_size
-
     # We will traverse the input tensor exactly the same as we traversed
     # the binary in window_reduce, but the window is equal to the filter
     # size of the kernel plus the channel size of the input tensor
@@ -1194,8 +1189,8 @@ defmodule Nx.BinaryBackend do
             do: Enum.at(filter_groups_with_index, batch_group_index),
             else: filter_groups_with_index
 
-        # Traverse the batch dim first
-        for <<batch::size(^batch_size)-bitstring <- batch_group>>,
+        # Each batch group holds one item of the batch
+        for batch <- [batch_group],
             # Traverse the filters next, this allows us to rebuild
             # the resulting binary correctly
             {filter, feature_group} <- current_filter_group_with_index,
@@ -1249,23 +1244,23 @@ defmodule Nx.BinaryBackend do
 
   defp split_into_feature_groups(data, shape, {_, size}, groups) do
     group_size = div(Nx.size(shape) * size, groups)
-    data_size = div(Nx.size(shape) * size, elem(shape, 0))
+    data_size = product_after(shape, 0) * size
 
-    for i <- 0..(groups - 1),
+    for i <- 0..(groups - 1)//1,
         offset = group_size * i,
         <<_::size(^offset)-bitstring, data_group::size(^group_size)-bitstring, _::bitstring>> =
           data,
-        <<out_data::size(^data_size)-bitstring <- data_group>>,
+        out_data <- chunks(data_group, div(elem(shape, 0), groups), data_size),
         do: {out_data, i}
   end
 
   defp split_into_batch_groups(data, shape, {_, size}, groups) do
-    item_size = div(Nx.size(shape) * size, elem(shape, 0))
+    item_size = product_after(shape, 0) * size
     num_groups = div(elem(shape, 0), groups)
 
     output_batch_groups =
-      for i <- 0..(num_groups - 1),
-          j <- 0..(groups - 1) do
+      for i <- 0..(num_groups - 1)//1,
+          j <- 0..(groups - 1)//1 do
         offset = (i + j * num_groups) * item_size
         <<_::size(^offset)-bitstring, item::size(^item_size)-bitstring, _::bitstring>> = data
         item
@@ -1330,9 +1325,7 @@ defmodule Nx.BinaryBackend do
   def all(out, %{type: type} = tensor, opts) do
     data =
       bin_reduce(tensor, out.type, 1, opts, fn bin, acc ->
-        res = if binary_to_number(bin, type) != 0, do: acc, else: 0
-
-        {res, res}
+        if binary_to_number(bin, type) != 0, do: acc, else: 0
       end)
 
     from_binary(out, data)
@@ -1342,8 +1335,7 @@ defmodule Nx.BinaryBackend do
   def any(out, %{type: type} = tensor, opts) do
     data =
       bin_reduce(tensor, out.type, 0, opts, fn bin, acc ->
-        res = if binary_to_number(bin, type) != 0, do: 1, else: acc
-        {res, res}
+        if binary_to_number(bin, type) != 0, do: 1, else: acc
       end)
 
     from_binary(out, data)
@@ -1353,8 +1345,7 @@ defmodule Nx.BinaryBackend do
   def sum(out, %{type: type} = tensor, opts) do
     data =
       bin_reduce(tensor, out.type, 0, opts, fn bin, acc ->
-        res = binary_to_number(bin, type) + acc
-        {res, res}
+        binary_to_number(bin, type) + acc
       end)
 
     from_binary(out, data)
@@ -1364,8 +1355,7 @@ defmodule Nx.BinaryBackend do
   def product(out, %{type: type} = tensor, opts) do
     data =
       bin_reduce(tensor, out.type, 1, opts, fn bin, acc ->
-        res = binary_to_number(bin, type) * acc
-        {res, res}
+        binary_to_number(bin, type) * acc
       end)
 
     from_binary(out, data)
@@ -1374,10 +1364,8 @@ defmodule Nx.BinaryBackend do
   @impl true
   def reduce_max(out, %{type: type} = tensor, opts) do
     data =
-      bin_reduce(tensor, out.type, :first, opts, fn bin, acc ->
-        val = binary_to_number(bin, type)
-        res = if acc == :first, do: val, else: non_finite_max(acc, val)
-        {res, res}
+      bin_reduce(tensor, out.type, limit(Nx.Type.min_binary(type), type), opts, fn bin, acc ->
+        non_finite_max(acc, binary_to_number(bin, type))
       end)
 
     from_binary(out, data)
@@ -1394,10 +1382,8 @@ defmodule Nx.BinaryBackend do
   @impl true
   def reduce_min(out, %{type: type} = tensor, opts) do
     data =
-      bin_reduce(tensor, out.type, :first, opts, fn bin, acc ->
-        val = binary_to_number(bin, type)
-        res = if acc == :first, do: val, else: non_finite_min(acc, val)
-        {res, res}
+      bin_reduce(tensor, out.type, limit(Nx.Type.max_binary(type), type), opts, fn bin, acc ->
+        non_finite_min(acc, binary_to_number(bin, type))
       end)
 
     from_binary(out, data)
@@ -1435,7 +1421,7 @@ defmodule Nx.BinaryBackend do
         :low -> &non_finite_lt/2
       end
 
-    argmin_or_max(out, tensor, comparator, opts[:axis])
+    argmin_or_max(out, tensor, comparator, opts[:axis], &Nx.Type.max_binary/1)
   end
 
   @impl true
@@ -1446,26 +1432,34 @@ defmodule Nx.BinaryBackend do
         :low -> &non_finite_gt/2
       end
 
-    argmin_or_max(out, tensor, comparator, opts[:axis])
+    argmin_or_max(out, tensor, comparator, opts[:axis], &Nx.Type.min_binary/1)
   end
 
-  defp argmin_or_max(out, %{type: type} = tensor, comparator, axis) do
+  # Starts from the limit of the type at index 0, so an empty axis gives 0.
+  defp argmin_or_max(out, %{type: type} = tensor, comparator, axis, limit_binary) do
     opts = if axis, do: [axes: [axis]], else: []
+    acc = {0, limit(limit_binary.(type), type), 0}
 
     data =
-      bin_reduce(tensor, out.type, {0, :first, -1}, opts, fn
-        bin, {i, cur_extreme_x, cur_extreme_i} ->
+      bin_reduce(
+        tensor,
+        out.type,
+        acc,
+        opts,
+        fn bin, {i, cur_extreme_x, cur_extreme_i} ->
           x = binary_to_number(bin, type)
 
-          if cur_extreme_x == :first or x == :nan or comparator.(x, cur_extreme_x) do
-            {i, {i + 1, x, i}}
-          else
-            {cur_extreme_i, {i + 1, cur_extreme_x, cur_extreme_i}}
-          end
-      end)
+          if x == :nan or comparator.(x, cur_extreme_x),
+            do: {i + 1, x, i},
+            else: {i + 1, cur_extreme_x, cur_extreme_i}
+        end,
+        &elem(&1, 2)
+      )
 
     from_binary(out, data)
   end
+
+  defp limit(binary, type), do: binary_to_number(binary, type)
 
   @impl true
   def reduce(out, tensor, acc, opts, fun) do
@@ -1473,8 +1467,7 @@ defmodule Nx.BinaryBackend do
 
     data =
       bin_reduce(tensor, out.type, acc, opts, fn bin, acc ->
-        res = fun.(from_binary(each, bin), acc)
-        {res, res}
+        fun.(from_binary(each, bin), acc)
       end)
 
     from_binary(out, data)
@@ -1744,12 +1737,12 @@ defmodule Nx.BinaryBackend do
         |> aggregate_axes([1], indices_shape, elem(indices.type, 1))
 
       updates_binary = to_binary(updates)
-      updates_count = updates_shape |> Tuple.product() |> div(elem(updates_shape, 0))
+      updates_count = product_after(updates_shape, 0)
       updates_chunk = updates_count * updates_size
       target_chunk = updates_count * target_size
 
       updates_list =
-        for <<x::bitstring-size(^updates_chunk) <- updates_binary>> do
+        for x <- chunks(updates_binary, elem(updates_shape, 0), updates_chunk) do
           binary_to_list(x, updates.type)
         end
 
@@ -1943,11 +1936,10 @@ defmodule Nx.BinaryBackend do
 
     indices_rank = tuple_size(indices_shape)
     indices_depth = elem(indices_shape, indices_rank - 1)
-    indices_count = Tuple.product(indices_shape)
     last_dim_bin_size = indices_depth * indices_size
 
     data = to_binary(tensor)
-    count = div(Tuple.product(out.shape), div(indices_count, indices_depth))
+    count = product_after(out.shape, indices_rank - 2)
 
     new_data =
       for <<bin::size(^last_dim_bin_size)-bitstring <- to_binary(indices)>>, into: <<>> do
@@ -2362,7 +2354,7 @@ defmodule Nx.BinaryBackend do
 
   ## Binary reducers
 
-  defp bin_reduce(tensor, type, acc, opts, fun) do
+  defp bin_reduce(tensor, type, acc, opts, fun, finish \\ & &1) do
     %T{type: {_, size}, shape: shape} = tensor
 
     view =
@@ -2373,27 +2365,23 @@ defmodule Nx.BinaryBackend do
       end
 
     for axis <- view, into: <<>> do
-      result = bin_reduce_axis(axis, size, <<>>, acc, fun)
-      scalar_to_binary!(result, type)
+      axis |> bin_reduce_axis(size, acc, fun) |> finish.() |> scalar_to_binary!(type)
     end
   end
 
-  defp bin_reduce_axis(axis, size, res, acc, fun) do
+  # Folds fun over the elements of an axis. An empty axis gives the initial accumulator.
+  defp bin_reduce_axis(axis, size, acc, fun) do
     case axis do
       <<b1::size(^size)-bitstring, b2::size(^size)-bitstring, b3::size(^size)-bitstring,
         b4::size(^size)-bitstring, rest::bitstring>> ->
-        {_, a1} = fun.(b1, acc)
-        {_, a2} = fun.(b2, a1)
-        {_, a3} = fun.(b3, a2)
-        {r4, a4} = fun.(b4, a3)
-        bin_reduce_axis(rest, size, r4, a4, fun)
+        acc = fun.(b4, fun.(b3, fun.(b2, fun.(b1, acc))))
+        bin_reduce_axis(rest, size, acc, fun)
 
       <<b::size(^size)-bitstring, rest::bitstring>> ->
-        {r, a} = fun.(b, acc)
-        bin_reduce_axis(rest, size, r, a, fun)
+        bin_reduce_axis(rest, size, fun.(b, acc), fun)
 
       <<>> ->
-        res
+        acc
     end
   end
 
@@ -2405,31 +2393,25 @@ defmodule Nx.BinaryBackend do
     v2 = aggregate_axes(to_binary(t2), axes2, t2.shape, s2)
 
     for b1 <- v1, b2 <- v2, into: <<>> do
-      {bin, _acc} = bin_zip_reduce_axis(b1, b2, s1, s2, <<>>, acc, fun)
-      scalar_to_binary!(bin, type)
+      b1 |> bin_zip_reduce_axis(b2, s1, s2, acc, fun) |> scalar_to_binary!(type)
     end
   end
 
-  # Helper for reducing down a single axis over two tensors,
-  # returning tensor data and a final accumulator.
-  defp bin_zip_reduce_axis(b1, b2, s1, s2, bin, acc, fun) do
+  # Folds fun over the pairs of elements of two axes. Empty axes give the initial accumulator.
+  defp bin_zip_reduce_axis(b1, b2, s1, s2, acc, fun) do
     case {b1, b2} do
       {<<x1::size(^s1)-bitstring, x2::size(^s1)-bitstring, x3::size(^s1)-bitstring,
          x4::size(^s1)-bitstring, rest1::bitstring>>,
        <<y1::size(^s2)-bitstring, y2::size(^s2)-bitstring, y3::size(^s2)-bitstring,
          y4::size(^s2)-bitstring, rest2::bitstring>>} ->
-        {_, a1} = fun.(x1, y1, acc)
-        {_, a2} = fun.(x2, y2, a1)
-        {_, a3} = fun.(x3, y3, a2)
-        {r4, a4} = fun.(x4, y4, a3)
-        bin_zip_reduce_axis(rest1, rest2, s1, s2, r4, a4, fun)
+        acc = fun.(x4, y4, fun.(x3, y3, fun.(x2, y2, fun.(x1, y1, acc))))
+        bin_zip_reduce_axis(rest1, rest2, s1, s2, acc, fun)
 
       {<<x::size(^s1)-bitstring, rest1::bitstring>>, <<y::size(^s2)-bitstring, rest2::bitstring>>} ->
-        {bin, acc} = fun.(x, y, acc)
-        bin_zip_reduce_axis(rest1, rest2, s1, s2, bin, acc, fun)
+        bin_zip_reduce_axis(rest1, rest2, s1, s2, fun.(x, y, acc), fun)
 
       {<<>>, <<>>} ->
-        {bin, acc}
+        acc
     end
   end
 

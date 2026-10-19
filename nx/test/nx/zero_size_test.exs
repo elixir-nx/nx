@@ -135,4 +135,119 @@ defmodule Nx.ZeroSizeTest do
       assert Nx.shape(Nx.tile(empty({0, 2}), [3, 1])) == {0, 2}
     end
   end
+
+  describe "reductions" do
+    test "with an initial value give it for an empty axis" do
+      e = empty({2, 0})
+      assert_equal(Nx.sum(e), Nx.tensor(0.0))
+      assert_equal(Nx.sum(e, axes: [1]), Nx.tensor([0.0, 0.0]))
+      assert Nx.shape(Nx.sum(e, axes: [0])) == {0}
+      assert_equal(Nx.product(e, axes: [1]), Nx.tensor([1.0, 1.0]))
+      assert_equal(Nx.all(e, axes: [1]), Nx.tensor([1, 1], type: :u8))
+      assert_equal(Nx.any(e, axes: [1]), Nx.tensor([0, 0], type: :u8))
+      assert_equal(Nx.reduce(e, 5.0, [axes: [1]], &Nx.add/2), Nx.tensor([5.0, 5.0]))
+    end
+
+    test "that divide by the size give NaN, logsumexp gives -inf" do
+      e = empty({2, 0})
+      assert Nx.to_number(Nx.mean(e)) == :nan
+      assert Nx.to_list(Nx.mean(e, axes: [1])) == [:nan, :nan]
+      assert Nx.to_number(Nx.variance(e)) == :nan
+      assert Nx.to_list(Nx.logsumexp(e, axes: [1])) == [:neg_infinity, :neg_infinity]
+    end
+
+    test "max, min, argmax and argmin start from the limits of the type" do
+      e = empty({2, 0})
+      assert Nx.to_list(Nx.reduce_max(e, axes: [1])) == [:neg_infinity, :neg_infinity]
+      assert Nx.to_list(Nx.reduce_min(e, axes: [1])) == [:infinity, :infinity]
+      assert Nx.to_number(Nx.reduce_max(empty({0}, :s32))) == -2_147_483_648
+      assert Nx.to_list(Nx.argmax(e, axis: 1)) == [0, 0]
+      assert Nx.to_number(Nx.argmin(e)) == 0
+    end
+
+    test "keep an empty output" do
+      e = empty({2, 0})
+      assert Nx.shape(Nx.reduce_max(e, axes: [0])) == {0}
+      assert Nx.shape(Nx.argmax(e, axis: 0)) == {0}
+    end
+
+    test "cumulative operations keep the shape" do
+      assert Nx.shape(Nx.cumulative_sum(empty({2, 0}), axis: 1)) == {2, 0}
+      assert Nx.shape(Nx.cumulative_max(empty({2, 0}), axis: 0)) == {2, 0}
+    end
+  end
+
+  describe "sorting" do
+    test "sort, argsort and top_k" do
+      assert Nx.shape(Nx.sort(empty({2, 0}), axis: 1)) == {2, 0}
+      assert Nx.shape(Nx.argsort(empty({0, 3}), axis: 1)) == {0, 3}
+      {values, indices} = Nx.top_k(Nx.iota({2, 3}, type: :f32), k: 0)
+      assert Nx.shape(values) == {2, 0}
+      assert Nx.shape(indices) == {2, 0}
+    end
+  end
+
+  describe "dot and conv" do
+    test "dot over an empty contraction axis gives zeros" do
+      assert_equal(Nx.dot(empty({2, 0}), empty({0, 3})), Nx.broadcast(0.0, {2, 3}))
+      assert Nx.shape(Nx.dot(empty({0, 3}), Nx.iota({3, 2}, type: :f32))) == {0, 2}
+      assert Nx.shape(Nx.dot(empty({0, 2, 3}), [2], [0], empty({0, 3, 4}), [1], [0])) == {0, 2, 4}
+    end
+
+    test "conv with an empty batch or empty input channels" do
+      assert Nx.shape(Nx.conv(empty({0, 1, 4}), Nx.broadcast(1.0, {1, 1, 2}))) == {0, 1, 3}
+      assert_equal(Nx.conv(empty({1, 0, 4}), empty({2, 0, 2})), Nx.broadcast(0.0, {1, 2, 3}))
+    end
+  end
+
+  describe "indexing" do
+    test "take and take_along_axis with empty indices" do
+      x = Nx.iota({2, 3})
+      none = Nx.tensor([], type: :s64)
+      assert Nx.shape(Nx.take(x, none, axis: 1)) == {2, 0}
+      assert Nx.shape(Nx.take(empty({0, 3}), none)) == {0, 3}
+      assert Nx.shape(Nx.take_along_axis(x, empty({2, 0}, :s64), axis: 1)) == {2, 0}
+    end
+
+    test "gather with empty indices" do
+      assert Nx.shape(Nx.gather(Nx.iota({2, 3}), empty({0, 2}, :s64))) == {0}
+    end
+
+    test "indexed_put and indexed_add with empty indices return the target" do
+      x = Nx.iota({2, 3})
+      assert_equal(Nx.indexed_put(x, empty({0, 2}, :s64), empty({0}, :s32)), x)
+      assert_equal(Nx.indexed_add(x, empty({0, 2}, :s64), empty({0}, :s32)), x)
+    end
+
+    test "window operations on an empty input" do
+      assert Nx.shape(Nx.window_sum(empty({0, 4}), {1, 2})) == {0, 3}
+      assert Nx.shape(Nx.window_max(empty({2, 0}), {1, 1})) == {2, 0}
+    end
+  end
+
+  describe "defn" do
+    test "jit with the evaluator" do
+      e = empty({2, 0})
+      assert Nx.shape(Nx.Defn.jit(&Nx.add(&1, 1)).(e)) == {2, 0}
+      assert_equal(Nx.Defn.jit(&Nx.sum(&1, axes: [1])).(e), Nx.tensor([0.0, 0.0]))
+      assert_equal(Nx.Defn.jit(&Nx.dot/2).(e, empty({0, 3})), Nx.broadcast(0.0, {2, 3}))
+    end
+
+    test "grad through a broadcast to a zero-size shape" do
+      grad = Nx.Defn.grad(Nx.tensor(2.0), &Nx.sum(Nx.multiply(Nx.broadcast(&1, {0}), 3)))
+      assert_equal(grad, Nx.tensor(0.0))
+    end
+
+    test "grad of a zero-size input has its shape" do
+      assert Nx.shape(Nx.Defn.grad(empty({2, 0}), &Nx.sum(Nx.exp(&1)))) == {2, 0}
+
+      grad = Nx.Defn.grad(empty({2, 0}), &Nx.sum(Nx.dot(&1, Nx.broadcast(1.0, {0, 3}))))
+      assert Nx.shape(grad) == {2, 0}
+    end
+
+    test "grad through dot over an empty contraction axis" do
+      grad = Nx.Defn.grad(Nx.iota({2, 3}, type: :f32), &Nx.sum(Nx.dot(empty({0, 2}), &1)))
+      assert_equal(grad, Nx.broadcast(0.0, {2, 3}))
+    end
+  end
 end
