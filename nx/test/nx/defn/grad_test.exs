@@ -3888,6 +3888,125 @@ defmodule Nx.Defn.GradTest do
       assert_equal(second_derivative.(Nx.tensor(-2.0)), Nx.tensor(3584.0))
     end
 
+    defn nonlinear_conditional(input) do
+      value =
+        if input > 0 do
+          Nx.sin(input) * Nx.sin(input)
+        else
+          Nx.cos(input) * Nx.cos(input) * Nx.cos(input)
+        end
+
+      Nx.sin(value)
+    end
+
+    defn sin_of_sin_squared(input), do: Nx.sin(Nx.sin(input) * Nx.sin(input))
+
+    defn sin_of_cos_cubed(input) do
+      Nx.sin(Nx.cos(input) * Nx.cos(input) * Nx.cos(input))
+    end
+
+    defn sign_flipping_conditional(input) do
+      if input > 0, do: -(input * input * input), else: input * input
+    end
+
+    defn composed_sign_flipping_conditional(input) do
+      Nx.sin(sign_flipping_conditional(sign_flipping_conditional(input)))
+    end
+
+    defn sin_of_sixth_power(input) do
+      Nx.sin(input * input * input * input * input * input)
+    end
+
+    defn sin_of_negated_sixth_power(input) do
+      Nx.sin(-(input * input * input * input * input * input))
+    end
+
+    defn two_input_nonlinear_conditional(selector, input) do
+      value =
+        if selector > 0 do
+          Nx.sin(input) * Nx.cos(selector)
+        else
+          Nx.cos(input) * Nx.sin(selector)
+        end
+
+      Nx.sin(value) + selector * input
+    end
+
+    defn two_input_positive_branch(selector, input) do
+      Nx.sin(Nx.sin(input) * Nx.cos(selector)) + selector * input
+    end
+
+    defn two_input_negative_branch(selector, input) do
+      Nx.sin(Nx.cos(input) * Nx.sin(selector)) + selector * input
+    end
+
+    test "gradients through nonlinear operations inside and outside the conditional" do
+      for {input, reference} <- [
+            {Nx.tensor(2.0), &sin_of_sin_squared/1},
+            {Nx.tensor(-2.0), &sin_of_cos_cubed/1}
+          ] do
+        assert_all_close(grad(&nonlinear_conditional/1).(input), grad(reference).(input))
+
+        assert_all_close(
+          grad(grad(&nonlinear_conditional/1)).(input),
+          grad(grad(reference)).(input)
+        )
+      end
+    end
+
+    test "gradients through a composed conditional whose branches swap" do
+      # The inner call maps positive inputs to negative values and negative inputs
+      # to positive values, so the outer call always takes the other branch.
+      for {input, reference} <- [
+            {Nx.tensor(2.0), &sin_of_sixth_power/1},
+            {Nx.tensor(-2.0), &sin_of_negated_sixth_power/1}
+          ] do
+        assert_all_close(
+          grad(&composed_sign_flipping_conditional/1).(input),
+          grad(reference).(input)
+        )
+
+        assert_all_close(
+          grad(grad(&composed_sign_flipping_conditional/1)).(input),
+          grad(grad(reference)).(input)
+        )
+      end
+    end
+
+    defn two_input_gradient_sum(selector, input, function) do
+      {selector_grad, input_grad} = grad({selector, input}, fn {s, i} -> function.(s, i) end)
+      selector_grad + input_grad
+    end
+
+    test "gradients with respect to both inputs of a nonlinear conditional" do
+      for {selector, reference} <- [
+            {Nx.tensor(0.5), &two_input_positive_branch/2},
+            {Nx.tensor(-0.5), &two_input_negative_branch/2}
+          ] do
+        input = Nx.tensor(1.5)
+
+        {selector_grad, input_grad} =
+          grad({selector, input}, fn {s, i} -> two_input_nonlinear_conditional(s, i) end)
+
+        {expected_selector_grad, expected_input_grad} =
+          grad({selector, input}, fn {s, i} -> reference.(s, i) end)
+
+        assert_all_close(selector_grad, expected_selector_grad)
+        assert_all_close(input_grad, expected_input_grad)
+
+        {selector_second, input_second} =
+          grad({selector, input}, fn {s, i} ->
+            two_input_gradient_sum(s, i, &two_input_nonlinear_conditional/2)
+          end)
+
+        {expected_selector_second, expected_input_second} =
+          grad({selector, input}, fn {s, i} -> two_input_gradient_sum(s, i, reference) end)
+
+        assert_all_close(selector_second, expected_selector_second)
+        assert_all_close(input_second, expected_input_second)
+      end
+    end
+
     defn grad_if(t), do: grad(t, fn t -> if(t + 1, do: Nx.pow(t, 2), else: Nx.pow(t, 3)) end)
 
     defn grad_sum_if(t) do
