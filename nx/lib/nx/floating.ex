@@ -89,15 +89,11 @@ defmodule Nx.Floating do
   def load_f8(<<0xFC::8-native>>), do: :neg_infinity
   def load_f8(<<0x7C::8-native>>), do: :infinity
   def load_f8(<<_sign::1, 31::5, mantissa::2>>) when mantissa != 0, do: :nan
-  def load_f8(<<sign::1, 0::7>>), do: if(sign == 0, do: 0.0, else: -0.0)
 
-  def load_f8(<<sign::1, exp::5, mantissa::2>>) do
-    float = :math.pow(2, exp - 15) * (1 + mantissa / 4)
-
-    case sign do
-      0 -> float
-      _ -> -float
-    end
+  # E5M2 is the high byte of an F16, as dump_f8/1 writes it.
+  def load_f8(<<byte::8>>) do
+    <<float::float-big-16>> = <<byte, 0>>
+    float
   end
 
   @doc """
