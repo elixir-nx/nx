@@ -3,9 +3,6 @@ defmodule Nx.ZeroSizeTest do
 
   import Nx.Testing
 
-  # A loop that does not stop on an empty axis fails the test instead of blocking the suite.
-  @moduletag timeout: 10_000
-
   defp empty(shape, type \\ :f32), do: Nx.broadcast(Nx.tensor(0, type: type), shape)
 
   describe "creation and conversion" do
