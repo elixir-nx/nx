@@ -30,7 +30,7 @@ defmodule Nx.Shape do
     dim = :erlang.element(pos, shape)
 
     cond do
-      is_integer(dim) and dim > 0 ->
+      is_integer(dim) and (dim > 0 or (dim == 0 and kind == :shape)) ->
         validate!(shape, pos - 1, kind)
 
       is_struct(dim, Nx.Tensor) ->
@@ -174,15 +174,21 @@ defmodule Nx.Shape do
 
         idx ->
           shape_without_auto = Tuple.delete_at(new_shape, idx)
-          inferred_dim = div(old_size, Tuple.product(shape_without_auto))
+          known_size = Tuple.product(shape_without_auto)
 
-          if inferred_dim == 0 do
+          if known_size == 0 do
+            raise ArgumentError,
+                  "cannot reshape with :auto, because the other dimensions of new shape " <>
+                    "#{inspect(new_shape)} have a size of 0 and any value would fit"
+          end
+
+          if rem(old_size, known_size) != 0 do
             raise ArgumentError,
                   "cannot reshape, current shape #{inspect(old_shape)} is not compatible with " <>
                     "new shape #{inspect(shape_without_auto)}"
           end
 
-          put_elem(new_shape, idx, inferred_dim)
+          put_elem(new_shape, idx, div(old_size, known_size))
       end
 
     if old_size != Tuple.product(new_shape) do
@@ -367,7 +373,7 @@ defmodule Nx.Shape do
        )
        when rdim == 1 or ldim == 1 or rdim == ldim do
     axis = axis - 1
-    shape_acc = [max(rdim, ldim) | shape_acc]
+    shape_acc = [if(ldim == 1, do: rdim, else: ldim) | shape_acc]
     names_acc = [merge_names!(lname, rname, axis, axis) | names_acc]
     binary_broadcast(ldims, lnames, rdims, rnames, shape_acc, names_acc, axis)
   end
@@ -1268,9 +1274,9 @@ defmodule Nx.Shape do
   defp do_slice(shape, pos, [i | indices], [len | lengths], [s | strides], acc_indices, acc_shape) do
     dim = elem(shape, pos)
 
-    if not is_integer(len) or len < 1 do
+    if not is_integer(len) or len < 0 do
       raise ArgumentError,
-            "length at axis #{pos} must be greater than or equal to 1, got: #{inspect(len)}"
+            "length at axis #{pos} must be greater than or equal to 0, got: #{inspect(len)}"
     end
 
     if not is_integer(s) or s < 1 do

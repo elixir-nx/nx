@@ -56,7 +56,7 @@ defmodule Nx.BinaryBackend do
   end
 
   def iota(%{shape: {n}, type: type} = out, 0, _backend_options) do
-    data = for i <- 0..(n - 1), do: number_to_binary(i, type)
+    data = for i <- 0..(n - 1)//1, do: number_to_binary(i, type)
     from_binary(out, data)
   end
 
@@ -77,9 +77,9 @@ defmodule Nx.BinaryBackend do
       |> Enum.reduce(1, &*/2)
 
     data =
-      for _ <- 1..cycles,
-          i <- 0..(dim - 1),
-          _ <- 1..repeat_blocks,
+      for _ <- 1..cycles//1,
+          i <- 0..(dim - 1)//1,
+          _ <- 1..repeat_blocks//1,
           into: "",
           do: number_to_binary(i, type)
 
@@ -102,7 +102,7 @@ defmodule Nx.BinaryBackend do
       |> Tuple.product()
 
     data =
-      for _ <- 1..count, i <- 1..m, j <- 1..n, into: <<>> do
+      for _ <- 1..count//1, i <- 1..m//1, j <- 1..n//1, into: <<>> do
         if i == j, do: one, else: zero
       end
 
@@ -238,41 +238,59 @@ defmodule Nx.BinaryBackend do
   end
 
   defp broadcast_data(%T{shape: old_shape, type: {_, size}} = t, new_shape, axes) do
-    chunk_size = size * Nx.size(old_shape)
-
     new_shape
     |> Tuple.to_list()
-    |> unary_broadcast(0, old_shape, 0, axes, to_binary(t), chunk_size)
+    |> unary_broadcast(0, old_shape, 0, axes, to_binary(t), size)
     |> :erlang.list_to_bitstring()
   end
 
   # Old and new match
-  defp unary_broadcast([dim | dims], axis, old_shape, old_pos, [axis | axes], data, chunk_size)
+  defp unary_broadcast([dim | dims], axis, old_shape, old_pos, [axis | axes], data, size)
        when elem(old_shape, old_pos) == dim do
-    chunk_size = div(chunk_size, dim)
+    chunk_size = size * product_after(old_shape, old_pos)
 
-    for <<chunk::size(^chunk_size)-bitstring <- data>> do
-      unary_broadcast(dims, axis + 1, old_shape, old_pos + 1, axes, chunk, chunk_size)
+    for chunk <- chunks(data, dim, chunk_size) do
+      unary_broadcast(dims, axis + 1, old_shape, old_pos + 1, axes, chunk, size)
     end
   end
 
   # Implicit broadcasting
-  defp unary_broadcast([dim | dims], axis, old_shape, old_pos, [axis | axes], data, chunk_size)
+  defp unary_broadcast([dim | dims], axis, old_shape, old_pos, [axis | axes], data, size)
        when elem(old_shape, old_pos) == 1 do
-    for _ <- 1..dim do
-      unary_broadcast(dims, axis + 1, old_shape, old_pos + 1, axes, data, chunk_size)
+    for _ <- 1..dim//1 do
+      unary_broadcast(dims, axis + 1, old_shape, old_pos + 1, axes, data, size)
     end
   end
 
   # Explicit broadcasting (unmapped axes)
-  defp unary_broadcast([dim | dims], axis, old_shape, old_pos, axes, data, chunk_size) do
-    for _ <- 1..dim do
-      unary_broadcast(dims, axis + 1, old_shape, old_pos, axes, data, chunk_size)
+  defp unary_broadcast([dim | dims], axis, old_shape, old_pos, axes, data, size) do
+    for _ <- 1..dim//1 do
+      unary_broadcast(dims, axis + 1, old_shape, old_pos, axes, data, size)
     end
   end
 
-  defp unary_broadcast([], _axis, _old_shape, _old_pos, [], data, _chunk_size) do
+  defp unary_broadcast([], _axis, _old_shape, _old_pos, [], data, _size) do
     data
+  end
+
+  # The number of elements in the dimensions after pos.
+  defp product_after(shape, pos) do
+    shape |> Tuple.to_list() |> Enum.drop(pos + 1) |> Enum.product()
+  end
+
+  # The number of elements in the dimensions before pos.
+  defp product_before(shape, pos) do
+    shape |> Tuple.to_list() |> Enum.take(pos) |> Enum.product()
+  end
+
+  # Splits data into count chunks of chunk_size bits. It iterates over the count,
+  # so it also works when the count or the chunk size is 0.
+  defp chunks(data, count, chunk_size) do
+    for i <- 0..(count - 1)//1 do
+      offset = i * chunk_size
+      <<_::size(^offset)-bitstring, chunk::size(^chunk_size)-bitstring, _::bitstring>> = data
+      chunk
+    end
   end
 
   ## Shape
@@ -298,7 +316,7 @@ defmodule Nx.BinaryBackend do
     traverse_list = Enum.map(list, &Enum.fetch!(weighted_shape, &1))
 
     data =
-      for <<chunk::size(^chunk_size)-bitstring <- data>> do
+      for chunk <- chunks(data, product_before(shape, min), chunk_size) do
         weighted_traverse(traverse_list, chunk, read_size)
       end
 
@@ -455,7 +473,7 @@ defmodule Nx.BinaryBackend do
       |> reverse_traverse(min, axes)
 
     data =
-      for <<chunk::size(^chunk_size)-bitstring <- data>> do
+      for chunk <- chunks(data, product_before(shape, min), chunk_size) do
         weighted_traverse(traverse, chunk, read_size)
       end
 
@@ -1833,9 +1851,8 @@ defmodule Nx.BinaryBackend do
     start_indices = clamp_indices(start_indices, shape, lengths)
 
     if hd(strides) == 1 and top_dimension_slice?(tuple_size(shape), shape, output_shape) do
-      length = Nx.size(output_shape) * size
-      offset = div(length, elem(output_shape, 0)) * hd(start_indices)
-      bitstring_part(data, offset, length)
+      row_size = product_after(output_shape, 0) * size
+      bitstring_part(data, row_size * hd(start_indices), row_size * elem(output_shape, 0))
     else
       # Anchored around the start indices
       weighted_shape = weighted_shape(shape, size, output_shape)
@@ -2499,10 +2516,10 @@ defmodule Nx.BinaryBackend do
   ## Aggregation helpers
 
   defp aggregate_axes(binary, axes, shape, size) do
-    {chunk_size, read_size, path} = aggregate_axes(axes, shape, size)
+    {count, chunk_size, read_size, path} = aggregate_axes(axes, shape, size)
 
     view =
-      for <<chunk::size(^chunk_size)-bitstring <- binary>> do
+      for chunk <- chunks(binary, count, chunk_size) do
         weighted_traverse(path, chunk, read_size)
       end
 
@@ -2534,7 +2551,7 @@ defmodule Nx.BinaryBackend do
           Enum.reverse(reverse_pre, [(&:erlang.list_to_bitstring/1) | Enum.reverse(reverse_pos)])
       end
 
-    {chunk_size, read_size, path}
+    {product_before(shape, min), chunk_size, read_size, path}
   end
 
   defp aggregate_path([pair | shape], [i | axes], i, pre, pos),
@@ -2618,15 +2635,8 @@ defmodule Nx.BinaryBackend do
   end
 
   defp weighted_traverse(dim, dim_size, dims, data, read_size, offset) do
-    head = weighted_traverse(dims, data, read_size, offset)
-
-    case dim do
-      1 ->
-        [head]
-
-      _ ->
-        <<_::size(^dim_size)-bitstring, data::bitstring>> = data
-        [head | weighted_traverse(dim - 1, dim_size, dims, data, read_size, offset)]
+    for i <- 0..(dim - 1)//1 do
+      weighted_traverse(dims, data, read_size, offset + i * dim_size)
     end
   end
 
@@ -2646,13 +2656,13 @@ defmodule Nx.BinaryBackend do
   defp make_anchors([], [], _window, _dilations, anchors), do: anchors
 
   defp make_anchors([dim | shape], [s | strides], [w | window], [dil | dilation], :init) do
-    dims = for i <- 0..(dim - 1), rem(i, s) == 0 and i + (w - 1) * dil < dim, do: [i]
+    dims = for i <- 0..(dim - 1)//1, rem(i, s) == 0 and i + (w - 1) * dil < dim, do: [i]
     make_anchors(shape, strides, window, dilation, dims)
   end
 
   defp make_anchors([dim | shape], [s | strides], [w | window], [dil | dilation], anchors) do
     anchors =
-      for i <- 0..(dim - 1),
+      for i <- 0..(dim - 1)//1,
           rem(i, s) == 0 and i + (w - 1) * dil < dim,
           anchor <- anchors,
           do: anchor ++ [i]
@@ -2686,6 +2696,6 @@ defmodule Nx.BinaryBackend do
   end
 
   defp bitstring_copy(bitstring, n) do
-    for _ <- 1..n, into: <<>>, do: bitstring
+    for _ <- 1..n//1, into: <<>>, do: bitstring
   end
 end
