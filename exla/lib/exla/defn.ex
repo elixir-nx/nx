@@ -1222,6 +1222,17 @@ defmodule EXLA.Defn do
     Value.select(pred, on_true, on_false, typespec)
   end
 
+  defp to_operator(
+         :triangular_solve,
+         args,
+         %{type: {:f, 16}} = ans,
+         %{client: %EXLA.Client{platform: :cuda}} = state
+       ) do
+    :triangular_solve
+    |> to_operator(args, %{ans | type: {:f, 32}}, state)
+    |> to_type({:f, 16})
+  end
+
   defp to_operator(:triangular_solve, [%Value{} = a, b, opts], %{type: type} = ans, _state) do
     left_side = Keyword.fetch!(opts, :left_side)
     lower = Keyword.fetch!(opts, :lower)

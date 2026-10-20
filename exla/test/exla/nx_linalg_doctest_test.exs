@@ -485,5 +485,52 @@ defmodule EXLA.NxLinAlgDoctestTest do
         b
       )
     end
+
+    test "works with f16" do
+      a =
+        Nx.tensor(
+          [
+            [
+              [2, 0, 0],
+              [1, 4, 0],
+              [-1, 2, 8]
+            ],
+            [
+              [4, 0, 0],
+              [-2, 2, 0],
+              [3, 1, -4]
+            ]
+          ],
+          type: :f16
+        )
+
+      b =
+        Nx.tensor(
+          [
+            [[1.0, 2.0], [-3.0, 0.5], [2.0, 1.0]],
+            [[0.5, -1.0], [2.0, 4.0], [-2.0, 3.0]]
+          ],
+          type: :f16
+        )
+
+      for left_side <- [true, false],
+          lower <- [true, false],
+          transform_a <- [:none, :transpose] do
+        opts = [left_side: left_side, lower: lower, transform_a: transform_a]
+        a = if lower, do: a, else: Nx.transpose(a, axes: [0, 2, 1])
+        b = if left_side, do: b, else: Nx.transpose(b, axes: [0, 2, 1])
+
+        x = Nx.LinAlg.triangular_solve(a, b, opts)
+
+        assert x.type == {:f, 16}
+
+        assert_all_close(
+          x,
+          Nx.LinAlg.triangular_solve(Nx.as_type(a, :f32), Nx.as_type(b, :f32), opts),
+          atol: 1.0e-2,
+          rtol: 1.0e-2
+        )
+      end
+    end
   end
 end
