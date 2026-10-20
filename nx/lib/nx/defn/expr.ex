@@ -836,8 +836,8 @@ defmodule Nx.Defn.Expr do
   @impl true
   def block(struct, _output \\ nil, in_args, fun) do
     {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
-    {args, context} = to_exprs(args)
-    context = context || :root
+    {args, parent_context} = to_exprs(args)
+    context = parent_context || :root
 
     # Nodes store devectorized tensors, so the body is traced on the
     # vectorized view and the result is vectorized again on the way out.
@@ -845,22 +845,42 @@ defmodule Nx.Defn.Expr do
     devectorized_args = Enum.map(args, &Nx.devectorize/1)
     in_args = devectorized_args ++ opts
 
+    # The body gets its own context, so an operation that mixes a parameter
+    # with a tensor from the enclosing scope fails when the block is built.
+    # Compilers run the body as a function of its arguments alone and cannot
+    # reach such a tensor.
+    body_context = new_context(:block)
+
     params =
-      Enum.with_index(devectorized_args, fn arg, pos -> parameter(arg, context, pos) end)
+      Enum.with_index(devectorized_args, fn arg, pos -> parameter(arg, body_context, pos) end)
 
     vectorized_params = Enum.zip_with(params, vectorized_axes, &vectorize_axes/2)
     traced = apply(fun, [struct | vectorized_params ++ opts])
+
+    # A tensor from the enclosing scope returned as is would bypass the check
+    # above. Outside a trace the arguments have no context to compare with.
+    if parent_context != nil do
+      Composite.reduce(traced, nil, fn %{data: %{context: traced_context}}, acc ->
+        if traced_context == parent_context do
+          raise ArgumentError,
+                "the function given to Nx.block returned a tensor from the enclosing scope. " <>
+                  "Every tensor the function uses must be given as one of the block arguments"
+        end
+
+        acc
+      end)
+    end
+
     out_vectorized_axes = [traced] |> Composite.flatten_list() |> Enum.map(& &1.vectorized_axes)
     fun = vectorized_block_fun(fun, vectorized_axes, length(opts))
 
     case Composite.traverse(traced, &Nx.devectorize/1) do
-      %{data: %{context: context}} = res ->
+      %{} = res ->
         res
         |> expr(context, :block, [struct, in_args, res, fun])
         |> revectorize_block_result(out_vectorized_axes)
 
       t when is_tuple(t) ->
-        context = elem(t, 0).data.context
         out = tuple_out(tuple_size(t))
         node = expr(out, context, :block, [struct, in_args, t, fun])
         revectorize_block_result(tuple(node, Tuple.to_list(t)), out_vectorized_axes)

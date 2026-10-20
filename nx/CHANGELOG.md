@@ -8,6 +8,7 @@
 
 ### Bug fixes
 
+  * [Nx.Defn] Raise when the function given to a block reads a tensor from the enclosing scope instead of returning wrong results
   * [Nx.Defn] Apply gradients for operations that create constants inside blocks
   * [Nx.Defn] Preserve tensor dimensions that match vectorized axis sizes in conditional gradients
   * [Nx.Defn] Avoid counting gradient contributions twice when differentiating conditionals
