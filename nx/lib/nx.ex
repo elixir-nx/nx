@@ -7685,10 +7685,13 @@ defmodule Nx do
   `pred` and returning either the corresponding element from
   `on_true` or `on_false`.
 
-  All three inputs broadcast against each other, as in other
-  element-wise operations. The output shape is the broadcast of
-  `pred`, `on_true`, and `on_false`, and the output names merge
-  the names of the three inputs.
+  All three inputs broadcast against each other. The output shape
+  is the broadcast of `pred`, `on_true`, and `on_false`.
+
+  When `pred` is a scalar, the output names merge the names of
+  `on_true` and `on_false`. Otherwise, the output names come from
+  `pred`, and the names of `on_true` and `on_false` are ignored.
+  The axes that `pred` does not have get no name.
 
   ## Examples
 
@@ -7717,7 +7720,7 @@ defmodule Nx do
 
   When the first argument is a tensor:
 
-      iex> Nx.select(Nx.tensor([0, 1, 0], names: [:x]), Nx.tensor([1, 2, 3]), Nx.tensor([4, 5, 6], names: [:x]))
+      iex> Nx.select(Nx.tensor([0, 1, 0], names: [:x]), Nx.tensor([1, 2, 3], names: [:y]), Nx.tensor([4, 5, 6], names: [:z]))
       #Nx.Tensor<
         s32[x: 3]
         [4, 2, 6]
@@ -7725,7 +7728,7 @@ defmodule Nx do
 
       iex> x = Nx.tensor([2, 4, 6], names: [:x])
       iex> y = Nx.tensor([3, 2, 1])
-      iex> Nx.select(Nx.greater(x, y), Nx.tensor([2, 4, 6]), Nx.tensor([1, 3, 5]))
+      iex> Nx.select(Nx.greater(x, y), Nx.tensor([2, 4, 6], names: [:i]), Nx.tensor([1, 3, 5], names: [:j]))
       #Nx.Tensor<
         s32[x: 3]
         [1, 4, 6]
@@ -7827,7 +7830,7 @@ defmodule Nx do
   """
   @doc type: :element
   def select(pred, on_true, on_false) do
-    pred = to_tensor(pred)
+    %T{shape: pred_shape} = pred = to_tensor(pred)
     [pred, on_true, on_false] = broadcast_vectors([pred, on_true, on_false], align_ranks: true)
 
     %T{vectorized_axes: vectorized_axes} = pred
@@ -7838,8 +7841,18 @@ defmodule Nx do
 
     output_type = binary_type(on_true, on_false)
 
+    # A non-scalar pred gives the output names, so the names of on_true and on_false are ignored.
+    names_of = fn %T{shape: shape, names: names} ->
+      if pred_shape == {}, do: names, else: List.duplicate(nil, tuple_size(shape))
+    end
+
     {shape, names} =
-      Nx.Shape.binary_broadcast(on_true.shape, on_true.names, on_false.shape, on_false.names)
+      Nx.Shape.binary_broadcast(
+        on_true.shape,
+        names_of.(on_true),
+        on_false.shape,
+        names_of.(on_false)
+      )
 
     {output_shape, output_names} =
       Nx.Shape.binary_broadcast(pred.shape, pred.names, shape, names)

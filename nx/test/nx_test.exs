@@ -3505,13 +3505,9 @@ defmodule NxTest do
       end
     end
 
-    test "merges the names of the inputs as other element-wise operations" do
+    test "takes the names from a non-scalar pred" do
       pred = Nx.tensor([1, 0, 1], type: :u8, names: [:y])
-      assert Nx.select(pred, Nx.iota({2, 3}, names: [:x, nil]), 0).names == [:x, :y]
-
-      assert_raise ArgumentError, ~r/cannot merge name :y on axis 1 with name :z/, fn ->
-        Nx.select(pred, Nx.iota({2, 3}, names: [nil, :z]), 0)
-      end
+      assert Nx.select(pred, Nx.iota({2, 3}, names: [:x, :z]), 0).names == [nil, :y]
     end
 
     test "works with vectorized scalar pred" do
