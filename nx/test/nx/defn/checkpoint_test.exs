@@ -551,6 +551,35 @@ defmodule Nx.Defn.CheckpointTest do
     end
   end
 
+  # --- Tensors read from the enclosing scope ---
+
+  describe "tensors read from the enclosing scope" do
+    defn captured_weight_loss(x, w) do
+      Nx.sum(checkpoint(x, fn x -> Nx.sin(Nx.dot(x, w)) end))
+    end
+
+    defn plain_weight_loss(x, w) do
+      Nx.sum(Nx.sin(Nx.dot(x, w)))
+    end
+
+    test "the forward value matches the plain function" do
+      x = Nx.tensor([[0.5, 1.0], [1.5, 2.0]])
+      w = Nx.tensor([[0.5, -0.3], [0.2, 0.8]])
+
+      assert_all_close(captured_weight_loss(x, w), plain_weight_loss(x, w))
+    end
+
+    defn grad_captured_weight(x, w), do: grad(w, &captured_weight_loss(x, &1))
+    defn grad_plain_weight(x, w), do: grad(w, &plain_weight_loss(x, &1))
+
+    test "the gradient of the captured weight matches the plain function" do
+      x = Nx.tensor([[0.5, 1.0], [1.5, 2.0]])
+      w = Nx.tensor([[0.5, -0.3], [0.2, 0.8]])
+
+      assert_all_close(grad_captured_weight(x, w), grad_plain_weight(x, w))
+    end
+  end
+
   # --- Gradient w.r.t. weights (training use case) ---
 
   describe "gradient w.r.t. weights" do
