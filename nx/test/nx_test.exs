@@ -815,10 +815,13 @@ defmodule NxTest do
              """
     end
 
-    test "cannot build an empty tensor" do
-      assert_raise(ArgumentError, "cannot build an empty tensor", fn ->
-        Nx.from_binary(<<>>, {:f, 64})
-      end)
+    test "an empty tensor" do
+      assert inspect(Nx.from_binary(<<>>, {:f, 64})) == """
+             #Nx.Tensor<
+               f64[0]
+               []
+             >\
+             """
     end
 
     test "all dimensions named" do
@@ -1526,10 +1529,9 @@ defmodule NxTest do
       assert Nx.tensor(:nan) == Nx.Constants.nan()
     end
 
-    test "raises for empty list" do
-      assert_raise(ArgumentError, "invalid value given to Nx.tensor/1, got: []", fn ->
-        Nx.tensor([])
-      end)
+    test "builds a zero-size f32 tensor from an empty list" do
+      assert Nx.shape(Nx.tensor([])) == {0}
+      assert Nx.type(Nx.tensor([])) == {:f, 32}
     end
 
     test "raises for non-numeric list" do
@@ -1559,10 +1561,8 @@ defmodule NxTest do
   end
 
   describe "from_binary/3" do
-    test "raises for empty bitstring" do
-      assert_raise(ArgumentError, "cannot build an empty tensor", fn ->
-        Nx.from_binary("", {:u, 32})
-      end)
+    test "builds a zero-size tensor from an empty bitstring" do
+      assert Nx.shape(Nx.from_binary("", {:u, 32})) == {0}
     end
 
     test "round-trips sub-byte tensors whose binary is not byte-aligned" do

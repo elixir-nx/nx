@@ -553,7 +553,7 @@ defmodule Nx.Defn.Grad do
         {parents, nodes} = parents_tree(body, ids, keep_names: false)
 
         {grads, []} =
-          Composite.reduce(body, {grads, gs}, fn arg, {grads, [g | gs]} ->
+          Composite.reduce(body, {%{}, gs}, fn arg, {grads, [g | gs]} ->
             {Map.put(grads, arg.data.id, [g]), gs}
           end)
 
@@ -602,7 +602,7 @@ defmodule Nx.Defn.Grad do
             |> clear_axis_names()
             |> squeeze_to_shape(target_shape)
 
-          {Map.put(grads, to_grad.data.id, [elem]), rest}
+          {Map.update(grads, to_grad.data.id, [elem], &[elem | &1]), rest}
         end)
 
       # We don't replace nodes for cond because the checks are cheap (scalar values)
