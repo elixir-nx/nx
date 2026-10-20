@@ -185,7 +185,7 @@ defmodule Torchx.Backend do
 
     m
     |> Torchx.eye(n, to_torch_type(type, device), device)
-    |> Torchx.broadcast_to(shape)
+    |> Torchx.broadcast_to(shape, false)
     |> to_nx(out)
   end
 
@@ -230,7 +230,7 @@ defmodule Torchx.Backend do
     aten = Torchx.reshape(aten, reshape)
 
     # Now broadcast the tensor using the original shape
-    Torchx.broadcast_to(aten, shape) |> to_nx(out)
+    Torchx.broadcast_to(aten, shape, false) |> to_nx(out)
   end
 
   ## Transfer
@@ -439,7 +439,7 @@ defmodule Torchx.Backend do
 
   @impl true
   def reshape(%T{shape: shape} = out, %T{} = t),
-    do: Torchx.reshape(from_nx(t), shape) |> to_nx(out)
+    do: Torchx.reshape(from_nx(t), shape, t.donatable?) |> to_nx(out)
 
   @impl true
   def as_type(%T{type: type} = out, %T{} = t) do
@@ -448,7 +448,7 @@ defmodule Torchx.Backend do
     target_torch_type = to_torch_type(type, device)
 
     t_tx
-    |> Torchx.to_type(target_torch_type)
+    |> Torchx.to_type(target_torch_type, t.donatable?)
     |> bitmask(type)
     |> to_nx(out)
   end
@@ -456,10 +456,11 @@ defmodule Torchx.Backend do
   @impl true
   def squeeze(out, %T{} = t, axes) do
     # sort the axes desc so we don't have to decrease the axis numbers after each squeeze
-    result =
-      for axis <- Enum.sort(axes, :desc), reduce: from_nx(t) do
-        t_tx ->
-          Torchx.squeeze(t_tx, axis)
+    # Only the first squeeze reads the input. The rest read the previous result.
+    {result, _donate} =
+      for axis <- Enum.sort(axes, :desc), reduce: {from_nx(t), t.donatable?} do
+        {t_tx, donate} ->
+          {Torchx.squeeze(t_tx, axis, donate), true}
       end
 
     to_nx(result, out)
@@ -470,7 +471,7 @@ defmodule Torchx.Backend do
     t
     |> maybe_reshape(shape, axes)
     |> from_nx()
-    |> Torchx.broadcast_to(shape)
+    |> Torchx.broadcast_to(shape, nil, t.donatable?)
     |> to_nx(out)
   end
 
@@ -497,7 +498,7 @@ defmodule Torchx.Backend do
 
   @impl true
   def transpose(out, %T{} = t, axes) do
-    Torchx.permute(from_nx(t), axes) |> to_nx(out)
+    Torchx.permute(from_nx(t), axes, t.donatable?) |> to_nx(out)
   end
 
   @impl true
@@ -510,11 +511,11 @@ defmodule Torchx.Backend do
       ) do
     t
     |> from_nx()
-    |> torchx_slice(input_shape, start_indices, lengths, strides)
+    |> torchx_slice(input_shape, start_indices, lengths, strides, t.donatable?)
     |> to_nx(out)
   end
 
-  defp torchx_slice(t, input_shape, start_indices, lengths, strides) do
+  defp torchx_slice(t, input_shape, start_indices, lengths, strides, donate \\ false) do
     starts =
       start_indices
       |> Enum.zip(lengths)
@@ -522,7 +523,7 @@ defmodule Torchx.Backend do
         min(to_number(start), elem(input_shape, axis) - len)
       end)
 
-    Torchx.slice(t, starts, lengths, strides)
+    Torchx.slice(t, starts, lengths, strides, donate)
   end
 
   @impl true
@@ -540,13 +541,19 @@ defmodule Torchx.Backend do
       end)
 
     input_tx_typed =
-      input_tx |> Torchx.to_type(to_torch_type(out.type, device_from_ref(input_tx)))
+      input_tx
+      |> Torchx.to_type(to_torch_type(out.type, device_from_ref(input_tx)), input.donatable?)
 
     slice_tx =
-      slice |> from_nx() |> Torchx.to_type(to_torch_type(out.type, device_from_ref(input_tx)))
+      slice
+      |> from_nx()
+      |> Torchx.to_type(to_torch_type(out.type, device_from_ref(input_tx)), slice.donatable?)
+
+    # A cast to another type is a new tensor that nothing else reads.
+    donate? = input.donatable? or input.type != out.type
 
     input_tx_typed
-    |> Torchx.put(start_indices, slice_tx)
+    |> Torchx.put(start_indices, slice_tx, donate?)
     |> to_nx(out)
   end
 
@@ -633,7 +640,7 @@ defmodule Torchx.Backend do
 
         {
           &Nx.transpose(&1, axes: permutation),
-          &Torchx.permute(&1, inverse_permutation)
+          &Torchx.permute(&1, inverse_permutation, true)
         }
       else
         {& &1, & &1}
@@ -647,14 +654,26 @@ defmodule Torchx.Backend do
       updates
       |> from_nx()
       |> then(fn result_tx ->
-        Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
+        Torchx.to_type(
+          result_tx,
+          to_torch_type(out.type, device_from_ref(result_tx)),
+          updates.donatable?
+        )
       end)
+
+    # The tensor is permuted as a view of the input, so a donated input stays
+    # donated. A cast to another type is a new tensor that nothing else reads.
+    donate? = tensor.donatable? or tensor.type != out.type
 
     tensor_tx
     |> then(fn result_tx ->
-      Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
+      Torchx.to_type(
+        result_tx,
+        to_torch_type(out.type, device_from_ref(result_tx)),
+        tensor.donatable?
+      )
     end)
-    |> Torchx.index_put(indices_tx, updates_tx, accumulate?)
+    |> Torchx.index_put(indices_tx, updates_tx, accumulate?, donate?)
     |> then(inverse_permutation_fn)
     |> to_nx(out)
   end
@@ -927,6 +946,17 @@ defmodule Torchx.Backend do
     raise ArithmeticError, "Torchx does not support complex values for atan2"
   end
 
+  # The first operand holds the result of a binary op that reuses a buffer, so
+  # commutative ops swap their operands when only the second one is donatable.
+  @commutative_ops [:add, :multiply, :min, :max]
+
+  defp donated_operand(op, left_tx, right_tx, %T{donatable?: false}, %T{donatable?: true})
+       when op in @commutative_ops,
+       do: {right_tx, left_tx, true}
+
+  defp donated_operand(_op, left_tx, right_tx, left, _right),
+    do: {left_tx, right_tx, left.donatable?}
+
   ops = [:add, :subtract, :multiply, :pow, :left_shift]
 
   for op <- ops do
@@ -934,25 +964,39 @@ defmodule Torchx.Backend do
     def unquote(op)(out, l, r) do
       {left, right} = maybe_upcast(l, r)
       {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
-      result = Torchx.unquote(op)(left_tx, right_tx)
+      {left_tx, right_tx, donate} = donated_operand(unquote(op), left_tx, right_tx, left, right)
+      result = Torchx.unquote(op)(left_tx, right_tx, donate)
 
       result
       |> bitmask(out.type)
       |> then(fn result_tx ->
-        Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
+        Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)), true)
       end)
       |> to_nx(out)
     end
   end
 
   defp bitmask({device, _} = tensor, {:u, 16}),
-    do: Torchx.bitwise_and(tensor, Torchx.scalar_tensor(0xFFFF, :int, device))
+    do: Torchx.bitwise_and(tensor, Torchx.scalar_tensor(0xFFFF, :int, device), true)
 
   defp bitmask({device, _} = tensor, {:u, 32}),
-    do: Torchx.bitwise_and(tensor, Torchx.scalar_tensor(0xFFFF_FFFF, :long, device))
+    do: Torchx.bitwise_and(tensor, Torchx.scalar_tensor(0xFFFF_FFFF, :long, device), true)
 
   defp bitmask(tensor, {_, _}),
     do: tensor
+
+  # Only ops whose result has the type of their input can reuse its buffer.
+  for op <- [:min, :max, :divide, :quotient, :atan2, :right_shift] do
+    defp torchx_binary(unquote(op), left_tx, right_tx, donate),
+      do: Torchx.unquote(op)(left_tx, right_tx, donate)
+  end
+
+  for op <-
+        [:logical_and, :logical_or, :logical_xor] ++
+          [:equal, :not_equal, :greater, :less, :greater_equal, :less_equal] do
+    defp torchx_binary(unquote(op), left_tx, right_tx, _donate),
+      do: Torchx.unquote(op)(left_tx, right_tx)
+  end
 
   ops =
     [:min, :max, :divide, :quotient, :atan2] ++
@@ -965,11 +1009,12 @@ defmodule Torchx.Backend do
       {left, right} = maybe_upcast(l, r)
       {left_tx, right_tx} = maybe_broadcast_bin_args(out.shape, left, right)
 
-      result_tx = Torchx.unquote(op)(left_tx, right_tx)
+      {left_tx, right_tx, donate} = donated_operand(unquote(op), left_tx, right_tx, left, right)
+      result_tx = torchx_binary(unquote(op), left_tx, right_tx, donate)
       device = device_from_ref(result_tx)
 
       result_tx
-      |> Torchx.to_type(to_torch_type(out.type, device))
+      |> Torchx.to_type(to_torch_type(out.type, device), true)
       |> to_nx(out)
     end
   end
@@ -1049,23 +1094,13 @@ defmodule Torchx.Backend do
 
   # false keeps a view of the input. The op allocates its own result.
   defp maybe_broadcast_bin_args(out_shape, l, r) do
-    l_tx =
-      case l.shape do
-        ^out_shape ->
-          from_nx(l)
-
-        _ ->
-          l |> from_nx() |> Torchx.broadcast_to(out_shape, false)
-      end
-
-    r_tx =
-      case r.shape do
-        ^out_shape -> from_nx(r)
-        _ -> r |> from_nx() |> Torchx.broadcast_to(out_shape, false)
-      end
-
-    {l_tx, r_tx}
+    {broadcast_bin_arg(out_shape, l), broadcast_bin_arg(out_shape, r)}
   end
+
+  defp broadcast_bin_arg(out_shape, %T{shape: out_shape} = t), do: from_nx(t)
+
+  defp broadcast_bin_arg(out_shape, %T{} = t),
+    do: t |> from_nx() |> Torchx.broadcast_to(out_shape, false, t.donatable?)
 
   for op <- [:bitwise_and, :bitwise_or, :bitwise_xor] do
     @impl true
@@ -1076,9 +1111,9 @@ defmodule Torchx.Backend do
       %T{type: {_, size_right}} = right
 
       if size_left >= size_right do
-        Torchx.unquote(op)(from_nx(left), from_nx(right))
+        Torchx.unquote(op)(from_nx(left), from_nx(right), left.donatable?)
       else
-        Torchx.unquote(op)(from_nx(right), from_nx(left))
+        Torchx.unquote(op)(from_nx(right), from_nx(left), right.donatable?)
       end
       |> to_nx(out)
     end
@@ -1112,8 +1147,14 @@ defmodule Torchx.Backend do
 
   for op <- unary_ops do
     @impl true
-    def unquote(op)(out, tensor) do
-      Torchx.unquote(op)(from_nx(tensor)) |> to_nx(out)
+    if op in [:cbrt, :is_nan, :is_infinity] do
+      def unquote(op)(out, tensor) do
+        Torchx.unquote(op)(from_nx(tensor)) |> to_nx(out)
+      end
+    else
+      def unquote(op)(out, tensor) do
+        Torchx.unquote(op)(from_nx(tensor), tensor.donatable?) |> to_nx(out)
+      end
     end
   end
 
@@ -1126,9 +1167,13 @@ defmodule Torchx.Backend do
     tensor
     |> from_nx()
     |> then(fn result_tx ->
-      Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
+      Torchx.to_type(
+        result_tx,
+        to_torch_type(out.type, device_from_ref(result_tx)),
+        tensor.donatable?
+      )
     end)
-    |> Torchx.conjugate()
+    |> Torchx.conjugate(true)
     |> to_nx(out)
   end
 
@@ -1145,12 +1190,13 @@ defmodule Torchx.Backend do
   defp get_complex_component(out, tensor, component) do
     tensor
     |> from_nx()
-    |> get_complex_component_tx(tensor.shape, component)
+    |> get_complex_component_tx(tensor.shape, component, tensor.donatable?)
     |> to_nx(out)
   end
 
-  defp get_complex_component_tx(tensor_tx, shape, component) when component in [:real, :imag] do
-    as_real = Torchx.view_as_real(tensor_tx)
+  defp get_complex_component_tx(tensor_tx, shape, component, donate \\ false)
+       when component in [:real, :imag] do
+    as_real = Torchx.view_as_real(tensor_tx, donate)
 
     as_real_shape = Torchx.shape(as_real)
 
@@ -1167,8 +1213,8 @@ defmodule Torchx.Backend do
     strides = List.duplicate(1, tuple_size(as_real_shape))
 
     as_real
-    |> torchx_slice(as_real_shape, starts, lengths, strides)
-    |> Torchx.reshape(shape)
+    |> torchx_slice(as_real_shape, starts, lengths, strides, true)
+    |> Torchx.reshape(shape, true)
   end
 
   @impl true
@@ -1980,12 +2026,13 @@ defmodule Torchx.Backend do
 
   @impl true
   # u64 is emulated with s64
-  def bitcast(%{type: {:s, 64}} = out, %T{type: {:u, 64}, data: data}) do
-    %{out | data: data}
+  # The result is a view, so it does not share a buffer handle with the input.
+  def bitcast(%{type: {:s, 64}} = out, %T{type: {:u, 64}} = tensor) do
+    tensor |> from_nx() |> Torchx.reshape(out.shape) |> to_nx(out)
   end
 
-  def bitcast(%{type: {:u, 64}} = out, %T{type: {:s, 64}, data: data}) do
-    %{out | data: data}
+  def bitcast(%{type: {:u, 64}} = out, %T{type: {:s, 64}} = tensor) do
+    tensor |> from_nx() |> Torchx.reshape(out.shape) |> to_nx(out)
   end
 
   # u16/u32 are double the size of s16/u32
@@ -2056,9 +2103,12 @@ defmodule Torchx.Backend do
         device_ref
       end
 
+    # Backend results are new tensors, so they do not inherit the donatable
+    # mark of the input the output template was copied from.
     %{
       t
-      | data: %__MODULE__{ref: check_shape_and_type!(t_tx, shape, type)}
+      | data: %__MODULE__{ref: check_shape_and_type!(t_tx, shape, type)},
+        donatable?: false
     }
   end
 
