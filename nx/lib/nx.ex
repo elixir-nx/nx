@@ -7402,7 +7402,14 @@ defmodule Nx do
             "Nx.block/4 expected a default fun/#{arity} for #{length(args)} argument(s), got: #{inspect(fun)}"
     end
 
-    backend = Nx.Shared.list_impl!(args)
+    # A block without arguments reads everything it needs from the enclosing
+    # scope, so there is no tensor to pick the backend from.
+    backend =
+      case args do
+        [] -> if Nx.Defn.Compiler.current(), do: Nx.Defn.Expr, else: elem(Nx.default_backend(), 0)
+        _ -> Nx.Shared.list_impl!(args)
+      end
+
     backend.block(struct, output, args, fun)
   end
 

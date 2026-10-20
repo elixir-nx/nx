@@ -937,32 +937,105 @@ defmodule Nx.DefnTest do
       defstruct []
     end
 
-    test "raises when the body mixes an argument with a tensor from the enclosing scope" do
-      assert_raise RuntimeError, ~r/expressions come from different contexts/, fn ->
+    @tag compiler: Evaluator
+    test "lifts a tensor read from the enclosing scope into a block argument" do
+      x = Nx.tensor([1.0, 2.0, 3.0])
+      weight = Nx.tensor([2.0, 3.0, 4.0])
+
+      result =
         Nx.Defn.jit(fn x, weight ->
           Nx.block(%VectorizedNonlinear{}, [x], nil, fn _, x -> Nx.multiply(x, weight) end)
-        end).(Nx.tensor([1.0, 2.0, 3.0]), Nx.tensor([2.0, 3.0, 4.0]))
-      end
+        end).(x, weight)
+
+      assert_equal(result, Nx.tensor([2.0, 6.0, 12.0]))
     end
 
-    test "raises when the body returns a tensor from the enclosing scope" do
-      assert_raise ArgumentError, ~r/returned a tensor from the enclosing scope/, fn ->
+    @tag compiler: Evaluator
+    test "lifts a tensor returned unchanged from the enclosing scope" do
+      x = Nx.tensor([1.0, 2.0])
+      y = Nx.tensor([3.0, 4.0])
+
+      result =
         Nx.Defn.jit(fn x, y ->
           Nx.block(%VectorizedNonlinear{}, [x], nil, fn _, _x -> y end)
-        end).(Nx.tensor([1.0, 2.0]), Nx.tensor([3.0, 4.0]))
-      end
+        end).(x, y)
+
+      assert_equal(result, y)
     end
 
-    test "raises when the body reads a tensor from the enclosing scope inside grad" do
-      assert_raise RuntimeError, ~r/expressions come from different contexts/, fn ->
+    @tag compiler: Evaluator
+    test "lists lifted tensors after the explicit arguments of the block" do
+      x = Nx.tensor([1.0, 2.0, 3.0])
+      weight = Nx.tensor([2.0, 3.0, 4.0])
+
+      expr =
+        Nx.Defn.debug_expr(fn x, weight ->
+          Nx.block(%VectorizedNonlinear{}, [x], nil, fn _, x -> Nx.multiply(x, weight) end)
+        end).(x, weight)
+
+      assert %Nx.Tensor{data: %Nx.Defn.Expr{op: :block, args: [_struct, in_args, _body, _fun]}} =
+               expr
+
+      assert [
+               %Nx.Tensor{data: %Nx.Defn.Expr{op: :parameter, args: [0]}},
+               %Nx.Tensor{data: %Nx.Defn.Expr{op: :parameter, args: [1]}}
+             ] = in_args
+    end
+
+    @tag compiler: Evaluator
+    test "differentiates a tensor read from the enclosing scope" do
+      x = Nx.tensor([[0.5, 1.0], [1.5, 2.0]])
+      w = Nx.tensor([[0.5, -0.3], [0.2, 0.8]])
+
+      with_block =
         Nx.Defn.jit(fn x, w ->
           grad(w, fn w ->
             Nx.sum(
               Nx.block(%VectorizedNonlinear{}, [x], nil, fn _, x -> Nx.sin(Nx.dot(x, w)) end)
             )
           end)
-        end).(Nx.tensor([[0.5, 1.0], [1.5, 2.0]]), Nx.tensor([[0.5, -0.3], [0.2, 0.8]]))
-      end
+        end).(x, w)
+
+      plain = Nx.Defn.jit(fn x, w -> grad(w, fn w -> Nx.sum(Nx.sin(Nx.dot(x, w))) end) end).(x, w)
+      assert_all_close(with_block, plain)
+    end
+
+    @tag compiler: Evaluator
+    test "lifts every tensor of a block without arguments" do
+      x = Nx.tensor([1.0, 2.0, 3.0])
+      weight = Nx.tensor([2.0, 3.0, 4.0])
+
+      result =
+        Nx.Defn.jit(fn x, weight ->
+          Nx.block(%VectorizedNonlinear{}, [], nil, fn _ -> Nx.multiply(x, weight) end)
+        end).(x, weight)
+
+      assert_equal(result, Nx.tensor([2.0, 6.0, 12.0]))
+
+      expr =
+        Nx.Defn.debug_expr(fn x, weight ->
+          Nx.block(%VectorizedNonlinear{}, [], nil, fn _ -> Nx.multiply(x, weight) end)
+        end).(x, weight)
+
+      assert %Nx.Tensor{data: %Nx.Defn.Expr{op: :block, args: [_struct, in_args, _body, _fun]}} =
+               expr
+
+      assert [
+               %Nx.Tensor{data: %Nx.Defn.Expr{op: :parameter, args: [0]}},
+               %Nx.Tensor{data: %Nx.Defn.Expr{op: :parameter, args: [1]}}
+             ] = in_args
+    end
+
+    @tag compiler: Evaluator
+    test "a concrete tensor from the enclosing scope stays a constant in the body" do
+      weight = Nx.tensor([2.0, 3.0, 4.0])
+
+      result =
+        Nx.Defn.jit(fn x ->
+          Nx.block(%VectorizedNonlinear{}, [x], nil, fn _, x -> Nx.multiply(x, weight) end)
+        end).(Nx.tensor([1.0, 2.0, 3.0]))
+
+      assert_equal(result, Nx.tensor([2.0, 6.0, 12.0]))
     end
 
     @tag compiler: Evaluator

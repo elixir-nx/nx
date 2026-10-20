@@ -54,6 +54,9 @@ defmodule Nx.Defn.Expr do
   alias Nx.Defn.{Composite, Expr}
   alias Nx.Tensor, as: T
 
+  # Set while a block body is traced; see block_body_context/1.
+  @block_context_key {__MODULE__, :block_context}
+
   import Nx.Shared
 
   @enforce_keys [:id, :op, :args, :context]
@@ -843,38 +846,69 @@ defmodule Nx.Defn.Expr do
     # vectorized view and the result is vectorized again on the way out.
     vectorized_axes = Enum.map(args, & &1.vectorized_axes)
     devectorized_args = Enum.map(args, &Nx.devectorize/1)
-    in_args = devectorized_args ++ opts
 
-    # The body gets its own context, so an operation that mixes a parameter
-    # with a tensor from the enclosing scope fails when the block is built.
-    # Compilers run the body as a function of its arguments alone and cannot
-    # reach such a tensor.
-    body_context = new_context(:block)
+    # The body gets a context of its own that remembers the enclosing one.
+    # Compilers run the body as a function of its arguments alone, so a
+    # tensor the body reads from the enclosing scope has to become an
+    # argument. Operations that mix a parameter with such a tensor keep the
+    # body context, and the tensor itself is found below and lifted.
+    # Without arguments the parent is unknown until the body is traced, so the
+    # context is allowed to absorb any scope a block can be nested in.
+    body_context = {:block, make_ref(), parent_context || :any}
 
     params =
       Enum.with_index(devectorized_args, fn arg, pos -> parameter(arg, body_context, pos) end)
 
     vectorized_params = Enum.zip_with(params, vectorized_axes, &vectorize_axes/2)
-    traced = apply(fun, [struct | vectorized_params ++ opts])
+    # Every node built while the body is traced belongs to the body, even one
+    # built from enclosing tensors alone, so that only the tensors the body
+    # reads are lifted and the work stays inside the block.
+    previous_body_context = Process.put(@block_context_key, body_context)
 
-    # A tensor from the enclosing scope returned as is would bypass the check
-    # above. Outside a trace the arguments have no context to compare with.
-    if parent_context != nil do
-      Composite.reduce(traced, nil, fn %{data: %{context: traced_context}}, acc ->
-        if traced_context == parent_context do
-          raise ArgumentError,
-                "the function given to Nx.block returned a tensor from the enclosing scope. " <>
-                  "Every tensor the function uses must be given as one of the block arguments"
+    traced =
+      try do
+        apply(fun, [struct | vectorized_params ++ opts])
+      after
+        if previous_body_context do
+          Process.put(@block_context_key, previous_body_context)
+        else
+          Process.delete(@block_context_key)
         end
-
-        acc
-      end)
-    end
+      end
 
     out_vectorized_axes = [traced] |> Composite.flatten_list() |> Enum.map(& &1.vectorized_axes)
-    fun = vectorized_block_fun(fun, vectorized_axes, length(opts))
 
-    case Composite.traverse(traced, &Nx.devectorize/1) do
+    body = Composite.traverse(traced, &Nx.devectorize/1)
+
+    # Outside a trace a defn the body calls is compiled on its own with root
+    # parameters, so nothing is lifted there.
+    {body, captured, captured_params} =
+      case Nx.Defn.Compiler.current() do
+        nil -> {body, [], []}
+        _ -> lift_captured(body, body_context, length(args))
+      end
+
+    in_args = devectorized_args ++ captured ++ opts
+
+    context =
+      case {parent_context, captured} do
+        {nil, [_ | _]} -> captured |> to_exprs() |> elem(1) || :root
+        _ -> context
+      end
+
+    # The user's function cannot receive the lifted tensors, so once something
+    # was lifted the block is rerun from its traced body instead.
+    fun =
+      case captured do
+        [] ->
+          vectorized_block_fun(fun, vectorized_axes, length(opts))
+
+        _ ->
+          param_ids = Enum.map(params ++ captured_params, & &1.data.id)
+          instantiating_block_fun(body, param_ids, length(opts))
+      end
+
+    case body do
       %{} = res ->
         res
         |> expr(context, :block, [struct, in_args, res, fun])
@@ -884,6 +918,109 @@ defmodule Nx.Defn.Expr do
         out = tuple_out(tuple_size(t))
         node = expr(out, context, :block, [struct, in_args, t, fun])
         revectorize_block_result(tuple(node, Tuple.to_list(t)), out_vectorized_axes)
+    end
+  end
+
+  # Walks the traced body and replaces every tensor that carries a context
+  # other than the body's own with a new parameter. Those tensors come from
+  # the enclosing scopes and become extra block arguments, in the order they
+  # are met. Constants carry no context and stay in the body.
+  defp lift_captured(body, body_context, first_pos) do
+    {body, {captured, _cache}} =
+      Composite.traverse(body, {[], %{}}, &lift_captured_node(&1, body_context, first_pos, &2))
+
+    captured = Enum.reverse(captured)
+    {body, Enum.map(captured, &elem(&1, 0)), Enum.map(captured, &elem(&1, 1))}
+  end
+
+  defp lift_captured_node(
+         %T{data: %Expr{id: id, context: node_context}} = tensor,
+         body_context,
+         first_pos,
+         {captured, cache}
+       ) do
+    case cache do
+      %{^id => replaced} ->
+        {replaced, {captured, cache}}
+
+      %{} ->
+        cond do
+          node_context == body_context ->
+            {args, {captured, cache}} =
+              Nx.Defn.Tree.apply_args(
+                tensor,
+                :scope,
+                {captured, cache},
+                &lift_captured_node(&1, body_context, first_pos, &2)
+              )
+
+            tensor = put_in(tensor.data.args, args)
+            {tensor, {captured, Map.put(cache, id, tensor)}}
+
+          node_context == nil ->
+            {tensor, {captured, cache}}
+
+          true ->
+            param = parameter(tensor, body_context, first_pos + length(captured))
+            {param, {[{tensor, param} | captured], Map.put(cache, id, param)}}
+        end
+    end
+  end
+
+  # Rebuilds the traced body with the given tensors in place of its
+  # parameters. Expression arguments give a fresh copy of the body in the
+  # caller's graph; concrete arguments evaluate it.
+  defp instantiating_block_fun(body, param_ids, opts_count) do
+    tensors_count = length(param_ids)
+
+    block_fun(tensors_count + opts_count, fn _struct, args ->
+      {tensors, _opts} = Enum.split(args, tensors_count)
+
+      if Enum.all?(tensors, &match?(%T{data: %Expr{}}, &1)) do
+        instantiate(body, param_ids, tensors)
+      else
+        Nx.Defn.jit(fn tensors -> instantiate(body, param_ids, Tuple.to_list(tensors)) end).(
+          List.to_tuple(tensors)
+        )
+      end
+    end)
+  end
+
+  defp instantiate(body, param_ids, tensors) do
+    substitutions = Map.new(Enum.zip(param_ids, tensors))
+
+    {body, _cache} =
+      Composite.traverse(body, %{}, &instantiate_node(&1, substitutions, &2))
+
+    body
+  end
+
+  defp instantiate_node(%T{data: %Expr{id: id}} = tensor, substitutions, cache) do
+    case {substitutions, cache} do
+      {%{^id => replacement}, _} ->
+        {replacement, cache}
+
+      {_, %{^id => rebuilt}} ->
+        {rebuilt, cache}
+
+      _ ->
+        # The rebuilt node takes its context from its new arguments, like a
+        # node built by an operation would.
+        {args, {cache, node_context}} =
+          Nx.Defn.Tree.apply_args(tensor, :scope, {cache, nil}, fn arg, {cache, node_context} ->
+            {arg, cache} = instantiate_node(arg, substitutions, cache)
+            {arg, {cache, merge_context!(arg, node_context)}}
+          end)
+
+        rebuilt = %{tensor | data: %{tensor.data | id: id(), args: args}}
+
+        rebuilt =
+          case node_context do
+            nil -> rebuilt
+            _ -> %{rebuilt | data: %{rebuilt.data | context: node_context}}
+          end
+
+        {rebuilt, Map.put(cache, id, rebuilt)}
     end
   end
 
@@ -914,7 +1051,7 @@ defmodule Nx.Defn.Expr do
 
   defp block_fun(arity, _body) do
     raise ArgumentError,
-          "blocks with vectorized arguments support up to 253 arguments, got: #{arity}"
+          "blocks that wrap their function, because their arguments are vectorized or the body reads tensors from the enclosing scope, support up to 253 arguments, got: #{arity}"
   end
 
   defp revectorize_block_result(result, out_vectorized_axes) do
@@ -1436,6 +1573,7 @@ defmodule Nx.Defn.Expr do
 
   defp expr(tensor, context, op, args) do
     args = promote_constants(tensor, args)
+    context = block_body_context(context)
 
     %{tensor | data: %Expr{id: id(), op: op, args: args, context: context}, donatable?: false}
   end
@@ -1549,37 +1687,83 @@ defmodule Nx.Defn.Expr do
   end
 
   defp merge_context!(%{data: %{context: context}}, acc) do
-    if context != acc and context != nil and acc != nil do
-      raise """
-      cannot build defn because expressions come from different contexts: \
-      #{inspect(context)} and #{inspect(acc)}.
+    cond do
+      context == acc or context == nil or acc == nil ->
+        context || acc
 
-      This typically happens on "while" and inside anonymous functions when you \
-      try to access an external variable. All variables you intend to use inside \
-      "while" or anonymous functions in defn must be explicitly given as arguments.
-      For example, this is not valid:
+      # A block body may read tensors from the scopes that enclose it. The
+      # block context records its parent, so those scopes are the chain of
+      # parents. The tensors are lifted into block arguments afterwards.
+      block_context_within?(context, acc) ->
+        context
 
-          defn increment_by_y_while_less_than_10(y) do
-            while x = 0, Nx.less(x, 10) do
-              x + y
+      block_context_within?(acc, context) ->
+        acc
+
+      true ->
+        raise """
+        cannot build defn because expressions come from different contexts: \
+        #{inspect(context)} and #{inspect(acc)}.
+
+        This typically happens on "while" and inside anonymous functions when you \
+        try to access an external variable. All variables you intend to use inside \
+        "while" or anonymous functions in defn must be explicitly given as arguments.
+        For example, this is not valid:
+
+            defn increment_by_y_while_less_than_10(y) do
+              while x = 0, Nx.less(x, 10) do
+                x + y
+              end
             end
-          end
 
-      In the example above, we want to increment "x" by "y" while it is less than 10. \
-      However, the code won't compile because "y" is used inside "while" but not \
-      explicitly defined as part of "while". You must fix it like so:
+        In the example above, we want to increment "x" by "y" while it is less than 10. \
+        However, the code won't compile because "y" is used inside "while" but not \
+        explicitly defined as part of "while". You must fix it like so:
 
-          defn increment_by_y_while_less_than_10(y) do
-            while {x = 0, y}, Nx.less(x, 10) do
-              {x + y, y}
+            defn increment_by_y_while_less_than_10(y) do
+              while {x = 0, y}, Nx.less(x, 10) do
+                {x + y, y}
+              end
             end
-          end
 
-      """
+        """
     end
-
-    context || acc
   end
+
+  # While a block body is traced, a node whose arguments come only from the
+  # enclosing scopes still belongs to the body.
+  defp block_body_context(context) do
+    case Process.get(@block_context_key) do
+      nil ->
+        context
+
+      # With the parent unknown, scopes of a while inside the body cannot be
+      # told from a while the block sits in, so they are left alone.
+      {:block, _ref, :any} = body_context ->
+        case context do
+          :root -> body_context
+          {:block, _ref, _parent} -> body_context
+          _ -> context
+        end
+
+      body_context ->
+        if block_context_within?(body_context, context), do: body_context, else: context
+    end
+  end
+
+  defp block_context_within?({:block, _ref, :any}, outer) do
+    case outer do
+      :root -> true
+      {:while, _ref} -> true
+      {:block, _ref, _parent} -> true
+      _ -> false
+    end
+  end
+
+  defp block_context_within?({:block, _ref, parent}, outer),
+    do: parent == outer or block_context_within?(parent, outer)
+
+  defp block_context_within?(_context, _outer), do: false
 
   @doc """
   Helper for defining an :runtime_call expression node.
