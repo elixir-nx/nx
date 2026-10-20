@@ -3482,26 +3482,29 @@ defmodule NxTest do
   end
 
   describe "select" do
-    # pred {2, 1} is smaller than the output, and on_false is smaller than, larger than or
-    # equal to on_true.
-    for {size, on_true, on_false, expected, vectorized} <- [
-          {"smaller", [[10, 20, 30], [40, 50, 60]], [1, 2, 3], [[10, 20, 30], [1, 2, 3]],
-           [[[10, 20, 30], [1, 2, 3]], [[1, 2, 3], [40, 50, 60]]]},
-          {"larger", [10, 20, 30], [[1, 2, 3], [4, 5, 6]], [[10, 20, 30], [4, 5, 6]],
-           [[[10, 20, 30], [4, 5, 6]], [[1, 2, 3], [10, 20, 30]]]},
-          {"equal", [[10, 20, 30], [40, 50, 60]], [[1, 2, 3], [4, 5, 6]],
-           [[10, 20, 30], [4, 5, 6]], [[[10, 20, 30], [4, 5, 6]], [[1, 2, 3], [40, 50, 60]]]}
-        ] do
-      test "broadcasts a smaller pred when on_false is #{size} than on_true" do
-        pred = Nx.tensor([[1], [0]], type: :u8)
-        result = Nx.select(pred, Nx.tensor(unquote(on_true)), Nx.tensor(unquote(on_false)))
-        assert_equal(result, Nx.tensor(unquote(expected)))
-      end
+    # pred is smaller than the output, and on_false is smaller than, larger than or equal to
+    # on_true.
+    test "broadcasts a smaller pred, vectorized or not" do
+      pred = Nx.tensor([[1], [0]], type: :u8)
+      vectorized_pred = Nx.tensor([[[1], [0]], [[0], [1]]], type: :u8) |> Nx.vectorize(:x)
 
-      test "broadcasts a smaller vectorized pred when on_false is #{size} than on_true" do
-        pred = Nx.tensor([[[1], [0]], [[0], [1]]], type: :u8) |> Nx.vectorize(:x)
-        result = Nx.select(pred, Nx.tensor(unquote(on_true)), Nx.tensor(unquote(on_false)))
-        assert_equal(result, unquote(vectorized) |> Nx.tensor() |> Nx.vectorize(:x))
+      for {on_true, on_false, expected, expected_vectorized} <- [
+            {[[10, 20, 30], [40, 50, 60]], [1, 2, 3], [[10, 20, 30], [1, 2, 3]],
+             [[[10, 20, 30], [1, 2, 3]], [[1, 2, 3], [40, 50, 60]]]},
+            {[10, 20, 30], [[1, 2, 3], [4, 5, 6]], [[10, 20, 30], [4, 5, 6]],
+             [[[10, 20, 30], [4, 5, 6]], [[1, 2, 3], [10, 20, 30]]]},
+            {[[10, 20, 30], [40, 50, 60]], [[1, 2, 3], [4, 5, 6]], [[10, 20, 30], [4, 5, 6]],
+             [[[10, 20, 30], [4, 5, 6]], [[1, 2, 3], [40, 50, 60]]]}
+          ] do
+        on_true = Nx.tensor(on_true)
+        on_false = Nx.tensor(on_false)
+
+        assert_equal(Nx.select(pred, on_true, on_false), Nx.tensor(expected))
+
+        assert_equal(
+          Nx.select(vectorized_pred, on_true, on_false),
+          expected_vectorized |> Nx.tensor() |> Nx.vectorize(:x)
+        )
       end
     end
 
