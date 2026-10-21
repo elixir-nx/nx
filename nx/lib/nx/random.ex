@@ -248,9 +248,9 @@ defmodule Nx.Random do
 
     state = {xs, ks, rotations}
 
-    {_, {{nx1, nx2}, _, _}} =
-      while {x = Nx.tensor(1, type: :u32), state}, x < 6 do
-        {x + Nx.tensor(1, type: :u32), rolled_loop_step(x, state)}
+    {{nx1, nx2}, _, _} =
+      while state, x <- Nx.iota({5}, type: :u32) + 1, unroll: true do
+        rolled_loop_step(x, state)
       end
 
     {nx1, nx2}
@@ -268,7 +268,7 @@ defmodule Nx.Random do
 
   defnp rolled_loop_step(i, {{_xs1, _xs2} = xs, {k1, k2, k3}, {r1, r2}}) do
     {xs1, xs2} =
-      while xs, r <- r1 do
+      while xs, r <- r1, unroll: true do
         apply_round(xs, r)
       end
 
