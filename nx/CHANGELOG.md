@@ -24,6 +24,8 @@
   * [Nx.Defn.Evaluator] Evaluate expressions used by both a `cond` predicate and its branches once, instead of again when the predicate is false
   * [Nx] Keep the input type in `Nx.log2/1`, `Nx.log10/1` and `Nx.log/2` with a number base, instead of returning f32 for every float type narrower than f32, and compute them at f64 precision for f64 input
   * [Nx.LinAlg] Keep the input type in `Nx.LinAlg.invert/1` for f16 and bf16 matrices, instead of returning f32
+  * [Nx.LinAlg] Return the inverse instead of NaN from `Nx.LinAlg.invert/1` for invertible matrices with small entries, and NaN for matrices that are singular to working precision rather than only for an exactly zero determinant
+  * [Nx.LinAlg] Return NaN from `Nx.LinAlg.invert/1` for a singular matrix in a batch, instead of raising on backends whose solve raises for singular matrices
 
 ## v1.0.0 (2026-09-10)
 
