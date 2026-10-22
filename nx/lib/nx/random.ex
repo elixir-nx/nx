@@ -249,7 +249,7 @@ defmodule Nx.Random do
     state = {xs, ks, rotations}
 
     {{nx1, nx2}, _, _} =
-      while state, x <- Nx.iota({5}, type: :u32) + 1, unroll: true do
+      while state, x <- Nx.u32([1, 2, 3, 4, 5]), unroll: true do
         rolled_loop_step(x, state)
       end
 
