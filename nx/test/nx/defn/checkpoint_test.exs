@@ -558,25 +558,24 @@ defmodule Nx.Defn.CheckpointTest do
       Nx.sum(checkpoint(x, fn x -> Nx.sin(Nx.dot(x, w)) end))
     end
 
-    defn plain_weight_loss(x, w) do
-      Nx.sum(Nx.sin(Nx.dot(x, w)))
-    end
-
-    test "the forward value matches the plain function" do
+    test "raises in the forward pass" do
       x = Nx.tensor([[0.5, 1.0], [1.5, 2.0]])
       w = Nx.tensor([[0.5, -0.3], [0.2, 0.8]])
 
-      assert_all_close(captured_weight_loss(x, w), plain_weight_loss(x, w))
+      assert_raise RuntimeError, ~r/expressions come from different contexts/, fn ->
+        captured_weight_loss(x, w)
+      end
     end
 
     defn grad_captured_weight(x, w), do: grad(w, &captured_weight_loss(x, &1))
-    defn grad_plain_weight(x, w), do: grad(w, &plain_weight_loss(x, &1))
 
-    test "the gradient of the captured weight matches the plain function" do
+    test "raises inside grad" do
       x = Nx.tensor([[0.5, 1.0], [1.5, 2.0]])
       w = Nx.tensor([[0.5, -0.3], [0.2, 0.8]])
 
-      assert_all_close(grad_captured_weight(x, w), grad_plain_weight(x, w))
+      assert_raise RuntimeError, ~r/expressions come from different contexts/, fn ->
+        grad_captured_weight(x, w)
+      end
     end
   end
 
