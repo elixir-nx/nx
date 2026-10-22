@@ -3482,6 +3482,37 @@ defmodule NxTest do
   end
 
   describe "select" do
+    # pred is smaller than the output, and on_false is smaller than, larger than or equal to
+    # on_true.
+    test "broadcasts a smaller pred, vectorized or not" do
+      pred = Nx.tensor([[1], [0]], type: :u8)
+      vectorized_pred = Nx.tensor([[[1], [0]], [[0], [1]]], type: :u8) |> Nx.vectorize(:x)
+
+      for {on_true, on_false, expected, expected_vectorized} <- [
+            {[[10, 20, 30], [40, 50, 60]], [1, 2, 3], [[10, 20, 30], [1, 2, 3]],
+             [[[10, 20, 30], [1, 2, 3]], [[1, 2, 3], [40, 50, 60]]]},
+            {[10, 20, 30], [[1, 2, 3], [4, 5, 6]], [[10, 20, 30], [4, 5, 6]],
+             [[[10, 20, 30], [4, 5, 6]], [[1, 2, 3], [10, 20, 30]]]},
+            {[[10, 20, 30], [40, 50, 60]], [[1, 2, 3], [4, 5, 6]], [[10, 20, 30], [4, 5, 6]],
+             [[[10, 20, 30], [4, 5, 6]], [[1, 2, 3], [40, 50, 60]]]}
+          ] do
+        on_true = Nx.tensor(on_true)
+        on_false = Nx.tensor(on_false)
+
+        assert_equal(Nx.select(pred, on_true, on_false), Nx.tensor(expected))
+
+        assert_equal(
+          Nx.select(vectorized_pred, on_true, on_false),
+          expected_vectorized |> Nx.tensor() |> Nx.vectorize(:x)
+        )
+      end
+    end
+
+    test "takes the names from a non-scalar pred" do
+      pred = Nx.tensor([1, 0, 1], type: :u8, names: [:y])
+      assert Nx.select(pred, Nx.iota({2, 3}, names: [:x, :z]), 0).names == [nil, :y]
+    end
+
     test "works with vectorized scalar pred" do
       pred = Nx.tensor([0, 1]) |> Nx.vectorize(x: 2)
       on_true = Nx.tensor([[0, 1, 2]])

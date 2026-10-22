@@ -7678,11 +7678,13 @@ defmodule Nx do
   `pred` and returning either the corresponding element from
   `on_true` or `on_false`.
 
-  `pred` must either be `1` or `0` or a tensor of predicates
-  with a shape that matches the largest shape between `s1` or `s2`.
+  All three inputs broadcast against each other. The output shape
+  is the broadcast of `pred`, `on_true`, and `on_false`.
 
-  If the shape of `on_true` or `on_false` do not match the shape of
-  `pred`, attempts to broadcast both so they match the shape of `pred`.
+  When `pred` is a scalar, the output names merge the names of
+  `on_true` and `on_false`. Otherwise, the output names come from
+  `pred`, and the names of `on_true` and `on_false` are ignored.
+  The axes that `pred` does not have get no name.
 
   ## Examples
 
@@ -7731,6 +7733,20 @@ defmodule Nx do
       #Nx.Tensor<
         s32[x: 5]
         [2, 3, 2, 7, 2]
+      >
+
+  `pred` can be of a shape different than that of `on_true` and of `on_false` and will broadcast:
+
+      iex> pred = Nx.tensor([[1], [0]], type: :u8)
+      iex> on_true = Nx.tensor([[10, 20, 30], [40, 50, 60]])
+      iex> on_false = Nx.tensor([[1, 2, 3], [4, 5, 6]])
+      iex> Nx.select(pred, on_true, on_false)
+      #Nx.Tensor<
+        s32[2][3]
+        [
+          [10, 20, 30],
+          [4, 5, 6]
+        ]
       >
 
   If the tensor has other values, any non-zero value is considered true:
@@ -7808,7 +7824,6 @@ defmodule Nx do
   @doc type: :element
   def select(pred, on_true, on_false) do
     %T{shape: pred_shape} = pred = to_tensor(pred)
-
     [pred, on_true, on_false] = broadcast_vectors([pred, on_true, on_false], align_ranks: true)
 
     %T{vectorized_axes: vectorized_axes} = pred
@@ -7819,42 +7834,29 @@ defmodule Nx do
 
     output_type = binary_type(on_true, on_false)
 
-    {output_shape, output_names} =
-      if pred_shape == {} do
-        Nx.Shape.binary_broadcast(on_true.shape, on_true.names, on_false.shape, on_false.names)
-      else
-        {pred.shape, pred.names}
-      end
+    # A non-scalar pred gives the output names, so the names of on_true and on_false are ignored.
+    names_of = fn %T{shape: shape, names: names} ->
+      if pred_shape == {}, do: names, else: List.duplicate(nil, tuple_size(shape))
+    end
 
-    _ =
-      Nx.Shape.broadcast!(
+    {shape, names} =
+      Nx.Shape.binary_broadcast(
         on_true.shape,
-        output_shape,
-        Nx.Shape.broadcast_axes(on_true.shape, output_shape)
+        names_of.(on_true),
+        on_false.shape,
+        names_of.(on_false)
       )
 
-    _ =
-      Nx.Shape.broadcast!(
-        on_false.shape,
-        output_shape,
-        Nx.Shape.broadcast_axes(on_false.shape, output_shape)
-      )
+    {output_shape, output_names} =
+      Nx.Shape.binary_broadcast(pred.shape, pred.names, shape, names)
 
     out = %{pred | shape: output_shape, type: output_type, names: output_names}
 
-    if vectorized_axes != [] do
-      pred =
-        if pred.shape != output_shape do
-          broadcast(pred, output_shape)
-        else
-          pred
-        end
+    # Backends take a scalar pred, which selects a whole input, or a pred of the output shape.
+    pred = if pred.shape in [{}, output_shape], do: pred, else: broadcast(pred, output_shape)
+    result = impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
 
-      result = impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
-      vectorize(result, vectorized_axes)
-    else
-      impl!(pred, on_true, on_false).select(out, pred, on_true, on_false)
-    end
+    if vectorized_axes != [], do: vectorize(result, vectorized_axes), else: result
   end
 
   @doc """
