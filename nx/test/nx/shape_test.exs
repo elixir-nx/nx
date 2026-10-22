@@ -15,10 +15,10 @@ defmodule Nx.ShapeTest do
     end
   end
 
-  test "conv with empty dimensions raises" do
-    assert_raise ArgumentError, ~r/conv would result/, fn ->
-      names = [nil, nil, nil]
+  test "conv with a filter larger than the input gives a zero-size output" do
+    names = [nil, nil, nil]
 
+    {shape, _names, _padding} =
       Nx.Shape.conv(
         {1, 1, 1},
         names,
@@ -34,6 +34,7 @@ defmodule Nx.ShapeTest do
         [0, 1, 2],
         [0, 1, 2]
       )
-    end
+
+    assert shape == {1, 1, 0}
   end
 end
