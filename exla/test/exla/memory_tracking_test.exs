@@ -3,8 +3,10 @@ defmodule EXLA.MemoryTrackingTest do
 
   alias EXLA.{Client, DeviceBuffer, Typespec}
 
+  @client :memory_tracking_host
+
   test "tracks memory allocation and deallocation" do
-    client = Client.fetch!(:host)
+    client = Client.fetch!(@client)
     other_host_client = Client.fetch!(:other_host)
     Client.reset_peak_memory(client)
     Client.reset_peak_memory(other_host_client)
@@ -18,7 +20,7 @@ defmodule EXLA.MemoryTrackingTest do
 
     # Allocate a buffer
     data = <<1::32-native, 2::32-native, 3::32-native, 4::32-native>>
-    buffer = DeviceBuffer.place_on_device(data, Typespec.tensor({:s, 32}, {4}), client, 0)
+    buffer = place(data, client)
 
     # Check memory increased
     stats = Client.get_memory_statistics(client)
@@ -28,7 +30,7 @@ defmodule EXLA.MemoryTrackingTest do
 
     # Allocate another buffer
     data2 = <<5::32-native, 6::32-native, 7::32-native, 8::32-native>>
-    DeviceBuffer.place_on_device(data2, Typespec.tensor({:s, 32}, {4}), client, 0)
+    place(data2, client)
 
     # Check memory increased
     stats = Client.get_memory_statistics(client)
@@ -49,7 +51,7 @@ defmodule EXLA.MemoryTrackingTest do
   end
 
   test "tracks per-device memory" do
-    client = Client.fetch!(:host)
+    client = Client.fetch!(@client)
 
     # Get baseline
     baseline_stats = Client.get_memory_statistics(client)
@@ -57,17 +59,14 @@ defmodule EXLA.MemoryTrackingTest do
 
     # Allocate on device 0
     data = <<1::32-native, 2::32-native, 3::32-native, 4::32-native>>
-    buffer = DeviceBuffer.place_on_device(data, Typespec.tensor({:s, 32}, {4}), client, 0)
+    place(data, client)
 
     stats = Client.get_memory_statistics(client)
     assert Map.get(stats.per_device, 0, 0) == baseline_device_memory + 16
-
-    # Cleanup
-    DeviceBuffer.deallocate(buffer)
   end
 
   test "reset peak memory" do
-    client = Client.fetch!(:host)
+    client = Client.fetch!(@client)
 
     # Get baseline
     baseline_stats = Client.get_memory_statistics(client)
@@ -75,7 +74,7 @@ defmodule EXLA.MemoryTrackingTest do
 
     # Allocate and track peak
     data = <<1::32-native, 2::32-native, 3::32-native, 4::32-native>>
-    buffer = DeviceBuffer.place_on_device(data, Typespec.tensor({:s, 32}, {4}), client, 0)
+    buffer = place(data, client)
 
     stats = Client.get_memory_statistics(client)
     peak_after_alloc = stats.peak
@@ -93,13 +92,13 @@ defmodule EXLA.MemoryTrackingTest do
   end
 
   test "tracks memory deallocation when buffer is garbage collected" do
-    client = Client.fetch!(:host)
+    client = Client.fetch!(@client)
     :erlang.garbage_collect()
     Client.reset_peak_memory(client)
 
     assert %{allocated: baseline_allocated} = Client.get_memory_statistics(client)
 
-    t = Nx.iota({1000}, type: :u8, backend: {EXLA.Backend, client: :host})
+    t = free_on_exit(Nx.iota({1000}, type: :u8, backend: {EXLA.Backend, client: @client}))
     f = fn t, f -> f.(t, f) end
 
     test_pid = self()
@@ -107,7 +106,7 @@ defmodule EXLA.MemoryTrackingTest do
 
     task =
       Task.async(fn ->
-        t2 = Nx.iota({10000}, type: :u8, backend: {EXLA.Backend, client: :host})
+        t2 = Nx.iota({10000}, type: :u8, backend: {EXLA.Backend, client: @client})
         send(test_pid, {ref, :allocated})
         f.(t2, f)
       end)
@@ -143,24 +142,43 @@ defmodule EXLA.MemoryTrackingTest do
   end
 
   test "untracks donated buffers after execution" do
-    client = EXLAHelpers.client()
-    Nx.default_backend({EXLA.Backend, client: client.name})
+    client = Client.fetch!(@client)
+    Nx.default_backend({EXLA.Backend, client: @client})
     :erlang.garbage_collect()
 
     assert %{allocated: baseline} = Client.get_memory_statistics(client)
 
-    t1 = Nx.iota({200_000}) |> Nx.donatable()
-    t2 = Nx.iota({100_000})
+    t1 = Nx.iota({200_000}) |> free_on_exit() |> Nx.donatable()
+    t2 = free_on_exit(Nx.iota({100_000}))
 
     assert %{allocated: before} = Client.get_memory_statistics(client)
     assert before == baseline + Nx.byte_size(t1) + Nx.byte_size(t2)
 
-    res = EXLA.jit_apply(fn x, y -> Nx.put_slice(x, [0], y) end, [t1, t2])
+    res =
+      free_on_exit(
+        EXLA.jit_apply(fn x, y -> Nx.put_slice(x, [0], y) end, [t1, t2], client: @client)
+      )
 
     assert %{allocated: allocated} = Client.get_memory_statistics(client)
     # t1 was donated; only the result and live t2 should remain counted.
     assert allocated == baseline + Nx.byte_size(res) + Nx.byte_size(t2)
     assert :already_deallocated = Nx.backend_deallocate(t1)
     assert %{allocated: ^allocated} = Client.get_memory_statistics(client)
+  end
+
+  defp place(data, client) do
+    data
+    |> DeviceBuffer.place_on_device(Typespec.tensor({:s, 32}, {4}), client, 0)
+    |> free_on_exit()
+  end
+
+  defp free_on_exit(%DeviceBuffer{} = buffer) do
+    on_exit(fn -> DeviceBuffer.deallocate(buffer) end)
+    buffer
+  end
+
+  defp free_on_exit(%Nx.Tensor{} = tensor) do
+    on_exit(fn -> Nx.backend_deallocate(tensor) end)
+    tensor
   end
 end
