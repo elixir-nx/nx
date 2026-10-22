@@ -250,6 +250,131 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Runs `fun` on `inputs` and asks the gradient to recompute the body
+  instead of keeping its intermediate results.
+
+  Reverse-mode differentiation keeps the intermediate results of the
+  forward pass until the backward pass has used them, so the memory
+  `grad` needs grows with the depth of the function. Inside a checkpoint
+  the backward pass instead reconstructs the intermediates it needs by
+  running `fun` again from its inputs. This trades extra computation,
+  usually one more evaluation of the body, for memory.
+
+  The gradient is the same with or without the checkpoint, up to the
+  floating point differences a compiler may introduce by reordering
+  operations. The memory saving is not guaranteed: it depends on the
+  compiler keeping the recomputation separate from the forward pass and
+  running it late in the backward pass. EXLA does. Outside
+  `grad` a checkpoint is the same as calling `fun`.
+
+  The inputs and outputs of a checkpoint keep whatever lifetime they
+  have in the surrounding computation. Only the values created inside
+  `fun` become candidates for recomputation, so a checkpoint helps most
+  when its body creates large intermediates that nothing outside needs:
+
+      defn block(x, w1, w2) do
+        checkpoint([x, w1, w2], fn x, w1, w2 ->
+          x |> Nx.dot(w1) |> Nx.relu() |> Nx.dot(w2)
+        end)
+      end
+
+  Here `x`, the weights and the block's output are kept for the backward
+  pass, while the hidden activation between the two matrix multiplications
+  is recomputed. A slice of a parameter is a new tensor that would be kept,
+  so pass the parameter whole and slice it inside `fun`.
+
+  `inputs` is a tensor or container, or a list of them when `fun` takes
+  several arguments, with at most 253 tensors in total. `fun` must return
+  a tensor or a flat tuple of tensors, and every tensor it uses must come
+  from its arguments; it cannot read tensors from the enclosing scope.
+
+  `fun` may run more than once, so it must produce the same values from
+  the same inputs. Random numbers inside the body need their `Nx.Random`
+  key passed as an input.
+  """
+  def checkpoint(inputs, fun) when is_function(fun) do
+    arguments = List.wrap(inputs)
+    arity = length(arguments)
+
+    unless is_function(fun, arity) do
+      Kernel.raise(
+        ArgumentError,
+        "checkpoint expected a function of arity #{arity} for #{arity} input(s), got: #{Kernel.inspect(fun)}"
+      )
+    end
+
+    leaves = Enum.reverse(Enum.reduce(arguments, [], &checkpoint_leaves/2))
+
+    case leaves do
+      [] ->
+        apply(fun, arguments)
+
+      _ ->
+        rebuild = fn recomputed_leaves ->
+          {recomputed_arguments, []} =
+            Enum.map_reduce(arguments, recomputed_leaves, &checkpoint_rebuild/2)
+
+          checkpoint_result(apply(fun, recomputed_arguments))
+        end
+
+        Nx.block(
+          %Nx.Block.Checkpoint{},
+          leaves,
+          nil,
+          checkpoint_block_fun(length(leaves), rebuild)
+        )
+    end
+  end
+
+  defp checkpoint_result(%Nx.Tensor{} = tensor), do: tensor
+
+  defp checkpoint_result(tuple) when is_tuple(tuple) do
+    Kernel.if Enum.all?(Tuple.to_list(tuple), &is_struct(&1, Nx.Tensor)) do
+      tuple
+    else
+      checkpoint_result(Tuple.to_list(tuple))
+    end
+  end
+
+  defp checkpoint_result(other) do
+    Kernel.raise(
+      ArgumentError,
+      "the function given to checkpoint must return a tensor or a tuple of tensors, got: #{Kernel.inspect(other)}"
+    )
+  end
+
+  defp checkpoint_leaves(%Nx.Tensor{} = tensor, acc), do: [tensor | acc]
+
+  defp checkpoint_leaves(container, acc)
+       when Kernel.or(is_tuple(container), is_map(container)),
+       do: Nx.Container.reduce(container, acc, &checkpoint_leaves/2)
+
+  defp checkpoint_leaves(_other, acc), do: acc
+
+  defp checkpoint_rebuild(%Nx.Tensor{}, [leaf | leaves]), do: {leaf, leaves}
+
+  defp checkpoint_rebuild(container, leaves)
+       when Kernel.or(is_tuple(container), is_map(container)),
+       do: Nx.Container.traverse(container, leaves, &checkpoint_rebuild/2)
+
+  defp checkpoint_rebuild(other, leaves), do: {other, leaves}
+
+  # The block callback takes the struct and one argument per tensor. It
+  # also captures rebuild, and the struct and the capture both count toward
+  # the 255 arguments a function can take.
+  for arity <- 1..253 do
+    args = Macro.generate_arguments(arity, __MODULE__)
+
+    defp checkpoint_block_fun(unquote(arity), rebuild) do
+      fn %Nx.Block.Checkpoint{}, unquote_splicing(args) -> rebuild.([unquote_splicing(args)]) end
+    end
+  end
+
+  defp checkpoint_block_fun(arity, _rebuild) do
+    Kernel.raise(ArgumentError, "checkpoint supports at most 253 tensors, got: #{arity}")
+  end
+
+  @doc """
   Defines a custom gradient for the given expression.
 
   It also expects a list of inputs of the gradient and a `fun`
