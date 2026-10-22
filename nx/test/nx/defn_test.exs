@@ -937,6 +937,34 @@ defmodule Nx.DefnTest do
       defstruct []
     end
 
+    test "raises when the body mixes an argument with a tensor from the enclosing scope" do
+      assert_raise RuntimeError, ~r/expressions come from different contexts/, fn ->
+        Nx.Defn.jit(fn x, weight ->
+          Nx.block(%VectorizedNonlinear{}, [x], nil, fn _, x -> Nx.multiply(x, weight) end)
+        end).(Nx.tensor([1.0, 2.0, 3.0]), Nx.tensor([2.0, 3.0, 4.0]))
+      end
+    end
+
+    test "raises when the body returns a tensor from the enclosing scope" do
+      assert_raise ArgumentError, ~r/returned a tensor from the enclosing scope/, fn ->
+        Nx.Defn.jit(fn x, y ->
+          Nx.block(%VectorizedNonlinear{}, [x], nil, fn _, _x -> y end)
+        end).(Nx.tensor([1.0, 2.0]), Nx.tensor([3.0, 4.0]))
+      end
+    end
+
+    test "raises when the body reads a tensor from the enclosing scope inside grad" do
+      assert_raise RuntimeError, ~r/expressions come from different contexts/, fn ->
+        Nx.Defn.jit(fn x, w ->
+          grad(w, fn w ->
+            Nx.sum(
+              Nx.block(%VectorizedNonlinear{}, [x], nil, fn _, x -> Nx.sin(Nx.dot(x, w)) end)
+            )
+          end)
+        end).(Nx.tensor([[0.5, 1.0], [1.5, 2.0]]), Nx.tensor([[0.5, -0.3], [0.2, 0.8]]))
+      end
+    end
+
     @tag compiler: Evaluator
     test "applies gradients for a block whose output is a constant-creating comparison" do
       input = Nx.tensor([-0.7, 0.3, 0.7])
