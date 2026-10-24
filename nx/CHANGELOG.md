@@ -14,6 +14,7 @@
   * [Nx.Defn] Avoid counting gradient contributions twice when differentiating conditionals
   * [Nx.Defn] Pass gradients through metadata nodes on tuples
   * [Nx] Read Elixir number literals at the precision of element-wise binary operations
+  * [Nx] Raise when an integer does not fit the type of a tensor created with `Nx.tensor/2`, `Nx.to_tensor/1` or a `defn` literal, instead of wrapping it
   * [Nx.Defn] Return finite gradients for `Nx.sigmoid/1` at very negative and non-finite inputs
   * [Nx.Defn] Keep vectorized entries apart in `Nx.block/4` under `jit`
   * [Nx] Make `Nx.Type.merge/2` independent of argument order for `:f8_e4m3fn`, and raise when merging it with `:f8`

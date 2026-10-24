@@ -1460,8 +1460,11 @@ defmodule Nx.Defn.Expr do
             "value and inline it inside the defn expression. Got: #{inspect(t)}"
   end
 
-  defp to_expr(number) when is_number(number) or is_struct(number, Complex),
-    do: constant(%T{shape: {}, names: [], type: Nx.Type.infer(number)}, number)
+  defp to_expr(number) when is_number(number) or is_struct(number, Complex) do
+    type = Nx.Type.infer(number)
+    Nx.Type.check_integer!(type, number)
+    constant(%T{shape: {}, names: [], type: type}, number)
+  end
 
   defp to_expr(other) do
     raise ArgumentError,
