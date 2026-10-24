@@ -1103,6 +1103,50 @@ defmodule Nx.DefnTest do
       )
     end
 
+    @tag compiler: Evaluator
+    test "takes the argument list past the arity limit" do
+      count = 300
+      tensors = Enum.map(1..count, &Nx.tensor(&1 * 1.0))
+
+      sum_all = fn tensors ->
+        Nx.block(%VectorizedNonlinear{}, tensors, nil, fn _struct, args ->
+          Enum.reduce(args, &Nx.add/2)
+        end)
+      end
+
+      result =
+        Nx.Defn.jit(fn tensors -> sum_all.(Tuple.to_list(tensors)) end).(List.to_tuple(tensors))
+
+      assert_equal(result, Nx.tensor(count * (count + 1) / 2))
+
+      gradient =
+        Nx.Defn.jit(fn tensors ->
+          grad(tensors, fn tensors -> sum_all.(Tuple.to_list(tensors)) end)
+        end).(List.to_tuple(tensors))
+
+      assert tuple_size(gradient) == count
+      assert_equal(elem(gradient, 0), Nx.tensor(1.0))
+      assert_equal(elem(gradient, count - 1), Nx.tensor(1.0))
+    end
+
+    @tag compiler: Evaluator
+    test "takes the argument list past the arity limit with vectorized arguments" do
+      count = 300
+      tensors = Enum.map(1..count, &Nx.tensor([&1 * 1.0, &1 * 2.0]))
+      [first | rest] = tensors
+      tensors = [Nx.vectorize(first, :batch) | rest]
+
+      result =
+        Nx.Defn.jit(fn tensors ->
+          Nx.block(%VectorizedNonlinear{}, Tuple.to_list(tensors), nil, fn _struct, args ->
+            Enum.reduce(args, &Nx.add/2)
+          end)
+        end).(List.to_tuple(tensors))
+
+      expected = Nx.vectorize(Nx.tensor([[45150.0, 90299.0], [45151.0, 90300.0]]), :batch)
+      assert_equal(result, expected)
+    end
+
     defmodule PerEntrySum do
       defstruct []
     end

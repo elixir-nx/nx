@@ -855,7 +855,7 @@ defmodule Nx.Defn.Expr do
       Enum.with_index(devectorized_args, fn arg, pos -> parameter(arg, body_context, pos) end)
 
     vectorized_params = Enum.zip_with(params, vectorized_axes, &vectorize_axes/2)
-    traced = apply(fun, [struct | vectorized_params ++ opts])
+    traced = Nx.Shared.apply_block_fun(fun, struct, vectorized_params ++ opts)
 
     # A tensor from the enclosing scope returned as is would bypass the check
     # above. Outside a trace the arguments have no context to compare with.
@@ -896,11 +896,20 @@ defmodule Nx.Defn.Expr do
     else
       tensors_count = length(vectorized_axes)
 
-      block_fun(tensors_count + opts_count, fn struct, args ->
+      run = fn struct, args ->
         {tensors, opts} = Enum.split(args, tensors_count)
         tensors = Enum.zip_with(tensors, vectorized_axes, &vectorize_axes/2)
-        fun |> apply([struct | tensors ++ opts]) |> Composite.traverse(&Nx.devectorize/1)
-      end)
+
+        fun
+        |> Nx.Shared.apply_block_fun(struct, tensors ++ opts)
+        |> Composite.traverse(&Nx.devectorize/1)
+      end
+
+      # Past the arguments a function can take, the callback takes the list.
+      case tensors_count + opts_count do
+        count when count <= 253 -> block_fun(count, run)
+        _ -> run
+      end
     end
   end
 
@@ -910,11 +919,6 @@ defmodule Nx.Defn.Expr do
     defp block_fun(unquote(arity), body) do
       fn struct, unquote_splicing(args) -> body.(struct, [unquote_splicing(args)]) end
     end
-  end
-
-  defp block_fun(arity, _body) do
-    raise ArgumentError,
-          "blocks with vectorized arguments support up to 253 arguments, got: #{arity}"
   end
 
   defp revectorize_block_result(result, out_vectorized_axes) do

@@ -72,7 +72,7 @@ defmodule Torchx.Backend do
       end
 
     if device == :mps and block_name in mps_unsupported do
-      apply(fun, [struct | args])
+      Nx.Shared.apply_block_fun(fun, struct, args)
     else
       case {block_name, args} do
         {Nx.Block.LinAlg.QR, [t]} ->
@@ -133,7 +133,7 @@ defmodule Torchx.Backend do
           cumulative_block_impl(output, t, struct, &Torchx.cumulative_max/2)
 
         _ ->
-          apply(fun, [struct | args])
+          Nx.Shared.apply_block_fun(fun, struct, args)
       end
     end
   end

@@ -34,7 +34,7 @@ defmodule Nx.BinaryBackend do
 
   @impl true
   def block(struct, _output, args, fun) do
-    apply(fun, [struct | args])
+    Nx.Shared.apply_block_fun(fun, struct, args)
   end
 
   ## Creation
