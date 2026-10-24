@@ -94,7 +94,7 @@ defmodule Nx.Random do
     seed =
       case seed do
         seed when is_integer(seed) ->
-          Nx.u64(seed)
+          Nx.u64(Integer.mod(seed, 2 ** 64))
 
         %Nx.Tensor{} = seed when seed.type == {:u, 64} ->
           seed

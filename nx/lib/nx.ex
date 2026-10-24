@@ -518,13 +518,25 @@ defmodule Nx do
         [1.2, 2.3, 3.4, 4.5]
       >
 
-  The type can be explicitly given. Integers and floats
-  bigger than the given size overflow:
+  The type can be explicitly given:
+
+      iex> Nx.tensor([300, 301, 302], type: :s16)
+      #Nx.Tensor<
+        s16[3]
+        [300, 301, 302]
+      >
+
+  Integers that do not fit the type raise:
 
       iex> Nx.tensor([300, 301, 302], type: :s8)
+      ** (ArgumentError) the integer 300 does not fit in the type :s8, pass type: :s16 to hold it
+
+  Floats bigger than the given size overflow to infinity:
+
+      iex> Nx.tensor([1.0e300], type: :f32)
       #Nx.Tensor<
-        s8[3]
-        [44, 45, 46]
+        f32[1]
+        [Inf]
       >
 
   Mixed types give higher priority to floats:
@@ -849,6 +861,7 @@ defmodule Nx do
   defp tensor(false, type, opts), do: tensor(0, type, opts)
 
   defp tensor(arg, type, opts) when is_number(arg) do
+    Nx.Type.check_integer!(type, arg)
     names = Nx.Shape.named_axes!(opts[:names], {})
     {backend, backend_options} = backend_from_options!(opts) || default_backend()
     backend.constant(%T{shape: {}, type: type, names: names}, arg, backend_options)
@@ -923,6 +936,7 @@ defmodule Nx do
        when is_number(number)
        when is_struct(number, Complex)
        when number in @non_finite do
+    Nx.Type.check_integer!(type, number)
     number_to_binary(number, type)
   end
 
@@ -2148,6 +2162,7 @@ defmodule Nx do
   def to_tensor(number) when is_number(number) or number in [:infinity, :neg_infinity, :nan] do
     {backend, options} = default_backend()
     type = Nx.Type.infer(number)
+    Nx.Type.check_integer!(type, number)
     out = %T{shape: {}, type: type, names: []}
     backend.constant(out, number, options)
   end
@@ -9083,9 +9098,9 @@ defmodule Nx do
         [32, 28, 24, 16]
       >
 
-      iex> Nx.count_leading_zeros(Nx.tensor([0xF0000000, 0x0F000000], names: [:x]))
+      iex> Nx.count_leading_zeros(Nx.tensor([0xF0000000, 0x0F000000], type: :u32, names: [:x]))
       #Nx.Tensor<
-        s32[x: 2]
+        u32[x: 2]
         [0, 4]
       >
 
@@ -9095,7 +9110,7 @@ defmodule Nx do
         [64, 60, 56, 48]
       >
 
-      iex> Nx.count_leading_zeros(Nx.tensor([0, 0xF, 0xFF, 0xFFFF], type: :s16, names: [:x]))
+      iex> Nx.count_leading_zeros(Nx.tensor([0, 0xF, 0xFF, -1], type: :s16, names: [:x]))
       #Nx.Tensor<
         s16[x: 4]
         [16, 12, 8, 0]
@@ -17998,7 +18013,7 @@ defmodule Nx do
     opts = Keyword.validate!(opts, [:type])
 
     type = Nx.Type.normalize!(opts[:type] || binary_type(tensor, value))
-    value = to_tensor(value)
+    value = value |> literal_tensor(type) |> to_tensor()
 
     %{shape: shape, names: names} = devectorize(tensor)
 

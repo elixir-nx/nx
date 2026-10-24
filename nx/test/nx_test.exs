@@ -1522,11 +1522,50 @@ defmodule NxTest do
     end
   end
 
+  describe "fill/3" do
+    test "creates an integer value in the type of the result" do
+      t = Nx.tensor([1, 2], type: :s64)
+      assert Nx.fill(t, 2 ** 40) == Nx.tensor([2 ** 40, 2 ** 40], type: :s64)
+    end
+  end
+
   describe "tensor/2" do
     test "with non-finite" do
       assert Nx.tensor(:neg_infinity) == Nx.Constants.neg_infinity()
       assert Nx.tensor(:infinity) == Nx.Constants.infinity()
       assert Nx.tensor(:nan) == Nx.Constants.nan()
+    end
+
+    test "keeps integers at the bounds of the type" do
+      for {value, type} <- [{2 ** 31 - 1, :s32}, {-(2 ** 31), :s32}, {255, :u8}, {0, :u8}] do
+        assert Nx.to_number(Nx.tensor(value, type: type)) == value
+      end
+
+      assert Nx.type(Nx.tensor([2 ** 31 - 1, -(2 ** 31)])) == {:s, 32}
+    end
+
+    test "raises when an integer does not fit the type" do
+      assert_raise ArgumentError,
+                   "the integer 2147483648 does not fit in the type :s32, pass type: :s64 to hold it",
+                   fn -> Nx.tensor(2 ** 31) end
+
+      assert_raise ArgumentError, ~r/the integer -2147483649 does not fit in the type :s32/, fn ->
+        Nx.tensor([1, -(2 ** 31) - 1])
+      end
+
+      assert_raise ArgumentError, ~r/the integer 256 does not fit in the type :u8/, fn ->
+        Nx.tensor(256, type: :u8)
+      end
+
+      assert_raise ArgumentError, ~r/the integer -1 does not fit in the type :u32/, fn ->
+        Nx.tensor([0, -1], type: :u32)
+      end
+
+      assert_raise ArgumentError,
+                   ~r/the integer 1099511627776 does not fit in the type :s32/,
+                   fn ->
+                     Nx.Defn.jit(fn -> 2 ** 40 end).()
+                   end
     end
 
     test "builds a zero-size f32 tensor from an empty list" do
