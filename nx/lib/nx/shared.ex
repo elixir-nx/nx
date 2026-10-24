@@ -457,6 +457,18 @@ defmodule Nx.Shared do
   @doc """
   Gets the implementation of a list of maybe tensors.
   """
+  # Invokes a block callback with the block struct and its arguments. A block
+  # callback takes the struct and then one argument per tensor and option. A
+  # function cannot take more than 255 arguments, so a block with more than
+  # 254 of them stores a callback that takes the struct and the list instead.
+  def apply_block_fun(fun, struct, args) do
+    if is_function(fun, length(args) + 1) do
+      apply(fun, [struct | args])
+    else
+      fun.(struct, args)
+    end
+  end
+
   def list_impl!(list) do
     case for(%T{data: %struct{}} <- list, do: struct) do
       [] -> raise ArgumentError, "expected at least one tensor in list_impl!"

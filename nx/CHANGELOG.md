@@ -5,6 +5,7 @@
 ### Enhancements
 
   * [Nx.Defn.Evaluator] Mark values as donatable at their last use, so backends that run operations eagerly can reuse their buffers
+  * [Nx] Accept a function of the struct and the argument list as a block's default implementation when the block has more than 254 arguments
 
 ### Bug fixes
 
