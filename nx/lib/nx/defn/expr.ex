@@ -838,8 +838,7 @@ defmodule Nx.Defn.Expr do
     {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
 
     # An argument is a tensor or a container of tensors. The tensors inside a
-    # container are the block's inputs in traversal order, so a block with
-    # many inputs can take them as a single tuple or map argument.
+    # container become block inputs in traversal order.
     {args, parent_context} =
       Enum.map_reduce(args, nil, fn arg, acc ->
         Composite.traverse(arg, acc, fn tensor, acc ->

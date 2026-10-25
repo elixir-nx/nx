@@ -7395,6 +7395,22 @@ defmodule Nx do
   The backend’s `c:Nx.Backend.block/4` receives `struct`, `output`, `args`, and `fun`, and
   should either run a native implementation or invoke the default as
   `apply(fun, [struct | args])`.
+
+  ## Examples
+
+      iex> defmodule ScaleShift do
+      ...>   defstruct []
+      ...> end
+      iex> x = Nx.tensor([1.0, 2.0, 3.0])
+      iex> weights = {Nx.tensor([2.0, 3.0, 4.0]), Nx.tensor(0.5)}
+      iex> Nx.block(struct(ScaleShift), [x, weights], nil, fn _struct, x, {scale, bias} ->
+      ...>   Nx.add(Nx.multiply(x, scale), bias)
+      ...> end)
+      #Nx.Tensor<
+        f32[3]
+        [2.5, 6.5, 12.5]
+      >
+
   """
   @doc type: :element
   def block(struct, args, output, fun) when is_list(args) do

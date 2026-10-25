@@ -1118,14 +1118,15 @@ defmodule Nx.DefnTest do
       left = Nx.tensor([[0.0, 1.0], [2.0, 3.0]]) |> Nx.vectorize(:batch)
       right = Nx.tensor([0.5, 1.5])
 
-      actual =
+      {actual, mask} =
         Nx.Defn.jit(fn pair ->
           Nx.block(%ContainerBlock{}, [pair], nil, fn _, {left, right} ->
-            Nx.add(Nx.sin(left), Nx.cos(right))
+            {Nx.add(Nx.sin(left), Nx.cos(right)), Nx.greater(left, right)}
           end)
         end).({left, right})
 
       assert_all_close(actual, Nx.add(Nx.sin(left), Nx.cos(right)))
+      assert_equal(mask, Nx.greater(left, right))
     end
 
     @tag compiler: Evaluator
