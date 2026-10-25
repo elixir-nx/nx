@@ -887,7 +887,7 @@ defmodule Nx.Defn.Expr do
     end
 
     out_vectorized_axes = [traced] |> Composite.flatten_list() |> Enum.map(& &1.vectorized_axes)
-    fun = vectorized_block_fun(fun, length(args), vectorized_axes, length(opts))
+    fun = vectorized_block_fun(fun, args, opts, vectorized_axes)
 
     case Composite.traverse(traced, &Nx.devectorize/1) do
       %{} = res ->
@@ -918,12 +918,14 @@ defmodule Nx.Defn.Expr do
     args
   end
 
-  defp vectorized_block_fun(fun, args_count, vectorized_axes, opts_count) do
+  defp vectorized_block_fun(fun, args, opts, vectorized_axes) do
     if Enum.all?(vectorized_axes, &(&1 == [])) do
       fun
     else
-      block_fun(args_count + opts_count, fn struct, args ->
-        {args, opts} = Enum.split(args, args_count)
+      args_count = length(args)
+
+      block_fun(args_count + length(opts), fn struct, all_args ->
+        {args, opts} = Enum.split(all_args, args_count)
         args = revectorize_block_args(args, vectorized_axes)
         fun |> apply([struct | args ++ opts]) |> Composite.traverse(&Nx.devectorize/1)
       end)
