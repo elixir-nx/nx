@@ -284,9 +284,9 @@ defmodule Nx.Defn.Kernel do
   so pass the parameter whole and slice it inside `fun`.
 
   `inputs` is a tensor or container, or a list of them when `fun` takes
-  several arguments, with at most 253 tensors in total. `fun` must return
-  a tensor or a flat tuple of tensors, and every tensor it uses must come
-  from its arguments; it cannot read tensors from the enclosing scope.
+  several arguments. `fun` must return a tensor or a flat tuple of tensors,
+  and every tensor it uses must come from its arguments; it cannot read
+  tensors from the enclosing scope.
 
   `fun` may run more than once, so it must produce the same values from
   the same inputs. Random numbers inside the body need their `Nx.Random`
@@ -303,26 +303,14 @@ defmodule Nx.Defn.Kernel do
       )
     end
 
-    leaves = Enum.reverse(Enum.reduce(arguments, [], &checkpoint_leaves/2))
-
-    case leaves do
-      [] ->
-        apply(fun, arguments)
-
-      _ ->
-        rebuild = fn recomputed_leaves ->
-          {recomputed_arguments, []} =
-            Enum.map_reduce(arguments, recomputed_leaves, &checkpoint_rebuild/2)
-
-          checkpoint_result(apply(fun, recomputed_arguments))
-        end
-
-        Nx.block(
-          %Nx.Block.Checkpoint{},
-          leaves,
-          nil,
-          checkpoint_block_fun(length(leaves), rebuild)
-        )
+    # The arguments travel as one block argument, so fun may take any number
+    # of tensors.
+    Kernel.if Enum.any?(Nx.Defn.Composite.flatten_list(arguments), &is_struct(&1, Nx.Tensor)) do
+      Nx.block(%Nx.Block.Checkpoint{}, [List.to_tuple(arguments)], nil, fn _struct, arguments ->
+        checkpoint_result(apply(fun, Tuple.to_list(arguments)))
+      end)
+    else
+      apply(fun, arguments)
     end
   end
 
@@ -341,37 +329,6 @@ defmodule Nx.Defn.Kernel do
       ArgumentError,
       "the function given to checkpoint must return a tensor or a tuple of tensors, got: #{Kernel.inspect(other)}"
     )
-  end
-
-  defp checkpoint_leaves(%Nx.Tensor{} = tensor, acc), do: [tensor | acc]
-
-  defp checkpoint_leaves(container, acc)
-       when Kernel.or(is_tuple(container), is_map(container)),
-       do: Nx.Container.reduce(container, acc, &checkpoint_leaves/2)
-
-  defp checkpoint_leaves(_other, acc), do: acc
-
-  defp checkpoint_rebuild(%Nx.Tensor{}, [leaf | leaves]), do: {leaf, leaves}
-
-  defp checkpoint_rebuild(container, leaves)
-       when Kernel.or(is_tuple(container), is_map(container)),
-       do: Nx.Container.traverse(container, leaves, &checkpoint_rebuild/2)
-
-  defp checkpoint_rebuild(other, leaves), do: {other, leaves}
-
-  # The block callback takes the struct and one argument per tensor. It
-  # also captures rebuild, and the struct and the capture both count toward
-  # the 255 arguments a function can take.
-  for arity <- 1..253 do
-    args = Macro.generate_arguments(arity, __MODULE__)
-
-    defp checkpoint_block_fun(unquote(arity), rebuild) do
-      fn %Nx.Block.Checkpoint{}, unquote_splicing(args) -> rebuild.([unquote_splicing(args)]) end
-    end
-  end
-
-  defp checkpoint_block_fun(arity, _rebuild) do
-    Kernel.raise(ArgumentError, "checkpoint supports at most 253 tensors, got: #{arity}")
   end
 
   @doc """

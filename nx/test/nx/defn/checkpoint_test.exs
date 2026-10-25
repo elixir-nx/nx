@@ -522,6 +522,22 @@ defmodule Nx.Defn.CheckpointTest do
       assert_equal(grad_checkpoint_no_grad_path(x, y), y)
     end
 
+    test "more inputs than a function can take as arguments" do
+      count = 300
+      weights = List.to_tuple(Enum.map(1..count, &Nx.tensor(&1 * 1.0)))
+
+      sum_all = fn weights ->
+        checkpoint(weights, fn weights -> weights |> Tuple.to_list() |> Nx.stack() |> Nx.sum() end)
+      end
+
+      assert_equal(Nx.Defn.jit(sum_all).(weights), Nx.tensor(count * (count + 1) / 2))
+
+      gradient = Nx.Defn.jit(fn weights -> grad(weights, sum_all) end).(weights)
+      assert tuple_size(gradient) == count
+      assert_equal(elem(gradient, 0), Nx.tensor(1.0))
+      assert_equal(elem(gradient, count - 1), Nx.tensor(1.0))
+    end
+
     defn grad_checkpoint_closed_over_opts(x, opts \\ []) do
       opts = keyword!(opts, scale: 2.0)
       offset = 1.0

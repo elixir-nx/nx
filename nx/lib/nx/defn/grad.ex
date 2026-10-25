@@ -222,17 +222,17 @@ defmodule Nx.Defn.Grad do
          id,
          acc
        ) do
-    Enum.reduce(in_args, acc, fn
-      opts, {parents, nodes} when is_list(opts) ->
-        {parents, nodes}
+    {inputs, _opts} = Enum.split_while(in_args, &(not is_list(&1)))
 
-      arg, {parents, nodes} ->
-        if arg.data.op in @constants do
-          {parents, nodes}
-        else
-          parents = Map.update(parents, arg.data.id, [id], &[id | &1])
-          recur_parents_tree(arg, {parents, nodes})
-        end
+    inputs
+    |> Composite.flatten_list()
+    |> Enum.reduce(acc, fn arg, {parents, nodes} ->
+      if arg.data.op in @constants do
+        {parents, nodes}
+      else
+        parents = Map.update(parents, arg.data.id, [id], &[id | &1])
+        recur_parents_tree(arg, {parents, nodes})
+      end
     end)
   end
 
@@ -448,12 +448,16 @@ defmodule Nx.Defn.Grad do
     recomputed =
       apply(callback, [struct | tied_inputs ++ opts]) |> Composite.traverse(&Nx.devectorize/1)
 
+    # Inputs may be containers; the gradient walk works on the tensors inside.
+    input_tensors = Composite.flatten_list(inputs)
+    tied_tensors = Composite.flatten_list(tied_inputs)
+
     # Differentiate the recomputed body on its own. The tied inputs are marked
     # visited so the walk stays inside the body.
-    stops = Map.new(tied_inputs, &{&1.data.id, :stop})
+    stops = Map.new(tied_tensors, &{&1.data.id, :stop})
     {parents, nodes} = parents_tree(recomputed, stops)
     {_to_grad, _ids, batch_count} = to_grad_ids
-    body_to_grad_ids = {List.to_tuple(tied_inputs), stops, batch_count}
+    body_to_grad_ids = {List.to_tuple(tied_tensors), stops, batch_count}
 
     {seeded, []} =
       Composite.reduce(recomputed, {%{}, tied_gs}, fn out, {acc, [g | rest]} ->
@@ -465,11 +469,11 @@ defmodule Nx.Defn.Grad do
     acc = traverse_parents(__MODULE__, body_to_grad_ids, parents, {nodes, seeded})
 
     {_nodes, body_grads} =
-      Enum.reduce(tied_inputs, acc, &traverse_parents(&1.data.id, body_to_grad_ids, parents, &2))
+      Enum.reduce(tied_tensors, acc, &traverse_parents(&1.data.id, body_to_grad_ids, parents, &2))
 
     # Hand each input's gradient back to the enclosing traversal under the
     # original input's id.
-    Enum.zip_reduce(inputs, tied_inputs, grads, fn input, tied_input, grads ->
+    Enum.zip_reduce(input_tensors, tied_tensors, grads, fn input, tied_input, grads ->
       case Map.fetch(body_grads, tied_input.data.id) do
         {:ok, pieces} ->
           input_grad = sum_grad(pieces)
