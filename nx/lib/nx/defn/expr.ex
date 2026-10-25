@@ -922,8 +922,9 @@ defmodule Nx.Defn.Expr do
       fun
     else
       args_count = length(args)
+      arity = args_count + length(opts)
 
-      block_fun(args_count + length(opts), fn struct, all_args ->
+      block_fun(arity, fn struct, all_args ->
         {args, opts} = Enum.split(all_args, args_count)
         args = revectorize_block_args(args, vectorized_axes)
         fun |> apply([struct | args ++ opts]) |> Composite.traverse(&Nx.devectorize/1)
