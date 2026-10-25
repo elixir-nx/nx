@@ -337,14 +337,16 @@ defmodule EXLA.Backend do
 
   @impl true
   def block(struct, _output, args, fun) do
-    # Here we take the leading tensor arguments and pass them as JIT arguments
-    {tensors, rest} = Enum.split_while(args, &is_struct(&1, Nx.Tensor))
+    # The leading arguments are tensors or containers of tensors and become
+    # JIT arguments; trailing keyword lists are passed through.
+    {inputs, opts} = Enum.split_while(args, &(not is_list(&1)))
 
-    wrapper_fun = fn tensors ->
-      Nx.Defn.Expr.block(struct, Tuple.to_list(tensors) ++ rest, fun)
+    wrapper_fun = fn inputs ->
+      Nx.Defn.Expr.block(struct, Tuple.to_list(inputs) ++ opts, fun)
     end
 
-    jit([], wrapper_fun, tensors, [List.to_tuple(tensors)])
+    tensors = Nx.Defn.Composite.flatten_list(inputs)
+    jit([], wrapper_fun, tensors, [List.to_tuple(inputs)])
   end
 
   binary_ops =
@@ -435,8 +437,8 @@ defmodule EXLA.Backend do
 
   defp clear_donatable(%T{} = tensor), do: %{tensor | donatable?: false}
 
-  defp clear_donatable(tuple) when is_tuple(tuple),
-    do: tuple |> Tuple.to_list() |> Enum.map(&clear_donatable/1) |> List.to_tuple()
+  defp clear_donatable(container) when is_tuple(container) or is_map(container),
+    do: Nx.Defn.Composite.traverse(container, &clear_donatable/1)
 
   defp clear_donatable(other), do: other
 
