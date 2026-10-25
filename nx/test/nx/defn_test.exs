@@ -1092,6 +1092,92 @@ defmodule Nx.DefnTest do
       Nx.Testing.assert_all_close(actual, expected)
     end
 
+    defmodule ContainerBlock do
+      defstruct []
+    end
+
+    @tag compiler: Evaluator
+    test "accepts a container argument" do
+      x = Nx.tensor([1.0, 2.0, 3.0])
+      weights = %{scale: Nx.tensor([2.0, 3.0, 4.0]), bias: Nx.tensor(0.5)}
+
+      fun = fn x, weights ->
+        Nx.block(%ContainerBlock{}, [x, weights], nil, fn _, x, %{scale: scale, bias: bias} ->
+          Nx.add(Nx.multiply(x, scale), bias)
+        end)
+      end
+
+      assert_equal(Nx.Defn.jit(fun).(x, weights), Nx.tensor([2.5, 6.5, 12.5]))
+
+      expr = Nx.Defn.debug_expr(fun).(x, weights)
+      assert inspect(expr) =~ "block %Nx.DefnTest.ContainerBlock{}, a, b, c"
+    end
+
+    @tag compiler: Evaluator
+    test "accepts a container argument with a vectorized entry" do
+      left = Nx.tensor([[0.0, 1.0], [2.0, 3.0]]) |> Nx.vectorize(:batch)
+      right = Nx.tensor([0.5, 1.5])
+
+      actual =
+        Nx.Defn.jit(fn pair ->
+          Nx.block(%ContainerBlock{}, [pair], nil, fn _, {left, right} ->
+            Nx.add(Nx.sin(left), Nx.cos(right))
+          end)
+        end).({left, right})
+
+      assert_all_close(actual, Nx.add(Nx.sin(left), Nx.cos(right)))
+    end
+
+    @tag compiler: Evaluator
+    test "differentiates through a container argument" do
+      x = Nx.tensor([[0.5, 1.0], [1.5, 2.0]])
+      w = Nx.tensor([[0.5, -0.3], [0.2, 0.8]])
+
+      actual =
+        Nx.Defn.jit(fn x, w ->
+          grad({x, w}, fn {x, w} ->
+            Nx.sum(
+              Nx.block(%ContainerBlock{}, [{x, w}], nil, fn _, {x, w} ->
+                Nx.sin(Nx.dot(x, w))
+              end)
+            )
+          end)
+        end).(x, w)
+
+      expected =
+        Nx.Defn.jit(fn x, w -> grad({x, w}, fn {x, w} -> Nx.sum(Nx.sin(Nx.dot(x, w))) end) end).(
+          x,
+          w
+        )
+
+      {actual_x, actual_w} = actual
+      {expected_x, expected_w} = expected
+      assert_all_close(actual_x, expected_x)
+      assert_all_close(actual_w, expected_w)
+    end
+
+    @tag compiler: Evaluator
+    test "takes more tensors in one container than a function can take as arguments" do
+      count = 300
+      tensors = Enum.map(1..count, &Nx.tensor(&1 * 1.0))
+
+      sum_all = fn tensors ->
+        Nx.block(%ContainerBlock{}, [tensors], nil, fn _, tensors ->
+          tensors |> Tuple.to_list() |> Nx.stack() |> Nx.sum()
+        end)
+      end
+
+      result = Nx.Defn.jit(sum_all).(List.to_tuple(tensors))
+      assert_equal(result, Nx.tensor(count * (count + 1) / 2))
+
+      gradient =
+        Nx.Defn.jit(fn tensors -> grad(tensors, sum_all) end).(List.to_tuple(tensors))
+
+      assert tuple_size(gradient) == count
+      assert_equal(elem(gradient, 0), Nx.tensor(1.0))
+      assert_equal(elem(gradient, count - 1), Nx.tensor(1.0))
+    end
+
     @tag compiler: Evaluator
     test "accepts a constant tensor argument" do
       rhs = Nx.tensor([4.0, 3.0, 2.0])

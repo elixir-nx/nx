@@ -150,7 +150,12 @@ defmodule Nx.Defn.Tree do
 
   def apply_args(%T{data: %Expr{op: :block, args: args}}, type, acc, fun) do
     [struct, in_args, expr, callback] = args
-    {in_args, acc} = Enum.map_reduce(in_args, acc, fun)
+
+    {in_args, acc} =
+      Enum.map_reduce(in_args, acc, fn
+        opts, acc when is_list(opts) -> {opts, acc}
+        arg, acc -> Composite.traverse(arg, acc, fun)
+      end)
 
     {expr, acc} =
       case type do

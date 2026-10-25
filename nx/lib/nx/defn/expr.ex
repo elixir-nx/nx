@@ -836,13 +836,24 @@ defmodule Nx.Defn.Expr do
   @impl true
   def block(struct, _output \\ nil, in_args, fun) do
     {args, opts} = Enum.split_while(in_args, &(not is_list(&1)))
-    {args, parent_context} = to_exprs(args)
+
+    # An argument is a tensor or a container of tensors. The tensors inside a
+    # container are the block's inputs in traversal order, so a block with
+    # many inputs can take them as a single tuple or map argument.
+    {args, parent_context} =
+      Enum.map_reduce(args, nil, fn arg, acc ->
+        Composite.traverse(arg, acc, fn tensor, acc ->
+          expr = to_expr(tensor)
+          {expr, merge_context!(expr, acc)}
+        end)
+      end)
+
     context = parent_context || :root
 
     # Nodes store devectorized tensors, so the body is traced on the
     # vectorized view and the result is vectorized again on the way out.
-    vectorized_axes = Enum.map(args, & &1.vectorized_axes)
-    devectorized_args = Enum.map(args, &Nx.devectorize/1)
+    vectorized_axes = args |> Composite.flatten_list() |> Enum.map(& &1.vectorized_axes)
+    devectorized_args = Enum.map(args, fn arg -> Composite.traverse(arg, &Nx.devectorize/1) end)
     in_args = devectorized_args ++ opts
 
     # The body gets its own context, so an operation that mixes a parameter
@@ -851,10 +862,14 @@ defmodule Nx.Defn.Expr do
     # reach such a tensor.
     body_context = new_context(:block)
 
-    params =
-      Enum.with_index(devectorized_args, fn arg, pos -> parameter(arg, body_context, pos) end)
+    {params, _} =
+      Enum.map_reduce(devectorized_args, 0, fn arg, pos ->
+        Composite.traverse(arg, pos, fn tensor, pos ->
+          {parameter(tensor, body_context, pos), pos + 1}
+        end)
+      end)
 
-    vectorized_params = Enum.zip_with(params, vectorized_axes, &vectorize_axes/2)
+    vectorized_params = revectorize_block_args(params, vectorized_axes)
     traced = apply(fun, [struct | vectorized_params ++ opts])
 
     # A tensor from the enclosing scope returned as is would bypass the check
@@ -872,7 +887,7 @@ defmodule Nx.Defn.Expr do
     end
 
     out_vectorized_axes = [traced] |> Composite.flatten_list() |> Enum.map(& &1.vectorized_axes)
-    fun = vectorized_block_fun(fun, vectorized_axes, length(opts))
+    fun = vectorized_block_fun(fun, length(args), vectorized_axes, length(opts))
 
     case Composite.traverse(traced, &Nx.devectorize/1) do
       %{} = res ->
@@ -890,16 +905,27 @@ defmodule Nx.Defn.Expr do
   defp vectorize_axes(tensor, []), do: tensor
   defp vectorize_axes(tensor, axes), do: Nx.vectorize(tensor, axes)
 
-  defp vectorized_block_fun(fun, vectorized_axes, opts_count) do
+  # Vectorizes the tensors inside the block arguments again, one list of axes
+  # per tensor in traversal order.
+  defp revectorize_block_args(args, vectorized_axes) do
+    {args, []} =
+      Enum.map_reduce(args, vectorized_axes, fn arg, axes ->
+        Composite.traverse(arg, axes, fn tensor, [tensor_axes | rest] ->
+          {vectorize_axes(tensor, tensor_axes), rest}
+        end)
+      end)
+
+    args
+  end
+
+  defp vectorized_block_fun(fun, args_count, vectorized_axes, opts_count) do
     if Enum.all?(vectorized_axes, &(&1 == [])) do
       fun
     else
-      tensors_count = length(vectorized_axes)
-
-      block_fun(tensors_count + opts_count, fn struct, args ->
-        {tensors, opts} = Enum.split(args, tensors_count)
-        tensors = Enum.zip_with(tensors, vectorized_axes, &vectorize_axes/2)
-        fun |> apply([struct | tensors ++ opts]) |> Composite.traverse(&Nx.devectorize/1)
+      block_fun(args_count + opts_count, fn struct, args ->
+        {args, opts} = Enum.split(args, args_count)
+        args = revectorize_block_args(args, vectorized_axes)
+        fun |> apply([struct | args ++ opts]) |> Composite.traverse(&Nx.devectorize/1)
       end)
     end
   end
@@ -1954,7 +1980,16 @@ defmodule Nx.Defn.Expr do
     do: traverse_args([initial], state)
 
   defp traverse_args(:block, [struct, in_args, _body, _callback], state) do
-    {in_args_io, state} = Enum.map_reduce(in_args, state, &recur_inspect/2)
+    {in_args_io, state} =
+      Enum.flat_map_reduce(in_args, state, fn
+        opts, state when is_list(opts) ->
+          {io, state} = recur_inspect(opts, state)
+          {[io], state}
+
+        arg, state ->
+          [arg] |> Composite.flatten_list() |> Enum.map_reduce(state, &recur_inspect/2)
+      end)
+
     {[inspect(struct) | in_args_io], state}
   end
 

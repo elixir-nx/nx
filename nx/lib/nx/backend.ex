@@ -137,7 +137,8 @@ defmodule Nx.Backend do
   Invoked for execution of `Nx.block/4`.
 
   `output` is the result template (`Nx.Tensor` or tuple of tensors). `args` are
-  the tensor (and optional trailing keyword lists) passed to `Nx.block/4`.
+  the tensors or containers of tensors (and optional trailing keyword lists)
+  passed to `Nx.block/4`.
   Backends should dispatch on `struct` (see `Nx.Block.*`) and either run a
   native implementation or invoke `fun` as `apply(fun, [struct | args])`.
   """

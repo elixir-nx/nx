@@ -854,6 +854,54 @@ defmodule EXLA.Defn.ExprTest do
       assert_all_close(right, Nx.cos(input))
     end
 
+    defmodule ContainerBlock do
+      defstruct []
+    end
+
+    test "compiles a container argument with a vectorized entry" do
+      left = Nx.tensor([[0.0, 1.0], [2.0, 3.0]]) |> Nx.vectorize(:batch)
+      right = Nx.tensor([0.5, 1.5])
+
+      fun = fn pair ->
+        Nx.block(%ContainerBlock{}, [pair], nil, fn _, {left, right} ->
+          Nx.add(Nx.sin(left), Nx.cos(right))
+        end)
+      end
+
+      assert_all_close(EXLA.jit_apply(fun, [{left, right}]), Nx.add(Nx.sin(left), Nx.cos(right)))
+
+      {grad_left, grad_right} =
+        EXLA.jit_apply(fn pair -> Nx.Defn.grad(pair, &Nx.sum(fun.(&1))) end, [{left, right}])
+
+      {expected_left, expected_right} =
+        EXLA.jit_apply(
+          fn pair ->
+            Nx.Defn.grad(pair, fn {left, right} -> Nx.sum(Nx.add(Nx.sin(left), Nx.cos(right))) end)
+          end,
+          [{left, right}]
+        )
+
+      assert_all_close(grad_left, expected_left)
+      assert_all_close(grad_right, expected_right)
+    end
+
+    test "compiles a container with more tensors than a function can take as arguments" do
+      count = 300
+      tensors = List.to_tuple(Enum.map(1..count, &Nx.tensor(&1 * 1.0)))
+
+      result =
+        EXLA.jit_apply(
+          fn tensors ->
+            Nx.block(%ContainerBlock{}, [tensors], nil, fn _, tensors ->
+              tensors |> Tuple.to_list() |> Nx.stack() |> Nx.sum()
+            end)
+          end,
+          [tensors]
+        )
+
+      assert_equal(result, Nx.tensor(count * (count + 1) / 2))
+    end
+
     test "differentiates a nonlinear expression through a vectorized block" do
       input = Nx.tensor([[0.0, 1.0], [2.0, 3.0]]) |> Nx.vectorize(:batch)
 

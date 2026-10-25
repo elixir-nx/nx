@@ -234,7 +234,10 @@ defmodule Nx.Defn.Evaluator do
     [struct, in_args, expr, callback] = args
 
     {call_prefix, call_suffix} = Enum.split_while(in_args, &(not is_list(&1)))
-    {call_prefix, cache} = Enum.map_reduce(call_prefix, cache, &compute_cache(&1, state, &2))
+
+    {call_prefix, cache} =
+      Enum.map_reduce(call_prefix, cache, &composite_compute_cache(&1, state, &2))
+
     in_args = call_prefix ++ call_suffix
 
     {[struct, in_args, expr, callback], cache}
@@ -463,9 +466,14 @@ defmodule Nx.Defn.Evaluator do
   end
 
   defp eval_apply(:block, [struct, in_args, expr, callback], ans, state, caches) do
-    {in_args, caches} = Enum.map_reduce(in_args, caches, &eval(&1, state, &2))
-    {param_prefix, _} = Enum.split_while(in_args, &(not is_list(&1)))
-    backend = Nx.Shared.list_impl!(param_prefix)
+    {in_args, caches} =
+      Enum.map_reduce(in_args, caches, fn
+        opts, caches when is_list(opts) -> {opts, caches}
+        arg, caches -> Composite.traverse(arg, caches, &eval(&1, state, &2))
+      end)
+
+    {tensor_args, _opts} = Enum.split_while(in_args, &(not is_list(&1)))
+    backend = tensor_args |> Composite.flatten_list() |> Nx.Shared.list_impl!()
 
     out =
       case ans do

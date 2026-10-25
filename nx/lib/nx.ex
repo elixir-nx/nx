@@ -7385,7 +7385,10 @@ defmodule Nx do
   Executes an extensible computation block.
 
   `struct` identifies the block and carries static configuration. `args` is a
-  list of runtime inputs and `output` is the output template. The default
+  list of runtime inputs and `output` is the output template. Each input is a
+  tensor or a container of tensors, such as a tuple or a map, followed by
+  optional keyword lists. A block with many inputs can group them into one
+  container instead of listing each as a separate argument. The default
   implementation `fun` receives the struct first and then each argument in
   order (`apply(fun, [struct | args])`).
 
@@ -7402,7 +7405,8 @@ defmodule Nx do
             "Nx.block/4 expected a default fun/#{arity} for #{length(args)} argument(s), got: #{inspect(fun)}"
     end
 
-    backend = Nx.Shared.list_impl!(args)
+    {tensor_args, _opts} = Enum.split_while(args, &(not is_list(&1)))
+    backend = tensor_args |> Nx.Defn.Composite.flatten_list() |> Nx.Shared.list_impl!()
     backend.block(struct, output, args, fun)
   end
 
