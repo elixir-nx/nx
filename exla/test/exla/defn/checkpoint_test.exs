@@ -219,7 +219,7 @@ defmodule EXLA.Defn.CheckpointTest do
     assert_all_close(gradient, Nx.Defn.grad(scale, &vectorized_scale_loss_plain(x, &1)))
   end
 
-  test "a tuple input is flattened into the block and rebuilt for the body" do
+  test "a tuple input computes the same value and gradient as the plain function" do
     pair = {Nx.tensor([0.5, 1.0, 1.5]), Nx.tensor([2.0, 2.5, 3.0])}
     assert_all_close(pair_loss(pair), pair_loss_plain(pair))
     {grad_a, grad_b} = Nx.Defn.grad(pair, &pair_loss/1)
