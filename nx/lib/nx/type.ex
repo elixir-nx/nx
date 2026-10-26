@@ -776,6 +776,43 @@ defmodule Nx.Type do
   def epsilon_binary(type),
     do: raise(ArgumentError, "only floating types are supported, got: #{inspect(type)}")
 
+  # Raises when an Elixir integer is outside the range of an integer type.
+  # Tensor creation and defn literals call it, element-wise arithmetic does not.
+  @doc false
+  def check_integer!({:s, size} = type, int) when is_integer(int) do
+    max = 2 ** (size - 1)
+    check_integer!(type, -max, max, int)
+  end
+
+  def check_integer!({:u, size} = type, int) when is_integer(int) do
+    check_integer!(type, 0, 2 ** size, int)
+  end
+
+  def check_integer!(_type, _number), do: :ok
+
+  defp check_integer!({kind, size}, min, max, int) do
+    if int < min or int >= max do
+      hint =
+        case suggested_integer_type(kind, int) do
+          nil -> "no integer type can hold it"
+          {hint_kind, hint_size} -> "pass type: :#{hint_kind}#{hint_size} to hold it"
+        end
+
+      raise ArgumentError,
+            "the integer #{int} does not fit in the type :#{kind}#{size}, #{hint}"
+    end
+
+    :ok
+  end
+
+  defp suggested_integer_type(kind, int) do
+    cond do
+      int < -(2 ** 63) or int >= 2 ** 64 -> nil
+      int >= 2 ** 63 or (kind == :u and int >= 0) -> {:u, max(unsigned_size(int), 8)}
+      true -> {:s, max(signed_size(int), 8)}
+    end
+  end
+
   defp unsigned_size(x) when x <= 1, do: 1
   defp unsigned_size(x) when x <= 255, do: 8
   defp unsigned_size(x) when x <= 65535, do: 16

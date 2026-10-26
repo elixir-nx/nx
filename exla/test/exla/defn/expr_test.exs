@@ -344,7 +344,7 @@ defmodule EXLA.Defn.ExprTest do
 
     test "negate" do
       for t <- [
-            Nx.tensor([-1, 0, 1], type: {:u, 8}),
+            Nx.tensor([255, 0, 1], type: {:u, 8}),
             Nx.tensor([-1, 0, 1]),
             Nx.tensor([-1.0, 1.0])
           ] do
