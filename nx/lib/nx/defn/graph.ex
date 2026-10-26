@@ -821,7 +821,12 @@ defmodule Nx.Defn.Graph do
         {res, put_in(acc.used_args[id], res)}
 
       _ ->
-        {in_args, acc} = composite_rewrite_subtree(in_args, state, acc)
+        {in_args, acc} =
+          Enum.map_reduce(in_args, acc, fn
+            opts, acc when is_list(opts) -> {opts, acc}
+            arg, acc -> composite_rewrite_subtree(arg, state, acc)
+          end)
+
         # `subexpr` is hermetic, in the sense that it is a self-contained scope
         # from which the arguments always come from `in_args`, so we can
         # keep it as is.

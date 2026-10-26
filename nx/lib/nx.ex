@@ -7400,13 +7400,32 @@ defmodule Nx do
   Executes an extensible computation block.
 
   `struct` identifies the block and carries static configuration. `args` is a
-  list of runtime inputs and `output` is the output template. The default
+  list of runtime inputs and `output` is the output template. Each input is a
+  tensor or a container of tensors, such as a tuple or a map, followed by
+  optional keyword lists. A block with many inputs can group them into one
+  container instead of listing each as a separate argument. The default
   implementation `fun` receives the struct first and then each argument in
   order (`apply(fun, [struct | args])`).
 
   The backend’s `c:Nx.Backend.block/4` receives `struct`, `output`, `args`, and `fun`, and
   should either run a native implementation or invoke the default as
   `apply(fun, [struct | args])`.
+
+  ## Examples
+
+      iex> defmodule ScaleShift do
+      ...>   defstruct []
+      ...> end
+      iex> x = Nx.tensor([1.0, 2.0, 3.0])
+      iex> weights = {Nx.tensor([2.0, 3.0, 4.0]), Nx.tensor(0.5)}
+      iex> Nx.block(struct(ScaleShift), [x, weights], nil, fn _struct, x, {scale, bias} ->
+      ...>   Nx.add(Nx.multiply(x, scale), bias)
+      ...> end)
+      #Nx.Tensor<
+        f32[3]
+        [2.5, 6.5, 12.5]
+      >
+
   """
   @doc type: :element
   def block(struct, args, output, fun) when is_list(args) do
@@ -7417,7 +7436,8 @@ defmodule Nx do
             "Nx.block/4 expected a default fun/#{arity} for #{length(args)} argument(s), got: #{inspect(fun)}"
     end
 
-    backend = Nx.Shared.list_impl!(args)
+    {tensor_args, _opts} = Enum.split_while(args, &(not is_list(&1)))
+    backend = tensor_args |> Nx.Defn.Composite.flatten_list() |> Nx.Shared.list_impl!()
     backend.block(struct, output, args, fun)
   end
 

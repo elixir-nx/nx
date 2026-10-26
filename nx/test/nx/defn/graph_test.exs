@@ -362,6 +362,34 @@ defmodule Nx.Defn.GraphTest do
       assert subexpr_arg_0_id != arg_1_id
     end
 
+    defmodule ContainerBlock do
+      defstruct []
+    end
+
+    test "rewrites block arguments inside containers" do
+      input = Nx.tensor([[1, 1, 1], [1, 1, 1]])
+
+      expr =
+        Nx.Defn.debug_expr(fn a, b ->
+          y = Nx.sum(Nx.add(b, 1), axes: [1])
+          Nx.block(%ContainerBlock{}, [{y, a}], nil, fn _, {y, a} -> Nx.subtract(y, a) end)
+        end).(1, input)
+
+      split_fn = fn
+        %T{data: %Expr{op: :sum}} -> :before
+        _ -> :none
+      end
+
+      assert [%Stage{} = stage_0, %Stage{} = stage_1] = Graph.split(expr, split_fn)
+      assert stage_1.arguments == [%{source: {nil, 0}}, %{source: {stage_0.id, 0}}]
+
+      assert %T{data: %Expr{op: :block, args: [%ContainerBlock{}, [{y, a}], _subexpr, _fun]}} =
+               stage_1.expr
+
+      assert %T{data: %Expr{op: :sum, args: [%T{data: %Expr{op: :parameter, args: [1]}}, _]}} = y
+      assert %T{data: %Expr{op: :parameter, args: [0]}} = a
+    end
+
     test "supports in-line anonymous functions" do
       arg0 =
         Nx.u8([

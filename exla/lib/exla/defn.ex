@@ -787,7 +787,12 @@ defmodule EXLA.Defn do
          %{client: client, builder: %Function{}} = state,
          cache
        ) do
-    {call_args, cache} = Enum.map_reduce(in_args, cache, &recur_operator(&1, state, &2))
+    # A container argument contributes its tensors to the compiled function's
+    # parameters in traversal order, matching the body's parameter positions.
+    {call_args, cache} =
+      in_args
+      |> Composite.flatten_list()
+      |> Enum.map_reduce(cache, &recur_operator(&1, state, &2))
 
     case EXLA.CustomCall.call(struct, out, in_args, client) do
       :skip ->
