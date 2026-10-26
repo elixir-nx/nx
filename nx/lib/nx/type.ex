@@ -779,18 +779,18 @@ defmodule Nx.Type do
   # Raises when an Elixir integer is outside the range of an integer type.
   # Tensor creation and defn literals call it, element-wise arithmetic does not.
   @doc false
-  def check_integer!({:s, size}, int) when is_integer(int) do
+  def check_integer!({:s, size} = type, int) when is_integer(int) do
     max = 2 ** (size - 1)
-    check_integer!(:s, -max, max, int)
+    check_integer!(type, -max, max, int)
   end
 
-  def check_integer!({:u, size}, int) when is_integer(int) do
-    check_integer!(:u, 0, 2 ** size, int)
+  def check_integer!({:u, size} = type, int) when is_integer(int) do
+    check_integer!(type, 0, 2 ** size, int)
   end
 
   def check_integer!(_type, _number), do: :ok
 
-  defp check_integer!(kind, min, max, int) do
+  defp check_integer!({kind, size}, min, max, int) do
     if int < min or int >= max do
       hint =
         case suggested_integer_type(kind, int) do
