@@ -799,12 +799,20 @@ defmodule EXLA.Defn do
         default_block_implementation(struct, call_args, out, state, cache)
 
       {:ok, %CustomCallSpec{} = spec} ->
-        dictionary_entries =
-          case spec.attributes do
-            list when is_list(list) ->
+        backend_config =
+          case spec do
+            %{backend_config: nil, attributes: list} when is_list(list) ->
               list
 
-            other ->
+            %{backend_config: config, attributes: [], api_version: version}
+            when is_binary(config) and version < 4 ->
+              config
+
+            %{backend_config: config} when config != nil ->
+              raise ArgumentError,
+                    "EXLA.CustomCall.Spec backend_config must be a binary with an api_version below 4 and no attributes, got: #{inspect(config)} with api_version #{inspect(spec.api_version)}"
+
+            %{attributes: other} ->
               raise ArgumentError,
                     "EXLA.CustomCall.Spec attributes must be a list of {binary_key, binary_attr} pairs, got: #{inspect(other)}"
           end
@@ -824,14 +832,19 @@ defmodule EXLA.Defn do
           |> Composite.flatten_list()
           |> Enum.map(&expr_to_typespec/1)
 
+        extra_typespecs =
+          Enum.map(spec.extra_results, fn {type, shape} -> Typespec.tensor(type, shape) end)
+
         lowered =
           Value.custom_call(
             call_args,
-            out_typespecs,
+            out_typespecs ++ extra_typespecs,
             spec.call_target_name,
-            dictionary_entries,
-            mlir_attributes
+            backend_config,
+            mlir_attributes,
+            spec.api_version
           )
+          |> Enum.take(length(out_typespecs))
           |> wrap_tuple_result(out)
 
         {lowered, cache}
