@@ -42,8 +42,10 @@ defprotocol EXLA.CustomCall do
       `EXLA.CustomCall.Spec` for `call_target_name`; optional `attributes`
       (`[{name, attr}]` string pairs for the `stablehlo.custom_call` `backend_config`
       dictionary); optional `mlir_attributes` (string pairs emitted directly on
-      `stablehlo.custom_call`); and optional `operand_element_types` (operand converts
-      when they differ from the lowered inputs).
+      `stablehlo.custom_call`); optional `api_version` and `backend_config` (an opaque
+      string for targets of an earlier API version); optional `extra_results` (results
+      after the block outputs, which EXLA drops); and optional `operand_element_types`
+      (operand converts when they differ from the lowered inputs).
 
   ## Dispatch
 
