@@ -823,6 +823,20 @@ defmodule Nx.LinAlgTest do
           key
       end
     end
+
+    test "converges to f64 precision" do
+      key = Nx.Random.key(System.unique_integer())
+      {base, _key} = Nx.Random.normal(key, shape: {12, 12}, type: :f64)
+      {q, _} = Nx.LinAlg.qr(base)
+
+      evals_test = Nx.linspace(12.0, 1.0, n: 12, type: :f64)
+      a = q |> Nx.multiply(evals_test) |> Nx.dot(Nx.transpose(q))
+
+      {evals, evecs} = Nx.LinAlg.eigh(a, eps: 1.0e-12)
+
+      assert_all_close(evals, evals_test, atol: 1.0e-10, rtol: 1.0e-10)
+      assert_all_close(Nx.dot(a, evecs), Nx.multiply(evecs, evals), atol: 1.0e-10, rtol: 1.0e-10)
+    end
   end
 
   describe "svd" do

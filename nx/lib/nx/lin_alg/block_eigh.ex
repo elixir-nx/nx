@@ -181,7 +181,8 @@ defmodule Nx.LinAlg.BlockEigh do
 
     t = 1 / (tau + Nx.select(tau >= 0, t, -t))
 
-    pred = Nx.abs(tr) <= 1.0e-5 * Nx.min(Nx.abs(br), Nx.abs(tl))
+    tiny = 0.1 * Nx.Constants.epsilon(Nx.type(tl))
+    pred = Nx.abs(tr) <= tiny * Nx.min(Nx.abs(br), Nx.abs(tl))
     t = Nx.select(pred, Nx.tensor(0, type: tl.type), t)
 
     c = 1.0 / Nx.sqrt(1.0 + t ** 2)
