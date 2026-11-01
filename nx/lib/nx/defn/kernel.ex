@@ -274,7 +274,7 @@ defmodule Nx.Defn.Kernel do
 
       defn block(x, w1, w2) do
         checkpoint([x, w1, w2], fn x, w1, w2 ->
-          x |> Nx.dot(w1) |> Nx.relu() |> Nx.dot(w2)
+          x |> Nx.dot(w1) |> Nx.max(0) |> Nx.dot(w2)
         end)
       end
 
