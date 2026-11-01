@@ -1033,6 +1033,25 @@ defmodule Nx.LinAlgTest do
       assert s.type == {:f, 64}
       assert vt.type == {:f, 64}
     end
+
+    test "converges to f64 precision" do
+      key = Nx.Random.key(System.unique_integer())
+      {a, key} = Nx.Random.normal(key, shape: {20, 8}, type: :f64)
+      {b, _key} = Nx.Random.normal(key, shape: {8, 8}, type: :f64)
+      {u_test, _} = Nx.LinAlg.qr(a)
+      {v_test, _} = Nx.LinAlg.qr(b)
+
+      s_test = Nx.linspace(8.0, 1.0, n: 8, type: :f64)
+      t = u_test |> Nx.multiply(s_test) |> Nx.dot(Nx.transpose(v_test))
+
+      {u, s, vt} = Nx.LinAlg.svd(t)
+      u = Nx.slice_along_axis(u, 0, 8, axis: 1)
+      opts = [atol: 1.0e-10, rtol: 1.0e-10]
+
+      assert_all_close(s, s_test, opts)
+      assert_all_close(Nx.dot(Nx.transpose(u), u), Nx.eye(8, type: :f64), opts)
+      assert_all_close(u |> Nx.multiply(s) |> Nx.dot(vt), t, opts)
+    end
   end
 
   describe "lu" do
