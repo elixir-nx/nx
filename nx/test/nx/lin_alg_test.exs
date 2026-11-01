@@ -1012,6 +1012,22 @@ defmodule Nx.LinAlgTest do
       end
     end
 
+    test "zeroes the singular values of rank deficient matrices" do
+      key = Nx.Random.key(System.unique_integer())
+
+      for {m, n} <- [{4, 3}, {3, 4}], _ <- 1..5, reduce: key do
+        key ->
+          {a, key} = Nx.Random.normal(key, shape: {m, 2})
+          {b, key} = Nx.Random.normal(key, shape: {2, n})
+          t = a |> Nx.dot(b) |> Nx.multiply(100)
+
+          {_u, s, _vt} = Nx.LinAlg.svd(t, full_matrices?: false)
+          assert_all_close(s[2], Nx.tensor(0.0))
+
+          key
+      end
+    end
+
     test "works with f16" do
       x = Nx.tensor([[0, 0], [0, 0]], type: :f16)
       assert Nx.LinAlg.svd(x) == {Nx.eye(2, type: :f16), ~VEC"0.0 0.0"f16, Nx.eye(2, type: :f16)}
@@ -1044,13 +1060,16 @@ defmodule Nx.LinAlgTest do
       s_test = Nx.linspace(8.0, 1.0, n: 8, type: :f64)
       t = u_test |> Nx.multiply(s_test) |> Nx.dot(Nx.transpose(v_test))
 
-      {u, s, vt} = Nx.LinAlg.svd(t)
-      u = Nx.slice_along_axis(u, 0, 8, axis: 1)
       opts = [atol: 1.0e-10, rtol: 1.0e-10]
 
-      assert_all_close(s, s_test, opts)
-      assert_all_close(Nx.dot(Nx.transpose(u), u), Nx.eye(8, type: :f64), opts)
-      assert_all_close(u |> Nx.multiply(s) |> Nx.dot(vt), t, opts)
+      for full_matrices? <- [true, false] do
+        {u, s, vt} = Nx.LinAlg.svd(t, full_matrices?: full_matrices?)
+        u = Nx.slice_along_axis(u, 0, 8, axis: 1)
+
+        assert_all_close(s, s_test, opts)
+        assert_all_close(Nx.dot(Nx.transpose(u), u), Nx.eye(8, type: :f64), opts)
+        assert_all_close(u |> Nx.multiply(s) |> Nx.dot(vt), t, opts)
+      end
     end
   end
 

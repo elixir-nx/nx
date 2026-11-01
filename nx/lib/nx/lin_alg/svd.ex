@@ -131,7 +131,11 @@ defmodule Nx.LinAlg.SVD do
           Nx.dot(tensor, [-2], tensor, [-2])
       end
 
-    {s_sq, v} = Nx.LinAlg.eigh(gram, max_iter: opts[:max_iter])
+    eps = type_eps(gram)
+    {s_sq, v} = Nx.LinAlg.eigh(gram, max_iter: opts[:max_iter], eps: eps)
+
+    # eigenvalues within the rounding error of the Gram matrix are zero
+    s_sq = Nx.select(s_sq > n * eps * Nx.reduce_max(s_sq), s_sq, 0)
 
     # clamp small floating-point negatives before sqrt
     s = Nx.sqrt(Nx.max(s_sq, 0))
