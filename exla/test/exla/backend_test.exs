@@ -25,6 +25,7 @@ defmodule EXLA.BackendTest do
     expm1: 1,
     rsqrt: 1,
     # Differ from the expected output in the last float digit on some platforms
+    acosh: 1,
     cbrt: 1,
     covariance: 3,
     log10: 1,
@@ -232,6 +233,18 @@ defmodule EXLA.BackendTest do
         Nx.tensor([[16, 25], [70, 160]]) |> Nx.vectorize(:x)
       )
     end
+  end
+
+  # The doctest differs in the last float digit on some platforms
+  test "Nx.acosh/1" do
+    assert_equal(Nx.acosh(Nx.tensor(1, type: :f64)), Nx.tensor(0.0, type: :f64))
+
+    assert_all_close(
+      Nx.acosh(Nx.tensor([1, 2, 3], names: [:x], type: :f64)),
+      Nx.tensor([0.0, 1.3169578969248168, 1.762747174039086], type: :f64),
+      atol: 1.0e-15,
+      rtol: 1.0e-15
+    )
   end
 
   test "Nx.to_binary/1" do
