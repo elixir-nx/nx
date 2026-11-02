@@ -181,6 +181,10 @@ defmodule Nx.LinAlg.BlockEigh do
 
     t = 1 / (tau + Nx.select(tau >= 0, t, -t))
 
+    # Skip the rotation when the off-diagonal entry is below the rounding error
+    # of the diagonal. The 0.1 fudge factor comes from XLA, which uses the f32
+    # epsilon for every type, while here it follows the input type:
+    # https://github.com/openxla/xla/blob/fdefcb8be5d08923ec5d724eab3bd615931eb65e/xla/hlo/transforms/expanders/eigh_expander.cc#L130-L133
     tiny = 0.1 * Nx.Constants.epsilon(Nx.type(tl))
     pred = Nx.abs(tr) <= tiny * Nx.min(Nx.abs(br), Nx.abs(tl))
     t = Nx.select(pred, Nx.tensor(0, type: tl.type), t)
