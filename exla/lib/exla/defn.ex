@@ -827,19 +827,15 @@ defmodule EXLA.Defn do
           |> Composite.flatten_list()
           |> Enum.map(&expr_to_typespec/1)
 
-        extra_typespecs =
-          Enum.map(spec.extra_results, fn {type, shape} -> Typespec.tensor(type, shape) end)
-
         lowered =
           Value.custom_call(
             call_args,
-            out_typespecs ++ extra_typespecs,
+            out_typespecs,
             spec.call_target_name,
             backend_config,
             mlir_attributes,
             spec.api_version
           )
-          |> Enum.take(length(out_typespecs))
           |> wrap_tuple_result(out)
 
         {lowered, cache}

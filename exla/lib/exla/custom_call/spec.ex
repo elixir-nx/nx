@@ -24,11 +24,6 @@ defmodule EXLA.CustomCall.Spec do
       `attributes`. Names must be unique and cannot be `call_target_name`, `api_version`,
       or `backend_config`.
 
-    * **`extra_results`** — Optional `{type, shape}` pairs, default `[]`, of results that
-      the custom call has after the block outputs, such as a scratch workspace. Shapes can
-      have zero-size axes. EXLA drops these results, so the block outputs stay the output
-      of `Nx.block/4`.
-
     * **`operand_element_types`** — How operand SSA values are presented to the handler:
 
       * **`:default`** — use each lowered operand’s element type as produced from the
@@ -49,7 +44,6 @@ defmodule EXLA.CustomCall.Spec do
     api_version: 4,
     attributes: [],
     mlir_attributes: [],
-    extra_results: [],
     operand_element_types: :default
   ]
 
@@ -58,7 +52,6 @@ defmodule EXLA.CustomCall.Spec do
           api_version: pos_integer(),
           attributes: [{String.t(), String.t()}] | String.t(),
           mlir_attributes: [{String.t(), String.t()}],
-          extra_results: [{Nx.Type.t(), tuple()}],
           operand_element_types: :default | [Nx.Type.t()]
         }
 end

@@ -97,18 +97,4 @@ defmodule EXLA.MLIR.CustomCallTest do
     assert mlir =~ "api_version = 2 : i32"
     assert mlir =~ ~S(backend_config = "{\22k\22: \22v\22}")
   end
-
-  test "extra results are dropped from the block outputs" do
-    t = Nx.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0], [7.0, 8.0, 10.0], [1.0, 0.0, 1.0]])
-
-    fun =
-      EXLA.jit(fn t ->
-        Nx.block(%EXLA.Test.QRQBlock{}, [t], Nx.template({4, 3}, :f32), fn _, t ->
-          t |> Nx.LinAlg.qr(mode: :reduced) |> elem(0)
-        end)
-      end)
-
-    {q, _r} = Nx.LinAlg.qr(Nx.backend_copy(t, Nx.BinaryBackend), mode: :reduced)
-    assert_all_close(Nx.abs(fun.(t)), Nx.abs(q), atol: 1.0e-5, rtol: 1.0e-5)
-  end
 end
