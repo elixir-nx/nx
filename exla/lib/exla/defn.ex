@@ -801,20 +801,15 @@ defmodule EXLA.Defn do
       {:ok, %CustomCallSpec{} = spec} ->
         backend_config =
           case spec do
-            %{backend_config: nil, attributes: list} when is_list(list) ->
+            %{attributes: list} when is_list(list) ->
               list
 
-            %{backend_config: config, attributes: [], api_version: version}
-            when is_binary(config) and version < 4 ->
+            %{attributes: config, api_version: version} when is_binary(config) and version < 4 ->
               config
-
-            %{backend_config: config} when config != nil ->
-              raise ArgumentError,
-                    "EXLA.CustomCall.Spec backend_config must be a binary with an api_version below 4 and no attributes, got: #{inspect(config)} with api_version #{inspect(spec.api_version)}"
 
             %{attributes: other} ->
               raise ArgumentError,
-                    "EXLA.CustomCall.Spec attributes must be a list of {binary_key, binary_attr} pairs, got: #{inspect(other)}"
+                    "EXLA.CustomCall.Spec attributes must be a list of {binary_key, binary_attr} pairs, or a binary with an api_version below 4, got: #{inspect(other)} with api_version #{inspect(spec.api_version)}"
           end
 
         mlir_attributes =
