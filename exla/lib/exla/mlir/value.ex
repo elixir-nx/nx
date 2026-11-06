@@ -786,23 +786,31 @@ defmodule EXLA.MLIR.Value do
         [%Value{function: func} | _] = operands,
         typespecs,
         call_target_name,
-        dictionary_entries \\ [],
-        mlir_attributes \\ []
+        backend_config \\ [],
+        mlir_attributes \\ [],
+        api_version \\ 4
       )
-      when is_binary(call_target_name) and is_list(typespecs) and is_list(dictionary_entries) and
-             is_list(mlir_attributes) do
+      when is_binary(call_target_name) and is_list(typespecs) and
+             (is_list(backend_config) or is_binary(backend_config)) and
+             is_list(mlir_attributes) and is_integer(api_version) do
     result_types = typespecs_to_mlir_types(typespecs)
 
     attributes = [
       call_target_name: attr_string(call_target_name),
-      api_version: attr_i32(4)
+      api_version: attr_i32(api_version)
     ]
 
+    # The typed FFI (api_version 4) takes a dictionary, earlier versions an opaque string.
     attributes =
-      if dictionary_entries != [] do
-        Keyword.put(attributes, :backend_config, backend_config_dict_attr(dictionary_entries))
-      else
-        attributes
+      case backend_config do
+        [] ->
+          attributes
+
+        config when is_binary(config) ->
+          Keyword.put(attributes, :backend_config, attr_escaped_string(config))
+
+        entries ->
+          Keyword.put(attributes, :backend_config, backend_config_dict_attr(entries))
       end
 
     attributes = attributes ++ custom_call_mlir_attrs(mlir_attributes)
@@ -1054,6 +1062,19 @@ defmodule EXLA.MLIR.Value do
   end
 
   defp attr_string(string), do: ~s["#{string}"]
+
+  # An MLIR string literal of any binary: quotes, backslashes and control bytes become
+  # \\XX hex escapes.
+  defp attr_escaped_string(string) do
+    escaped =
+      for <<byte <- string>>, into: "" do
+        if byte in [?", ?\\] or byte < 0x20,
+          do: "\\" <> Base.encode16(<<byte>>),
+          else: <<byte>>
+      end
+
+    ~s["#{escaped}"]
+  end
 
   defp attr_symbol_reference(id), do: "@#{id}"
 

@@ -5,6 +5,15 @@ defmodule EXLA.CustomCall.Spec do
 
     * **`call_target_name`** — XLA FFI handler name (`call_target_name` on the op).
 
+    * **`api_version`** — The custom call API version, default `4` (typed FFI). Targets
+      that XLA lowers itself with the earlier ABI, such as the cuDNN fused attention
+      targets, take `2`.
+
+    * **`backend_config`** — Optional binary, default `nil`, emitted as the opaque string
+      `backend_config` of the op. Only an `api_version` below 4 takes it, and then
+      `attributes` must be empty. For example, the cuDNN targets read a JSON
+      `GpuBackendConfig` from it.
+
     * **`attributes`** — Optional `{name, attr}` pairs, default `[]`, merged into
       the `backend_config` dictionary on `stablehlo.custom_call` (StableHLO’s name
       for that attribute). Each `name` must be a **BEAM binary** MLIR identifier; each
@@ -17,6 +26,11 @@ defmodule EXLA.CustomCall.Spec do
       as layouts and sharding rules. Names and attributes use the same binary format as
       `attributes`. Names must be unique and cannot be `call_target_name`, `api_version`,
       or `backend_config`.
+
+    * **`extra_results`** — Optional `{type, shape}` pairs, default `[]`, of results that
+      the custom call has after the block outputs, such as a scratch workspace. Shapes can
+      have zero-size axes. EXLA drops these results, so the block outputs stay the output
+      of `Nx.block/4`.
 
     * **`operand_element_types`** — How operand SSA values are presented to the handler:
 
@@ -35,15 +49,21 @@ defmodule EXLA.CustomCall.Spec do
 
   defstruct [
     :call_target_name,
+    api_version: 4,
+    backend_config: nil,
     attributes: [],
     mlir_attributes: [],
+    extra_results: [],
     operand_element_types: :default
   ]
 
   @type t :: %__MODULE__{
           call_target_name: String.t(),
+          api_version: pos_integer(),
+          backend_config: String.t() | nil,
           attributes: [{String.t(), String.t()}],
           mlir_attributes: [{String.t(), String.t()}],
+          extra_results: [{Nx.Type.t(), tuple()}],
           operand_element_types: :default | [Nx.Type.t()]
         }
 end
