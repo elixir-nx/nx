@@ -131,7 +131,11 @@ defmodule Nx.LinAlg.SVD do
           Nx.dot(tensor, [-2], tensor, [-2])
       end
 
-    {s_sq, v} = Nx.LinAlg.eigh(gram, max_iter: opts[:max_iter])
+    eps = type_eps(gram)
+    {s_sq, v} = Nx.LinAlg.eigh(gram, max_iter: opts[:max_iter], eps: eps)
+
+    # eigenvalues within the rounding error of the Gram matrix are zero
+    s_sq = Nx.select(s_sq > n * eps * Nx.reduce_max(s_sq), s_sq, 0)
 
     # clamp small floating-point negatives before sqrt
     s = Nx.sqrt(Nx.max(s_sq, 0))
@@ -177,7 +181,7 @@ defmodule Nx.LinAlg.SVD do
     {u, h} = qdwh(a, opts)
     # ensure H is hermitian
     h = (h + Nx.LinAlg.adjoint(h)) / 2
-    {s, v} = Nx.LinAlg.eigh(h, max_iter: opts[:max_iter])
+    {s, v} = Nx.LinAlg.eigh(h, max_iter: opts[:max_iter], eps: type_eps(h))
 
     sign = Nx.select(s < 0, -1, 1)
 
@@ -253,6 +257,14 @@ defmodule Nx.LinAlg.SVD do
   # f16 is not enough precision to compute SVD
   deftransformp(min_precision_type({:f, 64}), do: {:f, 64})
   deftransformp(min_precision_type(_), do: {:f, 32})
+
+  deftransformp type_eps(t) do
+    t
+    |> Nx.type()
+    |> Nx.Type.to_real()
+    |> Nx.Constants.epsilon(backend: Nx.BinaryBackend)
+    |> Nx.to_number()
+  end
 
   defnp qdwh_use_qr(u, x, a, b, c) do
     {m, _n} = Nx.shape(x)

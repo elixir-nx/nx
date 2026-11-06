@@ -823,6 +823,20 @@ defmodule Nx.LinAlgTest do
           key
       end
     end
+
+    test "converges to f64 precision" do
+      key = Nx.Random.key(System.unique_integer())
+      {base, _key} = Nx.Random.normal(key, shape: {12, 12}, type: :f64)
+      {q, _} = Nx.LinAlg.qr(base)
+
+      evals_test = Nx.linspace(12.0, 1.0, n: 12, type: :f64)
+      a = q |> Nx.multiply(evals_test) |> Nx.dot(Nx.transpose(q))
+
+      {evals, evecs} = Nx.LinAlg.eigh(a, eps: 1.0e-12)
+
+      assert_all_close(evals, evals_test, atol: 1.0e-10, rtol: 1.0e-10)
+      assert_all_close(Nx.dot(a, evecs), Nx.multiply(evecs, evals), atol: 1.0e-10, rtol: 1.0e-10)
+    end
   end
 
   describe "svd" do
@@ -998,6 +1012,22 @@ defmodule Nx.LinAlgTest do
       end
     end
 
+    test "zeroes the singular values of rank deficient matrices" do
+      key = Nx.Random.key(System.unique_integer())
+
+      for {m, n} <- [{4, 3}, {3, 4}], _ <- 1..5, reduce: key do
+        key ->
+          {a, key} = Nx.Random.normal(key, shape: {m, 2})
+          {b, key} = Nx.Random.normal(key, shape: {2, n})
+          t = a |> Nx.dot(b) |> Nx.multiply(100)
+
+          {_u, s, _vt} = Nx.LinAlg.svd(t, full_matrices?: false)
+          assert_all_close(s[2], Nx.tensor(0.0))
+
+          key
+      end
+    end
+
     test "works with f16" do
       x = Nx.tensor([[0, 0], [0, 0]], type: :f16)
       assert Nx.LinAlg.svd(x) == {Nx.eye(2, type: :f16), ~VEC"0.0 0.0"f16, Nx.eye(2, type: :f16)}
@@ -1018,6 +1048,28 @@ defmodule Nx.LinAlgTest do
       assert u.type == {:f, 64}
       assert s.type == {:f, 64}
       assert vt.type == {:f, 64}
+    end
+
+    test "converges to f64 precision" do
+      key = Nx.Random.key(System.unique_integer())
+      {a, key} = Nx.Random.normal(key, shape: {20, 8}, type: :f64)
+      {b, _key} = Nx.Random.normal(key, shape: {8, 8}, type: :f64)
+      {u_test, _} = Nx.LinAlg.qr(a)
+      {v_test, _} = Nx.LinAlg.qr(b)
+
+      s_test = Nx.linspace(8.0, 1.0, n: 8, type: :f64)
+      t = u_test |> Nx.multiply(s_test) |> Nx.dot(Nx.transpose(v_test))
+
+      opts = [atol: 1.0e-10, rtol: 1.0e-10]
+
+      for full_matrices? <- [true, false] do
+        {u, s, vt} = Nx.LinAlg.svd(t, full_matrices?: full_matrices?)
+        u = Nx.slice_along_axis(u, 0, 8, axis: 1)
+
+        assert_all_close(s, s_test, opts)
+        assert_all_close(Nx.dot(Nx.transpose(u), u), Nx.eye(8, type: :f64), opts)
+        assert_all_close(u |> Nx.multiply(s) |> Nx.dot(vt), t, opts)
+      end
     end
   end
 
