@@ -1028,6 +1028,30 @@ defmodule Nx.LinAlgTest do
       end
     end
 
+    test "keeps small singular values next to dominant ones" do
+      key = Nx.Random.key(42)
+
+      for {type, small, atol} <- [{:f32, 0.1, 2.0e-2}, {:f64, 1.0e-4, 1.0e-7}] do
+        {a, key} = Nx.Random.normal(key, shape: {40, 20}, type: type)
+        {b, _key} = Nx.Random.normal(key, shape: {20, 20}, type: type)
+        {u_test, _} = Nx.LinAlg.qr(a)
+        {v_test, _} = Nx.LinAlg.qr(b)
+
+        s_test =
+          Nx.concatenate([
+            Nx.broadcast(Nx.tensor(100, type: type), {5}),
+            Nx.linspace(small, small / 5, n: 15, type: type)
+          ])
+
+        t = u_test |> Nx.multiply(s_test) |> Nx.dot(Nx.transpose(v_test))
+
+        {u, s, vt} = Nx.LinAlg.svd(t, full_matrices?: false)
+
+        assert_all_close(s, s_test, atol: atol)
+        assert_all_close(u |> Nx.multiply(s) |> Nx.dot(vt), t, atol: atol)
+      end
+    end
+
     test "works with f16" do
       x = Nx.tensor([[0, 0], [0, 0]], type: :f16)
       assert Nx.LinAlg.svd(x) == {Nx.eye(2, type: :f16), ~VEC"0.0 0.0"f16, Nx.eye(2, type: :f16)}
