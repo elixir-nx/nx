@@ -110,7 +110,7 @@ defmodule Nx.LinAlg.SVD do
   end
 
   defnp svd_non_full(tensor, opts) do
-    {_m, n} = Nx.shape(tensor)
+    {m, _n} = Nx.shape(tensor)
 
     # Gram matrix approach: G = AᵀA lives in n × n space regardless of m, avoiding
     # large QDWH intermediates (e.g. (m+n) × (m+n) QR steps) when m ≈ n.
@@ -132,22 +132,31 @@ defmodule Nx.LinAlg.SVD do
       end
 
     eps = type_eps(gram)
-    {s_sq, v} = Nx.LinAlg.eigh(gram, max_iter: opts[:max_iter], eps: eps)
+    {_s_sq, v} = Nx.LinAlg.eigh(gram, max_iter: opts[:max_iter], eps: eps)
 
-    # eigenvalues within the rounding error of the Gram matrix are zero
-    s_sq = Nx.select(s_sq > n * eps * Nx.reduce_max(s_sq), s_sq, 0)
-
-    # clamp small floating-point negatives before sqrt
-    s = Nx.sqrt(Nx.max(s_sq, 0))
-
-    # eigh returns ascending order; sort descending
-    sort_idx = Nx.argsort(s, direction: :desc)
-    s = Nx.take(s, sort_idx)
+    # As in scipy.sparse.linalg.svds, s and U come from AV, not from the eigenvalues.
+    # A QR of AV with columns sorted by norm replaces its dense svd(AV): R is nearly
+    # diagonal, so |diag(R)| gives s and Q gives U.
+    av = Nx.dot(tensor, v)
+    sort_idx = Nx.argsort(Nx.sum(Nx.abs(av) ** 2, axes: [0]), direction: :desc)
+    av = Nx.take(av, sort_idx, axis: 1)
     v = Nx.take(v, sort_idx, axis: 1)
 
-    # U = AV · S⁻¹; zero out columns corresponding to near-zero singular values
-    s_inv = Nx.select(s > n * @eps * s[0], 1 / s, Nx.broadcast(0, Nx.shape(s)))
-    u = Nx.dot(tensor, v) * Nx.new_axis(s_inv, 0)
+    # eps: 0 keeps QR from zeroing entries below its absolute default
+    {q, r} = Nx.LinAlg.qr(av, eps: 0)
+    d = Nx.take_diagonal(r)
+    s = Nx.abs(d)
+
+    sort_idx = Nx.argsort(s, direction: :desc)
+    s = Nx.take(s, sort_idx)
+    d = Nx.take(d, sort_idx)
+    q = Nx.take(q, sort_idx, axis: 1)
+    v = Nx.take(v, sort_idx, axis: 1)
+
+    # same default tolerance as numpy, scipy and PyTorch (m >= n here)
+    keep = s > m * eps * s[0]
+    s = Nx.select(keep, s, 0)
+    u = q * Nx.select(keep, Nx.sign(d), 0)
 
     {u, s, v}
   end
