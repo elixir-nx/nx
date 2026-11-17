@@ -1274,6 +1274,22 @@ defmodule Nx.ServingTest do
       assert Task.await(task2)
     end
 
+    test "returns the result of the client postprocessing of a streaming serving", config do
+      serving =
+        Nx.Serving.jit(&Nx.multiply(&1, 2))
+        |> Nx.Serving.streaming()
+        |> Nx.Serving.client_postprocessing(fn stream, :info ->
+          %{batches: Enum.map(stream, fn {:batch, tensor, _metadata} -> tensor end)}
+        end)
+        |> Nx.Serving.client_preprocessing(&{&1, :info})
+
+      start_supervised!({Nx.Serving, name: config.test, serving: serving, batch_size: 2})
+      batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
+
+      assert Nx.Serving.batched_run({:distributed, config.test}, batch) ==
+               %{batches: [Nx.tensor([2, 4])]}
+    end
+
     @tag :distributed
     test "spawns distributed tasks over the network", config do
       parent = self()

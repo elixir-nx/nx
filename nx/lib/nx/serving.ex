@@ -964,7 +964,8 @@ defmodule Nx.Serving do
   Then `client_postprocessing` is invoked on the response. See the
   module documentation for more information. In the distributed case,
   the callbacks are invoked in the distributed node, but still outside of
-  the serving process.
+  the serving process. The caller gets a stream only when `client_postprocessing`
+  returns a stream, as in a local call.
 
   Note that you cannot batch an `input` larger than the configured
   `:batch_size` in the server.
@@ -1181,12 +1182,15 @@ defmodule Nx.Serving do
         %{mode: mode, distributed_postprocessing: dist_post} =
           :persistent_term.get(persistent_key(name))
 
-        if mode == :execute do
-          exit({ref, dist_post.(result)})
-        else
+        result = dist_post.(result)
+
+        # The caller gets a stream only when the postprocessing returns one, as in a local call.
+        if mode != :execute and (is_function(result) or is_struct(result, Stream)) do
           send(client_pid, {ref, :streaming})
-          Enum.each(dist_post.(result), &send(client_pid, {ref, &1}))
+          Enum.each(result, &send(client_pid, {ref, &1}))
           exit({ref, :streaming})
+        else
+          exit({ref, result})
         end
 
       {:DOWN, reason} ->
