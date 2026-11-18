@@ -65,6 +65,23 @@ defmodule EXLA.MemoryTrackingTest do
     assert Map.get(stats.per_device, 0, 0) == baseline_device_memory + 16
   end
 
+  test "gives the limit of the allocator of each device that reports one" do
+    client = Client.fetch!(@client)
+    %{limit: limit} = Client.get_memory_statistics(client)
+
+    assert Enum.all?(limit, fn {device, bytes} ->
+             device in 0..(client.device_count - 1) and is_integer(bytes) and bytes > 0
+           end)
+  end
+
+  @tag :cuda_required
+  test "gives the limit of the BFC allocator of a CUDA device" do
+    client = Client.fetch!(:cuda)
+    Nx.iota({1000}, type: :u8, backend: {EXLA.Backend, client: :cuda})
+    %{limit: %{0 => limit}, per_device: %{0 => allocated}} = Client.get_memory_statistics(client)
+    assert limit > allocated
+  end
+
   test "reset peak memory" do
     client = Client.fetch!(@client)
 

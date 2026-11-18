@@ -734,6 +734,22 @@ get_per_device_memory(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client) {
 
 FINE_NIF(get_per_device_memory, 0);
 
+// The bytes that the allocator of each addressable device can use, for the
+// devices whose allocator reports a limit.
+std::map<int64_t, int64_t>
+get_memory_limits(ErlNifEnv *env, fine::ResourcePtr<ExlaClient> client) {
+  std::map<int64_t, int64_t> result;
+  for (auto device : client->client()->addressable_devices()) {
+    auto stats = device->GetAllocatorStats();
+    if (stats.ok() && stats->bytes_limit.has_value()) {
+      result[device->global_device_id().value()] = *stats->bytes_limit;
+    }
+  }
+  return result;
+}
+
+FINE_NIF(get_memory_limits, 0);
+
 int64_t callback_server_pid_size(ErlNifEnv *env) {
   (void)env;
   return static_cast<int64_t>(sizeof(ErlNifPid));
