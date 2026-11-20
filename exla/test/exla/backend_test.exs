@@ -25,6 +25,7 @@ defmodule EXLA.BackendTest do
     expm1: 1,
     rsqrt: 1,
     # Differ from the expected output in the last float digit on some platforms
+    acosh: 1,
     cbrt: 1,
     covariance: 3,
     log10: 1,
