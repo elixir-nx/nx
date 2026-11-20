@@ -799,14 +799,17 @@ defmodule EXLA.Defn do
         default_block_implementation(struct, call_args, out, state, cache)
 
       {:ok, %CustomCallSpec{} = spec} ->
-        dictionary_entries =
-          case spec.attributes do
-            list when is_list(list) ->
+        backend_config =
+          case spec do
+            %{attributes: list} when is_list(list) ->
               list
 
-            other ->
+            %{attributes: config, api_version: version} when is_binary(config) and version < 4 ->
+              config
+
+            %{attributes: other} ->
               raise ArgumentError,
-                    "EXLA.CustomCall.Spec attributes must be a list of {binary_key, binary_attr} pairs, got: #{inspect(other)}"
+                    "EXLA.CustomCall.Spec attributes must be a list of {binary_key, binary_attr} pairs, or a binary with an api_version below 4, got: #{inspect(other)} with api_version #{inspect(spec.api_version)}"
           end
 
         mlir_attributes =
@@ -829,8 +832,9 @@ defmodule EXLA.Defn do
             call_args,
             out_typespecs,
             spec.call_target_name,
-            dictionary_entries,
-            mlir_attributes
+            backend_config,
+            mlir_attributes,
+            spec.api_version
           )
           |> wrap_tuple_result(out)
 
