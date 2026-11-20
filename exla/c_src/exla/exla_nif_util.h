@@ -37,52 +37,65 @@ namespace fine {
 
 // Define decoding for xla::Shape from for %EXLA.Typespec{} term
 template <> struct Decoder<xla::Shape> {
-  static xla::Shape decode(ErlNifEnv *env, const ERL_NIF_TERM &term) {
+  static DecodeResult<xla::Shape> try_decode(ErlNifEnv *env,
+                                             const ERL_NIF_TERM &term) {
     ERL_NIF_TERM type_term;
     ERL_NIF_TERM shape_term;
 
     if (!enif_get_map_value(env, term, fine::encode(env, exla::atoms::type),
                             &type_term)) {
-      throw std::invalid_argument(
-          "decode failed, expected EXLA.Typespec struct");
+      return DecodeError("decode failed, expected EXLA.Typespec struct", term);
     }
 
     if (!enif_get_map_value(env, term, fine::encode(env, exla::atoms::shape),
                             &shape_term)) {
-      throw std::invalid_argument(
-          "decode failed, expected EXLA.Typespec struct");
+      return DecodeError("decode failed, expected EXLA.Typespec struct", term);
     }
 
-    return xla::ShapeUtil::MakeShape(decode_type(env, type_term),
-                                     decode_shape(env, shape_term));
+    auto type = decode_type(env, type_term);
+    if (!type) {
+      return std::move(type).error();
+    }
+
+    auto shape = decode_shape(env, shape_term);
+    if (!shape) {
+      return std::move(shape).error();
+    }
+
+    return xla::ShapeUtil::MakeShape(type.value(), shape.value());
   }
 
 private:
-  static std::vector<int64_t> decode_shape(ErlNifEnv *env,
-                                           const ERL_NIF_TERM &term) {
+  static DecodeResult<std::vector<int64_t>>
+  decode_shape(ErlNifEnv *env, const ERL_NIF_TERM &term) {
     int size;
     const ERL_NIF_TERM *terms;
 
     if (!enif_get_tuple(env, term, &size, &terms)) {
-      throw std::invalid_argument(
-          "decode failed, expected shape to be a tuple");
+      return DecodeError("decode failed, expected shape to be a tuple", term);
     }
 
     auto vector = std::vector<int64_t>();
     vector.reserve(size);
 
     for (auto i = 0; i < size; i++) {
-      auto elem = fine::decode<int64_t>(env, terms[i]);
-      vector.push_back(elem);
+      auto elem = fine::try_decode<int64_t>(env, terms[i]);
+      if (!elem) {
+        return std::move(elem).error();
+      }
+      vector.push_back(elem.value());
     }
 
     return vector;
   }
 
-  static xla::PrimitiveType decode_type(ErlNifEnv *env,
-                                        const ERL_NIF_TERM &term) {
-    auto [element, size] =
-        fine::decode<std::tuple<fine::Atom, uint64_t>>(env, term);
+  static DecodeResult<xla::PrimitiveType> decode_type(ErlNifEnv *env,
+                                                     const ERL_NIF_TERM &term) {
+    auto result = fine::try_decode<std::tuple<fine::Atom, uint64_t>>(env, term);
+    if (!result) {
+      return std::move(result).error();
+    }
+    auto &[element, size] = result.value();
 
     if (element == "u") {
       switch (size) {
@@ -149,7 +162,7 @@ private:
       return xla::PRED;
     }
 
-    throw std::invalid_argument("decode failed, unexpected type");
+    return DecodeError("decode failed, unexpected type", term);
   }
 };
 

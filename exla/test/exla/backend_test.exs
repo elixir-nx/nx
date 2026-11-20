@@ -29,6 +29,7 @@ defmodule EXLA.BackendTest do
     cbrt: 1,
     covariance: 3,
     log10: 1,
+    acosh: 1,
     # Doctests copied below as regular tests, so the ones that differ in the
     # last float digit on CUDA can be tagged :skip_cuda
     atan2: 2,
@@ -235,16 +236,18 @@ defmodule EXLA.BackendTest do
     end
   end
 
-  # The doctest differs in the last float digit on some platforms
-  test "Nx.acosh/1" do
-    assert_equal(Nx.acosh(Nx.tensor(1, type: :f64)), Nx.tensor(0.0, type: :f64))
+  describe "Nx.acosh/1" do
+    # The doctest differs from the expected output in the last float digit.
+    test "with a scalar" do
+      assert_all_close(Nx.acosh(Nx.tensor(1, type: :f64)), Nx.tensor(0.0, type: :f64))
+    end
 
-    assert_all_close(
-      Nx.acosh(Nx.tensor([1, 2, 3], names: [:x], type: :f64)),
-      Nx.tensor([0.0, 1.3169578969248168, 1.762747174039086], type: :f64),
-      atol: 1.0e-15,
-      rtol: 1.0e-15
-    )
+    test "with a tensor" do
+      assert_all_close(
+        Nx.acosh(Nx.tensor([1, 2, 3], names: [:x], type: :f64)),
+        Nx.tensor([0.0, 1.3169578969248168, 1.762747174039086], names: [:x], type: :f64)
+      )
+    end
   end
 
   test "Nx.to_binary/1" do

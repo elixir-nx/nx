@@ -79,4 +79,22 @@ defmodule EXLA.MLIR.CustomCallTest do
     assert mlir =~ "#{name} = 1 : i64"
     assert_raise ArgumentError, fn -> String.to_existing_atom(name) end
   end
+
+  test "a binary backend config is an escaped string of the given api_version" do
+    typespec = EXLA.Typespec.tensor({:f, 32}, {1})
+
+    mlir =
+      Module.new([typespec], [typespec], fn function ->
+        [argument] = Function.get_arguments(function)
+
+        [result] =
+          Value.custom_call([argument], [typespec], "legacy", ~s({"k": "v"}), [], 2)
+
+        Value.func_return(function, [result])
+        Module.as_string(function.module)
+      end)
+
+    assert mlir =~ "api_version = 2 : i32"
+    assert mlir =~ ~S(backend_config = "{\22k\22: \22v\22}")
+  end
 end

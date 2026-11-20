@@ -964,7 +964,8 @@ defmodule Nx.Serving do
   Then `client_postprocessing` is invoked on the response. See the
   module documentation for more information. In the distributed case,
   the callbacks are invoked in the distributed node, but still outside of
-  the serving process.
+  the serving process. The caller raises the exceptions of the callbacks,
+  as in a local call.
 
   Note that you cannot batch an `input` larger than the configured
   `:batch_size` in the server.
@@ -1152,12 +1153,18 @@ defmodule Nx.Serving do
                   {:DOWN, ^monitor_ref, _, _, {^ref, :streaming}} ->
                     {:halt, :ok}
 
+                  {:DOWN, ^monitor_ref, _, _, {^ref, :raise, exception, stacktrace}} ->
+                    reraise exception, stacktrace
+
                   {:DOWN, ^monitor_ref, _, _, reason} ->
                     exit({reason, {Nx.Serving, :streaming, []}})
                 end
               end,
               fn _ -> :ok end
             )
+
+          {:DOWN, ^monitor_ref, _, _, {^ref, :raise, exception, stacktrace}} ->
+            reraise exception, stacktrace
 
           {:DOWN, ^monitor_ref, _, _, {^ref, result}} ->
             result
@@ -1176,21 +1183,26 @@ defmodule Nx.Serving do
   def __distributed_batched_run__(client_pid, ref, name, input) do
     pid = Process.whereis(name) || exit(:noproc)
 
-    case local_batched_run(pid, name, input) do
-      {:ok, result} ->
-        %{mode: mode, distributed_postprocessing: dist_post} =
-          :persistent_term.get(persistent_key(name))
+    # The caller raises the exceptions of the callbacks again, as in a local call.
+    try do
+      case local_batched_run(pid, name, input) do
+        {:ok, result} ->
+          %{mode: mode, distributed_postprocessing: dist_post} =
+            :persistent_term.get(persistent_key(name))
 
-        if mode == :execute do
-          exit({ref, dist_post.(result)})
-        else
-          send(client_pid, {ref, :streaming})
-          Enum.each(dist_post.(result), &send(client_pid, {ref, &1}))
-          exit({ref, :streaming})
-        end
+          if mode == :execute do
+            exit({ref, dist_post.(result)})
+          else
+            send(client_pid, {ref, :streaming})
+            Enum.each(dist_post.(result), &send(client_pid, {ref, &1}))
+            exit({ref, :streaming})
+          end
 
-      {:DOWN, reason} ->
-        exit(reason)
+        {:DOWN, reason} ->
+          exit(reason)
+      end
+    rescue
+      exception -> exit({ref, :raise, exception, __STACKTRACE__})
     end
   end
 

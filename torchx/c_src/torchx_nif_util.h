@@ -140,7 +140,8 @@ namespace fine {
 // Decoder for std::vector<int64_t> from tuple (for shape parameters)
 // Elixir passes shapes as tuples like {2, 3}, but we need vector<int64_t>
 template <> struct Decoder<std::vector<int64_t>> {
-  static std::vector<int64_t> decode(ErlNifEnv *env, const ERL_NIF_TERM &term) {
+  static DecodeResult<std::vector<int64_t>>
+  try_decode(ErlNifEnv *env, const ERL_NIF_TERM &term) {
     // First try to decode as tuple (for shapes)
     int size;
     const ERL_NIF_TERM *terms;
@@ -148,7 +149,11 @@ template <> struct Decoder<std::vector<int64_t>> {
       std::vector<int64_t> vec;
       vec.reserve(size);
       for (int i = 0; i < size; i++) {
-        vec.push_back(fine::decode<int64_t>(env, terms[i]));
+        auto elem = fine::try_decode<int64_t>(env, terms[i]);
+        if (!elem) {
+          return std::move(elem).error();
+        }
+        vec.push_back(elem.value());
       }
       return vec;
     }
@@ -156,7 +161,7 @@ template <> struct Decoder<std::vector<int64_t>> {
     // Otherwise try to decode as list
     unsigned int length;
     if (!enif_get_list_length(env, term, &length)) {
-      throw std::invalid_argument("decode failed, expected a tuple or list");
+      return DecodeError("decode failed, expected a tuple or list", term);
     }
 
     std::vector<int64_t> vector;
@@ -165,8 +170,11 @@ template <> struct Decoder<std::vector<int64_t>> {
     auto list = term;
     ERL_NIF_TERM head, tail;
     while (enif_get_list_cell(env, list, &head, &tail)) {
-      auto elem = fine::decode<int64_t>(env, head);
-      vector.push_back(elem);
+      auto elem = fine::try_decode<int64_t>(env, head);
+      if (!elem) {
+        return std::move(elem).error();
+      }
+      vector.push_back(elem.value());
       list = tail;
     }
 
@@ -176,21 +184,24 @@ template <> struct Decoder<std::vector<int64_t>> {
 
 // Decoder for torch::Scalar
 template <> struct Decoder<torch::Scalar> {
-  static torch::Scalar decode(ErlNifEnv *env, const ERL_NIF_TERM &term) {
-    // Try to decode as double
-    try {
-      return torch::Scalar(fine::decode<double>(env, term));
-    } catch (const std::invalid_argument &) {
-      // Try to decode as int64
-      try {
-        return torch::Scalar(fine::decode<int64_t>(env, term));
-      } catch (const std::invalid_argument &) {
-        // Try to decode as complex number (tuple of two doubles)
-        auto complex_tuple = fine::decode<std::tuple<double, double>>(env, term);
-        return torch::Scalar(c10::complex<double>(std::get<0>(complex_tuple),
-                                                   std::get<1>(complex_tuple)));
-      }
+  static DecodeResult<torch::Scalar> try_decode(ErlNifEnv *env,
+                                                const ERL_NIF_TERM &term) {
+    if (auto value = fine::try_decode<double>(env, term)) {
+      return torch::Scalar(value.value());
     }
+
+    if (auto value = fine::try_decode<int64_t>(env, term)) {
+      return torch::Scalar(value.value());
+    }
+
+    // Complex number as a tuple of two doubles
+    if (auto value = fine::try_decode<std::tuple<double, double>>(env, term)) {
+      auto [real, imag] = value.value();
+      return torch::Scalar(c10::complex<double>(real, imag));
+    }
+
+    return DecodeError("decode failed, expected a number or a tuple of two floats",
+                       term);
   }
 };
 
@@ -212,23 +223,32 @@ template <> struct Encoder<torch::Scalar> {
 
 // Decoder for torch::ScalarType (from atom string)
 template <> struct Decoder<torch::ScalarType> {
-  static torch::ScalarType decode(ErlNifEnv *env, const ERL_NIF_TERM &term) {
-    auto type_string = fine::decode<fine::Atom>(env, term).to_string();
-    return torchx::string2type(type_string);
+  static DecodeResult<torch::ScalarType> try_decode(ErlNifEnv *env,
+                                                    const ERL_NIF_TERM &term) {
+    auto atom = fine::try_decode<fine::Atom>(env, term);
+    if (!atom) {
+      return std::move(atom).error();
+    }
+    return torchx::string2type(atom.value().to_string());
   }
 };
 
 // Decoder for torch::Device
 template <> struct Decoder<torch::Device> {
-  static torch::Device decode(ErlNifEnv *env, const ERL_NIF_TERM &term) {
-    auto device_string = fine::decode<std::string>(env, term);
-    return torch::Device(device_string);
+  static DecodeResult<torch::Device> try_decode(ErlNifEnv *env,
+                                                const ERL_NIF_TERM &term) {
+    auto device_string = fine::try_decode<std::string>(env, term);
+    if (!device_string) {
+      return std::move(device_string).error();
+    }
+    return torch::Device(device_string.value());
   }
 };
 
 // Decoder for c10::IntArrayRef (from list of int64)
 template <> struct Decoder<c10::IntArrayRef> {
-  static c10::IntArrayRef decode(ErlNifEnv *env, const ERL_NIF_TERM &term) {
+  static DecodeResult<c10::IntArrayRef> try_decode(ErlNifEnv *env,
+                                                   const ERL_NIF_TERM &term) {
     // We need to store the vector somewhere persistent for IntArrayRef to reference
     // This is tricky - IntArrayRef is a view, so we'll decode to vector instead
     throw std::runtime_error(
@@ -239,12 +259,16 @@ template <> struct Decoder<c10::IntArrayRef> {
 // Decoder for std::vector<torch::Tensor>
 template <>
 struct Decoder<std::vector<torch::Tensor>> {
-  static std::vector<torch::Tensor> decode(ErlNifEnv *env,
-                                           const ERL_NIF_TERM &term) {
-    auto tensor_resources = fine::decode<std::vector<fine::ResourcePtr<torchx::TorchTensor>>>(env, term);
+  static DecodeResult<std::vector<torch::Tensor>>
+  try_decode(ErlNifEnv *env, const ERL_NIF_TERM &term) {
+    auto tensor_resources = fine::try_decode<
+        std::vector<fine::ResourcePtr<torchx::TorchTensor>>>(env, term);
+    if (!tensor_resources) {
+      return std::move(tensor_resources).error();
+    }
     std::vector<torch::Tensor> tensors;
-    tensors.reserve(tensor_resources.size());
-    for (const auto &res : tensor_resources) {
+    tensors.reserve(tensor_resources.value().size());
+    for (const auto &res : tensor_resources.value()) {
       tensors.push_back(res->tensor());
     }
     return tensors;
