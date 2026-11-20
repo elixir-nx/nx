@@ -99,6 +99,43 @@ defmodule Nx.LinAlgTest do
                Nx.tensor([1.0, 1.0, -1.0])
     end
 
+    test "raises for singular matrices from the exhaustively checked domains" do
+      # every 2x2 matrix with entries in -5..5 and every 3x3 matrix with
+      # entries in -1..1 was checked; the test samples those domains
+      for type <- [bf: 16, f: 16, f: 32, f: 64], {n, lo, hi} <- [{2, -5, 5}, {3, -1, 1}] do
+        b = Nx.broadcast(1, {n})
+
+        for {rows, 0} <- small_integer_matrices(n, lo, hi, 50) do
+          t = Nx.tensor(rows, type: type)
+
+          assert_raise ArgumentError, "can't solve for singular matrix", fn ->
+            Nx.LinAlg.solve(t, b)
+          end
+        end
+      end
+    end
+
+    test "is accurate for nonsingular small integer matrices" do
+      for type <- [f: 32, f: 64],
+          {n, lo, hi, count} <- [{2, -5, 5, 50}, {3, -3, 3, 50}, {4, -2, 2, 20}, {5, -1, 1, 10}] do
+        epsilon =
+          type
+          |> Nx.Constants.epsilon()
+          |> Nx.to_number()
+
+        tolerance = 32 * n * epsilon
+
+        for {rows, exact} <- small_integer_matrices(n, lo, hi, count), exact != 0 do
+          t = Nx.tensor(rows, type: type)
+          b = Nx.broadcast(1, {n})
+          x = Nx.LinAlg.solve(t, b)
+          product = Nx.dot(t, x)
+
+          assert relative_residual(product, b, t, x) <= tolerance
+        end
+      end
+    end
+
     test "works with batched input" do
       a = Nx.tensor([[[1, 3, -2], [3, 5, 6], [2, 4, 3]], [[1, 1, 1], [6, -4, 5], [5, 2, 2]]])
       b = Nx.tensor([[5, 7, 8], [2, 31, 13]])
@@ -122,32 +159,6 @@ defmodule Nx.LinAlgTest do
   end
 
   describe "invert" do
-    test "keeps the input type" do
-      for type <- [bf: 16, f: 16, f: 32, f: 64] do
-        t =
-          Nx.tensor(
-            [
-              [2, 0],
-              [0, 4]
-            ],
-            type: type
-          )
-
-        expected =
-          Nx.tensor(
-            [
-              [0.5, 0],
-              [0, 0.25]
-            ],
-            type: type
-          )
-
-        result = Nx.LinAlg.invert(t)
-        assert result.type == type
-        assert_equal(result, expected)
-      end
-    end
-
     test "works with batched input" do
       a = Nx.tensor([[[1, 2], [3, 4]], [[5, 6], [7, 8]]])
       expected_result = Nx.tensor([[[-2, 1], [1.5, -0.5]], [[-4, 3], [3.5, -2.5]]])
@@ -203,6 +214,349 @@ defmodule Nx.LinAlgTest do
 
       invq = Nx.LinAlg.invert(q)
       assert_all_close(Nx.dot(invq, q), Nx.eye(q.shape), atol: 1.0e-15)
+    end
+
+    test "keeps the input type" do
+      for type <- [bf: 16, f: 16, f: 32, f: 64] do
+        t =
+          Nx.tensor(
+            [
+              [2, 0],
+              [0, 4]
+            ],
+            type: type
+          )
+
+        expected =
+          Nx.tensor(
+            [
+              [0.5, 0],
+              [0, 0.25]
+            ],
+            type: type
+          )
+
+        result = Nx.LinAlg.invert(t)
+        assert result.type == type
+        assert_equal(result, expected)
+      end
+    end
+
+    test "returns NaN in the input type for singular matrices" do
+      for type <- [bf: 16, f: 16, f: 32, f: 64] do
+        # rows in arithmetic progression, so the matrix is exactly singular
+        t =
+          Nx.tensor(
+            [
+              [1, 2, 3],
+              [4, 5, 6],
+              [7, 8, 9]
+            ],
+            type: type
+          )
+
+        result = Nx.LinAlg.invert(t)
+        assert result.type == type
+        assert_equal(result, Nx.broadcast(:nan, {3, 3}))
+      end
+    end
+
+    test "returns NaN for a singular matrix whose determinant rounds away from zero" do
+      # exactly singular, but rounding leaves a tiny pivot instead of zero
+      t =
+        Nx.tensor([
+          [2, -1, -1, 0],
+          [2, 0, -1, 1],
+          [-1, 0, 1, 1],
+          [1, 2, -2, -2]
+        ])
+
+      in_f64 = Nx.as_type(t, :f64)
+      nan = Nx.broadcast(:nan, {4, 4})
+
+      assert_equal(Nx.LinAlg.invert(t), nan)
+      assert_equal(Nx.LinAlg.invert(in_f64), nan)
+    end
+
+    test "returns NaN for singular matrices in a batch" do
+      a =
+        Nx.tensor([
+          [
+            [2, 0],
+            [0, 4]
+          ],
+          [
+            [1, 2],
+            [2, 4]
+          ]
+        ])
+
+      expected =
+        Nx.tensor([
+          [
+            [0.5, 0],
+            [0, 0.25]
+          ],
+          [
+            [:nan, :nan],
+            [:nan, :nan]
+          ]
+        ])
+
+      vectorized = Nx.vectorize(a, :x)
+      expected_vectorized = Nx.vectorize(expected, :x)
+
+      assert_equal(Nx.LinAlg.invert(a), expected)
+      assert_equal(Nx.LinAlg.invert(vectorized), expected_vectorized)
+    end
+
+    test "inverts well-conditioned matrices with small entries" do
+      a =
+        Nx.tensor(
+          [
+            [0.2, 0],
+            [0, 0.2]
+          ],
+          type: :f16
+        )
+
+      expected =
+        Nx.tensor(
+          [
+            [5, 0],
+            [0, 5]
+          ],
+          type: :f16
+        )
+
+      assert_equal(Nx.LinAlg.invert(a), expected)
+
+      identity = Nx.eye(10)
+      scaled = Nx.multiply(identity, 1.0e-4)
+      expected_scaled = Nx.multiply(identity, 1.0e4)
+
+      assert_all_close(Nx.LinAlg.invert(scaled), expected_scaled)
+    end
+
+    test "inverts a graded matrix whose smallest pivot is far below its largest" do
+      # the tiny pivot is an entry of the matrix, not the result of cancellation
+      t =
+        Nx.tensor([
+          [1.0, 0.0],
+          [1.0, 1.0e-6]
+        ])
+
+      expected =
+        Nx.tensor([
+          [1.0, 0.0],
+          [-1.0e6, 1.0e6]
+        ])
+
+      assert_equal(Nx.LinAlg.invert(t), expected)
+    end
+
+    test "inverts bf16 diagonal and block-diagonal matrices at sizes where the tolerance is large" do
+      # the tolerance is 0.094 at n = 32 and at n = 64 in bf16; a pivot that
+      # nothing was subtracted from still counts as nonsingular
+      identity = Nx.eye(64, type: :bf16)
+      assert_equal(Nx.LinAlg.invert(identity), identity)
+
+      # the 32x32 block-diagonal matrix with sixteen copies of a 2x2 block on
+      # its diagonal: the Kronecker product of the identity with the block
+      block_diagonal = fn block ->
+        eye = Nx.eye(16, type: :bf16)
+        eye_axes = Nx.reshape(eye, {16, 1, 16, 1})
+
+        block
+        |> Nx.tensor(type: :bf16)
+        |> Nx.reshape({1, 2, 1, 2})
+        |> Nx.multiply(eye_axes)
+        |> Nx.reshape({32, 32})
+      end
+
+      block = [
+        [1, 1],
+        [1, 2]
+      ]
+
+      inverse_block = [
+        [2, -1],
+        [-1, 1]
+      ]
+
+      t = block_diagonal.(block)
+      expected = block_diagonal.(inverse_block)
+
+      assert_equal(Nx.LinAlg.invert(t), expected)
+    end
+
+    test "inverts well-conditioned matrices in every type" do
+      # LAPACK's test suite builds random matrices with a prescribed condition
+      # number and expects systems with cond * epsilon <= 0.1 to be solvable,
+      # after the perturbation bound of Higham, Accuracy and Stability of
+      # Numerical Algorithms, 2nd ed., SIAM, 2002, ch. 7; these are its cond 2
+      # and cond 0.1 / epsilon types
+      for type <- [f: 64, f: 32, f: 16, bf: 16], n <- [4, 8, 16] do
+        epsilon =
+          type
+          |> Nx.Constants.epsilon()
+          |> Nx.to_number()
+
+        for cond <- [2.0, 0.1 / epsilon] do
+          matrices = conditioned_matrices(n, cond, 10, type)
+          inverses = Nx.LinAlg.invert(matrices)
+
+          has_nan =
+            inverses
+            |> Nx.is_nan()
+            |> Nx.any()
+            |> Nx.to_number()
+
+          assert has_nan == 0
+
+          for i <- 0..9 do
+            t = matrices[i]
+            inverse = inverses[i]
+            product = Nx.dot(t, inverse)
+
+            assert relative_residual(product, Nx.eye(n), t, inverse) <= 32 * n * epsilon
+          end
+        end
+      end
+
+      # The Hadamard matrix (Higham, ACM TOMS 17(3), 1991,
+      # doi:10.1145/114697.116805) has entries of 1 and -1 and is orthogonal
+      # up to scaling, so its inverse is its transpose over n. Its elimination
+      # is exact integer arithmetic that cancels many products at each pivot,
+      # which the criterion must not mistake for rounding noise.
+      for type <- [f: 64, f: 32, f: 16, bf: 16], n <- [4, 8, 16, 32] do
+        t = hadamard(n, type)
+
+        expected =
+          t
+          |> Nx.transpose()
+          |> Nx.divide(n)
+
+        assert_equal(Nx.LinAlg.invert(t), expected)
+      end
+    end
+
+    test "returns NaN when the elimination overflows the type" do
+      # The Wilkinson matrix is the classic example of pivot growth (Wilkinson,
+      # J. ACM 8(3), 1961, doi:10.1145/321075.321076): every elimination step
+      # doubles its last column, so the last pivot is 2 ** (n - 1), beyond f16
+      # from n = 17.
+      t = wilkinson(17, :f16)
+      assert_equal(Nx.LinAlg.invert(t), Nx.broadcast(:nan, {17, 17}))
+    end
+
+    test "inverts matrices holding the minimum of a signed integer type" do
+      # the absolute value of the minimum wraps around in the integer type, so
+      # the row magnitudes must be taken after the cast to the floating type
+      for width <- [8, 16, 32, 64] do
+        minimum = -(2 ** (width - 1))
+
+        t =
+          Nx.tensor(
+            [
+              [minimum, 0],
+              [0, 1]
+            ],
+            type: {:s, width}
+          )
+
+        expected =
+          Nx.tensor([
+            [1 / minimum, 0.0],
+            [0.0, 1.0]
+          ])
+
+        assert_equal(Nx.LinAlg.invert(t), expected)
+      end
+    end
+
+    test "inverts a matrix whose rows are below the normal range of f64" do
+      # the row scale is clamped to the largest power of two of the type
+      m = 2.0 ** -1024
+      big = 2.0 ** 1023
+
+      t =
+        Nx.tensor(
+          [
+            [m, m],
+            [m, -m]
+          ],
+          type: :f64
+        )
+
+      expected =
+        Nx.tensor(
+          [
+            [big, big],
+            [big, -big]
+          ],
+          type: :f64
+        )
+
+      assert_equal(Nx.LinAlg.invert(t), expected)
+    end
+
+    test "returns NaN for singular matrices from the exhaustively checked domains, alone and in a batch" do
+      # every 2x2 matrix with entries in -5..5 and every 3x3 matrix with
+      # entries in -1..1 was checked; the test samples those domains
+      for type <- [bf: 16, f: 16, f: 32, f: 64], {n, lo, hi} <- [{2, -5, 5}, {3, -1, 1}] do
+        matrices = small_integer_matrices(n, lo, hi, 50)
+        nan = Nx.broadcast(:nan, {n, n})
+
+        for {rows, 0} <- matrices do
+          t = Nx.tensor(rows, type: type)
+          assert_equal(Nx.LinAlg.invert(t), nan)
+        end
+
+        # a batch mixing singular and nonsingular matrices
+        batch =
+          matrices
+          |> Enum.map(&elem(&1, 0))
+          |> Nx.tensor(type: type)
+
+        inverses = Nx.LinAlg.invert(batch)
+
+        for {{rows, exact}, i} <- Enum.with_index(matrices) do
+          if exact == 0 do
+            assert_equal(inverses[i], nan)
+          else
+            t = Nx.tensor(rows, type: type)
+            assert_all_close(inverses[i], Nx.LinAlg.invert(t))
+          end
+        end
+      end
+    end
+
+    test "is accurate for nonsingular small integer matrices, alone and in a batch" do
+      for type <- [f: 32, f: 64],
+          {n, lo, hi, count} <- [{2, -5, 5, 50}, {3, -3, 3, 50}, {4, -2, 2, 20}, {5, -1, 1, 10}] do
+        epsilon =
+          type
+          |> Nx.Constants.epsilon()
+          |> Nx.to_number()
+
+        tolerance = 32 * n * epsilon
+
+        matrices =
+          for {rows, exact} <- small_integer_matrices(n, lo, hi, count), exact != 0, do: rows
+
+        batch = Nx.tensor(matrices, type: type)
+        inverses = Nx.LinAlg.invert(batch)
+
+        for {rows, i} <- Enum.with_index(matrices) do
+          t = Nx.tensor(rows, type: type)
+          inverse = Nx.LinAlg.invert(t)
+          product = Nx.dot(t, inverse)
+
+          assert relative_residual(product, Nx.eye(n), t, inverse) <= tolerance
+          assert_all_close(inverses[i], inverse)
+        end
+      end
     end
   end
 
@@ -1242,5 +1596,96 @@ defmodule Nx.LinAlgTest do
           key
       end
     end
+  end
+
+  # Random n-by-n integer matrices with entries in lo..hi, paired with their
+  # exact determinant, so a test knows which ones are singular.
+  defp small_integer_matrices(n, lo, hi, count) do
+    key = Nx.Random.key(42)
+    {ints, _} = Nx.Random.randint(key, lo, hi + 1, shape: {count, n, n})
+    for rows <- Nx.to_list(ints), do: {rows, exact_determinant(rows)}
+  end
+
+  defp exact_determinant([[a]]), do: a
+
+  defp exact_determinant([first | rest]) do
+    first
+    |> Enum.with_index()
+    |> Enum.map(fn {x, j} ->
+      minor = Enum.map(rest, &List.delete_at(&1, j))
+      Integer.pow(-1, j) * x * exact_determinant(minor)
+    end)
+    |> Enum.sum()
+  end
+
+  # Random n-by-n matrices with the given condition number in the given type,
+  # built as LAPACK's test generator does: random orthogonal factors around
+  # singular values spread geometrically from 1 to 1 / cond (Stewart, SIAM J.
+  # Numer. Anal. 17(3), 1980, doi:10.1137/0717034).
+  defp conditioned_matrices(n, cond, count, type) do
+    key = Nx.Random.key(42)
+    {left, key} = Nx.Random.normal(key, shape: {count, n, n}, type: :f64)
+    {right, _} = Nx.Random.normal(key, shape: {count, n, n}, type: :f64)
+    {u, _} = Nx.LinAlg.qr(left)
+    {v, _} = Nx.LinAlg.qr(right)
+    ratios = for i <- 0..(n - 1), do: cond ** (-i / max(n - 1, 1))
+    singular_values = Nx.tensor(ratios)
+
+    u
+    |> Nx.multiply(singular_values)
+    |> Nx.dot([2], [0], v, [2], [0])
+    |> Nx.as_type(type)
+  end
+
+  # The Sylvester Hadamard matrix of order n, a power of two, with entries of
+  # 1 and -1: each order doubles the previous one into four blocks, the last
+  # negated.
+  defp hadamard(n, type) do
+    n
+    |> hadamard_rows()
+    |> Nx.tensor(type: type)
+  end
+
+  defp hadamard_rows(1), do: [[1]]
+
+  defp hadamard_rows(n) do
+    half = hadamard_rows(div(n, 2))
+    top = Enum.map(half, &(&1 ++ &1))
+    bottom = Enum.map(half, fn row -> row ++ Enum.map(row, &(-&1)) end)
+    top ++ bottom
+  end
+
+  # The Wilkinson matrix: ones on the diagonal and in the last column, minus
+  # ones below the diagonal, zeros elsewhere.
+  defp wilkinson(n, type) do
+    entries =
+      for i <- 1..n, j <- 1..n do
+        cond do
+          j == n -> 1
+          i == j -> 1
+          j < i -> -1
+          true -> 0
+        end
+      end
+
+    entries
+    |> Nx.tensor(type: type)
+    |> Nx.reshape({n, n})
+  end
+
+  # The backward-error style residual |product - expected| / (|a| |x| + |expected|),
+  # in the max norm and in f64, so it means the same thing for every type
+  defp relative_residual(product, expected, a, x) do
+    norm = fn t ->
+      t
+      |> Nx.abs()
+      |> Nx.reduce_max()
+      |> Nx.to_number()
+    end
+
+    product_f64 = Nx.as_type(product, :f64)
+    expected_f64 = Nx.as_type(expected, :f64)
+    residual = Nx.subtract(product_f64, expected_f64)
+    norm.(residual) / (norm.(a) * norm.(x) + norm.(expected))
   end
 end

@@ -196,6 +196,67 @@ defmodule EXLA.NxLinAlgDoctestTest do
     end
   end
 
+  describe "invert" do
+    test "keeps the input type and returns NaN per singular matrix in a batch" do
+      for type <- [f: 16, bf: 16, f: 32] do
+        batch =
+          Nx.tensor(
+            [
+              [
+                [2, 0],
+                [0, 4]
+              ],
+              [
+                [1, 2],
+                [2, 4]
+              ]
+            ],
+            type: type
+          )
+
+        expected =
+          Nx.tensor(
+            [
+              [
+                [0.5, 0],
+                [0, 0.25]
+              ],
+              [
+                [:nan, :nan],
+                [:nan, :nan]
+              ]
+            ],
+            type: type
+          )
+
+        inverses = Nx.LinAlg.invert(batch)
+        assert inverses.type == type
+        assert_equal(inverses, expected)
+      end
+    end
+
+    test "inverts a matrix whose rows are near the top of the f32 range" do
+      # The row scale 2 ** -127 is subnormal in f32, which XLA flushes to zero.
+      big = 2.0 ** 127
+
+      a =
+        Nx.tensor([
+          [big, big],
+          [big, big * (1 + 2.0 ** -16)]
+        ])
+
+      expected =
+        Nx.tensor([
+          [1 + 2.0 ** -16, -1],
+          [-1, 1]
+        ])
+
+      inverse = Nx.LinAlg.invert(a)
+
+      assert_all_close(Nx.multiply(inverse, 2.0 ** 111), expected)
+    end
+  end
+
   describe "matrix_power" do
     test "supports complex with positive exponent" do
       a = ~MAT[
