@@ -107,6 +107,7 @@ defmodule EXLA.NIF do
   def get_peak_memory(_client), do: err!()
   def reset_peak_memory(_client), do: err!()
   def get_per_device_memory(_client), do: err!()
+  def get_memory_limits(_client), do: err!()
 
   # Elixir callback bridge
   def runtime_callback_reply(_reply_tag, _status, _result), do: err!()

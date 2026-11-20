@@ -1274,6 +1274,41 @@ defmodule Nx.ServingTest do
       assert Task.await(task2)
     end
 
+    test "raises the exceptions of the client preprocessing in the caller", config do
+      serving =
+        Nx.Serving.jit(&Nx.multiply(&1, 2))
+        |> Nx.Serving.client_preprocessing(fn
+          %Nx.Batch{} = batch -> {batch, :info}
+          input -> raise ArgumentError, "expected a batch, got: #{inspect(input)}"
+        end)
+
+      start_supervised!({Nx.Serving, name: config.test, serving: serving, batch_size: 2})
+
+      assert_raise ArgumentError, "expected a batch, got: :bad", fn ->
+        Nx.Serving.batched_run({:distributed, config.test}, :bad)
+      end
+    end
+
+    test "raises the exceptions of a stream of the client postprocessing in the caller",
+         config do
+      serving =
+        Nx.Serving.jit(&Nx.multiply(&1, 2))
+        |> Nx.Serving.streaming()
+        |> Nx.Serving.client_postprocessing(fn stream, :info ->
+          Stream.map(stream, fn {:batch, tensor, _metadata} ->
+            raise ArgumentError, "bad batch: #{inspect(Nx.to_list(tensor))}"
+          end)
+        end)
+        |> Nx.Serving.client_preprocessing(&{&1, :info})
+
+      start_supervised!({Nx.Serving, name: config.test, serving: serving, batch_size: 2})
+      batch = Nx.Batch.concatenate([Nx.tensor([1, 2])])
+
+      assert_raise ArgumentError, "bad batch: [2, 4]", fn ->
+        Nx.Serving.batched_run({:distributed, config.test}, batch) |> Enum.to_list()
+      end
+    end
+
     @tag :distributed
     test "spawns distributed tasks over the network", config do
       parent = self()

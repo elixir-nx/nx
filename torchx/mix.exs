@@ -48,7 +48,7 @@ defmodule Torchx.MixProject do
     [
       # {:nx, "~> 1.0.0"},
       {:nx, path: "../nx"},
-      {:fine, "~> 0.1.0", runtime: false},
+      {:fine, "~> 0.2.0", runtime: false},
       {:ex_doc, "~> 0.29", only: :docs}
     ]
   end

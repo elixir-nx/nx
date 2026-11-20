@@ -74,7 +74,7 @@ defmodule EXLA.MixProject do
       # {:nx, "~> 1.0"},
       {:telemetry, "~> 0.4.0 or ~> 1.0"},
       {:xla, "~> 0.11.0", runtime: false},
-      {:fine, "~> 0.1", runtime: false},
+      {:fine, "~> 0.2.0", runtime: false},
       {:elixir_make, "~> 0.6", runtime: false},
       {:benchee, "~> 1.0", only: :dev},
       {:ex_doc, "~> 0.29", only: :docs},
