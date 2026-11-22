@@ -847,8 +847,6 @@ defmodule Nx.Defn.Expr do
         end)
       end)
 
-    context = parent_context || :root
-
     # Nodes store devectorized tensors, so the body is traced on the
     # vectorized view and the result is vectorized again on the way out.
     vectorized_axes = args |> Composite.flatten_list() |> Enum.map(& &1.vectorized_axes)
@@ -891,12 +889,12 @@ defmodule Nx.Defn.Expr do
     case Composite.traverse(traced, &Nx.devectorize/1) do
       %{} = res ->
         res
-        |> expr(context, :block, [struct, in_args, res, fun])
+        |> expr(parent_context, :block, [struct, in_args, res, fun])
         |> revectorize_block_result(out_vectorized_axes)
 
       t when is_tuple(t) ->
         out = tuple_out(tuple_size(t))
-        node = expr(out, context, :block, [struct, in_args, t, fun])
+        node = expr(out, parent_context, :block, [struct, in_args, t, fun])
         revectorize_block_result(tuple(node, Tuple.to_list(t)), out_vectorized_axes)
     end
   end
