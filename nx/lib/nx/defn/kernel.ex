@@ -250,6 +250,48 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Computes `fun` on `inputs` again at every use of its result.
+
+  The result is not kept in memory. Every operation that uses it runs
+  `fun` again from `inputs`, with or without `grad`. An input that is
+  itself the result of a checkpoint is computed again as well, so in a
+  chain of checkpoints one use of the last result runs every function in
+  the chain.
+
+  `inputs` is a tensor or a container of tensors, or a list of them for a
+  function of several arguments. `fun` cannot read tensors from the
+  enclosing scope and returns a tensor or a tuple of tensors.
+
+  ## Examples
+
+      defn twice(x, w) do
+        y = checkpoint([x, w], fn x, w -> Nx.exp(Nx.dot(x, w)) end)
+        # Nx.exp(Nx.dot(x, w)) runs once for each operand below
+        Nx.sum(y) + Nx.reduce_max(y)
+      end
+
+  """
+  def checkpoint(inputs, fun) when is_function(fun) do
+    arguments = List.wrap(inputs)
+    arity = length(arguments)
+
+    unless is_function(fun, arity) do
+      Kernel.raise(
+        ArgumentError,
+        "checkpoint expected a function of arity #{arity} for #{arity} input(s), got: #{Kernel.inspect(fun)}"
+      )
+    end
+
+    Kernel.if Enum.any?(Nx.Defn.Composite.flatten_list(arguments), &is_struct(&1, Nx.Tensor)) do
+      Nx.block(%Nx.Block.Checkpoint{}, [List.to_tuple(arguments)], nil, fn _struct, arguments ->
+        apply(fun, Tuple.to_list(arguments))
+      end)
+    else
+      apply(fun, arguments)
+    end
+  end
+
+  @doc """
   Defines a custom gradient for the given expression.
 
   It also expects a list of inputs of the gradient and a `fun`
