@@ -96,4 +96,14 @@ defmodule EXLAHelpers do
       {:error, message} -> raise RuntimeError, message: message
     end
   end
+
+  @doc """
+  Runs a dot of `a` with itself on the CUDA client and gives the result on the host.
+
+  `EXLA.CompileStackTest` calls it on a peer node.
+  """
+  def dot_on_cuda(a) do
+    EXLA.jit_apply(fn a -> Nx.dot(a, a) end, [a], client: :cuda)
+    |> Nx.backend_copy(Nx.BinaryBackend)
+  end
 end
