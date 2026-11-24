@@ -140,6 +140,14 @@ defmodule Torchx.NxTest do
   end
 
   describe "unary ops" do
+    test "argmax and argmin break global ties at the highest flattened index" do
+      t = Nx.tensor([[3, 1, 3], [1, 2, 2]])
+      assert_equal(Nx.argmax(t, tie_break: :high), 2)
+      assert_equal(Nx.argmin(t, tie_break: :high), 3)
+      assert_equal(Nx.argmax(t, tie_break: :high, keep_axis: true), 2)
+      assert_equal(Nx.argmax(Nx.tensor(7), tie_break: :high), 0)
+    end
+
     for op <- @unary_ops -- [:bitwise_not],
         type <- @types do
       if type == {:f, 64} or type == {:c, 128} do

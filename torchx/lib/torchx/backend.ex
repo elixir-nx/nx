@@ -885,10 +885,18 @@ defmodule Torchx.Backend do
       end)
       |> to_nx(out)
     else
-      %{data: %{ref: {device, _}}, shape: shape} = t
+      {t_tx, axis, axis_size, keep_axis} =
+        if axis == -1 do
+          size = Nx.size(t)
+          {Torchx.reshape(t_tx, {size}), 0, size, false}
+        else
+          {t_tx, axis, elem(t.shape, axis), keep_axis}
+        end
+
+      device = device_from_ref(t_tx)
 
       scalar =
-        Torchx.scalar_tensor(elem(shape, axis) - 1, to_torch_type(out.type, device), device)
+        Torchx.scalar_tensor(axis_size - 1, to_torch_type(out.type, device), device)
 
       flipped = Torchx.flip(t_tx, [axis])
 
