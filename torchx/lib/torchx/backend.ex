@@ -873,22 +873,30 @@ defmodule Torchx.Backend do
 
   defp argminmax(fun, %T{} = out, %T{} = t, opts) do
     tie_break = opts[:tie_break] || :low
-    axis = opts[:axis] || -1
+    axis = opts[:axis]
     keep_axis = opts[:keep_axis] || false
 
     t_tx = from_nx(t)
 
     if tie_break == :low do
-      apply(Torchx, fun, [t_tx, axis, keep_axis])
+      apply(Torchx, fun, [t_tx, axis || -1, keep_axis])
       |> then(fn result_tx ->
         Torchx.to_type(result_tx, to_torch_type(out.type, device_from_ref(result_tx)))
       end)
       |> to_nx(out)
     else
-      %{data: %{ref: {device, _}}, shape: shape} = t
+      {t_tx, axis, axis_size, keep_axis} =
+        if is_nil(axis) do
+          size = Nx.size(t)
+          {Torchx.reshape(t_tx, {size}), 0, size, false}
+        else
+          {t_tx, axis, elem(t.shape, axis), keep_axis}
+        end
+
+      device = device_from_ref(t_tx)
 
       scalar =
-        Torchx.scalar_tensor(elem(shape, axis) - 1, to_torch_type(out.type, device), device)
+        Torchx.scalar_tensor(axis_size - 1, to_torch_type(out.type, device), device)
 
       flipped = Torchx.flip(t_tx, [axis])
 
