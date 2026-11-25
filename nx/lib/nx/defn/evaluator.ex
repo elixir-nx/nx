@@ -312,16 +312,16 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, [cache | caches]) do
     case cache do
-      # A checkpoint block keeps its evaluated inputs instead of its result
+      # A recompute block keeps its evaluated inputs instead of its result
       # and runs its body again for every consumer.
-      %{^id => {:args, count, [%Nx.Block.Checkpoint{} | _] = args}} when op == :block ->
-        {in_values, [cache | caches]} = eval_checkpoint_inputs(args, state, [cache | caches])
-        res = eval_checkpoint(args, in_values, ans)
+      %{^id => {:args, count, [%Nx.Block.Recompute{} | _] = args}} when op == :block ->
+        {in_values, [cache | caches]} = eval_recompute_inputs(args, state, [cache | caches])
+        res = eval_recompute(args, in_values, ans)
         state.gc && :erlang.garbage_collect(self())
         {res, [decrement_recompute(cache, id, count, {args, in_values}) | caches]}
 
       %{^id => {:recompute, count, {args, in_values}}} ->
-        res = eval_checkpoint(args, in_values, ans)
+        res = eval_recompute(args, in_values, ans)
         state.gc && :erlang.garbage_collect(self())
         {res, [decrement_recompute(cache, id, count, {args, in_values}) | caches]}
 
@@ -377,7 +377,7 @@ defmodule Nx.Defn.Evaluator do
   defp decrement_recompute(cache, id, counter, recipe),
     do: %{cache | id => {:recompute, counter - 1, recipe}}
 
-  defp eval_checkpoint_inputs([_struct, in_args, _expr, _callback], state, caches) do
+  defp eval_recompute_inputs([_struct, in_args, _expr, _callback], state, caches) do
     Enum.map_reduce(in_args, caches, fn arg, caches ->
       Composite.traverse(arg, caches, fn leaf, caches ->
         {value, caches} = eval(leaf, state, caches)
@@ -386,7 +386,7 @@ defmodule Nx.Defn.Evaluator do
     end)
   end
 
-  defp eval_checkpoint([struct, _in_args, expr, callback], in_values, ans) do
+  defp eval_recompute([struct, _in_args, expr, callback], in_values, ans) do
     backend = in_values |> Composite.flatten_list() |> Nx.Shared.list_impl!()
 
     out =
@@ -404,11 +404,11 @@ defmodule Nx.Defn.Evaluator do
   defp eval_parent([cache | caches], id, op, ans, state, acc) do
     case cache do
       %{^id => {:recompute, _count, {args, in_values}}} ->
-        {eval_checkpoint(args, in_values, ans), Enum.reverse(acc, [cache | caches])}
+        {eval_recompute(args, in_values, ans), Enum.reverse(acc, [cache | caches])}
 
-      %{^id => {:args, count, [%Nx.Block.Checkpoint{} | _] = args}} when op == :block ->
-        {in_values, [cache | caches]} = eval_checkpoint_inputs(args, state, [cache | caches])
-        res = eval_checkpoint(args, in_values, ans)
+      %{^id => {:args, count, [%Nx.Block.Recompute{} | _] = args}} when op == :block ->
+        {in_values, [cache | caches]} = eval_recompute_inputs(args, state, [cache | caches])
+        res = eval_recompute(args, in_values, ans)
         cache = Map.put(cache, id, {:recompute, count, {args, in_values}})
         {res, Enum.reverse(acc, [cache | caches])}
 

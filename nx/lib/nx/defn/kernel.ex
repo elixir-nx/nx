@@ -254,8 +254,8 @@ defmodule Nx.Defn.Kernel do
 
   The result is not kept in memory. Every operation that uses it runs
   `fun` again from `inputs`, with or without `grad`. An input that is
-  itself the result of a checkpoint is computed again as well, so in a
-  chain of checkpoints one use of the last result runs every function in
+  itself the result of `recompute` is computed again as well, so in a
+  chain of them one use of the last result runs every function in
   the chain.
 
   `inputs` is a tensor or a container of tensors, or a list of them for a
@@ -265,25 +265,25 @@ defmodule Nx.Defn.Kernel do
   ## Examples
 
       defn twice(x, w) do
-        y = checkpoint([x, w], fn x, w -> Nx.exp(Nx.dot(x, w)) end)
+        y = recompute([x, w], fn x, w -> Nx.exp(Nx.dot(x, w)) end)
         # Nx.exp(Nx.dot(x, w)) runs once for each operand below
         Nx.sum(y) + Nx.reduce_max(y)
       end
 
   """
-  def checkpoint(inputs, fun) when is_function(fun) do
+  def recompute(inputs, fun) when is_function(fun) do
     arguments = List.wrap(inputs)
     arity = length(arguments)
 
     unless is_function(fun, arity) do
       Kernel.raise(
         ArgumentError,
-        "checkpoint expected a function of arity #{arity} for #{arity} input(s), got: #{Kernel.inspect(fun)}"
+        "recompute expected a function of arity #{arity} for #{arity} input(s), got: #{Kernel.inspect(fun)}"
       )
     end
 
     Kernel.if Enum.any?(Nx.Defn.Composite.flatten_list(arguments), &is_struct(&1, Nx.Tensor)) do
-      Nx.block(%Nx.Block.Checkpoint{}, [List.to_tuple(arguments)], nil, fn _struct, arguments ->
+      Nx.block(%Nx.Block.Recompute{}, [List.to_tuple(arguments)], nil, fn _struct, arguments ->
         apply(fun, Tuple.to_list(arguments))
       end)
     else

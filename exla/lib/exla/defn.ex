@@ -570,7 +570,7 @@ defmodule EXLA.Defn do
 
   ## Operator handling
 
-  @checkpoint_tied {__MODULE__, :checkpoint_tied}
+  @recompute_tied {__MODULE__, :recompute_tied}
 
   defp recur_flatten(composite, state, cache) do
     {acc, cache} =
@@ -582,10 +582,10 @@ defmodule EXLA.Defn do
     {List.flatten(acc), cache}
   end
 
-  # A checkpoint block is lowered again for every consumer, so its result is
+  # A recompute block is lowered again for every consumer, so its result is
   # never shared between consumers or kept for a later one.
   defp recur_operator(
-         %T{data: %Expr{op: :block, args: [%Nx.Block.Checkpoint{} | _]}} = expr,
+         %T{data: %Expr{op: :block, args: [%Nx.Block.Recompute{} | _]}} = expr,
          state,
          cache
        ) do
@@ -796,11 +796,11 @@ defmodule EXLA.Defn do
   # that consumer's other operands, so it cannot run before the consumer
   # could, and it is not merged with the copy made for another consumer.
   # The consumer reads those operands from the barrier too, otherwise XLA
-  # drops them from it. Inputs that are checkpoint blocks are lowered again
+  # drops them from it. Inputs that are recompute blocks are lowered again
   # here as well.
   defp cached_recur_operator(
          :block,
-         %T{data: %Expr{args: [%Nx.Block.Checkpoint{} = struct, in_args, out, _callback]}},
+         %T{data: %Expr{args: [%Nx.Block.Recompute{} = struct, in_args, out, _callback]}},
          %{builder: %Function{} = builder} = state,
          cache
        ) do
@@ -809,10 +809,10 @@ defmodule EXLA.Defn do
       |> Composite.flatten_list()
       |> Enum.map_reduce(cache, &recur_operator(&1, state, &2))
 
-    tied = Map.get(cache, @checkpoint_tied, %{})
+    tied = Map.get(cache, @recompute_tied, %{})
 
     ties =
-      for %Value{function: ^builder} = value <- Map.get(state, :checkpoint_ties, []), do: value
+      for %Value{function: ^builder} = value <- Map.get(state, :recompute_ties, []), do: value
 
     {call_args, barriered_ties} =
       (call_args ++ Enum.map(ties, &Map.get(tied, &1, &1)))
@@ -826,7 +826,7 @@ defmodule EXLA.Defn do
       call_args,
       out,
       state,
-      Map.put(cache, @checkpoint_tied, tied)
+      Map.put(cache, @recompute_tied, tied)
     )
   end
 
@@ -1026,10 +1026,10 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(op, expr, state, cache) do
-    # Checkpoint operands are lowered last, tied to the other operands.
+    # Recompute operands are lowered last, tied to the other operands.
     {args, cache} =
       Tree.apply_args(expr, cache, fn
-        %T{data: %Expr{op: :block, args: [%Nx.Block.Checkpoint{} | _]}} = arg, cache ->
+        %T{data: %Expr{op: :block, args: [%Nx.Block.Recompute{} | _]}} = arg, cache ->
           {arg, cache}
 
         arg, cache ->
@@ -1037,11 +1037,11 @@ defmodule EXLA.Defn do
       end)
 
     ties = for %Value{} = value <- List.flatten(List.wrap(args)), do: value
-    {outer_tied, cache} = Map.pop(cache, @checkpoint_tied, %{})
-    {args, cache} = lower_checkpoint_args(args, Map.put(state, :checkpoint_ties, ties), cache)
-    {tied, cache} = Map.pop(cache, @checkpoint_tied, %{})
+    {outer_tied, cache} = Map.pop(cache, @recompute_tied, %{})
+    {args, cache} = lower_recompute_args(args, Map.put(state, :recompute_ties, ties), cache)
+    {tied, cache} = Map.pop(cache, @recompute_tied, %{})
     args = replace_tied(args, tied)
-    {to_operator(op, args, expr, state), Map.put(cache, @checkpoint_tied, outer_tied)}
+    {to_operator(op, args, expr, state), Map.put(cache, @recompute_tied, outer_tied)}
   end
 
   defp replace_tied(args, tied) when tied == %{}, do: args
@@ -1049,22 +1049,22 @@ defmodule EXLA.Defn do
   defp replace_tied(list, tied) when is_list(list), do: Enum.map(list, &replace_tied(&1, tied))
   defp replace_tied(other, _tied), do: other
 
-  defp lower_checkpoint_args(
-         %T{data: %Expr{op: :block, args: [%Nx.Block.Checkpoint{} | _]}} = arg,
+  defp lower_recompute_args(
+         %T{data: %Expr{op: :block, args: [%Nx.Block.Recompute{} | _]}} = arg,
          state,
          cache
        ),
        do: recur_operator(arg, state, cache)
 
-  defp lower_checkpoint_args(list, state, cache) when is_list(list),
-    do: Enum.map_reduce(list, cache, &lower_checkpoint_args(&1, state, &2))
+  defp lower_recompute_args(list, state, cache) when is_list(list),
+    do: Enum.map_reduce(list, cache, &lower_recompute_args(&1, state, &2))
 
-  defp lower_checkpoint_args(tuple, state, cache) when is_tuple(tuple) do
-    {list, cache} = lower_checkpoint_args(Tuple.to_list(tuple), state, cache)
+  defp lower_recompute_args(tuple, state, cache) when is_tuple(tuple) do
+    {list, cache} = lower_recompute_args(Tuple.to_list(tuple), state, cache)
     {List.to_tuple(list), cache}
   end
 
-  defp lower_checkpoint_args(other, _state, cache), do: {other, cache}
+  defp lower_recompute_args(other, _state, cache), do: {other, cache}
 
   defp cast_custom_call_operands(call_args, :default), do: call_args
 

@@ -1,4 +1,4 @@
-defmodule Nx.Defn.CheckpointTest do
+defmodule Nx.Defn.RecomputeTest do
   use ExUnit.Case, async: true
 
   import Nx.Defn
@@ -25,7 +25,7 @@ defmodule Nx.Defn.CheckpointTest do
   end
 
   defn two_uses(x) do
-    y = checkpoint(x, &counted_exp/1)
+    y = recompute(x, &counted_exp/1)
     Nx.sum(y) + Nx.reduce_max(y)
   end
 
@@ -35,8 +35,8 @@ defmodule Nx.Defn.CheckpointTest do
   end
 
   defn chain(x) do
-    y = checkpoint(x, &counted_exp/1)
-    z = checkpoint(y, &counted_sin/1)
+    y = recompute(x, &counted_exp/1)
+    z = recompute(y, &counted_sin/1)
     Nx.sum(z) + Nx.reduce_max(z)
   end
 
@@ -48,8 +48,8 @@ defmodule Nx.Defn.CheckpointTest do
   defn dense(x, w1, w2), do: x |> Nx.dot(w1) |> Nx.max(0) |> Nx.dot(w2) |> Nx.tanh()
 
   defn mlp(weights, x) do
-    y = checkpoint([x, weights], fn x, weights -> dense(x, weights.a, weights.b) end)
-    z = checkpoint([y, weights], fn y, weights -> dense(y, weights.c, weights.d) end)
+    y = recompute([x, weights], fn x, weights -> dense(x, weights.a, weights.b) end)
+    z = recompute([y, weights], fn y, weights -> dense(y, weights.c, weights.d) end)
     Nx.sum(z * z)
   end
 
@@ -59,7 +59,7 @@ defmodule Nx.Defn.CheckpointTest do
   end
 
   defn tuple_output(x) do
-    {a, b} = checkpoint(x, fn x -> {Nx.sin(x), Nx.cos(x)} end)
+    {a, b} = recompute(x, fn x -> {Nx.sin(x), Nx.cos(x)} end)
     Nx.sum(a * b)
   end
 
@@ -74,7 +74,7 @@ defmodule Nx.Defn.CheckpointTest do
     %{a: a, b: b, c: c, d: d}
   end
 
-  describe "checkpoint/2" do
+  describe "recompute/2" do
     test "returns the value of the function" do
       x = Nx.tensor([0.1, 0.2, 0.3])
       assert_all_close(two_uses(x), two_uses_plain(x))
@@ -86,9 +86,9 @@ defmodule Nx.Defn.CheckpointTest do
       assert runs(:exp) == 2
     end
 
-    # The evaluator keeps the evaluated inputs of a checkpoint, so the first
-    # checkpoint of a chain runs once. EXLA lowers it again for every use.
-    test "the evaluator keeps the inputs of a checkpoint" do
+    # The evaluator keeps the evaluated inputs of a recompute block, so the
+    # first block of a chain runs once. EXLA lowers it again for every use.
+    test "the evaluator keeps the inputs of a recompute block" do
       chain(Nx.tensor([0.1, 0.2, 0.3]))
       assert runs(:sin) == 2
       assert runs(:exp) == 1
@@ -123,12 +123,12 @@ defmodule Nx.Defn.CheckpointTest do
 
     test "is the function itself outside defn" do
       x = Nx.tensor([0.1, 0.2, 0.3])
-      assert_all_close(Nx.Defn.Kernel.checkpoint(x, &Nx.exp/1), Nx.exp(x))
+      assert_all_close(Nx.Defn.Kernel.recompute(x, &Nx.exp/1), Nx.exp(x))
     end
 
     test "raises when the function arity does not match the inputs" do
       assert_raise ArgumentError, ~r/expected a function of arity 2/, fn ->
-        Nx.Defn.Kernel.checkpoint([Nx.tensor(1), Nx.tensor(2)], &Nx.exp/1)
+        Nx.Defn.Kernel.recompute([Nx.tensor(1), Nx.tensor(2)], &Nx.exp/1)
       end
     end
   end
