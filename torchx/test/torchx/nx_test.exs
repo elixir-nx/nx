@@ -146,6 +146,7 @@ defmodule Torchx.NxTest do
       assert_equal(Nx.argmin(t, tie_break: :high), 3)
       assert_equal(Nx.argmax(t, tie_break: :high, keep_axis: true), 2)
       assert_equal(Nx.argmax(Nx.tensor(7), tie_break: :high), 0)
+      assert_equal(Nx.argmax(t, axis: -1, tie_break: :high), Nx.tensor([2, 2]))
     end
 
     for op <- @unary_ops -- [:bitwise_not],
