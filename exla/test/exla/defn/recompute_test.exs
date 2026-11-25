@@ -245,4 +245,221 @@ defmodule EXLA.Defn.RecomputeTest do
       assert products.(with_recompute) > products.(plain)
     end
   end
+
+  defn body(x), do: x |> Nx.exp() |> Nx.sin()
+
+  defn loss_with_recompute(x) do
+    y = recompute(x, &body/1)
+    Nx.sum(y * y)
+  end
+
+  defn loss_without_recompute(x) do
+    y = body(x)
+    Nx.sum(y * y)
+  end
+
+  defn nested(x) do
+    out =
+      recompute(x, fn x ->
+        y = x * x
+        z = recompute(y, fn y -> Nx.exp(y) end)
+        Nx.sin(z)
+      end)
+
+    Nx.sum(out * out)
+  end
+
+  defn nested_plain(x) do
+    out = Nx.sin(Nx.exp(x * x))
+    Nx.sum(out * out)
+  end
+
+  defn cond_inside(x) do
+    recompute(x, fn x ->
+      if Nx.sum(x) > 0, do: Nx.sum(Nx.sin(x)), else: Nx.sum(Nx.cos(x))
+    end)
+  end
+
+  defn cond_outside(x) do
+    if Nx.sum(x) > 0 do
+      recompute(x, fn x -> Nx.sum(Nx.sin(x)) end)
+    else
+      Nx.sum(Nx.cos(x))
+    end
+  end
+
+  defn cond_plain(x) do
+    if Nx.sum(x) > 0, do: Nx.sum(Nx.sin(x)), else: Nx.sum(Nx.cos(x))
+  end
+
+  defn while_inside(x) do
+    {_, acc} =
+      while {i = 0, acc = x}, i < 3 do
+        {i + 1, recompute(acc, fn acc -> Nx.sin(acc) * acc end)}
+      end
+
+    Nx.sum(acc)
+  end
+
+  defn while_plain(x) do
+    {_, acc} =
+      while {i = 0, acc = x}, i < 3 do
+        {i + 1, Nx.sin(acc) * acc}
+      end
+
+    Nx.sum(acc)
+  end
+
+  defn vectorized_loss(x, w) do
+    Nx.sum(recompute([x, w], fn x, w -> Nx.sin(Nx.dot(x, w)) * x end))
+  end
+
+  defn vectorized_loss_plain(x, w) do
+    Nx.sum(Nx.sin(Nx.dot(x, w)) * x)
+  end
+
+  defn vectorized_scale_loss(x, scale) do
+    Nx.sum(recompute([x, scale], fn x, scale -> Nx.multiply(Nx.sin(x), scale) end))
+  end
+
+  defn vectorized_scale_loss_plain(x, scale) do
+    Nx.sum(Nx.multiply(Nx.sin(x), scale))
+  end
+
+  defn pair_loss(pair) do
+    {a, b} = recompute(pair, fn {a, b} -> {Nx.sin(a), Nx.cos(b)} end)
+    Nx.sum(a * b)
+  end
+
+  defn pair_loss_plain({a, b}) do
+    Nx.sum(Nx.sin(a) * Nx.cos(b))
+  end
+
+  test "computes the same gradient as the plain function" do
+    x = Nx.iota({16}, type: :f32) |> Nx.divide(16)
+
+    assert_all_close(
+      Nx.Defn.grad(x, &loss_with_recompute/1),
+      Nx.Defn.grad(x, &loss_without_recompute/1)
+    )
+  end
+
+  test "recompute blocks with equal shapes and different bodies keep their own body" do
+    {ws, _} = Nx.Random.normal(Nx.Random.key(0), shape: {8, 16, 16}, type: :f32)
+    x = Nx.iota({8, 16}, type: :f32) |> Nx.divide(128)
+
+    assert_equal(
+      Nx.Defn.grad(ws, &mlp(&1, x)),
+      Nx.Defn.grad(ws, &mlp_plain(&1, x))
+    )
+  end
+
+  test "nested recompute blocks compute the same gradient as the plain function" do
+    x = Nx.tensor([0.5, 1.0, 1.5])
+    assert_all_close(Nx.Defn.grad(x, &nested/1), Nx.Defn.grad(x, &nested_plain/1))
+  end
+
+  test "a cond inside or around a recompute computes the same gradient" do
+    for x <- [Nx.tensor([1.0, 2.0, 3.0]), Nx.tensor([-1.0, -2.0, -3.0])] do
+      plain = Nx.Defn.grad(x, &cond_plain/1)
+      assert_all_close(Nx.Defn.grad(x, &cond_inside/1), plain)
+      assert_all_close(Nx.Defn.grad(x, &cond_outside/1), plain)
+    end
+  end
+
+  test "a recompute inside a while body computes the same gradient" do
+    x = Nx.tensor([0.5, 1.0])
+    assert_all_close(Nx.Defn.grad(x, &while_inside/1), Nx.Defn.grad(x, &while_plain/1))
+  end
+
+  test "a vectorized activation keeps its axes in the value and the gradient" do
+    x = Nx.tensor([[0.5, 1.0], [1.5, 2.0], [2.5, 3.0]]) |> Nx.vectorize(:batch)
+    w = Nx.tensor([[0.5, -0.3], [0.2, 0.8]])
+
+    value = vectorized_loss(x, w)
+    assert value.vectorized_axes == [batch: 3]
+    assert_all_close(value, vectorized_loss_plain(x, w))
+
+    gradient = Nx.Defn.grad(x, &vectorized_loss(&1, w))
+    assert gradient.vectorized_axes == [batch: 3]
+    assert_all_close(gradient, Nx.Defn.grad(x, &vectorized_loss_plain(&1, w)))
+  end
+
+  test "a vectorized input keeps its axes in the gradient when the activation is plain" do
+    x = Nx.tensor([0.5, 1.0])
+    scale = Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]) |> Nx.vectorize(:batch)
+
+    value = vectorized_scale_loss(x, scale)
+    assert value.vectorized_axes == [batch: 3]
+    assert_all_close(value, vectorized_scale_loss_plain(x, scale))
+
+    gradient = Nx.Defn.grad(scale, &vectorized_scale_loss(x, &1))
+    assert gradient.vectorized_axes == [batch: 3]
+    assert_all_close(gradient, Nx.Defn.grad(scale, &vectorized_scale_loss_plain(x, &1)))
+  end
+
+  test "a tuple input computes the same value and gradient as the plain function" do
+    pair = {Nx.tensor([0.5, 1.0, 1.5]), Nx.tensor([2.0, 2.5, 3.0])}
+    assert_all_close(pair_loss(pair), pair_loss_plain(pair))
+    {grad_a, grad_b} = Nx.Defn.grad(pair, &pair_loss/1)
+    {plain_a, plain_b} = Nx.Defn.grad(pair, &pair_loss_plain/1)
+    assert_all_close(grad_a, plain_a)
+    assert_all_close(grad_b, plain_b)
+  end
+
+  defn duplicated_outputs(x) do
+    recompute(x, fn x ->
+      y = x * x
+      {y, y}
+    end)
+  end
+
+  test "duplicated outputs accumulate their gradient contributions" do
+    x = Nx.tensor([2.0, 3.0])
+
+    gradient =
+      grad(x, fn x ->
+        {a, b} = duplicated_outputs(x)
+        Nx.sum(Nx.add(a, Nx.multiply(3, b)))
+      end)
+
+    assert_equal(gradient, Nx.tensor([16.0, 24.0]))
+  end
+
+  test "either duplicated output can be used without the other" do
+    x = Nx.tensor([2.0, 3.0])
+
+    for index <- [0, 1] do
+      gradient = grad(x, fn x -> Nx.sum(elem(duplicated_outputs(x), index)) end)
+      assert_equal(gradient, Nx.tensor([4.0, 6.0]))
+    end
+  end
+
+  defnp dropout(x, key) do
+    {mask, _key} = Nx.Random.uniform(key, shape: Nx.shape(x))
+    Nx.multiply(x, Nx.greater(mask, 0.5))
+  end
+
+  defn dropout_loss(x, key) do
+    Nx.sum(recompute([x, key], fn x, key -> dropout(x, key) end))
+  end
+
+  defn dropout_loss_plain(x, key), do: Nx.sum(dropout(x, key))
+
+  defn dropout_grad(x, key), do: grad(x, fn x -> dropout_loss(x, key) end)
+
+  defn dropout_grad_plain(x, key), do: grad(x, fn x -> dropout_loss_plain(x, key) end)
+
+  test "a random mask from an explicit key is the same in the recomputed body" do
+    x = Nx.tensor([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0])
+    key = Nx.Random.key(42)
+
+    assert_all_close(dropout_loss(x, key), dropout_loss_plain(x, key))
+
+    gradient = dropout_grad(x, key)
+    assert_all_close(gradient, dropout_grad_plain(x, key))
+
+    kept = Nx.to_number(Nx.sum(gradient))
+    assert kept > 0 and kept < 8
+  end
 end
