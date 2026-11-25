@@ -284,11 +284,28 @@ defmodule Nx.Defn.Kernel do
 
     Kernel.if Enum.any?(Nx.Defn.Composite.flatten_list(arguments), &is_struct(&1, Nx.Tensor)) do
       Nx.block(%Nx.Block.Recompute{}, [List.to_tuple(arguments)], nil, fn _struct, arguments ->
-        apply(fun, Tuple.to_list(arguments))
+        recompute_result(apply(fun, Tuple.to_list(arguments)))
       end)
     else
       apply(fun, arguments)
     end
+  end
+
+  defp recompute_result(%Nx.Tensor{} = tensor), do: tensor
+
+  defp recompute_result(tuple) when is_tuple(tuple) do
+    Kernel.if Enum.all?(Tuple.to_list(tuple), &is_struct(&1, Nx.Tensor)) do
+      tuple
+    else
+      recompute_result(Tuple.to_list(tuple))
+    end
+  end
+
+  defp recompute_result(other) do
+    Kernel.raise(
+      ArgumentError,
+      "the function given to recompute must return a tensor or a tuple of tensors, got: #{Kernel.inspect(other)}"
+    )
   end
 
   @doc """

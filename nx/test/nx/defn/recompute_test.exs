@@ -232,6 +232,14 @@ defmodule Nx.Defn.RecomputeTest do
       assert_all_close(Nx.Defn.Kernel.recompute(x, &Nx.exp/1), Nx.exp(x))
     end
 
+    test "raises when the function returns a container other than a tuple" do
+      x = Nx.tensor([1.0, 2.0])
+
+      assert_raise ArgumentError, ~r/must return a tensor or a tuple of tensors/, fn ->
+        Nx.Defn.jit(fn x -> Nx.Defn.Kernel.recompute(x, fn x -> %{value: x} end) end).(x)
+      end
+    end
+
     test "raises when the function arity does not match the inputs" do
       assert_raise ArgumentError, ~r/expected a function of arity 2/, fn ->
         Nx.Defn.Kernel.recompute([Nx.tensor(1), Nx.tensor(2)], &Nx.exp/1)
