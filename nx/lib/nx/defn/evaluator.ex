@@ -312,24 +312,25 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, [cache | caches]) do
     case cache do
-      # A recompute block keeps its evaluated inputs instead of its result
-      # and runs its body again for every consumer.
-      %{^id => {:args, count, [%Nx.Block.Recompute{} | _] = args}} when op == :block ->
-        {in_values, [cache | caches]} = eval_recompute_inputs(args, state, [cache | caches])
-        res = eval_recompute(args, in_values, ans)
+      # A recompute block keeps a recipe instead of its result and runs the
+      # recipe again for every consumer.
+      %{^id => {:recompute, count, recipe}} ->
+        res = run_recipe(recipe, ans)
         state.gc && :erlang.garbage_collect(self())
-        {res, [decrement_recompute(cache, id, count, {args, in_values}) | caches]}
-
-      %{^id => {:recompute, count, {args, in_values}}} ->
-        res = eval_recompute(args, in_values, ans)
-        state.gc && :erlang.garbage_collect(self())
-        {res, [decrement_recompute(cache, id, count, {args, in_values}) | caches]}
+        {res, [decrement_recompute(cache, id, count, recipe) | caches]}
 
       %{^id => {:args, count, args}} ->
-        {res, [cache | caches]} = eval_apply(op, args, ans, state, [cache | caches])
-        state.gc && :erlang.garbage_collect(self())
-        res = store_mark(res, op)
-        {mark(res, op, id, count, state), [decrement_cache(cache, id, count, res) | caches]}
+        if recompute_args?(op, args, [cache | caches]) do
+          {recipe, [cache | caches]} = recompute_recipe(op, args, state, [cache | caches])
+          res = run_recipe(recipe, ans)
+          state.gc && :erlang.garbage_collect(self())
+          {res, [decrement_recompute(cache, id, count, recipe) | caches]}
+        else
+          {res, [cache | caches]} = eval_apply(op, args, ans, state, [cache | caches])
+          state.gc && :erlang.garbage_collect(self())
+          res = store_mark(res, op)
+          {mark(res, op, id, count, state), [decrement_cache(cache, id, count, res) | caches]}
+        end
 
       %{^id => {:result, count, res}} ->
         {mark(res, op, id, count, state), [decrement_cache(cache, id, count, res) | caches]}
@@ -377,16 +378,88 @@ defmodule Nx.Defn.Evaluator do
   defp decrement_recompute(cache, id, counter, recipe),
     do: %{cache | id => {:recompute, counter - 1, recipe}}
 
-  defp eval_recompute_inputs([_struct, in_args, _expr, _callback], state, caches) do
-    Enum.map_reduce(in_args, caches, fn arg, caches ->
-      Composite.traverse(arg, caches, fn leaf, caches ->
-        {value, caches} = eval(leaf, state, caches)
-        {not_donatable(value), caches}
-      end)
-    end)
+  # A recompute block, or an element of one that returns a tuple. Operands
+  # are stored without their arguments, so the cache tells them apart.
+  defp recompute_args?(:block, [%Nx.Block.Recompute{} | _], _caches), do: true
+  defp recompute_args?(:elem, [tuple, _index], caches), do: recompute?(tuple, caches)
+  defp recompute_args?(_op, _args, _caches), do: false
+
+  defp recompute?(%Nx.Tensor{data: %Expr{op: op, id: id}} = expr, [cache | caches])
+       when op in [:block, :elem] do
+    case cache do
+      %{^id => {:recompute, _count, _recipe}} -> true
+      %{^id => {:args, _count, args}} -> recompute_args?(op, args, [cache | caches])
+      %{} -> recompute?(expr, caches)
+    end
   end
 
-  defp eval_recompute([struct, _in_args, expr, callback], in_values, ans) do
+  defp recompute?(_expr, _caches), do: false
+
+  # The recipe of a block holds its evaluated inputs. An input that is itself
+  # the result of a recompute block stays an expression in `in_values` and
+  # its recipe goes in `nested`, so it is computed again on every run too.
+  defp recompute_recipe(:block, [_struct, in_args, _expr, _callback] = args, state, caches) do
+    {in_values, {nested, caches}} =
+      Enum.map_reduce(in_args, {%{}, caches}, fn arg, acc ->
+        Composite.traverse(arg, acc, fn
+          %Nx.Tensor{data: %Expr{id: id}} = leaf, {nested, caches} ->
+            if recompute?(leaf, caches) do
+              {recipe, caches} = take_recipe(leaf, state, caches)
+              {leaf, {Map.put(nested, id, recipe), caches}}
+            else
+              {value, caches} = eval(leaf, state, caches)
+              {not_donatable(value), {nested, caches}}
+            end
+        end)
+      end)
+
+    {{:block, args, in_values, nested}, caches}
+  end
+
+  defp recompute_recipe(:elem, [tuple, index], state, caches) do
+    {recipe, caches} = take_recipe(tuple, state, caches)
+    {{:elem, recipe, tuple, index}, caches}
+  end
+
+  # Takes the recipe of a recompute block for one of its consumers.
+  defp take_recipe(%Nx.Tensor{data: %Expr{op: op, id: id}} = expr, state, [cache | caches]) do
+    case cache do
+      %{^id => {:args, count, args}} ->
+        {recipe, [cache | caches]} = recompute_recipe(op, args, state, [cache | caches])
+        {recipe, [decrement_recompute(cache, id, count, recipe) | caches]}
+
+      %{^id => {:recompute, count, recipe}} ->
+        {recipe, [decrement_recompute(cache, id, count, recipe) | caches]}
+
+      %{} ->
+        take_parent_recipe(caches, expr, state, [cache])
+    end
+  end
+
+  defp take_parent_recipe([cache | caches], %{data: %Expr{op: op, id: id}} = expr, state, acc) do
+    case cache do
+      %{^id => {:args, count, args}} ->
+        {recipe, [cache | caches]} = recompute_recipe(op, args, state, [cache | caches])
+        cache = Map.put(cache, id, {:recompute, count, recipe})
+        {recipe, Enum.reverse(acc, [cache | caches])}
+
+      %{^id => {:recompute, _count, recipe}} ->
+        {recipe, Enum.reverse(acc, [cache | caches])}
+
+      %{} ->
+        take_parent_recipe(caches, expr, state, [cache | acc])
+    end
+  end
+
+  defp run_recipe({:block, [struct, _in_args, expr, callback], in_values, nested}, ans) do
+    in_values =
+      Enum.map(in_values, fn arg ->
+        Composite.traverse(arg, fn
+          %Nx.Tensor{data: %Expr{id: id}} = leaf -> run_recipe(Map.fetch!(nested, id), leaf)
+          value -> value
+        end)
+      end)
+
     backend = in_values |> Composite.flatten_list() |> Nx.Shared.list_impl!()
 
     out =
@@ -398,30 +471,34 @@ defmodule Nx.Defn.Evaluator do
     struct |> backend.block(out, in_values, callback) |> Composite.traverse(&not_donatable/1)
   end
 
+  defp run_recipe({:elem, recipe, tuple, index}, _ans) do
+    recipe |> run_recipe(tuple) |> elem(index) |> tuple_element(tuple) |> not_donatable()
+  end
+
   defp decrement_cache(cache, id, 1, _res), do: Map.delete(cache, id)
   defp decrement_cache(cache, id, counter, res), do: %{cache | id => {:result, counter - 1, res}}
 
   defp eval_parent([cache | caches], id, op, ans, state, acc) do
     case cache do
-      %{^id => {:recompute, _count, {args, in_values}}} ->
-        {eval_recompute(args, in_values, ans), Enum.reverse(acc, [cache | caches])}
-
-      %{^id => {:args, count, [%Nx.Block.Recompute{} | _] = args}} when op == :block ->
-        {in_values, [cache | caches]} = eval_recompute_inputs(args, state, [cache | caches])
-        res = eval_recompute(args, in_values, ans)
-        cache = Map.put(cache, id, {:recompute, count, {args, in_values}})
-        {res, Enum.reverse(acc, [cache | caches])}
+      %{^id => {:recompute, _count, recipe}} ->
+        {run_recipe(recipe, ans), Enum.reverse(acc, [cache | caches])}
 
       %{^id => {:result, _count, res}} ->
         {not_donatable(res), Enum.reverse(acc, [cache | caches])}
 
       %{^id => {:args, count, args}} ->
-        {res, [cache | caches]} = eval_apply(op, args, ans, state, [cache | caches])
-        state.gc && :erlang.garbage_collect(self())
-        res = store_mark(res, op)
+        if recompute_args?(op, args, [cache | caches]) do
+          {recipe, [cache | caches]} = recompute_recipe(op, args, state, [cache | caches])
+          cache = Map.put(cache, id, {:recompute, count, recipe})
+          {run_recipe(recipe, ans), Enum.reverse(acc, [cache | caches])}
+        else
+          {res, [cache | caches]} = eval_apply(op, args, ans, state, [cache | caches])
+          state.gc && :erlang.garbage_collect(self())
+          res = store_mark(res, op)
 
-        {not_donatable(res),
-         Enum.reverse(acc, [Map.put(cache, id, {:result, count, res}) | caches])}
+          {not_donatable(res),
+           Enum.reverse(acc, [Map.put(cache, id, {:result, count, res}) | caches])}
+        end
 
       %{} ->
         eval_parent(caches, id, op, ans, state, [cache | acc])

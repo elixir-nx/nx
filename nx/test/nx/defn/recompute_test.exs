@@ -8,6 +8,7 @@ defmodule Nx.Defn.RecomputeTest do
   # expressions. Only the evaluator calls are counted.
   def counted_exp(x), do: counted(:exp, x, &Nx.exp/1)
   def counted_sin(y), do: counted(:sin, y, &Nx.sin/1)
+  def counted_exp_cos(x), do: {counted_exp(x), Nx.cos(x)}
 
   defp counted(name, %Nx.Tensor{data: %Nx.Defn.Expr{}} = x, fun) when is_atom(name), do: fun.(x)
 
@@ -65,6 +66,80 @@ defmodule Nx.Defn.RecomputeTest do
 
   defn tuple_output_plain(x), do: Nx.sum(Nx.sin(x) * Nx.cos(x))
 
+  defn tuple_two_uses(x) do
+    {a, b} = recompute(x, &counted_exp_cos/1)
+    Nx.sum(a) + Nx.reduce_max(a) + Nx.sum(b)
+  end
+
+  defn tuple_two_uses_plain(x) do
+    a = Nx.exp(x)
+    Nx.sum(a) + Nx.reduce_max(a) + Nx.sum(Nx.cos(x))
+  end
+
+  defn used_in_cond(x) do
+    y = recompute(x, &counted_exp/1)
+
+    if Nx.sum(y) > 0 do
+      Nx.reduce_max(y) * 2
+    else
+      Nx.sum(x)
+    end
+  end
+
+  defn used_in_cond_plain(x) do
+    y = Nx.exp(x)
+
+    if Nx.sum(y) > 0 do
+      Nx.reduce_max(y) * 2
+    else
+      Nx.sum(x)
+    end
+  end
+
+  defn used_in_while(x) do
+    y = recompute(x, &counted_exp/1)
+
+    {_i, total, _y} =
+      while {i = 0, total = Nx.sum(y), y}, i < 3 do
+        {i + 1, total + Nx.sum(y * total), y}
+      end
+
+    total
+  end
+
+  defn used_in_while_plain(x) do
+    y = Nx.exp(x)
+
+    {_i, total, _y} =
+      while {i = 0, total = Nx.sum(y), y}, i < 3 do
+        {i + 1, total + Nx.sum(y * total), y}
+      end
+
+    total
+  end
+
+  defn while_initial(x) do
+    y = recompute(x, &counted_exp/1)
+
+    {_i, acc} =
+      while {i = 0, acc = y}, i < 3 do
+        {i + 1, acc * 0.5}
+      end
+
+    Nx.sum(acc) + Nx.sum(y)
+  end
+
+  defn while_initial_plain(x) do
+    y = Nx.exp(x)
+
+    {_i, acc} =
+      while {i = 0, acc = y}, i < 3 do
+        {i + 1, acc * 0.5}
+      end
+
+    Nx.sum(acc) + Nx.sum(y)
+  end
+
   defp weights do
     key = Nx.Random.key(7)
     {a, key} = Nx.Random.normal(key, shape: {3, 4})
@@ -86,12 +161,43 @@ defmodule Nx.Defn.RecomputeTest do
       assert runs(:exp) == 2
     end
 
-    # The evaluator keeps the evaluated inputs of a recompute block, so the
-    # first block of a chain runs once. EXLA lowers it again for every use.
-    test "the evaluator keeps the inputs of a recompute block" do
+    test "computes inputs that are recompute blocks again" do
       chain(Nx.tensor([0.1, 0.2, 0.3]))
       assert runs(:sin) == 2
-      assert runs(:exp) == 1
+      assert runs(:exp) == 2
+    end
+
+    test "runs a function that returns a tuple once for every use of an element" do
+      x = Nx.tensor([0.1, 0.2, 0.3])
+      assert_all_close(tuple_two_uses(x), tuple_two_uses_plain(x))
+      assert runs(:exp) == 3
+    end
+
+    test "runs the function again for a use inside cond" do
+      x = Nx.tensor([0.1, 0.2, 0.3])
+      assert_all_close(used_in_cond(x), used_in_cond_plain(x))
+      assert runs(:exp) == 2
+
+      assert_all_close(Nx.Defn.grad(x, &used_in_cond/1), Nx.Defn.grad(x, &used_in_cond_plain/1))
+    end
+
+    # The loop state is a value, so the body of the loop reads the copy made
+    # for the while and does not run the function again.
+    test "a while carries one copy through its iterations" do
+      x = Nx.tensor([0.1, 0.2, 0.3])
+      assert_all_close(used_in_while(x), used_in_while_plain(x))
+      assert runs(:exp) == 2
+
+      assert_all_close(
+        Nx.Defn.grad(x, &used_in_while/1),
+        Nx.Defn.grad(x, &used_in_while_plain/1)
+      )
+    end
+
+    test "is the initial value of a while" do
+      x = Nx.tensor([0.1, 0.2, 0.3])
+      assert_all_close(while_initial(x), while_initial_plain(x))
+      assert runs(:exp) == 2
     end
 
     test "the gradient of a chain matches the plain function" do

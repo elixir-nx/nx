@@ -582,25 +582,87 @@ defmodule EXLA.Defn do
     {List.flatten(acc), cache}
   end
 
-  # A recompute block is lowered again for every consumer, so its result is
-  # never shared between consumers or kept for a later one.
-  defp recur_operator(
-         %T{data: %Expr{op: :block, args: [%Nx.Block.Recompute{} | _]}} = expr,
-         state,
-         cache
-       ) do
-    cached_recur_operator(:block, Nx.devectorize(expr), state, cache)
-  end
-
+  # The result of a recompute block is never cached by id, so every
+  # consumer lowers its own copy.
   defp recur_operator(%T{data: %Expr{id: id, op: op}} = expr, state, cache) do
     case cache do
       %{^id => res} ->
         {res, cache}
 
       %{} ->
-        {res, cache} = cached_recur_operator(op, Nx.devectorize(expr), state, cache)
-        {res, Map.put(cache, id, res)}
+        expr = Nx.devectorize(expr)
+
+        if recompute?(expr) do
+          recur_recompute_operands(op, expr, Map.get(state, :recompute_ties, []), state, cache)
+        else
+          state = Map.delete(state, :recompute_ties)
+          {res, cache} = recur_recompute_operands(op, expr, [], state, cache)
+          {res, Map.put(cache, id, res)}
+        end
     end
+  end
+
+  defp recompute?(%T{data: %Expr{op: :block, args: [%Nx.Block.Recompute{} | _]}}), do: true
+
+  defp recompute?(%T{data: %Expr{op: :elem, args: [tuple, _index]}}), do: recompute?(tuple)
+  defp recompute?(_expr), do: false
+
+  # Lowers `expr` after giving it a fresh copy of every operand that is a
+  # recompute block. The copies are lowered after the other operands and tied
+  # to them through an optimization barrier, so a copy cannot run before its
+  # consumer could and is not merged with the copy made for another consumer.
+  # While `expr` is lowered, the cache holds the copies and the barrier's
+  # version of the other operands. `inherited` are the ties of the consumer
+  # when `expr` is itself a recompute block.
+  defp recur_recompute_operands(op, expr, inherited, state, cache) do
+    state = Map.delete(state, :recompute_ties)
+    own_state = if inherited == [], do: state, else: Map.put(state, :recompute_ties, inherited)
+    {recomputed, plain} = expr |> direct_operands() |> Enum.split_with(&recompute?/1)
+
+    if recomputed == [] do
+      cached_recur_operator(op, expr, own_state, cache)
+    else
+      {plain_values, cache} = Enum.map_reduce(plain, cache, &recur_operator(&1, state, &2))
+      ties = inherited ++ for %Value{} = value <- plain_values, do: value
+      tie_state = Map.put(state, :recompute_ties, ties)
+
+      {outer_tied, cache} =
+        if inherited == [], do: Map.pop(cache, @recompute_tied, %{}), else: {nil, cache}
+
+      {copies, cache} =
+        Enum.map_reduce(recomputed, cache, fn %T{data: %Expr{id: id}} = operand, cache ->
+          {copy, cache} = recur_operator(operand, tie_state, cache)
+          {{id, copy}, cache}
+        end)
+
+      tied = Map.get(cache, @recompute_tied, %{})
+
+      originals =
+        for {%T{data: %Expr{id: id}}, %Value{} = value} <- Enum.zip(plain, plain_values),
+            is_map_key(tied, value),
+            do: {id, value}
+
+      scoped = Map.new(copies ++ Enum.map(originals, fn {id, value} -> {id, tied[value]} end))
+      {res, cache} = cached_recur_operator(op, expr, own_state, Map.merge(cache, scoped))
+
+      cache = cache |> Map.drop(Enum.map(copies, &elem(&1, 0))) |> Map.merge(Map.new(originals))
+      cache = if inherited == [], do: Map.put(cache, @recompute_tied, outer_tied), else: cache
+      {res, cache}
+    end
+  end
+
+  # Branches of a cond are lowered inside their own region, so they are not
+  # operands of the cond itself.
+  defp direct_operands(%T{data: %Expr{op: op}}) when op in [:cond, :fun], do: []
+
+  defp direct_operands(expr) do
+    {_, operands} =
+      Tree.apply_args(expr, :scope, [], fn
+        %T{data: %Expr{}} = arg, acc -> {arg, [arg | acc]}
+        arg, acc -> {arg, acc}
+      end)
+
+    operands |> Enum.reverse() |> Enum.uniq_by(& &1.data.id)
   end
 
   defp cached_recur_operator(
@@ -792,12 +854,9 @@ defmodule EXLA.Defn do
      ), cache}
   end
 
-  # The copy for one consumer reads its inputs through a barrier shared with
-  # that consumer's other operands, so it cannot run before the consumer
-  # could, and it is not merged with the copy made for another consumer.
-  # The consumer reads those operands from the barrier too, otherwise XLA
-  # drops them from it. Inputs that are recompute blocks are lowered again
-  # here as well.
+  # The copy reads its inputs through a barrier shared with the ties of its
+  # consumer, and records the barrier's version of each tie so the consumer
+  # reads it from there. Otherwise XLA drops the ties from the barrier.
   defp cached_recur_operator(
          :block,
          %T{data: %Expr{args: [%Nx.Block.Recompute{} = struct, in_args, out, _callback]}},
@@ -807,7 +866,7 @@ defmodule EXLA.Defn do
     {call_args, cache} =
       in_args
       |> Composite.flatten_list()
-      |> Enum.map_reduce(cache, &recur_operator(&1, state, &2))
+      |> Enum.map_reduce(cache, &recur_operator(&1, Map.delete(state, :recompute_ties), &2))
 
     tied = Map.get(cache, @recompute_tied, %{})
 
@@ -825,7 +884,7 @@ defmodule EXLA.Defn do
       struct,
       call_args,
       out,
-      state,
+      Map.delete(state, :recompute_ties),
       Map.put(cache, @recompute_tied, tied)
     )
   end
@@ -1026,45 +1085,9 @@ defmodule EXLA.Defn do
   end
 
   defp cached_recur_operator(op, expr, state, cache) do
-    # Recompute operands are lowered last, tied to the other operands.
-    {args, cache} =
-      Tree.apply_args(expr, cache, fn
-        %T{data: %Expr{op: :block, args: [%Nx.Block.Recompute{} | _]}} = arg, cache ->
-          {arg, cache}
-
-        arg, cache ->
-          recur_operator(arg, state, cache)
-      end)
-
-    ties = for %Value{} = value <- List.flatten(List.wrap(args)), do: value
-    {outer_tied, cache} = Map.pop(cache, @recompute_tied, %{})
-    {args, cache} = lower_recompute_args(args, Map.put(state, :recompute_ties, ties), cache)
-    {tied, cache} = Map.pop(cache, @recompute_tied, %{})
-    args = replace_tied(args, tied)
-    {to_operator(op, args, expr, state), Map.put(cache, @recompute_tied, outer_tied)}
+    {args, cache} = Tree.apply_args(expr, cache, &recur_operator(&1, state, &2))
+    {to_operator(op, args, expr, state), cache}
   end
-
-  defp replace_tied(args, tied) when tied == %{}, do: args
-  defp replace_tied(%Value{} = value, tied), do: Map.get(tied, value, value)
-  defp replace_tied(list, tied) when is_list(list), do: Enum.map(list, &replace_tied(&1, tied))
-  defp replace_tied(other, _tied), do: other
-
-  defp lower_recompute_args(
-         %T{data: %Expr{op: :block, args: [%Nx.Block.Recompute{} | _]}} = arg,
-         state,
-         cache
-       ),
-       do: recur_operator(arg, state, cache)
-
-  defp lower_recompute_args(list, state, cache) when is_list(list),
-    do: Enum.map_reduce(list, cache, &lower_recompute_args(&1, state, &2))
-
-  defp lower_recompute_args(tuple, state, cache) when is_tuple(tuple) do
-    {list, cache} = lower_recompute_args(Tuple.to_list(tuple), state, cache)
-    {List.to_tuple(list), cache}
-  end
-
-  defp lower_recompute_args(other, _state, cache), do: {other, cache}
 
   defp cast_custom_call_operands(call_args, :default), do: call_args
 

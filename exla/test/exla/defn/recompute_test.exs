@@ -64,6 +64,76 @@ defmodule EXLA.Defn.RecomputeTest do
     Nx.sum(x)
   end
 
+  defn tuple_two_uses(x) do
+    {a, b} = recompute(x, fn x -> {Nx.exp(x), Nx.cos(x)} end)
+    first = Nx.sum(a)
+    Nx.sum(a * first) + Nx.sum(b)
+  end
+
+  defn tuple_two_uses_plain(x) do
+    a = Nx.exp(x)
+    first = Nx.sum(a)
+    Nx.sum(a * first) + Nx.sum(Nx.cos(x))
+  end
+
+  defn used_in_cond(x) do
+    y = recompute(x, &Nx.exp/1)
+    first = Nx.sum(y)
+
+    if first > 0 do
+      Nx.sum(y * first)
+    else
+      first
+    end
+  end
+
+  defn used_in_cond_plain(x) do
+    y = Nx.exp(x)
+    first = Nx.sum(y)
+
+    if first > 0 do
+      Nx.sum(y * first)
+    else
+      first
+    end
+  end
+
+  defn while_initial(x) do
+    y = recompute(x, &Nx.exp/1)
+    first = Nx.sum(y)
+
+    {_i, acc, _first} =
+      while {i = 0, acc = y, first}, i < 3 do
+        {i + 1, acc * first, first}
+      end
+
+    Nx.sum(acc)
+  end
+
+  defn while_initial_plain(x) do
+    y = Nx.exp(x)
+    first = Nx.sum(y)
+
+    {_i, acc, _first} =
+      while {i = 0, acc = y, first}, i < 3 do
+        {i + 1, acc * first, first}
+      end
+
+    Nx.sum(acc)
+  end
+
+  defn block_consumer(x) do
+    y = recompute(x, &Nx.exp/1)
+    first = Nx.sum(y)
+    Nx.sum(Nx.take(y, Nx.as_type(Nx.remainder(first, 4), :s32)) * first)
+  end
+
+  defn block_consumer_plain(x) do
+    y = Nx.exp(x)
+    first = Nx.sum(y)
+    Nx.sum(Nx.take(y, Nx.as_type(Nx.remainder(first, 4), :s32)) * first)
+  end
+
   defp count(hlo, needle), do: hlo |> String.split(needle) |> length() |> Kernel.-(1)
 
   defp optimized(fun, args),
@@ -96,6 +166,38 @@ defmodule EXLA.Defn.RecomputeTest do
 
       assert count(hlo, "tanh(") == 2
       assert count(hlo, "exponential(") == 2
+    end
+
+    test "computes a tuple result again for a later use of an element" do
+      x = Nx.iota({1024}, type: :f32) |> Nx.divide(1024)
+
+      assert_all_close(tuple_two_uses(x), tuple_two_uses_plain(x))
+      assert count(optimized(&tuple_two_uses_plain/1, [x]), "exponential(") == 1
+      assert count(optimized(&tuple_two_uses/1, [x]), "exponential(") == 2
+    end
+
+    test "computes the result again for a use inside cond" do
+      x = Nx.iota({1024}, type: :f32) |> Nx.divide(1024)
+
+      assert_all_close(used_in_cond(x), used_in_cond_plain(x))
+      assert count(optimized(&used_in_cond_plain/1, [x]), "exponential(") == 1
+      assert count(optimized(&used_in_cond/1, [x]), "exponential(") == 2
+    end
+
+    test "computes the result again for a while that starts from it" do
+      x = Nx.iota({1024}, type: :f32) |> Nx.divide(1024)
+
+      assert_all_close(while_initial(x), while_initial_plain(x))
+      assert count(optimized(&while_initial_plain/1, [x]), "exponential(") == 1
+      assert count(optimized(&while_initial/1, [x]), "exponential(") == 2
+    end
+
+    test "computes the result again for a block that reads it" do
+      x = Nx.iota({1024}, type: :f32) |> Nx.divide(1024)
+
+      assert_all_close(block_consumer(x), block_consumer_plain(x))
+      assert count(optimized(&block_consumer_plain/1, [x]), "exponential(") == 1
+      assert count(optimized(&block_consumer/1, [x]), "exponential(") == 2
     end
 
     # On CUDA the plain function already fuses the matrix into both uses and
