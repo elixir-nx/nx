@@ -262,6 +262,9 @@ defmodule Nx.Defn.Kernel do
   function of several arguments. `fun` cannot read tensors from the
   enclosing scope and returns a tensor or a tuple of tensors.
 
+  `fun` runs once for every use, so a side effect inside it, such as an
+  `io_call/2`, happens once for every use as well.
+
   ## Examples
 
       defn twice(x, w) do

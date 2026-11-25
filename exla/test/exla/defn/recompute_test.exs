@@ -462,4 +462,88 @@ defmodule EXLA.Defn.RecomputeTest do
     kept = Nx.to_number(Nx.sum(gradient))
     assert kept > 0 and kept < 8
   end
+
+  defn outer_in_cond(row, column) do
+    weights =
+      recompute([row, column], fn row, column ->
+        Nx.exp(Nx.new_axis(row, 1) + Nx.new_axis(column, 0))
+      end)
+
+    first = Nx.mean(weights, axes: [1])
+
+    if Nx.sum(first) > 0 do
+      Nx.sum(weights * Nx.new_axis(Nx.sin(first), 1))
+    else
+      Nx.sum(first)
+    end
+  end
+
+  defn outer_in_cond_plain(row, column) do
+    weights = Nx.exp(Nx.new_axis(row, 1) + Nx.new_axis(column, 0))
+    first = Nx.mean(weights, axes: [1])
+
+    if Nx.sum(first) > 0 do
+      Nx.sum(weights * Nx.new_axis(Nx.sin(first), 1))
+    else
+      Nx.sum(first)
+    end
+  end
+
+  defn outer_in_while(row, column) do
+    weights =
+      recompute([row, column], fn row, column ->
+        Nx.exp(Nx.new_axis(row, 1) + Nx.new_axis(column, 0))
+      end)
+
+    first = Nx.mean(weights, axes: [1])
+
+    {_i, total, _row, _column} =
+      while {i = 0, total = Nx.sum(first), row, column}, i < 3 do
+        weights =
+          recompute([row, column], fn row, column ->
+            Nx.exp(Nx.new_axis(row, 1) + Nx.new_axis(column, 0))
+          end)
+
+        scale = Nx.mean(weights, axes: [1])
+        {i + 1, total + Nx.sum(weights * Nx.new_axis(Nx.sin(scale), 1)), row, column}
+      end
+
+    total
+  end
+
+  defn outer_in_while_plain(row, column) do
+    weights = Nx.exp(Nx.new_axis(row, 1) + Nx.new_axis(column, 0))
+    first = Nx.mean(weights, axes: [1])
+
+    {_i, total, _row, _column} =
+      while {i = 0, total = Nx.sum(first), row, column}, i < 3 do
+        weights = Nx.exp(Nx.new_axis(row, 1) + Nx.new_axis(column, 0))
+        scale = Nx.mean(weights, axes: [1])
+        {i + 1, total + Nx.sum(weights * Nx.new_axis(Nx.sin(scale), 1)), row, column}
+      end
+
+    total
+  end
+
+  # On CUDA the plain function already fuses the matrix into both uses and
+  # never holds it, so these two are checked on the host client only.
+  @tag :skip_cuda
+  test "does not keep a large result for a later use inside cond" do
+    row = Nx.iota({512}, type: :f32) |> Nx.divide(512)
+    matrix_bytes = 512 * 512 * 4
+
+    assert_all_close(outer_in_cond(row, row), outer_in_cond_plain(row, row))
+    assert scratch_bytes(&outer_in_cond_plain/2, [row, row]) >= matrix_bytes
+    assert scratch_bytes(&outer_in_cond/2, [row, row]) < matrix_bytes
+  end
+
+  @tag :skip_cuda
+  test "does not keep a large result between two uses inside a while body" do
+    row = Nx.iota({512}, type: :f32) |> Nx.divide(512)
+    matrix_bytes = 512 * 512 * 4
+
+    assert_all_close(outer_in_while(row, row), outer_in_while_plain(row, row))
+    assert scratch_bytes(&outer_in_while_plain/2, [row, row]) >= matrix_bytes
+    assert scratch_bytes(&outer_in_while/2, [row, row]) < matrix_bytes
+  end
 end

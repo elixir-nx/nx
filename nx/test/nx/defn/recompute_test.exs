@@ -233,6 +233,45 @@ defmodule Nx.Defn.RecomputeTest do
       assert_all_close(Nx.Defn.Kernel.recompute(x, &Nx.exp/1), Nx.exp(x))
     end
 
+    test "runs the function once for every use of a vectorized result" do
+      x = Nx.tensor([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]]) |> Nx.vectorize(:rows)
+      assert_all_close(two_uses(x), two_uses_plain(x))
+      assert runs(:exp) == 2
+    end
+
+    test "a side effect in the function happens once for every use" do
+      parent = self()
+      x = Nx.tensor([0.1, 0.2, 0.3])
+      body = fn x -> x |> Nx.exp() |> Nx.io_call(fn _ -> send(parent, :body_ran) end) end
+
+      Nx.Defn.jit_apply(
+        fn x ->
+          y = body.(x)
+          Nx.add(y, Nx.multiply(y, 2.0))
+        end,
+        [x]
+      )
+
+      assert_received :body_ran
+      refute_received :body_ran
+
+      Nx.Defn.jit_apply(
+        fn x ->
+          y = recompute(x, body)
+          Nx.add(y, Nx.multiply(y, 2.0))
+        end,
+        [x]
+      )
+
+      assert_received :body_ran
+      assert_received :body_ran
+      refute_received :body_ran
+
+      Nx.Defn.jit_apply(fn x -> Nx.sum(recompute(x, body)) end, [x])
+      assert_received :body_ran
+      refute_received :body_ran
+    end
+
     test "raises when the function returns a container other than a tuple" do
       x = Nx.tensor([1.0, 2.0])
 
