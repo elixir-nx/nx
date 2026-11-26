@@ -666,7 +666,6 @@ defmodule Nx.Defn.GradCheckpointTest do
   # The memory saving comes from the backward pass running the body again.
   # If the recomputed body were merged with the forward one, gradients would
   # stay correct and these counts would drop to one.
-
   describe "execution counts" do
     defp counted_body(x, parent) do
       x
