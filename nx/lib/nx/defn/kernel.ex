@@ -255,22 +255,23 @@ defmodule Nx.Defn.Kernel do
 
   Reverse-mode differentiation keeps the intermediate results of the
   forward pass until the backward pass has used them, so the memory
-  `grad` needs grows with the depth of the function. Inside a checkpoint
-  the backward pass instead reconstructs the intermediates it needs by
-  running `fun` again from its inputs. This trades extra computation,
-  usually one more evaluation of the body, for memory.
+  `grad` needs grows with the depth of the function. With
+  `grad_checkpoint` the backward pass instead reconstructs the
+  intermediates it needs by running `fun` again from its inputs. This
+  trades extra computation, usually one more evaluation of the body,
+  for memory.
 
-  The gradient is the same with or without the checkpoint, up to the
+  The gradient is the same with or without `grad_checkpoint`, up to the
   floating point differences a compiler may introduce by reordering
   operations. The memory saving is not guaranteed: it depends on the
   compiler keeping the recomputation separate from the forward pass and
-  running it late in the backward pass. EXLA does. Outside
-  `grad` a checkpoint is the same as calling `fun`.
+  running it late in the backward pass. EXLA does. Outside `grad`,
+  `grad_checkpoint` is the same as calling `fun`.
 
-  The inputs and outputs of a checkpoint keep whatever lifetime they
-  have in the surrounding computation. Only the values created inside
-  `fun` become candidates for recomputation, so a checkpoint helps most
-  when its body creates large intermediates that nothing outside needs:
+  The inputs and outputs of `grad_checkpoint` keep whatever lifetime
+  they have in the surrounding computation. Only the values created
+  inside `fun` become candidates for recomputation, so it helps most
+  when `fun` creates large intermediates that nothing outside needs:
 
       defn block(x, w1, w2) do
         grad_checkpoint([x, w1, w2], fn x, w1, w2 ->

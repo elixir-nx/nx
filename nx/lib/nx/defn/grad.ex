@@ -214,7 +214,7 @@ defmodule Nx.Defn.Grad do
     end)
   end
 
-  # A checkpoint is differentiated once its incoming gradient is known, so
+  # A grad_checkpoint block is differentiated once its incoming gradient is known, so
   # only its inputs are registered here. The body is traversed at that point.
   defp parents_args(
          :block,
@@ -465,7 +465,7 @@ defmodule Nx.Defn.Grad do
       end)
 
     # Conds are registered under the module name by parents_args(:cond).
-    # Differentiate their branches with respect to the checkpoint inputs.
+    # Differentiate their branches with respect to the block inputs.
     acc = traverse_parents(__MODULE__, body_to_grad_ids, parents, {nodes, seeded})
 
     {_nodes, body_grads} =
