@@ -2003,9 +2003,9 @@ defmodule Nx.Defn.Expr do
   defp traverse_args(:while, [initial, _arg, _condition, _body], state),
     do: traverse_args([initial], state)
 
-  defp traverse_args(:block, [%Nx.Block.Checkpoint{}, in_args, _body, _callback], state) do
+  defp traverse_args(:block, [%Nx.Block.GradCheckpoint{}, in_args, _body, _callback], state) do
     {in_args_io, state} = Enum.map_reduce(in_args, state, &recur_inspect/2)
-    {["checkpoint" | in_args_io], state}
+    {["grad_checkpoint" | in_args_io], state}
   end
 
   defp traverse_args(:block, [struct, in_args, _body, _callback], state) do

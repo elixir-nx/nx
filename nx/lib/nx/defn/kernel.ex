@@ -273,7 +273,7 @@ defmodule Nx.Defn.Kernel do
   when its body creates large intermediates that nothing outside needs:
 
       defn block(x, w1, w2) do
-        checkpoint([x, w1, w2], fn x, w1, w2 ->
+        grad_checkpoint([x, w1, w2], fn x, w1, w2 ->
           x |> Nx.dot(w1) |> Nx.max(0) |> Nx.dot(w2)
         end)
       end
@@ -292,42 +292,43 @@ defmodule Nx.Defn.Kernel do
   the same inputs. Random numbers inside the body need their `Nx.Random`
   key passed as an input.
   """
-  def checkpoint(inputs, fun) when is_function(fun) do
+  def grad_checkpoint(inputs, fun) when is_function(fun) do
     arguments = List.wrap(inputs)
     arity = length(arguments)
 
     unless is_function(fun, arity) do
       Kernel.raise(
         ArgumentError,
-        "checkpoint expected a function of arity #{arity} for #{arity} input(s), got: #{Kernel.inspect(fun)}"
+        "grad_checkpoint expected a function of arity #{arity} for #{arity} input(s), got: #{Kernel.inspect(fun)}"
       )
     end
 
     # The arguments travel as one block argument, so fun may take any number
     # of tensors.
     Kernel.if Enum.any?(Nx.Defn.Composite.flatten_list(arguments), &is_struct(&1, Nx.Tensor)) do
-      Nx.block(%Nx.Block.Checkpoint{}, [List.to_tuple(arguments)], nil, fn _struct, arguments ->
-        checkpoint_result(apply(fun, Tuple.to_list(arguments)))
+      Nx.block(%Nx.Block.GradCheckpoint{}, [List.to_tuple(arguments)], nil, fn _struct,
+                                                                               arguments ->
+        grad_checkpoint_result(apply(fun, Tuple.to_list(arguments)))
       end)
     else
       apply(fun, arguments)
     end
   end
 
-  defp checkpoint_result(%Nx.Tensor{} = tensor), do: tensor
+  defp grad_checkpoint_result(%Nx.Tensor{} = tensor), do: tensor
 
-  defp checkpoint_result(tuple) when is_tuple(tuple) do
+  defp grad_checkpoint_result(tuple) when is_tuple(tuple) do
     Kernel.if Enum.all?(Tuple.to_list(tuple), &is_struct(&1, Nx.Tensor)) do
       tuple
     else
-      checkpoint_result(Tuple.to_list(tuple))
+      grad_checkpoint_result(Tuple.to_list(tuple))
     end
   end
 
-  defp checkpoint_result(other) do
+  defp grad_checkpoint_result(other) do
     Kernel.raise(
       ArgumentError,
-      "the function given to checkpoint must return a tensor or a tuple of tensors, got: #{Kernel.inspect(other)}"
+      "the function given to grad_checkpoint must return a tensor or a tuple of tensors, got: #{Kernel.inspect(other)}"
     )
   end
 

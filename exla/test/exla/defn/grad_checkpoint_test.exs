@@ -1,4 +1,4 @@
-defmodule EXLA.Defn.CheckpointTest do
+defmodule EXLA.Defn.GradCheckpointTest do
   use EXLA.Case, async: true
 
   import Nx.Defn
@@ -6,7 +6,7 @@ defmodule EXLA.Defn.CheckpointTest do
   defn body(x), do: x |> Nx.exp() |> Nx.sin()
 
   defn loss_with_checkpoint(x) do
-    y = checkpoint(x, &body/1)
+    y = grad_checkpoint(x, &body/1)
     Nx.sum(y * y)
   end
 
@@ -28,10 +28,10 @@ defmodule EXLA.Defn.CheckpointTest do
   end
 
   defn mlp_with_checkpoints(ws, x) do
-    x = checkpoint([x, ws], fn x, ws -> pair(x, ws[0], ws[1]) end)
-    x = checkpoint([x, ws], fn x, ws -> pair(x, ws[2], ws[3]) end)
-    x = checkpoint([x, ws], fn x, ws -> pair(x, ws[4], ws[5]) end)
-    x = checkpoint([x, ws], fn x, ws -> pair(x, ws[6], ws[7]) end)
+    x = grad_checkpoint([x, ws], fn x, ws -> pair(x, ws[0], ws[1]) end)
+    x = grad_checkpoint([x, ws], fn x, ws -> pair(x, ws[2], ws[3]) end)
+    x = grad_checkpoint([x, ws], fn x, ws -> pair(x, ws[4], ws[5]) end)
+    x = grad_checkpoint([x, ws], fn x, ws -> pair(x, ws[6], ws[7]) end)
     Nx.sum(x)
   end
 
@@ -39,9 +39,9 @@ defmodule EXLA.Defn.CheckpointTest do
 
   defn nested(x) do
     out =
-      checkpoint(x, fn x ->
+      grad_checkpoint(x, fn x ->
         y = x * x
-        z = checkpoint(y, fn y -> Nx.exp(y) end)
+        z = grad_checkpoint(y, fn y -> Nx.exp(y) end)
         Nx.sin(z)
       end)
 
@@ -54,14 +54,14 @@ defmodule EXLA.Defn.CheckpointTest do
   end
 
   defn cond_inside(x) do
-    checkpoint(x, fn x ->
+    grad_checkpoint(x, fn x ->
       if Nx.sum(x) > 0, do: Nx.sum(Nx.sin(x)), else: Nx.sum(Nx.cos(x))
     end)
   end
 
   defn cond_outside(x) do
     if Nx.sum(x) > 0 do
-      checkpoint(x, fn x -> Nx.sum(Nx.sin(x)) end)
+      grad_checkpoint(x, fn x -> Nx.sum(Nx.sin(x)) end)
     else
       Nx.sum(Nx.cos(x))
     end
@@ -74,7 +74,7 @@ defmodule EXLA.Defn.CheckpointTest do
   defn while_inside(x) do
     {_, acc} =
       while {i = 0, acc = x}, i < 3 do
-        {i + 1, checkpoint(acc, fn acc -> Nx.sin(acc) * acc end)}
+        {i + 1, grad_checkpoint(acc, fn acc -> Nx.sin(acc) * acc end)}
       end
 
     Nx.sum(acc)
@@ -90,7 +90,7 @@ defmodule EXLA.Defn.CheckpointTest do
   end
 
   defn vectorized_loss(x, w) do
-    Nx.sum(checkpoint([x, w], fn x, w -> Nx.sin(Nx.dot(x, w)) * x end))
+    Nx.sum(grad_checkpoint([x, w], fn x, w -> Nx.sin(Nx.dot(x, w)) * x end))
   end
 
   defn vectorized_loss_plain(x, w) do
@@ -98,7 +98,7 @@ defmodule EXLA.Defn.CheckpointTest do
   end
 
   defn vectorized_scale_loss(x, scale) do
-    Nx.sum(checkpoint([x, scale], fn x, scale -> Nx.multiply(Nx.sin(x), scale) end))
+    Nx.sum(grad_checkpoint([x, scale], fn x, scale -> Nx.multiply(Nx.sin(x), scale) end))
   end
 
   defn vectorized_scale_loss_plain(x, scale) do
@@ -106,7 +106,7 @@ defmodule EXLA.Defn.CheckpointTest do
   end
 
   defn pair_loss(pair) do
-    {a, b} = checkpoint(pair, fn {a, b} -> {Nx.sin(a), Nx.cos(b)} end)
+    {a, b} = grad_checkpoint(pair, fn {a, b} -> {Nx.sin(a), Nx.cos(b)} end)
     Nx.sum(a * b)
   end
 
@@ -257,7 +257,7 @@ defmodule EXLA.Defn.CheckpointTest do
   end
 
   defn duplicated_outputs(x) do
-    checkpoint(x, fn x ->
+    grad_checkpoint(x, fn x ->
       y = x * x
       {y, y}
     end)
@@ -290,7 +290,7 @@ defmodule EXLA.Defn.CheckpointTest do
   end
 
   defn dropout_loss(x, key) do
-    Nx.sum(checkpoint([x, key], fn x, key -> dropout(x, key) end))
+    Nx.sum(grad_checkpoint([x, key], fn x, key -> dropout(x, key) end))
   end
 
   defn dropout_loss_plain(x, key), do: Nx.sum(dropout(x, key))

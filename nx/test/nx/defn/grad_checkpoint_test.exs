@@ -1,15 +1,15 @@
-defmodule Nx.Defn.CheckpointTest do
+defmodule Nx.Defn.GradCheckpointTest do
   use ExUnit.Case, async: true
 
   import Nx.Defn
-  import Nx.Defn.Kernel, only: [checkpoint: 2]
+  import Nx.Defn.Kernel, only: [grad_checkpoint: 2]
   import Nx.Testing, only: [assert_equal: 2, assert_all_close: 2]
 
   # --- Forward pass: checkpoint is a no-op ---
 
   describe "forward pass (outside grad)" do
     defn checkpoint_identity(x) do
-      checkpoint(x, fn x -> x end)
+      grad_checkpoint(x, fn x -> x end)
     end
 
     test "returns same result as calling the function directly" do
@@ -18,7 +18,7 @@ defmodule Nx.Defn.CheckpointTest do
     end
 
     defn checkpoint_computation(x) do
-      checkpoint(x, fn x -> Nx.sin(Nx.add(x, 1.0)) end)
+      grad_checkpoint(x, fn x -> Nx.sin(Nx.add(x, 1.0)) end)
     end
 
     defn no_checkpoint_computation(x) do
@@ -36,7 +36,7 @@ defmodule Nx.Defn.CheckpointTest do
   describe "gradient correctness" do
     defn grad_with_checkpoint(x) do
       grad(x, fn x ->
-        checkpoint(x, fn x -> Nx.sin(x) end)
+        grad_checkpoint(x, fn x -> Nx.sin(x) end)
       end)
     end
 
@@ -51,7 +51,7 @@ defmodule Nx.Defn.CheckpointTest do
 
     defn grad_checkpoint_multiply(x) do
       grad(x, fn x ->
-        checkpoint(x, fn x -> Nx.sum(Nx.multiply(x, x)) end)
+        grad_checkpoint(x, fn x -> Nx.sum(Nx.multiply(x, x)) end)
       end)
     end
 
@@ -70,10 +70,10 @@ defmodule Nx.Defn.CheckpointTest do
   describe "nested checkpoints" do
     defn grad_nested_checkpoint(x) do
       grad(x, fn x ->
-        checkpoint(x, fn x ->
+        grad_checkpoint(x, fn x ->
           y = Nx.multiply(x, x)
 
-          checkpoint(y, fn y ->
+          grad_checkpoint(y, fn y ->
             Nx.sum(Nx.sin(y))
           end)
         end)
@@ -95,7 +95,7 @@ defmodule Nx.Defn.CheckpointTest do
   describe "interaction with cond" do
     defn grad_checkpoint_with_cond(x) do
       grad(x, fn x ->
-        checkpoint(x, fn x ->
+        grad_checkpoint(x, fn x ->
           if Nx.greater(Nx.sum(x), 0) do
             Nx.sum(Nx.sin(x))
           else
@@ -128,7 +128,7 @@ defmodule Nx.Defn.CheckpointTest do
     defn grad_cond_with_checkpoint(x) do
       grad(x, fn x ->
         if Nx.greater(Nx.sum(x), 0) do
-          checkpoint(x, fn x -> Nx.sum(Nx.sin(x)) end)
+          grad_checkpoint(x, fn x -> Nx.sum(Nx.sin(x)) end)
         else
           Nx.sum(Nx.cos(x))
         end
@@ -153,7 +153,7 @@ defmodule Nx.Defn.CheckpointTest do
       grad(x, fn x ->
         {_i, acc} =
           while {i = 0, acc = x}, Nx.less(i, 3) do
-            {i + 1, checkpoint(acc, fn acc -> Nx.sin(acc) * acc end)}
+            {i + 1, grad_checkpoint(acc, fn acc -> Nx.sin(acc) * acc end)}
           end
 
         Nx.sum(acc)
@@ -178,7 +178,7 @@ defmodule Nx.Defn.CheckpointTest do
 
     defn grad_checkpoint_with_while(x) do
       grad(x, fn x ->
-        checkpoint(x, fn x ->
+        grad_checkpoint(x, fn x ->
           {_i, acc} =
             while {i = 0, acc = x}, Nx.less(i, 3) do
               {i + 1, Nx.sin(acc)}
@@ -219,7 +219,7 @@ defmodule Nx.Defn.CheckpointTest do
 
     defn grad_checkpoint_custom_grad(x) do
       grad(x, fn x ->
-        checkpoint(x, fn x ->
+        grad_checkpoint(x, fn x ->
           Nx.sum(my_relu(x))
         end)
       end)
@@ -239,7 +239,7 @@ defmodule Nx.Defn.CheckpointTest do
 
   describe "container support" do
     defn mixed_output_loss(x) do
-      {value, mask} = checkpoint(x, fn x -> {Nx.sin(x), x > 0} end)
+      {value, mask} = grad_checkpoint(x, fn x -> {Nx.sin(x), x > 0} end)
       Nx.sum(value * mask)
     end
 
@@ -256,7 +256,7 @@ defmodule Nx.Defn.CheckpointTest do
     end
 
     defn duplicated_outputs(x) do
-      checkpoint(x, fn x ->
+      grad_checkpoint(x, fn x ->
         y = x * x
         {y, y}
       end)
@@ -287,13 +287,13 @@ defmodule Nx.Defn.CheckpointTest do
       x = Nx.tensor([1.0, 2.0])
 
       assert_raise ArgumentError, ~r/must return a tensor or a tuple of tensors/, fn ->
-        Nx.Defn.jit(fn x -> checkpoint(x, fn x -> %{value: x} end) end).(x)
+        Nx.Defn.jit(fn x -> grad_checkpoint(x, fn x -> %{value: x} end) end).(x)
       end
     end
 
     defn grad_checkpoint_map_input(params, x) do
       grad(params, fn params ->
-        checkpoint([params, x], fn params, x ->
+        grad_checkpoint([params, x], fn params, x ->
           Nx.sum(Nx.dot(x, params.w) + params.b)
         end)
       end)
@@ -312,7 +312,7 @@ defmodule Nx.Defn.CheckpointTest do
     defn grad_checkpoint_nested_container(x, y) do
       grad({x, y}, fn {x, y} ->
         {a, b, c} =
-          checkpoint({x, %{pair: {y, x}}}, fn {x, %{pair: {y, x_again}}} ->
+          grad_checkpoint({x, %{pair: {y, x}}}, fn {x, %{pair: {y, x_again}}} ->
             {Nx.sin(x), Nx.cos(y), x_again * y}
           end)
 
@@ -333,7 +333,7 @@ defmodule Nx.Defn.CheckpointTest do
     defn grad_checkpoint_tuple_output(x) do
       grad(x, fn x ->
         {a, b} =
-          checkpoint(x, fn x ->
+          grad_checkpoint(x, fn x ->
             {Nx.sin(x), Nx.cos(x)}
           end)
 
@@ -359,7 +359,7 @@ defmodule Nx.Defn.CheckpointTest do
     defn vag_with_checkpoint(x) do
       value_and_grad(x, fn x ->
         x
-        |> checkpoint(fn x -> Nx.sin(x) end)
+        |> grad_checkpoint(fn x -> Nx.sin(x) end)
         |> Nx.sum()
       end)
     end
@@ -381,7 +381,9 @@ defmodule Nx.Defn.CheckpointTest do
 
   describe "edge cases" do
     defn grad_checkpoint_number_input(x) do
-      grad(x, fn x -> Nx.sum(checkpoint([x, 3.0], fn x, scale -> Nx.multiply(x, scale) end)) end)
+      grad(x, fn x ->
+        Nx.sum(grad_checkpoint([x, 3.0], fn x, scale -> Nx.multiply(x, scale) end))
+      end)
     end
 
     test "a number among the inputs is passed through to the body" do
@@ -391,7 +393,9 @@ defmodule Nx.Defn.CheckpointTest do
 
     defn grad_checkpoint_constant_input(x) do
       grad(x, fn x ->
-        Nx.sum(checkpoint([x, Nx.tensor([1.0, 2.0])], fn x, scale -> Nx.multiply(x, scale) end))
+        Nx.sum(
+          grad_checkpoint([x, Nx.tensor([1.0, 2.0])], fn x, scale -> Nx.multiply(x, scale) end)
+        )
       end)
     end
 
@@ -401,7 +405,7 @@ defmodule Nx.Defn.CheckpointTest do
     end
 
     defn grad_checkpoint_same_input_twice(x) do
-      grad(x, fn x -> Nx.sum(checkpoint([x, x], fn a, b -> Nx.multiply(a, b) end)) end)
+      grad(x, fn x -> Nx.sum(grad_checkpoint([x, x], fn a, b -> Nx.multiply(a, b) end)) end)
     end
 
     test "the same tensor passed as two inputs sums both gradients" do
@@ -411,7 +415,7 @@ defmodule Nx.Defn.CheckpointTest do
 
     defn grad_checkpoint_unused_output(x) do
       grad(x, fn x ->
-        _unused = checkpoint(x, fn x -> Nx.exp(x) end)
+        _unused = grad_checkpoint(x, fn x -> Nx.exp(x) end)
         Nx.sum(Nx.sin(x))
       end)
     end
@@ -425,17 +429,17 @@ defmodule Nx.Defn.CheckpointTest do
       x = Nx.tensor([1.0, 2.0])
 
       assert_raise ArgumentError, ~r/expected a function of arity 2 for 2 input\(s\)/, fn ->
-        Nx.Defn.jit(fn x -> checkpoint([x, x], fn x -> x end) end).(x)
+        Nx.Defn.jit(fn x -> grad_checkpoint([x, x], fn x -> x end) end).(x)
       end
     end
 
     test "inputs without tensors call the function directly" do
-      assert checkpoint([], fn -> :no_tensors end) == :no_tensors
+      assert grad_checkpoint([], fn -> :no_tensors end) == :no_tensors
     end
 
     defn grad_checkpoint_scalar(x) do
       grad(x, fn x ->
-        checkpoint(x, fn x -> Nx.multiply(x, x) end)
+        grad_checkpoint(x, fn x -> Nx.multiply(x, x) end)
       end)
     end
 
@@ -446,7 +450,7 @@ defmodule Nx.Defn.CheckpointTest do
 
     defn grad_checkpoint_no_grad_path(x, y) do
       grad(x, fn x ->
-        checkpoint([x, y], fn x, y -> Nx.sum(Nx.multiply(x, y)) end)
+        grad_checkpoint([x, y], fn x, y -> Nx.sum(Nx.multiply(x, y)) end)
       end)
     end
 
@@ -461,7 +465,9 @@ defmodule Nx.Defn.CheckpointTest do
       weights = List.to_tuple(Enum.map(1..count, &Nx.tensor(&1 * 1.0)))
 
       sum_all = fn weights ->
-        checkpoint(weights, fn weights -> weights |> Tuple.to_list() |> Nx.stack() |> Nx.sum() end)
+        grad_checkpoint(weights, fn weights ->
+          weights |> Tuple.to_list() |> Nx.stack() |> Nx.sum()
+        end)
       end
 
       assert_equal(Nx.Defn.jit(sum_all).(weights), Nx.tensor(count * (count + 1) / 2))
@@ -477,7 +483,7 @@ defmodule Nx.Defn.CheckpointTest do
       offset = 1.0
 
       grad(x, fn x ->
-        checkpoint(x, fn x -> Nx.sum(Nx.multiply(x, opts[:scale]) + offset) end)
+        grad_checkpoint(x, fn x -> Nx.sum(Nx.multiply(x, opts[:scale]) + offset) end)
       end)
     end
 
@@ -488,7 +494,7 @@ defmodule Nx.Defn.CheckpointTest do
 
     defn grad_checkpoint_high_rank(x) do
       grad(x, fn x ->
-        checkpoint(x, fn x ->
+        grad_checkpoint(x, fn x ->
           x |> Nx.sin() |> Nx.sum()
         end)
       end)
@@ -505,7 +511,7 @@ defmodule Nx.Defn.CheckpointTest do
 
   describe "tensors read from the enclosing scope" do
     defn captured_weight_loss(x, w) do
-      Nx.sum(checkpoint(x, fn x -> Nx.sin(Nx.dot(x, w)) end))
+      Nx.sum(grad_checkpoint(x, fn x -> Nx.sin(Nx.dot(x, w)) end))
     end
 
     test "raises in the forward pass" do
@@ -534,8 +540,8 @@ defmodule Nx.Defn.CheckpointTest do
   describe "gradient w.r.t. weights" do
     defn grad_shared_weight_two_checkpoints(w, x) do
       grad(w, fn w ->
-        first = checkpoint([x, w], fn x, w -> Nx.dot(x, w) end)
-        second = checkpoint([first, w], fn first, w -> Nx.dot(first, w) end)
+        first = grad_checkpoint([x, w], fn x, w -> Nx.dot(x, w) end)
+        second = grad_checkpoint([first, w], fn first, w -> Nx.dot(first, w) end)
         Nx.sum(second)
       end)
     end
@@ -552,7 +558,7 @@ defmodule Nx.Defn.CheckpointTest do
 
     defn grad_of_grad_weight_checkpoint(w, x) do
       grad(w, fn w ->
-        grad(w, fn w -> Nx.sum(checkpoint([x, w], fn x, w -> Nx.sin(Nx.dot(x, w)) end)) end)
+        grad(w, fn w -> Nx.sum(grad_checkpoint([x, w], fn x, w -> Nx.sin(Nx.dot(x, w)) end)) end)
         |> Nx.sum()
       end)
     end
@@ -573,8 +579,8 @@ defmodule Nx.Defn.CheckpointTest do
 
     defn grad_weights_with_checkpoint(w1, w2, x) do
       grad({w1, w2}, fn {w1, w2} ->
-        hidden = checkpoint([x, w1], fn x, w1 -> dense_layer(x, w1) end)
-        output = checkpoint([hidden, w2], fn hidden, w2 -> dense_layer(hidden, w2) end)
+        hidden = grad_checkpoint([x, w1], fn x, w1 -> dense_layer(x, w1) end)
+        output = grad_checkpoint([hidden, w2], fn hidden, w2 -> dense_layer(hidden, w2) end)
         Nx.sum(output)
       end)
     end
@@ -598,8 +604,11 @@ defmodule Nx.Defn.CheckpointTest do
 
     defn vag_params_with_checkpoint(params, x) do
       value_and_grad(params, fn params ->
-        hidden = checkpoint([x, params.w1], fn x, w1 -> dense_layer(x, w1) end)
-        output = checkpoint([hidden, params.w2], fn hidden, w2 -> dense_layer(hidden, w2) end)
+        hidden = grad_checkpoint([x, params.w1], fn x, w1 -> dense_layer(x, w1) end)
+
+        output =
+          grad_checkpoint([hidden, params.w2], fn hidden, w2 -> dense_layer(hidden, w2) end)
+
         Nx.sum(output)
       end)
     end
@@ -630,8 +639,8 @@ defmodule Nx.Defn.CheckpointTest do
   describe "shared input (diamond pattern)" do
     defn grad_diamond_checkpoint(x) do
       grad(x, fn x ->
-        a = checkpoint(x, fn x -> Nx.sin(x) end)
-        b = checkpoint(x, fn x -> Nx.cos(x) end)
+        a = grad_checkpoint(x, fn x -> Nx.sin(x) end)
+        b = grad_checkpoint(x, fn x -> Nx.cos(x) end)
         Nx.sum(Nx.multiply(a, b))
       end)
     end
@@ -655,7 +664,7 @@ defmodule Nx.Defn.CheckpointTest do
       grad(x, fn x ->
         x
         |> Nx.multiply(2.0)
-        |> checkpoint(fn x -> Nx.sin(Nx.exp(x)) end)
+        |> grad_checkpoint(fn x -> Nx.sin(Nx.exp(x)) end)
         |> Nx.sum()
       end)
     end
@@ -677,7 +686,7 @@ defmodule Nx.Defn.CheckpointTest do
   describe "interaction with stop_grad" do
     defn grad_checkpoint_with_stop_grad(x) do
       grad(x, fn x ->
-        checkpoint(x, fn x ->
+        grad_checkpoint(x, fn x ->
           Nx.sum(Nx.multiply(x, stop_grad(Nx.sin(x))))
         end)
       end)
@@ -704,8 +713,8 @@ defmodule Nx.Defn.CheckpointTest do
 
     defn nested_conditional_loss(x) do
       y =
-        checkpoint(x, fn x ->
-          y = checkpoint(x * x, &conditional_power/1)
+        grad_checkpoint(x, fn x ->
+          y = grad_checkpoint(x * x, &conditional_power/1)
           y * y + conditional_power(x)
         end)
 
@@ -730,8 +739,8 @@ defmodule Nx.Defn.CheckpointTest do
 
     defn nested_nonlinear_conditional_loss(x) do
       y =
-        checkpoint(x, fn x ->
-          y = checkpoint(Nx.sin(x), &nonlinear_conditional/1)
+        grad_checkpoint(x, fn x ->
+          y = grad_checkpoint(Nx.sin(x), &nonlinear_conditional/1)
           Nx.sin(y) + nonlinear_conditional(x)
         end)
 
@@ -764,7 +773,7 @@ defmodule Nx.Defn.CheckpointTest do
     defn grad_of_grad_checkpoint(x) do
       grad(x, fn x ->
         grad(x, fn x ->
-          checkpoint(x, fn x -> Nx.sum(Nx.pow(x, 3)) end)
+          grad_checkpoint(x, fn x -> Nx.sum(Nx.pow(x, 3)) end)
         end)
         |> Nx.sum()
       end)
@@ -786,7 +795,7 @@ defmodule Nx.Defn.CheckpointTest do
 
     defn grad_of_grad_outer_loss(x) do
       grad(x, fn x ->
-        grad(x, fn x -> Nx.sum(Nx.sin(checkpoint(x, fn x -> Nx.sin(x) end))) end)
+        grad(x, fn x -> Nx.sum(Nx.sin(grad_checkpoint(x, fn x -> Nx.sin(x) end))) end)
         |> Nx.sum()
       end)
     end
@@ -809,7 +818,7 @@ defmodule Nx.Defn.CheckpointTest do
   describe "zero gradient through checkpoint" do
     defn grad_checkpoint_constant(x) do
       grad(x, fn x ->
-        checkpoint(x, fn _x -> Nx.tensor(42.0) end)
+        grad_checkpoint(x, fn _x -> Nx.tensor(42.0) end)
       end)
     end
 
@@ -822,7 +831,7 @@ defmodule Nx.Defn.CheckpointTest do
 
   describe "vectorized input" do
     defn grad_checkpoint_vectorized_weight(x, w) do
-      grad(w, fn w -> Nx.sum(checkpoint([x, w], fn x, w -> Nx.sin(Nx.dot(x, w)) end)) end)
+      grad(w, fn w -> Nx.sum(grad_checkpoint([x, w], fn x, w -> Nx.sin(Nx.dot(x, w)) end)) end)
     end
 
     defn grad_vectorized_weight_plain(x, w) do
@@ -841,7 +850,7 @@ defmodule Nx.Defn.CheckpointTest do
     defn grad_checkpoint_vectorized_intermediate(x) do
       grad(x, fn x ->
         hidden = Nx.cos(x)
-        Nx.sum(checkpoint(hidden, fn hidden -> Nx.sin(hidden) * hidden end))
+        Nx.sum(grad_checkpoint(hidden, fn hidden -> Nx.sin(hidden) * hidden end))
       end)
     end
 
@@ -876,7 +885,7 @@ defmodule Nx.Defn.CheckpointTest do
     end
 
     defn grad_checkpoint_vectorized(x) do
-      grad(x, fn x -> Nx.sum(checkpoint(x, fn x -> Nx.sin(x) * x end)) end)
+      grad(x, fn x -> Nx.sum(grad_checkpoint(x, fn x -> Nx.sin(x) * x end)) end)
     end
 
     defn grad_vectorized_plain(x) do
@@ -886,7 +895,9 @@ defmodule Nx.Defn.CheckpointTest do
     test "forward and gradient keep the vectorized axes" do
       x = Nx.tensor([[0.5, 1.0], [1.5, 2.0], [2.5, 3.0]]) |> Nx.vectorize(:batch)
 
-      forward = Nx.Defn.jit(fn x -> checkpoint(x, fn x -> Nx.multiply(Nx.sin(x), x) end) end).(x)
+      forward =
+        Nx.Defn.jit(fn x -> grad_checkpoint(x, fn x -> Nx.multiply(Nx.sin(x), x) end) end).(x)
+
       assert forward.vectorized_axes == [batch: 3]
       assert_equal(forward, Nx.multiply(Nx.sin(x), x))
 
@@ -897,7 +908,7 @@ defmodule Nx.Defn.CheckpointTest do
 
     defn grad_checkpoint_vectorized_scale(x, scale) do
       grad(scale, fn scale ->
-        Nx.sum(checkpoint([x, scale], fn x, scale -> Nx.multiply(Nx.sin(x), scale) end))
+        Nx.sum(grad_checkpoint([x, scale], fn x, scale -> Nx.multiply(Nx.sin(x), scale) end))
       end)
     end
 
@@ -917,7 +928,7 @@ defmodule Nx.Defn.CheckpointTest do
     defn grad_checkpoint_vectorized_constant(x) do
       grad(x, fn x ->
         scale = Nx.vectorize(Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]), :batch)
-        Nx.sum(checkpoint([x, scale], fn x, scale -> Nx.multiply(Nx.sin(x), scale) end))
+        Nx.sum(grad_checkpoint([x, scale], fn x, scale -> Nx.multiply(Nx.sin(x), scale) end))
       end)
     end
 
@@ -944,7 +955,7 @@ defmodule Nx.Defn.CheckpointTest do
       fun =
         Nx.Defn.jit(
           fn x ->
-            checkpoint(x, fn x -> Nx.sin(x) end)
+            grad_checkpoint(x, fn x -> Nx.sin(x) end)
           end,
           compiler: Nx.Defn.Debug
         )
@@ -959,7 +970,7 @@ defmodule Nx.Defn.CheckpointTest do
   describe "shape-changing checkpoint" do
     defn grad_shape_change(x) do
       grad(x, fn x ->
-        checkpoint(x, fn x ->
+        grad_checkpoint(x, fn x ->
           Nx.sum(x, axes: [1])
         end)
         |> Nx.sum()
@@ -983,10 +994,10 @@ defmodule Nx.Defn.CheckpointTest do
   describe "deep nesting" do
     defn grad_checkpoint_while_checkpoint(x) do
       grad(x, fn x ->
-        checkpoint(x, fn x ->
+        grad_checkpoint(x, fn x ->
           {_i, acc} =
             while {i = 0, acc = x}, Nx.less(i, 2) do
-              {i + 1, checkpoint(acc, fn acc -> Nx.sin(acc) end)}
+              {i + 1, grad_checkpoint(acc, fn acc -> Nx.sin(acc) end)}
             end
 
           Nx.sum(acc)
@@ -1017,8 +1028,8 @@ defmodule Nx.Defn.CheckpointTest do
     defn grad_back_to_back(x) do
       grad(x, fn x ->
         x
-        |> checkpoint(fn x -> Nx.sin(x) end)
-        |> checkpoint(fn x -> x end)
+        |> grad_checkpoint(fn x -> Nx.sin(x) end)
+        |> grad_checkpoint(fn x -> x end)
         |> Nx.sum()
       end)
     end
@@ -1038,9 +1049,9 @@ defmodule Nx.Defn.CheckpointTest do
   describe "neural network op patterns" do
     defn grad_checkpoint_matmul_chain(w1, w2, w3, x) do
       grad(x, fn x ->
-        first = checkpoint([x, w1], fn x, w1 -> Nx.dot(x, w1) |> Nx.max(0) end)
-        second = checkpoint([first, w2], fn first, w2 -> Nx.dot(first, w2) |> Nx.max(0) end)
-        output = checkpoint([second, w3], fn second, w3 -> Nx.dot(second, w3) end)
+        first = grad_checkpoint([x, w1], fn x, w1 -> Nx.dot(x, w1) |> Nx.max(0) end)
+        second = grad_checkpoint([first, w2], fn first, w2 -> Nx.dot(first, w2) |> Nx.max(0) end)
+        output = grad_checkpoint([second, w3], fn second, w3 -> Nx.dot(second, w3) end)
         Nx.sum(output)
       end)
     end
@@ -1075,7 +1086,9 @@ defmodule Nx.Defn.CheckpointTest do
     end
 
     defn dropout_checkpoint_value_and_grad(x, key) do
-      value_and_grad(x, fn x -> Nx.sum(checkpoint([x, key], fn x, key -> dropout(x, key) end)) end)
+      value_and_grad(x, fn x ->
+        Nx.sum(grad_checkpoint([x, key], fn x, key -> dropout(x, key) end))
+      end)
     end
 
     defn dropout_plain_value_and_grad(x, key) do
@@ -1101,7 +1114,7 @@ defmodule Nx.Defn.CheckpointTest do
   describe "recomputation" do
     defn grad_checkpoint_used_twice(x) do
       grad(x, fn x ->
-        y = checkpoint(x, fn x -> Nx.sin(x) end)
+        y = grad_checkpoint(x, fn x -> Nx.sin(x) end)
         Nx.sum(Nx.add(y, Nx.multiply(y, 2.0)))
       end)
     end
@@ -1149,7 +1162,7 @@ defmodule Nx.Defn.CheckpointTest do
 
       # With a checkpoint, the backward pass runs it again.
       Nx.Defn.value_and_grad(x, fn x ->
-        x |> checkpoint(fn x -> counted_body(x, parent) end) |> Nx.sum()
+        x |> grad_checkpoint(fn x -> counted_body(x, parent) end) |> Nx.sum()
       end)
 
       assert_received :body_ran
@@ -1159,7 +1172,7 @@ defmodule Nx.Defn.CheckpointTest do
       # The forward pass alone runs it once however many times the output is used.
       Nx.Defn.jit_apply(
         fn x ->
-          y = checkpoint(x, fn x -> counted_body(x, parent) end)
+          y = grad_checkpoint(x, fn x -> counted_body(x, parent) end)
           Nx.add(y, Nx.multiply(y, 2.0))
         end,
         [x]

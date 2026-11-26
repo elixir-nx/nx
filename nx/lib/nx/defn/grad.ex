@@ -218,7 +218,7 @@ defmodule Nx.Defn.Grad do
   # only its inputs are registered here. The body is traversed at that point.
   defp parents_args(
          :block,
-         %{data: %{args: [%Nx.Block.Checkpoint{}, in_args, _expr, _callback]}},
+         %{data: %{args: [%Nx.Block.GradCheckpoint{}, in_args, _expr, _callback]}},
          id,
          acc
        ) do
@@ -428,7 +428,7 @@ defmodule Nx.Defn.Grad do
 
   defp update_grads(
          :block,
-         [%Nx.Block.Checkpoint{} = struct, in_args, _expr, callback],
+         [%Nx.Block.GradCheckpoint{} = struct, in_args, _expr, callback],
          _ans,
          gs,
          to_grad_ids,

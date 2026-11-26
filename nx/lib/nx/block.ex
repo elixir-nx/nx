@@ -82,11 +82,11 @@ defmodule Nx.Block.IRFFT do
   defstruct eps: nil, length: nil, axis: nil
 end
 
-defmodule Nx.Block.Checkpoint do
+defmodule Nx.Block.GradCheckpoint do
   @moduledoc """
   Marks a block whose intermediate results are not kept for the backward
   pass. The gradient recomputes the body from the inputs when it reaches
-  the block. See `Nx.Defn.Kernel.checkpoint/2`.
+  the block. See `Nx.Defn.Kernel.grad_checkpoint/2`.
   """
   defstruct []
 end
