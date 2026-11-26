@@ -1,8 +1,8 @@
-defmodule Nx.Defn.RecomputeTest do
+defmodule Nx.Defn.RecomputeCheckpointTest do
   use ExUnit.Case, async: true
 
   import Nx.Defn
-  import Nx.Defn.Kernel, only: [recompute: 2]
+  import Nx.Defn.Kernel, only: [recompute_checkpoint: 2]
   import Nx.Testing
 
   # The evaluator calls these with tensors, tracing calls them with
@@ -27,7 +27,7 @@ defmodule Nx.Defn.RecomputeTest do
   end
 
   defn two_uses(x) do
-    y = recompute(x, &counted_exp/1)
+    y = recompute_checkpoint(x, &counted_exp/1)
     Nx.sum(y) + Nx.reduce_max(y)
   end
 
@@ -37,8 +37,8 @@ defmodule Nx.Defn.RecomputeTest do
   end
 
   defn chain(x) do
-    y = recompute(x, &counted_exp/1)
-    z = recompute(y, &counted_sin/1)
+    y = recompute_checkpoint(x, &counted_exp/1)
+    z = recompute_checkpoint(y, &counted_sin/1)
     Nx.sum(z) + Nx.reduce_max(z)
   end
 
@@ -50,8 +50,8 @@ defmodule Nx.Defn.RecomputeTest do
   defn dense(x, w1, w2), do: x |> Nx.dot(w1) |> Nx.max(0) |> Nx.dot(w2) |> Nx.tanh()
 
   defn mlp(weights, x) do
-    y = recompute([x, weights], fn x, weights -> dense(x, weights.a, weights.b) end)
-    z = recompute([y, weights], fn y, weights -> dense(y, weights.c, weights.d) end)
+    y = recompute_checkpoint([x, weights], fn x, weights -> dense(x, weights.a, weights.b) end)
+    z = recompute_checkpoint([y, weights], fn y, weights -> dense(y, weights.c, weights.d) end)
     Nx.sum(z * z)
   end
 
@@ -61,14 +61,14 @@ defmodule Nx.Defn.RecomputeTest do
   end
 
   defn tuple_output(x) do
-    {a, b} = recompute(x, fn x -> {Nx.sin(x), Nx.cos(x)} end)
+    {a, b} = recompute_checkpoint(x, fn x -> {Nx.sin(x), Nx.cos(x)} end)
     Nx.sum(a * b)
   end
 
   defn tuple_output_plain(x), do: Nx.sum(Nx.sin(x) * Nx.cos(x))
 
   defn tuple_two_uses(x) do
-    {a, b} = recompute(x, &counted_exp_cos/1)
+    {a, b} = recompute_checkpoint(x, &counted_exp_cos/1)
     Nx.sum(a) + Nx.reduce_max(a) + Nx.sum(b)
   end
 
@@ -78,7 +78,7 @@ defmodule Nx.Defn.RecomputeTest do
   end
 
   defn used_in_cond(x) do
-    y = recompute(x, &counted_exp/1)
+    y = recompute_checkpoint(x, &counted_exp/1)
 
     if Nx.sum(y) > 0 do
       Nx.reduce_max(y) * 2
@@ -98,7 +98,7 @@ defmodule Nx.Defn.RecomputeTest do
   end
 
   defn used_in_while(x) do
-    y = recompute(x, &counted_exp/1)
+    y = recompute_checkpoint(x, &counted_exp/1)
 
     {_i, total, _y} =
       while {i = 0, total = Nx.sum(y), y}, i < 3 do
@@ -120,7 +120,7 @@ defmodule Nx.Defn.RecomputeTest do
   end
 
   defn while_initial(x) do
-    y = recompute(x, &counted_exp/1)
+    y = recompute_checkpoint(x, &counted_exp/1)
 
     {_i, acc} =
       while {i = 0, acc = y}, i < 3 do
@@ -150,7 +150,7 @@ defmodule Nx.Defn.RecomputeTest do
     %{a: a, b: b, c: c, d: d}
   end
 
-  describe "recompute/2" do
+  describe "recompute_checkpoint/2" do
     test "returns the value of the function" do
       x = Nx.tensor([0.1, 0.2, 0.3])
       assert_all_close(two_uses(x), two_uses_plain(x))
@@ -162,7 +162,7 @@ defmodule Nx.Defn.RecomputeTest do
       assert runs(:exp) == 2
     end
 
-    test "computes inputs that are recompute blocks again" do
+    test "computes inputs that are recompute_checkpoint blocks again" do
       chain(Nx.tensor([0.1, 0.2, 0.3]))
       assert runs(:sin) == 2
       assert runs(:exp) == 2
@@ -230,7 +230,7 @@ defmodule Nx.Defn.RecomputeTest do
 
     test "is the function itself outside defn" do
       x = Nx.tensor([0.1, 0.2, 0.3])
-      assert_all_close(Nx.Defn.Kernel.recompute(x, &Nx.exp/1), Nx.exp(x))
+      assert_all_close(Nx.Defn.Kernel.recompute_checkpoint(x, &Nx.exp/1), Nx.exp(x))
     end
 
     test "runs the function once for every use of a vectorized result" do
@@ -257,7 +257,7 @@ defmodule Nx.Defn.RecomputeTest do
 
       Nx.Defn.jit_apply(
         fn x ->
-          y = recompute(x, body)
+          y = recompute_checkpoint(x, body)
           Nx.add(y, Nx.multiply(y, 2.0))
         end,
         [x]
@@ -267,7 +267,7 @@ defmodule Nx.Defn.RecomputeTest do
       assert_received :body_ran
       refute_received :body_ran
 
-      Nx.Defn.jit_apply(fn x -> Nx.sum(recompute(x, body)) end, [x])
+      Nx.Defn.jit_apply(fn x -> Nx.sum(recompute_checkpoint(x, body)) end, [x])
       assert_received :body_ran
       refute_received :body_ran
     end
@@ -276,13 +276,15 @@ defmodule Nx.Defn.RecomputeTest do
       x = Nx.tensor([1.0, 2.0])
 
       assert_raise ArgumentError, ~r/must return a tensor or a tuple of tensors/, fn ->
-        Nx.Defn.jit(fn x -> Nx.Defn.Kernel.recompute(x, fn x -> %{value: x} end) end).(x)
+        Nx.Defn.jit(fn x -> Nx.Defn.Kernel.recompute_checkpoint(x, fn x -> %{value: x} end) end).(
+          x
+        )
       end
     end
 
     test "raises when the function arity does not match the inputs" do
       assert_raise ArgumentError, ~r/expected a function of arity 2/, fn ->
-        Nx.Defn.Kernel.recompute([Nx.tensor(1), Nx.tensor(2)], &Nx.exp/1)
+        Nx.Defn.Kernel.recompute_checkpoint([Nx.tensor(1), Nx.tensor(2)], &Nx.exp/1)
       end
     end
   end
@@ -291,7 +293,7 @@ defmodule Nx.Defn.RecomputeTest do
 
   describe "forward pass (outside grad)" do
     defn recompute_identity(x) do
-      recompute(x, fn x -> x end)
+      recompute_checkpoint(x, fn x -> x end)
     end
 
     test "returns same result as calling the function directly" do
@@ -300,7 +302,7 @@ defmodule Nx.Defn.RecomputeTest do
     end
 
     defn recompute_computation(x) do
-      recompute(x, fn x -> Nx.sin(Nx.add(x, 1.0)) end)
+      recompute_checkpoint(x, fn x -> Nx.sin(Nx.add(x, 1.0)) end)
     end
 
     defn no_recompute_computation(x) do
@@ -318,7 +320,7 @@ defmodule Nx.Defn.RecomputeTest do
   describe "gradient correctness" do
     defn grad_with_recompute(x) do
       grad(x, fn x ->
-        recompute(x, fn x -> Nx.sin(x) end)
+        recompute_checkpoint(x, fn x -> Nx.sin(x) end)
       end)
     end
 
@@ -333,7 +335,7 @@ defmodule Nx.Defn.RecomputeTest do
 
     defn grad_recompute_multiply(x) do
       grad(x, fn x ->
-        recompute(x, fn x -> Nx.sum(Nx.multiply(x, x)) end)
+        recompute_checkpoint(x, fn x -> Nx.sum(Nx.multiply(x, x)) end)
       end)
     end
 
@@ -347,15 +349,15 @@ defmodule Nx.Defn.RecomputeTest do
     end
   end
 
-  # --- Nested recompute blocks ---
+  # --- Nested recompute_checkpoint blocks ---
 
-  describe "nested recompute blocks" do
+  describe "nested recompute_checkpoint blocks" do
     defn grad_nested_recompute(x) do
       grad(x, fn x ->
-        recompute(x, fn x ->
+        recompute_checkpoint(x, fn x ->
           y = Nx.multiply(x, x)
 
-          recompute(y, fn y ->
+          recompute_checkpoint(y, fn y ->
             Nx.sum(Nx.sin(y))
           end)
         end)
@@ -366,7 +368,7 @@ defmodule Nx.Defn.RecomputeTest do
       grad(x, fn x -> Nx.sum(Nx.sin(Nx.multiply(x, x))) end)
     end
 
-    test "nested recompute blocks produce correct gradient" do
+    test "nested recompute_checkpoint blocks produce correct gradient" do
       x = Nx.tensor([1.0, 2.0, 3.0])
       assert_equal(grad_nested_recompute(x), grad_no_nested(x))
     end
@@ -377,7 +379,7 @@ defmodule Nx.Defn.RecomputeTest do
   describe "interaction with cond" do
     defn grad_recompute_with_cond(x) do
       grad(x, fn x ->
-        recompute(x, fn x ->
+        recompute_checkpoint(x, fn x ->
           if Nx.greater(Nx.sum(x), 0) do
             Nx.sum(Nx.sin(x))
           else
@@ -410,7 +412,7 @@ defmodule Nx.Defn.RecomputeTest do
     defn grad_cond_with_recompute(x) do
       grad(x, fn x ->
         if Nx.greater(Nx.sum(x), 0) do
-          recompute(x, fn x -> Nx.sum(Nx.sin(x)) end)
+          recompute_checkpoint(x, fn x -> Nx.sum(Nx.sin(x)) end)
         else
           Nx.sum(Nx.cos(x))
         end
@@ -435,7 +437,7 @@ defmodule Nx.Defn.RecomputeTest do
       grad(x, fn x ->
         {_i, acc} =
           while {i = 0, acc = x}, Nx.less(i, 3) do
-            {i + 1, recompute(acc, fn acc -> Nx.sin(acc) * acc end)}
+            {i + 1, recompute_checkpoint(acc, fn acc -> Nx.sin(acc) * acc end)}
           end
 
         Nx.sum(acc)
@@ -460,7 +462,7 @@ defmodule Nx.Defn.RecomputeTest do
 
     defn grad_recompute_with_while(x) do
       grad(x, fn x ->
-        recompute(x, fn x ->
+        recompute_checkpoint(x, fn x ->
           {_i, acc} =
             while {i = 0, acc = x}, Nx.less(i, 3) do
               {i + 1, Nx.sin(acc)}
@@ -501,7 +503,7 @@ defmodule Nx.Defn.RecomputeTest do
 
     defn grad_recompute_custom_grad(x) do
       grad(x, fn x ->
-        recompute(x, fn x ->
+        recompute_checkpoint(x, fn x ->
           Nx.sum(my_relu(x))
         end)
       end)
@@ -521,7 +523,7 @@ defmodule Nx.Defn.RecomputeTest do
 
   describe "container support" do
     defn mixed_output_loss(x) do
-      {value, mask} = recompute(x, fn x -> {Nx.sin(x), x > 0} end)
+      {value, mask} = recompute_checkpoint(x, fn x -> {Nx.sin(x), x > 0} end)
       Nx.sum(value * mask)
     end
 
@@ -538,7 +540,7 @@ defmodule Nx.Defn.RecomputeTest do
     end
 
     defn duplicated_outputs(x) do
-      recompute(x, fn x ->
+      recompute_checkpoint(x, fn x ->
         y = x * x
         {y, y}
       end)
@@ -567,7 +569,7 @@ defmodule Nx.Defn.RecomputeTest do
 
     defn grad_recompute_map_input(params, x) do
       grad(params, fn params ->
-        recompute([params, x], fn params, x ->
+        recompute_checkpoint([params, x], fn params, x ->
           Nx.sum(Nx.dot(x, params.w) + params.b)
         end)
       end)
@@ -586,7 +588,7 @@ defmodule Nx.Defn.RecomputeTest do
     defn grad_recompute_nested_container(x, y) do
       grad({x, y}, fn {x, y} ->
         {a, b, c} =
-          recompute({x, %{pair: {y, x}}}, fn {x, %{pair: {y, x_again}}} ->
+          recompute_checkpoint({x, %{pair: {y, x}}}, fn {x, %{pair: {y, x_again}}} ->
             {Nx.sin(x), Nx.cos(y), x_again * y}
           end)
 
@@ -607,7 +609,7 @@ defmodule Nx.Defn.RecomputeTest do
     defn grad_recompute_tuple_output(x) do
       grad(x, fn x ->
         {a, b} =
-          recompute(x, fn x ->
+          recompute_checkpoint(x, fn x ->
             {Nx.sin(x), Nx.cos(x)}
           end)
 
@@ -633,7 +635,7 @@ defmodule Nx.Defn.RecomputeTest do
     defn vag_with_recompute(x) do
       value_and_grad(x, fn x ->
         x
-        |> recompute(fn x -> Nx.sin(x) end)
+        |> recompute_checkpoint(fn x -> Nx.sin(x) end)
         |> Nx.sum()
       end)
     end
@@ -655,7 +657,9 @@ defmodule Nx.Defn.RecomputeTest do
 
   describe "edge cases" do
     defn grad_recompute_number_input(x) do
-      grad(x, fn x -> Nx.sum(recompute([x, 3.0], fn x, scale -> Nx.multiply(x, scale) end)) end)
+      grad(x, fn x ->
+        Nx.sum(recompute_checkpoint([x, 3.0], fn x, scale -> Nx.multiply(x, scale) end))
+      end)
     end
 
     test "a number among the inputs is passed through to the body" do
@@ -665,7 +669,11 @@ defmodule Nx.Defn.RecomputeTest do
 
     defn grad_recompute_constant_input(x) do
       grad(x, fn x ->
-        Nx.sum(recompute([x, Nx.tensor([1.0, 2.0])], fn x, scale -> Nx.multiply(x, scale) end))
+        Nx.sum(
+          recompute_checkpoint([x, Nx.tensor([1.0, 2.0])], fn x, scale ->
+            Nx.multiply(x, scale)
+          end)
+        )
       end)
     end
 
@@ -675,7 +683,7 @@ defmodule Nx.Defn.RecomputeTest do
     end
 
     defn grad_recompute_same_input_twice(x) do
-      grad(x, fn x -> Nx.sum(recompute([x, x], fn a, b -> Nx.multiply(a, b) end)) end)
+      grad(x, fn x -> Nx.sum(recompute_checkpoint([x, x], fn a, b -> Nx.multiply(a, b) end)) end)
     end
 
     test "the same tensor passed as two inputs sums both gradients" do
@@ -685,7 +693,7 @@ defmodule Nx.Defn.RecomputeTest do
 
     defn grad_recompute_unused_output(x) do
       grad(x, fn x ->
-        _unused = recompute(x, fn x -> Nx.exp(x) end)
+        _unused = recompute_checkpoint(x, fn x -> Nx.exp(x) end)
         Nx.sum(Nx.sin(x))
       end)
     end
@@ -699,17 +707,17 @@ defmodule Nx.Defn.RecomputeTest do
       x = Nx.tensor([1.0, 2.0])
 
       assert_raise ArgumentError, ~r/expected a function of arity 2 for 2 input\(s\)/, fn ->
-        Nx.Defn.jit(fn x -> recompute([x, x], fn x -> x end) end).(x)
+        Nx.Defn.jit(fn x -> recompute_checkpoint([x, x], fn x -> x end) end).(x)
       end
     end
 
     test "inputs without tensors call the function directly" do
-      assert recompute([], fn -> :no_tensors end) == :no_tensors
+      assert recompute_checkpoint([], fn -> :no_tensors end) == :no_tensors
     end
 
     defn grad_recompute_scalar(x) do
       grad(x, fn x ->
-        recompute(x, fn x -> Nx.multiply(x, x) end)
+        recompute_checkpoint(x, fn x -> Nx.multiply(x, x) end)
       end)
     end
 
@@ -720,7 +728,7 @@ defmodule Nx.Defn.RecomputeTest do
 
     defn grad_recompute_no_grad_path(x, y) do
       grad(x, fn x ->
-        recompute([x, y], fn x, y -> Nx.sum(Nx.multiply(x, y)) end)
+        recompute_checkpoint([x, y], fn x, y -> Nx.sum(Nx.multiply(x, y)) end)
       end)
     end
 
@@ -735,7 +743,9 @@ defmodule Nx.Defn.RecomputeTest do
       weights = List.to_tuple(Enum.map(1..count, &Nx.tensor(&1 * 1.0)))
 
       sum_all = fn weights ->
-        recompute(weights, fn weights -> weights |> Tuple.to_list() |> Nx.stack() |> Nx.sum() end)
+        recompute_checkpoint(weights, fn weights ->
+          weights |> Tuple.to_list() |> Nx.stack() |> Nx.sum()
+        end)
       end
 
       assert_equal(Nx.Defn.jit(sum_all).(weights), Nx.tensor(count * (count + 1) / 2))
@@ -751,7 +761,7 @@ defmodule Nx.Defn.RecomputeTest do
       offset = 1.0
 
       grad(x, fn x ->
-        recompute(x, fn x -> Nx.sum(Nx.multiply(x, opts[:scale]) + offset) end)
+        recompute_checkpoint(x, fn x -> Nx.sum(Nx.multiply(x, opts[:scale]) + offset) end)
       end)
     end
 
@@ -762,7 +772,7 @@ defmodule Nx.Defn.RecomputeTest do
 
     defn grad_recompute_high_rank(x) do
       grad(x, fn x ->
-        recompute(x, fn x ->
+        recompute_checkpoint(x, fn x ->
           x |> Nx.sin() |> Nx.sum()
         end)
       end)
@@ -779,7 +789,7 @@ defmodule Nx.Defn.RecomputeTest do
 
   describe "tensors read from the enclosing scope" do
     defn captured_weight_loss(x, w) do
-      Nx.sum(recompute(x, fn x -> Nx.sin(Nx.dot(x, w)) end))
+      Nx.sum(recompute_checkpoint(x, fn x -> Nx.sin(Nx.dot(x, w)) end))
     end
 
     test "raises in the forward pass" do
@@ -808,8 +818,8 @@ defmodule Nx.Defn.RecomputeTest do
   describe "gradient w.r.t. weights" do
     defn grad_shared_weight_two_recompute_blocks(w, x) do
       grad(w, fn w ->
-        first = recompute([x, w], fn x, w -> Nx.dot(x, w) end)
-        second = recompute([first, w], fn first, w -> Nx.dot(first, w) end)
+        first = recompute_checkpoint([x, w], fn x, w -> Nx.dot(x, w) end)
+        second = recompute_checkpoint([first, w], fn first, w -> Nx.dot(first, w) end)
         Nx.sum(second)
       end)
     end
@@ -818,7 +828,7 @@ defmodule Nx.Defn.RecomputeTest do
       grad(w, fn w -> Nx.sum(Nx.dot(Nx.dot(x, w), w)) end)
     end
 
-    test "a weight shared by two recompute blocks accumulates both gradients" do
+    test "a weight shared by two recompute_checkpoint blocks accumulates both gradients" do
       w = Nx.tensor([[0.5, -0.3], [0.2, 0.8]])
       x = Nx.tensor([1.0, 2.0])
 
@@ -830,7 +840,9 @@ defmodule Nx.Defn.RecomputeTest do
 
     defn grad_of_grad_weight_recompute(w, x) do
       grad(w, fn w ->
-        grad(w, fn w -> Nx.sum(recompute([x, w], fn x, w -> Nx.sin(Nx.dot(x, w)) end)) end)
+        grad(w, fn w ->
+          Nx.sum(recompute_checkpoint([x, w], fn x, w -> Nx.sin(Nx.dot(x, w)) end))
+        end)
         |> Nx.sum()
       end)
     end
@@ -851,8 +863,8 @@ defmodule Nx.Defn.RecomputeTest do
 
     defn grad_weights_with_recompute(w1, w2, x) do
       grad({w1, w2}, fn {w1, w2} ->
-        hidden = recompute([x, w1], fn x, w1 -> dense_layer(x, w1) end)
-        output = recompute([hidden, w2], fn hidden, w2 -> dense_layer(hidden, w2) end)
+        hidden = recompute_checkpoint([x, w1], fn x, w1 -> dense_layer(x, w1) end)
+        output = recompute_checkpoint([hidden, w2], fn hidden, w2 -> dense_layer(hidden, w2) end)
         Nx.sum(output)
       end)
     end
@@ -876,8 +888,11 @@ defmodule Nx.Defn.RecomputeTest do
 
     defn vag_params_with_recompute(params, x) do
       value_and_grad(params, fn params ->
-        hidden = recompute([x, params.w1], fn x, w1 -> dense_layer(x, w1) end)
-        output = recompute([hidden, params.w2], fn hidden, w2 -> dense_layer(hidden, w2) end)
+        hidden = recompute_checkpoint([x, params.w1], fn x, w1 -> dense_layer(x, w1) end)
+
+        output =
+          recompute_checkpoint([hidden, params.w2], fn hidden, w2 -> dense_layer(hidden, w2) end)
+
         Nx.sum(output)
       end)
     end
@@ -908,8 +923,8 @@ defmodule Nx.Defn.RecomputeTest do
   describe "shared input (diamond pattern)" do
     defn grad_diamond_recompute(x) do
       grad(x, fn x ->
-        a = recompute(x, fn x -> Nx.sin(x) end)
-        b = recompute(x, fn x -> Nx.cos(x) end)
+        a = recompute_checkpoint(x, fn x -> Nx.sin(x) end)
+        b = recompute_checkpoint(x, fn x -> Nx.cos(x) end)
         Nx.sum(Nx.multiply(a, b))
       end)
     end
@@ -920,7 +935,7 @@ defmodule Nx.Defn.RecomputeTest do
       end)
     end
 
-    test "two recompute blocks sharing the same input" do
+    test "two recompute_checkpoint blocks sharing the same input" do
       x = Nx.tensor([1.0, 2.0, 3.0])
       assert_equal(grad_diamond_recompute(x), grad_diamond_no_recompute(x))
     end
@@ -933,7 +948,7 @@ defmodule Nx.Defn.RecomputeTest do
       grad(x, fn x ->
         x
         |> Nx.multiply(2.0)
-        |> recompute(fn x -> Nx.sin(Nx.exp(x)) end)
+        |> recompute_checkpoint(fn x -> Nx.sin(Nx.exp(x)) end)
         |> Nx.sum()
       end)
     end
@@ -955,7 +970,7 @@ defmodule Nx.Defn.RecomputeTest do
   describe "interaction with stop_grad" do
     defn grad_recompute_with_stop_grad(x) do
       grad(x, fn x ->
-        recompute(x, fn x ->
+        recompute_checkpoint(x, fn x ->
           Nx.sum(Nx.multiply(x, stop_grad(Nx.sin(x))))
         end)
       end)
@@ -982,8 +997,8 @@ defmodule Nx.Defn.RecomputeTest do
 
     defn nested_conditional_loss(x) do
       y =
-        recompute(x, fn x ->
-          y = recompute(x * x, &conditional_power/1)
+        recompute_checkpoint(x, fn x ->
+          y = recompute_checkpoint(x * x, &conditional_power/1)
           y * y + conditional_power(x)
         end)
 
@@ -991,7 +1006,7 @@ defmodule Nx.Defn.RecomputeTest do
     end
 
     @tag timeout: 5_000
-    test "second-order gradient through nested recompute blocks with conditionals" do
+    test "second-order gradient through nested recompute_checkpoint blocks with conditionals" do
       # Bound memory use if the nested gradient expands repeatedly during evaluation.
       Process.flag(:max_heap_size, %{size: 8_000_000, kill: true, error_logger: false})
 
@@ -1008,8 +1023,8 @@ defmodule Nx.Defn.RecomputeTest do
 
     defn nested_nonlinear_conditional_loss(x) do
       y =
-        recompute(x, fn x ->
-          y = recompute(Nx.sin(x), &nonlinear_conditional/1)
+        recompute_checkpoint(x, fn x ->
+          y = recompute_checkpoint(Nx.sin(x), &nonlinear_conditional/1)
           Nx.sin(y) + nonlinear_conditional(x)
         end)
 
@@ -1022,7 +1037,7 @@ defmodule Nx.Defn.RecomputeTest do
     end
 
     @tag timeout: 5_000
-    test "gradients through nested recompute blocks with nonlinear conditionals" do
+    test "gradients through nested recompute_checkpoint blocks with nonlinear conditionals" do
       Process.flag(:max_heap_size, %{size: 8_000_000, kill: true, error_logger: false})
 
       first_derivative = grad(&nested_nonlinear_conditional_loss/1)
@@ -1042,7 +1057,7 @@ defmodule Nx.Defn.RecomputeTest do
     defn grad_of_grad_recompute(x) do
       grad(x, fn x ->
         grad(x, fn x ->
-          recompute(x, fn x -> Nx.sum(Nx.pow(x, 3)) end)
+          recompute_checkpoint(x, fn x -> Nx.sum(Nx.pow(x, 3)) end)
         end)
         |> Nx.sum()
       end)
@@ -1064,7 +1079,7 @@ defmodule Nx.Defn.RecomputeTest do
 
     defn grad_of_grad_outer_loss(x) do
       grad(x, fn x ->
-        grad(x, fn x -> Nx.sum(Nx.sin(recompute(x, fn x -> Nx.sin(x) end))) end)
+        grad(x, fn x -> Nx.sum(Nx.sin(recompute_checkpoint(x, fn x -> Nx.sin(x) end))) end)
         |> Nx.sum()
       end)
     end
@@ -1087,7 +1102,7 @@ defmodule Nx.Defn.RecomputeTest do
   describe "zero gradient through recompute" do
     defn grad_recompute_constant(x) do
       grad(x, fn x ->
-        recompute(x, fn _x -> Nx.tensor(42.0) end)
+        recompute_checkpoint(x, fn _x -> Nx.tensor(42.0) end)
       end)
     end
 
@@ -1100,7 +1115,9 @@ defmodule Nx.Defn.RecomputeTest do
 
   describe "vectorized input" do
     defn grad_recompute_vectorized_weight(x, w) do
-      grad(w, fn w -> Nx.sum(recompute([x, w], fn x, w -> Nx.sin(Nx.dot(x, w)) end)) end)
+      grad(w, fn w ->
+        Nx.sum(recompute_checkpoint([x, w], fn x, w -> Nx.sin(Nx.dot(x, w)) end))
+      end)
     end
 
     defn grad_vectorized_weight_plain(x, w) do
@@ -1119,7 +1136,7 @@ defmodule Nx.Defn.RecomputeTest do
     defn grad_recompute_vectorized_intermediate(x) do
       grad(x, fn x ->
         hidden = Nx.cos(x)
-        Nx.sum(recompute(hidden, fn hidden -> Nx.sin(hidden) * hidden end))
+        Nx.sum(recompute_checkpoint(hidden, fn hidden -> Nx.sin(hidden) * hidden end))
       end)
     end
 
@@ -1154,7 +1171,7 @@ defmodule Nx.Defn.RecomputeTest do
     end
 
     defn grad_recompute_vectorized(x) do
-      grad(x, fn x -> Nx.sum(recompute(x, fn x -> Nx.sin(x) * x end)) end)
+      grad(x, fn x -> Nx.sum(recompute_checkpoint(x, fn x -> Nx.sin(x) * x end)) end)
     end
 
     defn grad_vectorized_plain(x) do
@@ -1164,7 +1181,11 @@ defmodule Nx.Defn.RecomputeTest do
     test "forward and gradient keep the vectorized axes" do
       x = Nx.tensor([[0.5, 1.0], [1.5, 2.0], [2.5, 3.0]]) |> Nx.vectorize(:batch)
 
-      forward = Nx.Defn.jit(fn x -> recompute(x, fn x -> Nx.multiply(Nx.sin(x), x) end) end).(x)
+      forward =
+        Nx.Defn.jit(fn x -> recompute_checkpoint(x, fn x -> Nx.multiply(Nx.sin(x), x) end) end).(
+          x
+        )
+
       assert forward.vectorized_axes == [batch: 3]
       assert_equal(forward, Nx.multiply(Nx.sin(x), x))
 
@@ -1175,7 +1196,7 @@ defmodule Nx.Defn.RecomputeTest do
 
     defn grad_recompute_vectorized_scale(x, scale) do
       grad(scale, fn scale ->
-        Nx.sum(recompute([x, scale], fn x, scale -> Nx.multiply(Nx.sin(x), scale) end))
+        Nx.sum(recompute_checkpoint([x, scale], fn x, scale -> Nx.multiply(Nx.sin(x), scale) end))
       end)
     end
 
@@ -1195,7 +1216,7 @@ defmodule Nx.Defn.RecomputeTest do
     defn grad_recompute_vectorized_constant(x) do
       grad(x, fn x ->
         scale = Nx.vectorize(Nx.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]]), :batch)
-        Nx.sum(recompute([x, scale], fn x, scale -> Nx.multiply(Nx.sin(x), scale) end))
+        Nx.sum(recompute_checkpoint([x, scale], fn x, scale -> Nx.multiply(Nx.sin(x), scale) end))
       end)
     end
 
@@ -1222,13 +1243,13 @@ defmodule Nx.Defn.RecomputeTest do
       fun =
         Nx.Defn.jit(
           fn x ->
-            recompute(x, fn x -> Nx.sin(x) end)
+            recompute_checkpoint(x, fn x -> Nx.sin(x) end)
           end,
           compiler: Nx.Defn.Debug
         )
 
       result = fun.(Nx.tensor(1.0))
-      assert inspect(result) =~ "Nx.Block.Recompute"
+      assert inspect(result) =~ "Nx.Block.RecomputeCheckpoint"
     end
   end
 
@@ -1237,7 +1258,7 @@ defmodule Nx.Defn.RecomputeTest do
   describe "shape-changing recompute" do
     defn grad_shape_change(x) do
       grad(x, fn x ->
-        recompute(x, fn x ->
+        recompute_checkpoint(x, fn x ->
           Nx.sum(x, axes: [1])
         end)
         |> Nx.sum()
@@ -1261,10 +1282,10 @@ defmodule Nx.Defn.RecomputeTest do
   describe "deep nesting" do
     defn grad_recompute_while_recompute(x) do
       grad(x, fn x ->
-        recompute(x, fn x ->
+        recompute_checkpoint(x, fn x ->
           {_i, acc} =
             while {i = 0, acc = x}, Nx.less(i, 2) do
-              {i + 1, recompute(acc, fn acc -> Nx.sin(acc) end)}
+              {i + 1, recompute_checkpoint(acc, fn acc -> Nx.sin(acc) end)}
             end
 
           Nx.sum(acc)
@@ -1289,14 +1310,14 @@ defmodule Nx.Defn.RecomputeTest do
     end
   end
 
-  # --- Back-to-back recompute blocks with no ops between ---
+  # --- Back-to-back recompute_checkpoint blocks with no ops between ---
 
-  describe "back-to-back recompute blocks" do
+  describe "back-to-back recompute_checkpoint blocks" do
     defn grad_back_to_back(x) do
       grad(x, fn x ->
         x
-        |> recompute(fn x -> Nx.sin(x) end)
-        |> recompute(fn x -> x end)
+        |> recompute_checkpoint(fn x -> Nx.sin(x) end)
+        |> recompute_checkpoint(fn x -> x end)
         |> Nx.sum()
       end)
     end
@@ -1316,9 +1337,12 @@ defmodule Nx.Defn.RecomputeTest do
   describe "neural network op patterns" do
     defn grad_recompute_matmul_chain(w1, w2, w3, x) do
       grad(x, fn x ->
-        first = recompute([x, w1], fn x, w1 -> Nx.dot(x, w1) |> Nx.max(0) end)
-        second = recompute([first, w2], fn first, w2 -> Nx.dot(first, w2) |> Nx.max(0) end)
-        output = recompute([second, w3], fn second, w3 -> Nx.dot(second, w3) end)
+        first = recompute_checkpoint([x, w1], fn x, w1 -> Nx.dot(x, w1) |> Nx.max(0) end)
+
+        second =
+          recompute_checkpoint([first, w2], fn first, w2 -> Nx.dot(first, w2) |> Nx.max(0) end)
+
+        output = recompute_checkpoint([second, w3], fn second, w3 -> Nx.dot(second, w3) end)
         Nx.sum(output)
       end)
     end
@@ -1353,7 +1377,9 @@ defmodule Nx.Defn.RecomputeTest do
     end
 
     defn dropout_recompute_value_and_grad(x, key) do
-      value_and_grad(x, fn x -> Nx.sum(recompute([x, key], fn x, key -> dropout(x, key) end)) end)
+      value_and_grad(x, fn x ->
+        Nx.sum(recompute_checkpoint([x, key], fn x, key -> dropout(x, key) end))
+      end)
     end
 
     defn dropout_plain_value_and_grad(x, key) do
@@ -1379,7 +1405,7 @@ defmodule Nx.Defn.RecomputeTest do
   describe "recomputation" do
     defn grad_recompute_used_twice(x) do
       grad(x, fn x ->
-        y = recompute(x, fn x -> Nx.sin(x) end)
+        y = recompute_checkpoint(x, fn x -> Nx.sin(x) end)
         Nx.sum(Nx.add(y, Nx.multiply(y, 2.0)))
       end)
     end

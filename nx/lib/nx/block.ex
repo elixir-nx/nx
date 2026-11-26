@@ -82,7 +82,7 @@ defmodule Nx.Block.IRFFT do
   defstruct eps: nil, length: nil, axis: nil
 end
 
-defmodule Nx.Block.Recompute do
+defmodule Nx.Block.RecomputeCheckpoint do
   @moduledoc """
   Marks a block whose result is not kept. Every operation that uses the
   result computes it again from the block's inputs.

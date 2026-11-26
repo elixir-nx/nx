@@ -582,7 +582,7 @@ defmodule EXLA.Defn do
     {List.flatten(acc), cache}
   end
 
-  # The result of a recompute block is never cached by id, so every
+  # The result of a recompute_checkpoint block is never cached by id, so every
   # consumer lowers its own copy.
   defp recur_operator(%T{data: %Expr{id: id, op: op}} = expr, state, cache) do
     case cache do
@@ -602,18 +602,19 @@ defmodule EXLA.Defn do
     end
   end
 
-  defp recompute?(%T{data: %Expr{op: :block, args: [%Nx.Block.Recompute{} | _]}}), do: true
+  defp recompute?(%T{data: %Expr{op: :block, args: [%Nx.Block.RecomputeCheckpoint{} | _]}}),
+    do: true
 
   defp recompute?(%T{data: %Expr{op: :elem, args: [tuple, _index]}}), do: recompute?(tuple)
   defp recompute?(_expr), do: false
 
   # Lowers `expr` after giving it a fresh copy of every operand that is a
-  # recompute block. The copies are lowered after the other operands and tied
+  # recompute_checkpoint block. The copies are lowered after the other operands and tied
   # to them through an optimization barrier, so a copy cannot run before its
   # consumer could and is not merged with the copy made for another consumer.
   # While `expr` is lowered, the cache holds the copies and the barrier's
   # version of the other operands. `inherited` are the ties of the consumer
-  # when `expr` is itself a recompute block.
+  # when `expr` is itself a recompute_checkpoint block.
   defp recur_recompute_operands(op, expr, inherited, state, cache) do
     state = Map.delete(state, :recompute_ties)
     own_state = if inherited == [], do: state, else: Map.put(state, :recompute_ties, inherited)
@@ -859,7 +860,9 @@ defmodule EXLA.Defn do
   # reads it from there. Otherwise XLA drops the ties from the barrier.
   defp cached_recur_operator(
          :block,
-         %T{data: %Expr{args: [%Nx.Block.Recompute{} = struct, in_args, out, _callback]}},
+         %T{
+           data: %Expr{args: [%Nx.Block.RecomputeCheckpoint{} = struct, in_args, out, _callback]}
+         },
          %{builder: %Function{} = builder} = state,
          cache
        ) do

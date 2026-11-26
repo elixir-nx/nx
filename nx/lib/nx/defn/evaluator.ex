@@ -312,7 +312,7 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval(%Nx.Tensor{data: %Expr{op: op, id: id}} = ans, state, [cache | caches]) do
     case cache do
-      # A recompute block keeps a recipe instead of its result and runs the
+      # A recompute_checkpoint block keeps a recipe instead of its result and runs the
       # recipe again for every consumer.
       %{^id => {:recompute, count, recipe}} ->
         res = run_recipe(recipe, ans)
@@ -378,9 +378,9 @@ defmodule Nx.Defn.Evaluator do
   defp decrement_recompute(cache, id, counter, recipe),
     do: %{cache | id => {:recompute, counter - 1, recipe}}
 
-  # A recompute block, or an element of one that returns a tuple. Operands
+  # A recompute_checkpoint block, or an element of one that returns a tuple. Operands
   # are stored without their arguments, so the cache tells them apart.
-  defp recompute_args?(:block, [%Nx.Block.Recompute{} | _], _caches), do: true
+  defp recompute_args?(:block, [%Nx.Block.RecomputeCheckpoint{} | _], _caches), do: true
   defp recompute_args?(:elem, [tuple, _index], caches), do: recompute?(tuple, caches)
   defp recompute_args?(_op, _args, _caches), do: false
 
@@ -396,7 +396,7 @@ defmodule Nx.Defn.Evaluator do
   defp recompute?(_expr, _caches), do: false
 
   # The recipe of a block holds its evaluated inputs. An input that is itself
-  # the result of a recompute block stays an expression in `in_values` and
+  # the result of a recompute_checkpoint block stays an expression in `in_values` and
   # its recipe goes in `nested`, so it is computed again on every run too.
   defp recompute_recipe(:block, [_struct, in_args, _expr, _callback] = args, state, caches) do
     {in_values, {nested, caches}} =
@@ -421,7 +421,7 @@ defmodule Nx.Defn.Evaluator do
     {{:elem, recipe, tuple, index}, caches}
   end
 
-  # Takes the recipe of a recompute block for one of its consumers.
+  # Takes the recipe of a recompute_checkpoint block for one of its consumers.
   defp take_recipe(%Nx.Tensor{data: %Expr{op: op, id: id}} = expr, state, [cache | caches]) do
     case cache do
       %{^id => {:args, count, args}} ->

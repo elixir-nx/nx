@@ -254,9 +254,9 @@ defmodule Nx.Defn.Kernel do
 
   The result is not kept in memory. Every operation that uses it runs
   `fun` again from `inputs`, with or without `grad`. An input that is
-  itself the result of `recompute` is computed again as well, so in a
-  chain of them one use of the last result runs every function in
-  the chain.
+  itself the result of `recompute_checkpoint` is computed again as well,
+  so in a chain of them one use of the last result runs every function
+  in the chain.
 
   `inputs` is a tensor or a container of tensors, or a list of them for a
   function of several arguments. `fun` cannot read tensors from the
@@ -268,46 +268,47 @@ defmodule Nx.Defn.Kernel do
   ## Examples
 
       defn twice(x, w) do
-        y = recompute([x, w], fn x, w -> Nx.exp(Nx.dot(x, w)) end)
+        y = recompute_checkpoint([x, w], fn x, w -> Nx.exp(Nx.dot(x, w)) end)
         # Nx.exp(Nx.dot(x, w)) runs once for each operand below
         Nx.sum(y) + Nx.reduce_max(y)
       end
 
   """
-  def recompute(inputs, fun) when is_function(fun) do
+  def recompute_checkpoint(inputs, fun) when is_function(fun) do
     arguments = List.wrap(inputs)
     arity = length(arguments)
 
     unless is_function(fun, arity) do
       Kernel.raise(
         ArgumentError,
-        "recompute expected a function of arity #{arity} for #{arity} input(s), got: #{Kernel.inspect(fun)}"
+        "recompute_checkpoint expected a function of arity #{arity} for #{arity} input(s), got: #{Kernel.inspect(fun)}"
       )
     end
 
     Kernel.if Enum.any?(Nx.Defn.Composite.flatten_list(arguments), &is_struct(&1, Nx.Tensor)) do
-      Nx.block(%Nx.Block.Recompute{}, [List.to_tuple(arguments)], nil, fn _struct, arguments ->
-        recompute_result(apply(fun, Tuple.to_list(arguments)))
+      Nx.block(%Nx.Block.RecomputeCheckpoint{}, [List.to_tuple(arguments)], nil, fn _struct,
+                                                                                    arguments ->
+        recompute_checkpoint_result(apply(fun, Tuple.to_list(arguments)))
       end)
     else
       apply(fun, arguments)
     end
   end
 
-  defp recompute_result(%Nx.Tensor{} = tensor), do: tensor
+  defp recompute_checkpoint_result(%Nx.Tensor{} = tensor), do: tensor
 
-  defp recompute_result(tuple) when is_tuple(tuple) do
+  defp recompute_checkpoint_result(tuple) when is_tuple(tuple) do
     Kernel.if Enum.all?(Tuple.to_list(tuple), &is_struct(&1, Nx.Tensor)) do
       tuple
     else
-      recompute_result(Tuple.to_list(tuple))
+      recompute_checkpoint_result(Tuple.to_list(tuple))
     end
   end
 
-  defp recompute_result(other) do
+  defp recompute_checkpoint_result(other) do
     Kernel.raise(
       ArgumentError,
-      "the function given to recompute must return a tensor or a tuple of tensors, got: #{Kernel.inspect(other)}"
+      "the function given to recompute_checkpoint must return a tensor or a tuple of tensors, got: #{Kernel.inspect(other)}"
     )
   end
 
