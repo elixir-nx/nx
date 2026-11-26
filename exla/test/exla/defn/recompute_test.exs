@@ -546,4 +546,104 @@ defmodule EXLA.Defn.RecomputeTest do
     assert scratch_bytes(&outer_in_while_plain/2, [row, row]) >= matrix_bytes
     assert scratch_bytes(&outer_in_while/2, [row, row]) < matrix_bytes
   end
+
+  defn mlp_in_while_plain(ws, x, iterations) do
+    {_i, x, _ws, _iterations} =
+      while {i = 0, x, ws, iterations}, i < iterations do
+        x = pair(x, ws[0], ws[1])
+        x = pair(x, ws[2], ws[3])
+        x = pair(x, ws[4], ws[5])
+        x = pair(x, ws[6], ws[7])
+        {i + 1, x, ws, iterations}
+      end
+
+    Nx.sum(x)
+  end
+
+  defn mlp_in_while(ws, x, iterations) do
+    {_i, x, _ws, _iterations} =
+      while {i = 0, x, ws, iterations}, i < iterations do
+        x = recompute([x, ws], fn x, ws -> pair(x, ws[0], ws[1]) end)
+        x = recompute([x, ws], fn x, ws -> pair(x, ws[2], ws[3]) end)
+        x = recompute([x, ws], fn x, ws -> pair(x, ws[4], ws[5]) end)
+        x = recompute([x, ws], fn x, ws -> pair(x, ws[6], ws[7]) end)
+        {i + 1, x, ws, iterations}
+      end
+
+    Nx.sum(x)
+  end
+
+  defn one_pair_in_while_plain(ws, x, iterations) do
+    {_i, x, _ws, _iterations} =
+      while {i = 0, x, ws, iterations}, i < iterations do
+        {i + 1, pair(x, ws[0], ws[1]), ws, iterations}
+      end
+
+    Nx.sum(x)
+  end
+
+  defn one_pair_in_while(ws, x, iterations) do
+    {_i, x, _ws, _iterations} =
+      while {i = 0, x, ws, iterations}, i < iterations do
+        {i + 1, recompute([x, ws], fn x, ws -> pair(x, ws[0], ws[1]) end), ws, iterations}
+      end
+
+    Nx.sum(x)
+  end
+
+  # The gradient of a while keeps no state per iteration. It rebuilds each
+  # state from the initial one and holds the intermediates of one iteration
+  # at a time, so the only thing left to save is what one iteration keeps.
+  #
+  # Measured on the host client, in MB of scratch: 1279 plain and 1080 with
+  # recompute for four blocks per iteration, 472 for both with one block.
+  describe "the gradient of a while" do
+    setup do
+      n = 256
+      batch = 65536
+
+      %{
+        ws: Nx.broadcast(Nx.tensor(0.01, type: :f32), {8, n, n}),
+        x: Nx.broadcast(Nx.tensor(0.5, type: :f32), {batch, n}),
+        activation_bytes: batch * n * 4
+      }
+    end
+
+    test "needs less scratch memory when one iteration is a chain of blocks", context do
+      %{ws: ws, x: x, activation_bytes: activation_bytes} = context
+
+      scratch = fn fun ->
+        scratch_bytes(fn ws, x, n -> Nx.Defn.grad(ws, &fun.(&1, x, n)) end, [ws, x, 4])
+      end
+
+      assert scratch.(&mlp_in_while_plain/3) - scratch.(&mlp_in_while/3) >= activation_bytes
+    end
+
+    test "needs the same scratch memory when one iteration is a single block", context do
+      %{ws: ws, x: x, activation_bytes: activation_bytes} = context
+
+      scratch = fn fun ->
+        scratch_bytes(fn ws, x, n -> Nx.Defn.grad(ws, &fun.(&1, x, n)) end, [ws, x, 4])
+      end
+
+      difference = scratch.(&one_pair_in_while_plain/3) - scratch.(&one_pair_in_while/3)
+      assert abs(difference) < activation_bytes
+    end
+
+    test "matches the plain function" do
+      {ws, _} = Nx.Random.normal(Nx.Random.key(0), shape: {8, 16, 16}, type: :f32)
+      ws = Nx.multiply(ws, 0.2)
+      x = Nx.iota({8, 16}, type: :f32) |> Nx.divide(128)
+
+      assert_all_close(
+        Nx.Defn.grad(ws, &mlp_in_while(&1, x, 3)),
+        Nx.Defn.grad(ws, &mlp_in_while_plain(&1, x, 3))
+      )
+
+      assert_all_close(
+        Nx.Defn.grad(ws, &one_pair_in_while(&1, x, 3)),
+        Nx.Defn.grad(ws, &one_pair_in_while_plain(&1, x, 3))
+      )
+    end
+  end
 end
