@@ -314,13 +314,13 @@ defmodule Nx.Defn.Evaluator do
     case cache do
       # A recompute_checkpoint block keeps a recipe instead of its result and runs the
       # recipe again for every consumer.
-      %{^id => {:recompute, count, recipe}} ->
+      %{^id => {:recompute_checkpoint, count, recipe}} ->
         res = run_recipe(recipe, ans)
         state.gc && :erlang.garbage_collect(self())
         {res, [decrement_recompute(cache, id, count, recipe) | caches]}
 
       %{^id => {:args, count, args}} ->
-        if recompute_args?(op, args, [cache | caches]) do
+        if recompute_checkpoint_args?(op, args, [cache | caches]) do
           {recipe, [cache | caches]} = recompute_recipe(op, args, state, [cache | caches])
           res = run_recipe(recipe, ans)
           state.gc && :erlang.garbage_collect(self())
@@ -376,24 +376,28 @@ defmodule Nx.Defn.Evaluator do
   defp decrement_recompute(cache, id, 1, _recipe), do: Map.delete(cache, id)
 
   defp decrement_recompute(cache, id, counter, recipe),
-    do: %{cache | id => {:recompute, counter - 1, recipe}}
+    do: %{cache | id => {:recompute_checkpoint, counter - 1, recipe}}
 
   # A recompute_checkpoint block, or an element of one that returns a tuple. Operands
   # are stored without their arguments, so the cache tells them apart.
-  defp recompute_args?(:block, [%Nx.Block.RecomputeCheckpoint{} | _], _caches), do: true
-  defp recompute_args?(:elem, [tuple, _index], caches), do: recompute?(tuple, caches)
-  defp recompute_args?(_op, _args, _caches), do: false
+  defp recompute_checkpoint_args?(:block, [%Nx.Block.RecomputeCheckpoint{} | _], _caches),
+    do: true
 
-  defp recompute?(%Nx.Tensor{data: %Expr{op: op, id: id}} = expr, [cache | caches])
+  defp recompute_checkpoint_args?(:elem, [tuple, _index], caches),
+    do: recompute_checkpoint?(tuple, caches)
+
+  defp recompute_checkpoint_args?(_op, _args, _caches), do: false
+
+  defp recompute_checkpoint?(%Nx.Tensor{data: %Expr{op: op, id: id}} = expr, [cache | caches])
        when op in [:block, :elem] do
     case cache do
-      %{^id => {:recompute, _count, _recipe}} -> true
-      %{^id => {:args, _count, args}} -> recompute_args?(op, args, [cache | caches])
-      %{} -> recompute?(expr, caches)
+      %{^id => {:recompute_checkpoint, _count, _recipe}} -> true
+      %{^id => {:args, _count, args}} -> recompute_checkpoint_args?(op, args, [cache | caches])
+      %{} -> recompute_checkpoint?(expr, caches)
     end
   end
 
-  defp recompute?(_expr, _caches), do: false
+  defp recompute_checkpoint?(_expr, _caches), do: false
 
   # The recipe of a block holds its evaluated inputs. An input that is itself
   # the result of a recompute_checkpoint block stays an expression in `in_values` and
@@ -403,7 +407,7 @@ defmodule Nx.Defn.Evaluator do
       Enum.map_reduce(in_args, {%{}, caches}, fn arg, acc ->
         Composite.traverse(arg, acc, fn
           %Nx.Tensor{data: %Expr{id: id}} = leaf, {nested, caches} ->
-            if recompute?(leaf, caches) do
+            if recompute_checkpoint?(leaf, caches) do
               {recipe, caches} = take_recipe(leaf, state, caches)
               {leaf, {Map.put(nested, id, recipe), caches}}
             else
@@ -428,7 +432,7 @@ defmodule Nx.Defn.Evaluator do
         {recipe, [cache | caches]} = recompute_recipe(op, args, state, [cache | caches])
         {recipe, [decrement_recompute(cache, id, count, recipe) | caches]}
 
-      %{^id => {:recompute, count, recipe}} ->
+      %{^id => {:recompute_checkpoint, count, recipe}} ->
         {recipe, [decrement_recompute(cache, id, count, recipe) | caches]}
 
       %{} ->
@@ -440,10 +444,10 @@ defmodule Nx.Defn.Evaluator do
     case cache do
       %{^id => {:args, count, args}} ->
         {recipe, [cache | caches]} = recompute_recipe(op, args, state, [cache | caches])
-        cache = Map.put(cache, id, {:recompute, count, recipe})
+        cache = Map.put(cache, id, {:recompute_checkpoint, count, recipe})
         {recipe, Enum.reverse(acc, [cache | caches])}
 
-      %{^id => {:recompute, _count, recipe}} ->
+      %{^id => {:recompute_checkpoint, _count, recipe}} ->
         {recipe, Enum.reverse(acc, [cache | caches])}
 
       %{} ->
@@ -480,16 +484,16 @@ defmodule Nx.Defn.Evaluator do
 
   defp eval_parent([cache | caches], id, op, ans, state, acc) do
     case cache do
-      %{^id => {:recompute, _count, recipe}} ->
+      %{^id => {:recompute_checkpoint, _count, recipe}} ->
         {run_recipe(recipe, ans), Enum.reverse(acc, [cache | caches])}
 
       %{^id => {:result, _count, res}} ->
         {not_donatable(res), Enum.reverse(acc, [cache | caches])}
 
       %{^id => {:args, count, args}} ->
-        if recompute_args?(op, args, [cache | caches]) do
+        if recompute_checkpoint_args?(op, args, [cache | caches]) do
           {recipe, [cache | caches]} = recompute_recipe(op, args, state, [cache | caches])
-          cache = Map.put(cache, id, {:recompute, count, recipe})
+          cache = Map.put(cache, id, {:recompute_checkpoint, count, recipe})
           {run_recipe(recipe, ans), Enum.reverse(acc, [cache | caches])}
         else
           {res, [cache | caches]} = eval_apply(op, args, ans, state, [cache | caches])
@@ -518,11 +522,11 @@ defmodule Nx.Defn.Evaluator do
       %{^id => {:args, count, args}} ->
         [%{cache | id => {:args, count - 1, args}} | caches]
 
-      %{^id => {:recompute, 1, _recipe}} ->
+      %{^id => {:recompute_checkpoint, 1, _recipe}} ->
         [Map.delete(cache, id) | caches]
 
-      %{^id => {:recompute, count, recipe}} ->
-        [%{cache | id => {:recompute, count - 1, recipe}} | caches]
+      %{^id => {:recompute_checkpoint, count, recipe}} ->
+        [%{cache | id => {:recompute_checkpoint, count - 1, recipe}} | caches]
 
       %{} ->
         [cache | decrement_parents(caches, id)]

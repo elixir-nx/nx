@@ -592,21 +592,31 @@ defmodule EXLA.Defn do
       %{} ->
         expr = Nx.devectorize(expr)
 
-        if recompute?(expr) do
-          recur_recompute_operands(op, expr, Map.get(state, :recompute_ties, []), state, cache)
+        if recompute_checkpoint?(expr) do
+          recur_recompute_checkpoint_operands(
+            op,
+            expr,
+            Map.get(state, :recompute_ties, []),
+            state,
+            cache
+          )
         else
           state = Map.delete(state, :recompute_ties)
-          {res, cache} = recur_recompute_operands(op, expr, [], state, cache)
+          {res, cache} = recur_recompute_checkpoint_operands(op, expr, [], state, cache)
           {res, Map.put(cache, id, res)}
         end
     end
   end
 
-  defp recompute?(%T{data: %Expr{op: :block, args: [%Nx.Block.RecomputeCheckpoint{} | _]}}),
-    do: true
+  defp recompute_checkpoint?(%T{
+         data: %Expr{op: :block, args: [%Nx.Block.RecomputeCheckpoint{} | _]}
+       }),
+       do: true
 
-  defp recompute?(%T{data: %Expr{op: :elem, args: [tuple, _index]}}), do: recompute?(tuple)
-  defp recompute?(_expr), do: false
+  defp recompute_checkpoint?(%T{data: %Expr{op: :elem, args: [tuple, _index]}}),
+    do: recompute_checkpoint?(tuple)
+
+  defp recompute_checkpoint?(_expr), do: false
 
   # Lowers `expr` after giving it a fresh copy of every operand that is a
   # recompute_checkpoint block. The copies are lowered after the other operands and tied
@@ -615,10 +625,10 @@ defmodule EXLA.Defn do
   # While `expr` is lowered, the cache holds the copies and the barrier's
   # version of the other operands. `inherited` are the ties of the consumer
   # when `expr` is itself a recompute_checkpoint block.
-  defp recur_recompute_operands(op, expr, inherited, state, cache) do
+  defp recur_recompute_checkpoint_operands(op, expr, inherited, state, cache) do
     state = Map.delete(state, :recompute_ties)
     own_state = if inherited == [], do: state, else: Map.put(state, :recompute_ties, inherited)
-    {recomputed, plain} = expr |> direct_operands() |> Enum.split_with(&recompute?/1)
+    {recomputed, plain} = expr |> direct_operands() |> Enum.split_with(&recompute_checkpoint?/1)
 
     if recomputed == [] do
       cached_recur_operator(op, expr, own_state, cache)
