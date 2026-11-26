@@ -108,8 +108,8 @@ jobs:
           path: ${{ github.workspace }}/${{ matrix.working_directory }}/deps
           key: ${{ runner.os }}-Elixir-v${{ matrix.elixir }}-OTP-${{ matrix.otp }}-${{ hashFiles(format('{0}/{1}/mix.lock', github.workspace, matrix.working_directory)) }}-v1
       - name: Install dependencies
-        if: ${{ steps.mix-cache.outputs.cache-hit != 'true' && env.should_run == 'true' }}
-        run: mix deps.get
+        if: ${{ env.should_run == 'true' }}
+        run: mix deps.get --check-locked
       - name: Compile and check warnings
         if: ${{ env.should_run == 'true' }}
         run: mix compile --warnings-as-errors
@@ -177,8 +177,8 @@ jobs:
           path: ${{ github.workspace }}\${{ matrix.working_directory }}\deps
           key: ${{ runner.os }}-Elixir-v${{ matrix.elixir }}-OTP-${{ matrix.otp }}-${{ hashFiles(format('{0}\{1}\mix.lock', github.workspace, matrix.working_directory)) }}-v1
       - name: Install dependencies
-        if: ${{ steps.mix-cache.outputs.cache-hit != 'true' && env.should_run == 'true' }}
-        run: mix deps.get
+        if: ${{ env.should_run == 'true' }}
+        run: mix deps.get --check-locked
       - name: Compile and check warnings
         if: ${{ env.should_run == 'true' }}
         run: mix compile --warnings-as-errors
