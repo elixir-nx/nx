@@ -1014,9 +1014,6 @@ defmodule EXLA.Defn do
     {call_body, cache} =
       block_computation(block_subfunction_description(struct), call_args, expr, state, cache)
 
-    # The callback pid is an argument of the main function. The body is its
-    # own function, so the pid is passed along for the io_calls and
-    # runtime_calls inside it.
     call_args = [state.callback_pid_value | call_args]
 
     if token = get_token(cache) do
