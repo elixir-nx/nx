@@ -6,6 +6,7 @@
 
   * [Nx.Defn.Evaluator] Mark values as donatable at their last use, so backends that run operations eagerly can reuse their buffers
   * [Nx] Accept containers of tensors as `Nx.block/4` arguments
+  * [Nx.Defn] Add `recompute_checkpoint/2`, which computes a function's result again at every use instead of keeping it
 
 ### Bug fixes
 
