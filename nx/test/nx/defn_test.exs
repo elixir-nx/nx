@@ -2491,6 +2491,19 @@ defmodule Nx.DefnTest do
                    fn -> while_block_mixed_context_rhs(a) end
     end
 
+    defn while_block_constant_args(x) do
+      while {x}, _i <- 0..1 do
+        not_first = Nx.logical_not(Nx.equal(Nx.iota({3}), 0))
+        {Nx.select(Nx.logical_and(Nx.greater(x, 0), not_first), x, 0)}
+      end
+    end
+
+    @tag compiler: Evaluator
+    test "uses a block with only constant arguments inside while" do
+      assert {result} = while_block_constant_args(Nx.tensor([1, 2, 3]))
+      assert_equal(result, Nx.tensor([0, 2, 3]))
+    end
+
     defn while_condition_opts(a) do
       while a, Nx.less(a, 10), unroll: true do
         a + 1
