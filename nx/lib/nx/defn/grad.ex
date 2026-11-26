@@ -214,8 +214,9 @@ defmodule Nx.Defn.Grad do
     end)
   end
 
-  # A grad_checkpoint block is differentiated once its incoming gradient is known, so
-  # only its inputs are registered here. The body is traversed at that point.
+  # A grad_checkpoint block is differentiated once its incoming gradient is
+  # known, so only its inputs are registered here. The body is traversed at
+  # that point.
   defp parents_args(
          :block,
          %{data: %{args: [%Nx.Block.GradCheckpoint{}, in_args, _expr, _callback]}},
