@@ -59,6 +59,8 @@ defmodule EXLA.Defn do
     {executable, {used_inputs, outputs, outfeed, _input_typespecs?}} =
       compile(key, vars, fun, compile_options, 0, [], callback)
 
+    executable = bind_device(executable, compile_options)
+
     case compile_options[:module_compilation] do
       :to_mlir ->
         throw({:mlir_module, executable.ref, MapSet.new(Map.keys(used_inputs)), outputs})
@@ -231,6 +233,21 @@ defmodule EXLA.Defn do
   defp run_key(%{client: %{platform: :host}, device_id: device_id}), do: [:host | device_id]
   defp run_key(%{client: %{ref: ref}, device_id: device_id}), do: [ref | device_id]
 
+  # Single-device host executables are compiled as portable, so one compilation
+  # can run on any host device; only the device it runs on varies per call.
+  defp bind_device(%{client: %{platform: :host}, device_id: id, mesh: nil} = executable, options)
+       when id >= 0 do
+    %{
+      executable
+      | device_id: Keyword.get(options, :device_id, executable.client.default_device_id)
+    }
+  end
+
+  defp bind_device(executable, _options), do: executable
+
+  defp device_agnostic(options, %{platform: :host}, nil), do: Keyword.delete(options, :device_id)
+  defp device_agnostic(options, _client, _mesh), do: options
+
   ## Compile
 
   defp compile(
@@ -329,7 +346,10 @@ defmodule EXLA.Defn do
       end
 
       outfeed = Outfeed.new(hooks, defined_io_calls)
-      comp_key = {ref, client.name, outfeed.used_io_call_names, lazy_transfers, options}
+
+      comp_key =
+        {ref, client.name, outfeed.used_io_call_names, lazy_transfers,
+         device_agnostic(options, client, mesh)}
 
       {comp_time, {evaled, {xla_time, executable, inputs_and_typespecs, outfeed}}} =
         :timer.tc(fn ->
