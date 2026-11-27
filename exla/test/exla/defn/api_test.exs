@@ -389,6 +389,123 @@ defmodule EXLA.Defn.APITest do
     test "executes io_call with anonymous function callback" do
       assert_equal(EXLA.jit(&io_call_passthrough/2).(2, 3), Nx.tensor(5))
     end
+
+    defmodule IOCallBlock do
+      defstruct []
+    end
+
+    deftransform io_call_block(a, name) do
+      Nx.block(%IOCallBlock{}, [a], nil, fn _struct, a -> Nx.io_call(Nx.multiply(a, 2), name) end)
+    end
+
+    deftransform runtime_call_block(a, callback) do
+      Nx.block(%IOCallBlock{}, [a], nil, fn _struct, a ->
+        Nx.runtime_call(a, Nx.multiply(a, 2), callback)
+      end)
+    end
+
+    defn io_call_in_block(a), do: io_call_block(a, :block)
+
+    defn io_call_around_block(a) do
+      a |> io_call(:before) |> io_call_block(:block) |> io_call(:after)
+    end
+
+    defn io_call_in_two_blocks(a) do
+      io_call_block(a, :first) + io_call_block(a + 1, :second)
+    end
+
+    defn io_call_in_block_in_while(a) do
+      {a, _i} =
+        while {a, i = 0}, i < 3 do
+          {io_call_block(a, :block), i + 1}
+        end
+
+      a
+    end
+
+    defn io_call_in_block_in_cond(a) do
+      if a > 0 do
+        io_call_block(a, :taken)
+      else
+        io_call_block(a, :not_taken)
+      end
+    end
+
+    test "executes io_call within a block" do
+      assert_equal(
+        EXLA.jit(&io_call_in_block/1, hooks: %{block: send_to_self(:block)}).(3),
+        Nx.tensor(6)
+      )
+
+      assert_receive {:block, tensor}
+      assert_equal(tensor, Nx.tensor(6))
+      refute_received {:block, _}
+    end
+
+    test "executes io_calls before, within and after a block in program order" do
+      hooks = %{
+        before: send_to_self(:seen),
+        block: send_to_self(:seen),
+        after: send_to_self(:seen)
+      }
+
+      assert_equal(EXLA.jit(&io_call_around_block/1, hooks: hooks).(3), Nx.tensor(6))
+
+      for expected <- [3, 6, 6] do
+        assert_receive {:seen, tensor}
+        assert_equal(tensor, Nx.tensor(expected))
+      end
+
+      refute_received {:seen, _}
+    end
+
+    test "executes the io_call of each of two blocks" do
+      hooks = %{first: send_to_self(:first), second: send_to_self(:second)}
+      assert_equal(EXLA.jit(&io_call_in_two_blocks/1, hooks: hooks).(3), Nx.tensor(14))
+
+      assert_receive {:first, first}
+      assert_receive {:second, second}
+      assert_equal(first, Nx.tensor(6))
+      assert_equal(second, Nx.tensor(8))
+    end
+
+    test "executes io_call within a block within while" do
+      hooks = %{block: send_to_self(:block)}
+      assert_equal(EXLA.jit(&io_call_in_block_in_while/1, hooks: hooks).(1), Nx.tensor(8))
+
+      for expected <- [2, 4, 8] do
+        assert_receive {:block, tensor}
+        assert_equal(tensor, Nx.tensor(expected))
+      end
+
+      refute_received {:block, _}
+    end
+
+    test "executes io_call within a block within the taken branch of cond" do
+      hooks = %{taken: send_to_self(:taken), not_taken: send_to_self(:not_taken)}
+      assert_equal(EXLA.jit(&io_call_in_block_in_cond/1, hooks: hooks).(3), Nx.tensor(6))
+
+      assert_receive {:taken, tensor}
+      assert_equal(tensor, Nx.tensor(6))
+      refute_received {:not_taken, _}
+    end
+
+    test "executes runtime_call within a block" do
+      parent = self()
+
+      callback = fn tensor, _opts ->
+        send(parent, {:runtime_call, tensor})
+        tensor
+      end
+
+      assert_equal(
+        EXLA.jit(&runtime_call_block(&1, callback)).(Nx.tensor([1.0, 2.0])),
+        Nx.tensor([2.0, 4.0])
+      )
+
+      assert_receive {:runtime_call, tensor}
+      assert_equal(tensor, Nx.tensor([2.0, 4.0]))
+    end
   end
 
   describe "runtime raise" do

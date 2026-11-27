@@ -1014,6 +1014,8 @@ defmodule EXLA.Defn do
     {call_body, cache} =
       block_computation(block_subfunction_description(struct), call_args, expr, state, cache)
 
+    call_args = [state.callback_pid_value | call_args]
+
     if token = get_token(cache) do
       typespecs = [Typespec.token() | container_to_typespecs(expr)]
       [token | result] = Value.call(state.builder, [token | call_args], call_body, typespecs)
@@ -2041,7 +2043,8 @@ defmodule EXLA.Defn do
   defp block_computation(description, args, expr, %{builder: %Function{}} = state, cache) do
     %Function{module: module, name: name} = subbuilder(state.builder, description)
 
-    arg_typespecs = Enum.map(args, &Value.get_typespec/1)
+    callback_pid_typespec = EXLA.Executable.callback_server_pid_typespec()
+    arg_typespecs = [callback_pid_typespec | Enum.map(args, &Value.get_typespec/1)]
     out_typespecs = container_to_typespecs(expr)
 
     outer_token = get_token(cache)
@@ -2065,13 +2068,15 @@ defmodule EXLA.Defn do
         {nil, args}
       end
 
+    [callback_pid_value | args] = args
     params = Enum.with_index(args, fn param, i -> {i, param} end)
 
     state = %{
       state
       | builder: function,
         params: Map.new(params),
-        scope_ids: Tree.scope_ids(expr)
+        scope_ids: Tree.scope_ids(expr),
+        callback_pid_value: callback_pid_value
     }
 
     comp_cache = lower_io_calls_in_order(expr, state, reset_token(cache, inner_token))
