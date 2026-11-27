@@ -4193,6 +4193,13 @@ defmodule EXLA.Defn.ExprTest do
         rtol: 1.0e-2
       )
     end
+
+    defn svd_thin(t), do: Nx.LinAlg.svd(t, full_matrices?: false)
+
+    test "svd (thin, rank deficient matrix)" do
+      assert {_u, s, _vt} = svd_thin(Nx.iota({5, 4}))
+      assert_all_close(s, Nx.tensor([49.6337, 2.5485, 0.0, 0.0]))
+    end
   end
 
   describe "sort" do
