@@ -471,52 +471,37 @@ defmodule Nx.Defn.Grad do
         {gs, grad_args, pos_after_grads, grad_body}
       end
 
-    # Reverse-mode through while must apply body VJPs from last iteration to first.
-    # We rematerialize each intermediate state from `initial` (O(n²) time, O(1)
-    # extra memory) so the graph stays EXLA-compatible without a dynamic stack.
-    zero = Expr.tensor(0)
-    index_arg = Expr.parameter(zero, arg_context, n_args)
+    while_gs =
+      case Enum.find_value(flatten_initial, &while_iterations/1) do
+        nil ->
+          rematerialized_while_grads(
+            initial,
+            arg,
+            condition,
+            body,
+            gs,
+            grad_args,
+            grad_body,
+            context,
+            arg_context,
+            pos_after_grads
+          )
 
-    {_, n} =
-      Expr.while(
-        {initial, zero},
-        context,
-        {arg, index_arg},
-        condition,
-        {body, Nx.add(index_arg, 1)}
-      )
-
-    # Carry: {s, g, k, j, s0}. Keep {arg, grad_args} at the front so existing
-    # parameter positions stay valid; append {k, j, s0} with fresh parameters.
-    k_arg = Expr.parameter(n, arg_context, pos_after_grads)
-    j_arg = Expr.parameter(zero, arg_context, pos_after_grads + 1)
-
-    {s0_arg, _} =
-      Composite.traverse(initial, pos_after_grads + 2, fn t, pos ->
-        {Expr.parameter(t, arg_context, pos), pos + 1}
-      end)
-
-    remat? = Nx.less(j_arg, Nx.subtract(k_arg, 1))
-    grad_args_tuple = List.to_tuple(grad_args)
-    grad_body_tuple = List.to_tuple(grad_body)
-
-    reverse_body =
-      {
-        select_composite(remat?, body, s0_arg),
-        select_composite(remat?, grad_args_tuple, grad_body_tuple),
-        Nx.select(remat?, k_arg, Nx.subtract(k_arg, 1)),
-        Nx.select(remat?, Nx.add(j_arg, 1), zero),
-        s0_arg
-      }
-
-    {_s, while_gs, _k, _j, _s0} =
-      Expr.while(
-        {initial, List.to_tuple(gs), n, zero, initial},
-        context,
-        {arg, grad_args_tuple, k_arg, j_arg, s0_arg},
-        Nx.greater(k_arg, 0),
-        reverse_body
-      )
+        iterations ->
+          saved_states_while_grads(
+            iterations,
+            initial,
+            arg,
+            condition,
+            body,
+            gs,
+            grad_args,
+            grad_body,
+            context,
+            arg_context,
+            pos_after_grads
+          )
+      end
 
     # Now set the computed gradients for each input.
     {grads, []} =
@@ -652,6 +637,218 @@ defmodule Nx.Defn.Grad do
   defp tuple_primal(:cond, [_, last]), do: last
   defp tuple_primal(:io_call, [tensor_expr | _]), do: tensor_expr
   defp tuple_primal(_, _), do: nil
+
+  # Reverse-mode through while must apply body VJPs from last iteration to first.
+  # We rematerialize each intermediate state from `initial` (O(n²) time, O(1)
+  # extra memory) so the graph stays EXLA-compatible without a dynamic stack.
+  defp rematerialized_while_grads(
+         initial,
+         arg,
+         condition,
+         body,
+         gs,
+         grad_args,
+         grad_body,
+         context,
+         arg_context,
+         pos_after_grads
+       ) do
+    n_args = length(Composite.flatten_list([arg]))
+    zero = Expr.tensor(0)
+    index_arg = Expr.parameter(zero, arg_context, n_args)
+
+    {_, n} =
+      Expr.while(
+        {initial, zero},
+        context,
+        {arg, index_arg},
+        condition,
+        {body, Nx.add(index_arg, 1)}
+      )
+
+    # Carry: {s, g, k, j, s0}. Keep {arg, grad_args} at the front so existing
+    # parameter positions stay valid; append {k, j, s0} with fresh parameters.
+    k_arg = Expr.parameter(n, arg_context, pos_after_grads)
+    j_arg = Expr.parameter(zero, arg_context, pos_after_grads + 1)
+
+    {s0_arg, _} =
+      Composite.traverse(initial, pos_after_grads + 2, fn t, pos ->
+        {Expr.parameter(t, arg_context, pos), pos + 1}
+      end)
+
+    remat? = Nx.less(j_arg, Nx.subtract(k_arg, 1))
+    grad_args_tuple = List.to_tuple(grad_args)
+    grad_body_tuple = List.to_tuple(grad_body)
+
+    reverse_body =
+      {
+        select_composite(remat?, body, s0_arg),
+        select_composite(remat?, grad_args_tuple, grad_body_tuple),
+        Nx.select(remat?, k_arg, Nx.subtract(k_arg, 1)),
+        Nx.select(remat?, Nx.add(j_arg, 1), zero),
+        s0_arg
+      }
+
+    {_s, while_gs, _k, _j, _s0} =
+      Expr.while(
+        {initial, List.to_tuple(gs), n, zero, initial},
+        context,
+        {arg, grad_args_tuple, k_arg, j_arg, s0_arg},
+        Nx.greater(k_arg, 0),
+        reverse_body
+      )
+
+    while_gs
+  end
+
+  defp while_iterations(%T{data: %Expr{op: :metadata, args: [_, %{while_iterations: n}]}}), do: n
+  defp while_iterations(_), do: nil
+
+  # A `while` with a static iteration count (see the `:save_states` option of
+  # `Nx.Defn.Kernel.while/4`). A forward loop stores the state each iteration
+  # starts from, and the reverse loop reads it back (O(n) time, O(n) memory).
+  # Only the carry entries the reverse loop reads are stored. Entries that the
+  # body returns unchanged keep their initial value in the reverse loop.
+  defp saved_states_while_grads(
+         iterations,
+         initial,
+         arg,
+         condition,
+         body,
+         gs,
+         grad_args,
+         grad_body,
+         context,
+         arg_context,
+         pos_after_grads
+       ) do
+    arg_leaves = Composite.flatten_list([arg])
+    body_leaves = Composite.flatten_list([body])
+    initial_leaves = Composite.flatten_list([initial])
+    n_args = length(arg_leaves)
+    zero = Expr.tensor(0)
+    marked_zero = Expr.metadata(zero, %{while_iterations: iterations})
+
+    used_ids = reachable_ids(grad_body, %{})
+
+    saved? =
+      Enum.zip_with(arg_leaves, body_leaves, fn arg_leaf, body_leaf ->
+        Map.has_key?(used_ids, arg_leaf.data.id) and arg_leaf.data.id != body_leaf.data.id
+      end)
+
+    saved_leaves = for {leaf, true} <- Enum.zip(arg_leaves, saved?), do: leaf
+
+    buffers_initial =
+      Enum.map(saved_leaves, fn leaf ->
+        Nx.broadcast(
+          Nx.as_type(zero, leaf.type),
+          List.to_tuple([iterations | Tuple.to_list(leaf.shape)]),
+          names: [nil | leaf.names]
+        )
+      end)
+
+    {buffer_args, pos} =
+      Enum.map_reduce(buffers_initial, n_args, fn buffer, pos ->
+        {Expr.parameter(buffer, arg_context, pos), pos + 1}
+      end)
+
+    counter_arg = Expr.parameter(zero, arg_context, pos)
+
+    buffers_body =
+      Enum.zip_with(buffer_args, saved_leaves, fn buffer, leaf ->
+        update = Nx.new_axis(leaf, 0)
+        Nx.put_slice(buffer, [counter_arg | zero_starts(leaf)], update)
+      end)
+
+    {_, buffers, _} =
+      Expr.while(
+        {initial, List.to_tuple(buffers_initial), zero},
+        context,
+        {arg, List.to_tuple(buffer_args), counter_arg},
+        condition,
+        {body, List.to_tuple(buffers_body), Nx.add(counter_arg, 1)}
+      )
+
+    buffers = Tuple.to_list(buffers)
+
+    # Carry: {s, g, j, buffers}. The state for step j is read one step ahead,
+    # so `s` always holds the state the gradient body needs.
+    j_arg = Expr.parameter(zero, arg_context, pos_after_grads)
+
+    {reverse_buffer_args, _} =
+      Enum.map_reduce(buffers, pos_after_grads + 1, fn buffer, pos ->
+        {Expr.parameter(buffer, arg_context, pos), pos + 1}
+      end)
+
+    last_state =
+      read_saved_states(arg, saved?, initial_leaves, buffers, fn buffer, leaf ->
+        read_slice(buffer, iterations - 1, leaf)
+      end)
+
+    next_index = Nx.max(Nx.subtract(iterations - 2, j_arg), 0)
+
+    next_state =
+      read_saved_states(arg, saved?, arg_leaves, reverse_buffer_args, fn buffer_arg, leaf ->
+        read_slice(buffer_arg, next_index, leaf)
+      end)
+
+    grad_args_tuple = List.to_tuple(grad_args)
+
+    reverse_body =
+      {next_state, List.to_tuple(grad_body), Nx.add(j_arg, 1), List.to_tuple(reverse_buffer_args)}
+
+    {_s, while_gs, _j, _buffers} =
+      Expr.while(
+        {last_state, List.to_tuple(gs), marked_zero, List.to_tuple(buffers)},
+        context,
+        {arg, grad_args_tuple, j_arg, List.to_tuple(reverse_buffer_args)},
+        Nx.less(j_arg, iterations),
+        reverse_body
+      )
+
+    while_gs
+  end
+
+  defp zero_starts(leaf), do: List.duplicate(0, tuple_size(leaf.shape))
+
+  defp read_slice(buffer, index, leaf) do
+    buffer
+    |> Nx.slice([index | zero_starts(leaf)], [1 | Tuple.to_list(leaf.shape)])
+    |> Nx.squeeze(axes: [0])
+  end
+
+  # Builds the carry state with the structure of `arg`: entries flagged as
+  # saved are read from their buffer, the others come from `defaults`.
+  defp read_saved_states(arg, saved?, defaults, buffers, read) do
+    {states, []} =
+      [arg]
+      |> Composite.flatten_list()
+      |> Enum.zip(saved?)
+      |> Enum.zip(defaults)
+      |> Enum.map_reduce(buffers, fn
+        {{leaf, true}, _default}, [buffer | rest] -> {read.(buffer, leaf), rest}
+        {{_leaf, false}, default}, rest -> {default, rest}
+      end)
+
+    {state, []} = Composite.traverse(arg, states, fn _, [state | rest] -> {state, rest} end)
+    state
+  end
+
+  # Collects the ids of all expressions that `exprs` depend on.
+  defp reachable_ids(exprs, acc) do
+    Enum.reduce(exprs, acc, fn %T{data: %Expr{id: id}} = expr, acc ->
+      if Map.has_key?(acc, id) do
+        acc
+      else
+        {_, acc} =
+          Tree.apply_args(expr, :scope, Map.put(acc, id, true), fn child, acc ->
+            {child, reachable_ids([child], acc)}
+          end)
+
+        acc
+      end
+    end)
+  end
 
   defp select_composite(pred, left, right) do
     {selected, []} =

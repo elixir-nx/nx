@@ -6,6 +6,7 @@
 
   * [Nx.Defn.Evaluator] Mark values as donatable at their last use, so backends that run operations eagerly can reuse their buffers
   * [Nx] Accept containers of tensors as `Nx.block/4` arguments
+  * [Nx.Defn] Add the `:save_states` option to `while` generators, so `grad` stores the state of each iteration instead of rebuilding it from the start
 
 ### Bug fixes
 

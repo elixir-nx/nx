@@ -678,8 +678,13 @@ defmodule Nx.Defn.Expr do
   end
 
   defp while_range(range, file, line, initial, generator, condition_body, opts) do
-    opts = Keyword.validate!(opts, unroll: false)
+    opts = Keyword.validate!(opts, unroll: false, save_states: false)
     size = Range.size(range)
+
+    unless is_boolean(opts[:save_states]) do
+      message = ":save_states must be a boolean, got: #{inspect(opts[:save_states])}"
+      raise CompileError, line: line, file: file, description: message
+    end
 
     {internal, external} =
       case opts[:unroll] do
@@ -703,8 +708,19 @@ defmodule Nx.Defn.Expr do
 
     result =
       case internal do
-        {first..last//step, internal_unroll} ->
-          gen_initial = {{tensor(first), generator}, initial}
+        {first..last//step = internal_range, internal_unroll} ->
+          # Grad reads this mark to learn how many iterations the loop runs,
+          # so it can size the buffers that hold the state of each iteration.
+          iterations = div(Range.size(internal_range), Range.size(internal_unroll))
+
+          first_index =
+            if opts[:save_states] and iterations > 0 do
+              metadata(tensor(first), %{while_iterations: iterations})
+            else
+              tensor(first)
+            end
+
+          gen_initial = {{first_index, generator}, initial}
           {{{index_param, generator_param}, arg}, context} = to_param_expr(gen_initial, :while)
 
           condition =

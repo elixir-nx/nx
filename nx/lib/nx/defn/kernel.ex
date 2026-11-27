@@ -1129,6 +1129,32 @@ defmodule Nx.Defn.Kernel do
   and vectorized axes `[x: 2][y: 3]`, `unroll: true` will only unroll
   the `4` inner iterations.
 
+  ### Saving states for gradients
+
+  By default, `grad` through a `while` does not store the state of each
+  iteration. To step back through the loop, it rebuilds the state of
+  iteration `k` by running the loop `k` times from the initial state. The
+  gradient of a loop with `n` iterations then runs the body about `n^2 / 2`
+  times, and the cost grows faster when you take the gradient of a gradient.
+
+  Generators know their iteration count when the expression is built, so
+  you can ask for the states to be kept instead:
+
+      while {x, acc = 0}, i <- 1..100, save_states: true do
+        {x, acc + Nx.sin(acc * x) + i}
+      end
+
+  With `save_states: true`, the gradient first runs the loop once and
+  stores the state each iteration starts from, then reads those states
+  back. The body runs about `n` times, and the loop needs memory for `n`
+  copies of the carried values the gradient reads. Values the body returns
+  unchanged are not copied. Use it when the iteration count is large and
+  memory allows. `:save_states` is a boolean and defaults to `false`. It has
+  no effect on the result of the loop, only on how its gradient is computed,
+  and it only applies to the loop that `:unroll` leaves in place. It is not
+  supported on loops with a condition, because their iteration count is
+  not known in advance, and raises a `CompileError`.
+
   ### Range generators
 
   A range can also be given as a generator. The range may be increasing or

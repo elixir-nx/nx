@@ -4378,6 +4378,226 @@ defmodule Nx.Defn.GradTest do
         assert_equal(result, 1)
       end
     end
+
+    defn newton_states(a, b, opts \\ []) do
+      u = Nx.multiply(a, 0.0)
+
+      {u, _a, _b} =
+        while {u, a, b}, _i <- 1..opts[:iterations], save_states: opts[:save_states] do
+          r = a * Nx.exp(u) + b * Nx.sin(u) - u * u - 1.0
+          dr = a * Nx.exp(u) + b * Nx.cos(u) - 2.0 * u
+          {u - 0.5 * r / dr, a, b}
+        end
+
+      u
+    end
+
+    defn grad_newton_states(a, b, opts \\ []),
+      do: grad(a, &Nx.sum(newton_states(&1, b, opts)))
+
+    defn grad_grad_newton_states(a, b, opts \\ []),
+      do: grad(a, fn a -> Nx.sum(grad(a, &Nx.sum(newton_states(&1, b, opts)))) end)
+
+    defn grad_newton_states_all(a, b, opts \\ []),
+      do: grad({a, b}, fn {a, b} -> Nx.sum(newton_states(a, b, opts)) end)
+
+    test "save_states gives the same gradients as the default while" do
+      a = Nx.linspace(0.5, 1.5, n: 5, type: :f64)
+      b = Nx.linspace(0.1, 0.3, n: 5, type: :f64)
+
+      for iterations <- [1, 2, 5] do
+        default = [iterations: iterations, save_states: false]
+        saved = [iterations: iterations, save_states: true]
+
+        assert_all_close(
+          grad_newton_states(a, b, saved),
+          grad_newton_states(a, b, default),
+          rtol: 1.0e-10
+        )
+
+        assert_all_close(
+          grad_grad_newton_states(a, b, saved),
+          grad_grad_newton_states(a, b, default),
+          rtol: 1.0e-10
+        )
+
+        {saved_a, saved_b} = grad_newton_states_all(a, b, saved)
+        {default_a, default_b} = grad_newton_states_all(a, b, default)
+        assert_all_close(saved_a, default_a, rtol: 1.0e-10)
+        assert_all_close(saved_b, default_b, rtol: 1.0e-10)
+      end
+    end
+
+    defn states_with_generator(x, series, opts \\ []) do
+      {acc, _x} =
+        while {acc = x, x}, s <- series, save_states: opts[:save_states], unroll: opts[:unroll] do
+          {Nx.sin(acc) * x + s * acc, x}
+        end
+
+      acc
+    end
+
+    defn grad_states_with_generator(x, series, opts \\ []),
+      do: grad({x, series}, fn {x, series} -> Nx.sum(states_with_generator(x, series, opts)) end)
+
+    defn grad_grad_states_with_generator(x, series, opts \\ []) do
+      grad(x, fn x ->
+        {gx, _} =
+          grad({x, series}, fn {x, series} -> Nx.sum(states_with_generator(x, series, opts)) end)
+
+        Nx.sum(gx)
+      end)
+    end
+
+    test "save_states works with tensor generators and partial unrolling" do
+      x = Nx.tensor([0.3, 0.7, 1.1])
+      series = Nx.tensor([0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7])
+
+      for unroll <- [false, 2, 3, true] do
+        default = [save_states: false, unroll: unroll]
+        saved = [save_states: true, unroll: unroll]
+
+        {saved_x, saved_series} = grad_states_with_generator(x, series, saved)
+        {default_x, default_series} = grad_states_with_generator(x, series, default)
+        assert_all_close(saved_x, default_x, rtol: 1.0e-5)
+        assert_all_close(saved_series, default_series, rtol: 1.0e-5)
+
+        assert_all_close(
+          grad_grad_states_with_generator(x, series, saved),
+          grad_grad_states_with_generator(x, series, default),
+          rtol: 1.0e-5
+        )
+      end
+    end
+
+    defn states_with_decreasing_range(x) do
+      {acc, _x} =
+        while {acc = x, x}, i <- 6..1//-2, save_states: true do
+          {acc * Nx.cos(x) + i, x}
+        end
+
+      acc
+    end
+
+    defn states_with_decreasing_range_default(x) do
+      {acc, _x} =
+        while {acc = x, x}, i <- 6..1//-2 do
+          {acc * Nx.cos(x) + i, x}
+        end
+
+      acc
+    end
+
+    defn grad_states_with_decreasing_range(x),
+      do: grad(x, &Nx.sum(states_with_decreasing_range(&1)))
+
+    defn grad_states_with_decreasing_range_default(x),
+      do: grad(x, &Nx.sum(states_with_decreasing_range_default(&1)))
+
+    test "save_states works with decreasing ranges" do
+      x = Nx.tensor([0.3, 0.7, 1.1])
+
+      assert_all_close(
+        grad_states_with_decreasing_range(x),
+        grad_states_with_decreasing_range_default(x)
+      )
+    end
+
+    defn states_nested(x, opts \\ []) do
+      {acc, _x} =
+        while {acc = x, x}, _i <- 1..3, save_states: opts[:save_states] do
+          {inner, _} =
+            while {inner = acc, x}, _j <- 1..2, save_states: opts[:save_states] do
+              {Nx.sin(inner) * x + inner, x}
+            end
+
+          {inner * x, x}
+        end
+
+      acc
+    end
+
+    defn grad_grad_states_nested(x, opts \\ []),
+      do: grad(x, fn x -> Nx.sum(grad(x, &Nx.sum(states_nested(&1, opts)))) end)
+
+    test "save_states works with nested whiles" do
+      x = Nx.tensor([0.3, 0.7, 1.1])
+
+      assert_all_close(
+        grad_grad_states_nested(x, save_states: true),
+        grad_grad_states_nested(x, save_states: false),
+        rtol: 1.0e-5
+      )
+    end
+
+    defn states_with_io_call(x, opts \\ []) do
+      {acc, _x} =
+        while {acc = x, x}, _i <- 1..8, save_states: opts[:save_states] do
+          {io_call(Nx.sin(acc) * x, :body), x}
+        end
+
+      acc
+    end
+
+    defn grad_states_with_io_call(x, opts \\ []),
+      do: grad(x, &Nx.sum(states_with_io_call(&1, opts)))
+
+    test "save_states does not rerun the loop body in the backward pass" do
+      x = Nx.tensor([0.3, 0.7, 1.1])
+      parent = self()
+      hooks = %{body: fn _ -> send(parent, :body) end}
+
+      count = fn opts ->
+        Nx.Defn.jit_apply(&grad_states_with_io_call/2, [x, opts], hooks: hooks)
+
+        flush = fn flush, count ->
+          receive do
+            :body -> flush.(flush, count + 1)
+          after
+            0 -> count
+          end
+        end
+
+        flush.(flush, 0)
+      end
+
+      # The loop body runs once per iteration to save the states, and the
+      # backward pass reads them back. The default rebuilds each state.
+      assert count.(save_states: true) == 8
+      assert count.(save_states: false) > 8
+    end
+
+    test "save_states raises on loops that are not generator loops" do
+      assert_raise CompileError, ~r/options are not supported on while with conditions/, fn ->
+        grad_states_with_condition(Nx.tensor(1.0))
+      end
+
+      assert_raise CompileError, ~r/:save_states must be a boolean, got: :yes/, fn ->
+        grad_states_invalid(Nx.tensor(1.0))
+      end
+    end
+
+    defn grad_states_with_condition(x) do
+      grad(x, fn x ->
+        {_i, acc} =
+          while {i = 0, acc = x}, i < 3, save_states: true do
+            {i + 1, acc * x}
+          end
+
+        acc
+      end)
+    end
+
+    defn grad_states_invalid(x) do
+      grad(x, fn x ->
+        {acc, _} =
+          while {acc = x, x}, _i <- 1..3, save_states: :yes do
+            {acc * x, x}
+          end
+
+        acc
+      end)
+    end
   end
 
   describe "axes" do
