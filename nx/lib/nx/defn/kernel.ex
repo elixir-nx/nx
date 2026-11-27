@@ -250,6 +250,69 @@ defmodule Nx.Defn.Kernel do
   end
 
   @doc """
+  Computes `fun` on `inputs` again at every use of its result.
+
+  The result is not kept in memory. Every operation that uses it runs
+  `fun` again from `inputs`, with or without `grad`. An input that is
+  itself the result of `recompute_checkpoint` is computed again as well,
+  so in a chain of them one use of the last result runs every function
+  in the chain.
+
+  `inputs` is a tensor or a container of tensors, or a list of them for a
+  function of several arguments. `fun` cannot read tensors from the
+  enclosing scope and returns a tensor or a tuple of tensors.
+
+  `fun` runs once for every use, so a side effect inside it, such as an
+  `io_call/2`, happens once for every use as well.
+
+  ## Examples
+
+      defn twice(x, w) do
+        y = recompute_checkpoint([x, w], fn x, w -> Nx.exp(Nx.dot(x, w)) end)
+        # Nx.exp(Nx.dot(x, w)) runs once for each operand below
+        Nx.sum(y) + Nx.reduce_max(y)
+      end
+
+  """
+  def recompute_checkpoint(inputs, fun) when is_function(fun) do
+    arguments = List.wrap(inputs)
+    arity = length(arguments)
+
+    unless is_function(fun, arity) do
+      Kernel.raise(
+        ArgumentError,
+        "recompute_checkpoint expected a function of arity #{arity} for #{arity} input(s), got: #{Kernel.inspect(fun)}"
+      )
+    end
+
+    Kernel.if Enum.any?(Nx.Defn.Composite.flatten_list(arguments), &is_struct(&1, Nx.Tensor)) do
+      Nx.block(%Nx.Block.RecomputeCheckpoint{}, [List.to_tuple(arguments)], nil, fn _struct,
+                                                                                    arguments ->
+        recompute_checkpoint_result(apply(fun, Tuple.to_list(arguments)))
+      end)
+    else
+      apply(fun, arguments)
+    end
+  end
+
+  defp recompute_checkpoint_result(%Nx.Tensor{} = tensor), do: tensor
+
+  defp recompute_checkpoint_result(tuple) when is_tuple(tuple) do
+    Kernel.if Enum.all?(Tuple.to_list(tuple), &is_struct(&1, Nx.Tensor)) do
+      tuple
+    else
+      recompute_checkpoint_result(Tuple.to_list(tuple))
+    end
+  end
+
+  defp recompute_checkpoint_result(other) do
+    Kernel.raise(
+      ArgumentError,
+      "the function given to recompute_checkpoint must return a tensor or a tuple of tensors, got: #{Kernel.inspect(other)}"
+    )
+  end
+
+  @doc """
   Defines a custom gradient for the given expression.
 
   It also expects a list of inputs of the gradient and a `fun`

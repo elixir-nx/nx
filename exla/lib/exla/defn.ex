@@ -590,6 +590,8 @@ defmodule EXLA.Defn do
 
   ## Operator handling
 
+  @recompute_tied {__MODULE__, :recompute_tied}
+
   defp recur_flatten(composite, state, cache) do
     {acc, cache} =
       Composite.reduce(composite, {[], cache}, fn %T{} = expr, {acc, cache} ->
@@ -600,15 +602,98 @@ defmodule EXLA.Defn do
     {List.flatten(acc), cache}
   end
 
+  # The result of a recompute_checkpoint block is never cached by id, so every
+  # consumer lowers its own copy.
   defp recur_operator(%T{data: %Expr{id: id, op: op}} = expr, state, cache) do
     case cache do
       %{^id => res} ->
         {res, cache}
 
       %{} ->
-        {res, cache} = cached_recur_operator(op, Nx.devectorize(expr), state, cache)
-        {res, Map.put(cache, id, res)}
+        expr = Nx.devectorize(expr)
+
+        if recompute_checkpoint?(expr) do
+          recur_recompute_checkpoint_operands(
+            op,
+            expr,
+            Map.get(state, :recompute_ties, []),
+            state,
+            cache
+          )
+        else
+          state = Map.delete(state, :recompute_ties)
+          {res, cache} = recur_recompute_checkpoint_operands(op, expr, [], state, cache)
+          {res, Map.put(cache, id, res)}
+        end
     end
+  end
+
+  defp recompute_checkpoint?(%T{
+         data: %Expr{op: :block, args: [%Nx.Block.RecomputeCheckpoint{} | _]}
+       }),
+       do: true
+
+  defp recompute_checkpoint?(%T{data: %Expr{op: :elem, args: [tuple, _index]}}),
+    do: recompute_checkpoint?(tuple)
+
+  defp recompute_checkpoint?(_expr), do: false
+
+  # Lowers `expr` after giving it a fresh copy of every operand that is a
+  # recompute_checkpoint block. The copies are lowered after the other operands and tied
+  # to them through an optimization barrier, so a copy cannot run before its
+  # consumer could and is not merged with the copy made for another consumer.
+  # While `expr` is lowered, the cache holds the copies and the barrier's
+  # version of the other operands. `inherited` are the ties of the consumer
+  # when `expr` is itself a recompute_checkpoint block.
+  defp recur_recompute_checkpoint_operands(op, expr, inherited, state, cache) do
+    state = Map.delete(state, :recompute_ties)
+    own_state = if inherited == [], do: state, else: Map.put(state, :recompute_ties, inherited)
+    {recomputed, plain} = expr |> direct_operands() |> Enum.split_with(&recompute_checkpoint?/1)
+
+    if recomputed == [] do
+      cached_recur_operator(op, expr, own_state, cache)
+    else
+      {plain_values, cache} = Enum.map_reduce(plain, cache, &recur_operator(&1, state, &2))
+      ties = inherited ++ for %Value{} = value <- plain_values, do: value
+      tie_state = Map.put(state, :recompute_ties, ties)
+
+      {outer_tied, cache} =
+        if inherited == [], do: Map.pop(cache, @recompute_tied, %{}), else: {nil, cache}
+
+      {copies, cache} =
+        Enum.map_reduce(recomputed, cache, fn %T{data: %Expr{id: id}} = operand, cache ->
+          {copy, cache} = recur_operator(operand, tie_state, cache)
+          {{id, copy}, cache}
+        end)
+
+      tied = Map.get(cache, @recompute_tied, %{})
+
+      originals =
+        for {%T{data: %Expr{id: id}}, %Value{} = value} <- Enum.zip(plain, plain_values),
+            is_map_key(tied, value),
+            do: {id, value}
+
+      scoped = Map.new(copies ++ Enum.map(originals, fn {id, value} -> {id, tied[value]} end))
+      {res, cache} = cached_recur_operator(op, expr, own_state, Map.merge(cache, scoped))
+
+      cache = cache |> Map.drop(Enum.map(copies, &elem(&1, 0))) |> Map.merge(Map.new(originals))
+      cache = if inherited == [], do: Map.put(cache, @recompute_tied, outer_tied), else: cache
+      {res, cache}
+    end
+  end
+
+  # Branches of a cond are lowered inside their own region, so they are not
+  # operands of the cond itself.
+  defp direct_operands(%T{data: %Expr{op: op}}) when op in [:cond, :fun], do: []
+
+  defp direct_operands(expr) do
+    {_, operands} =
+      Tree.apply_args(expr, :scope, [], fn
+        %T{data: %Expr{}} = arg, acc -> {arg, [arg | acc]}
+        arg, acc -> {arg, acc}
+      end)
+
+    operands |> Enum.reverse() |> Enum.uniq_by(& &1.data.id)
   end
 
   defp cached_recur_operator(
@@ -798,6 +883,43 @@ defmodule EXLA.Defn do
        [tensor, opts],
        expr
      ), cache}
+  end
+
+  # The copy reads its inputs through a barrier shared with the ties of its
+  # consumer, and records the barrier's version of each tie so the consumer
+  # reads it from there. Otherwise XLA drops the ties from the barrier.
+  defp cached_recur_operator(
+         :block,
+         %T{
+           data: %Expr{args: [%Nx.Block.RecomputeCheckpoint{} = struct, in_args, out, _callback]}
+         },
+         %{builder: %Function{} = builder} = state,
+         cache
+       ) do
+    {call_args, cache} =
+      in_args
+      |> Composite.flatten_list()
+      |> Enum.map_reduce(cache, &recur_operator(&1, Map.delete(state, :recompute_ties), &2))
+
+    tied = Map.get(cache, @recompute_tied, %{})
+
+    ties =
+      for %Value{function: ^builder} = value <- Map.get(state, :recompute_ties, []), do: value
+
+    {call_args, barriered_ties} =
+      (call_args ++ Enum.map(ties, &Map.get(tied, &1, &1)))
+      |> Value.optimization_barrier()
+      |> Enum.split(length(call_args))
+
+    tied = ties |> Enum.zip(barriered_ties) |> Enum.into(tied)
+
+    default_block_implementation(
+      struct,
+      call_args,
+      out,
+      Map.delete(state, :recompute_ties),
+      Map.put(cache, @recompute_tied, tied)
+    )
   end
 
   # C-backed custom_call blocks (QR, Eigh, …): `EXLA.CustomCall`; else compile default callback.
