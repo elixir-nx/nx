@@ -125,6 +125,8 @@ defmodule EXLA.Defn.APITest do
       assert_equal(merge(%{"y" => 10})["y"], Nx.tensor(10))
     end
 
+    defn subtract_two(a, b), do: a - b
+
     @tag :multi_device
     test "a compilation on one host device is cached for every device" do
       device_count = EXLA.Client.fetch!(:host).device_count
@@ -133,13 +135,13 @@ defmodule EXLA.Defn.APITest do
       b = Nx.tensor(2, backend: {EXLA.Backend, client: :host})
 
       for device_id <- 0..(device_count - 1) do
-        refute EXLA.cached?(&add_two/2, [a, b], client: :host, device_id: device_id)
+        refute EXLA.cached?(&subtract_two/2, [a, b], client: :host, device_id: device_id)
       end
 
-      EXLA.jit(&add_two/2, client: :host, device_id: 0).(a, b)
+      EXLA.jit(&subtract_two/2, client: :host, device_id: 0).(a, b)
 
       for device_id <- 0..(device_count - 1) do
-        assert EXLA.cached?(&add_two/2, [a, b], client: :host, device_id: device_id)
+        assert EXLA.cached?(&subtract_two/2, [a, b], client: :host, device_id: device_id)
       end
     end
   end
