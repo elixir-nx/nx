@@ -10,6 +10,7 @@
 #include "xla/pjrt/pjrt_compiler.h"
 #include "xla/pjrt/tfrt_cpu_pjrt_client.h"
 #include "xla/shape_util.h"
+#include "xla/tsl/platform/env.h"
 #include <erl_nif.h>
 #include <fine.hpp>
 #include <memory>
@@ -441,6 +442,9 @@ ExlaClient::DeserializeExecutable(std::string deserialized_executable) {
       std::move(executable), std::move(fingerprint), this);
 }
 
+// The stack size of the thread that compiles, see ExlaClient::Compile.
+constexpr size_t kCompileStackSize = 64 * 1024 * 1024;
+
 tsl::StatusOr<fine::ResourcePtr<ExlaExecutable>> ExlaClient::Compile(
     mlir::ModuleOp module, std::vector<xla::Shape> argument_layouts,
     xla::ExecutableBuildOptions &options, bool compile_portable_executable) {
@@ -459,10 +463,21 @@ tsl::StatusOr<fine::ResourcePtr<ExlaExecutable>> ExlaClient::Compile(
   compile_opts.executable_build_options = options;
   compile_opts.compile_portable_executable = compile_portable_executable;
 
-  EXLA_ASSIGN_OR_RETURN(
-      std::unique_ptr<xla::PjRtLoadedExecutable> executable,
-      client_->CompileAndLoad(xla::MaybeOwningMlirModule(module),
-                              std::move(compile_opts)));
+  // XLA compiles on the calling thread. A NIF runs on a dirty scheduler of the BEAM, which
+  // has a small stack (40 kilowords by default), and the cuDNN compiler pass of XLA needs
+  // more. So the compile runs on a thread with a large stack, and this thread waits for it.
+  absl::StatusOr<std::unique_ptr<xla::PjRtLoadedExecutable>> compiled;
+  {
+    tsl::ThreadOptions thread_options;
+    thread_options.stack_size = kCompileStackSize;
+    std::unique_ptr<tsl::Thread> thread(tsl::Env::Default()->StartThread(
+        thread_options, "exla_compile", [&] {
+          compiled = client_->CompileAndLoad(xla::MaybeOwningMlirModule(module),
+                                             std::move(compile_opts));
+        }));
+  }
+  EXLA_ASSIGN_OR_RETURN(std::unique_ptr<xla::PjRtLoadedExecutable> executable,
+                        std::move(compiled));
   EXLA_ASSIGN_OR_RETURN(absl::optional<std::string> fingerprint,
                         ExecutableFingerprint(executable));
 

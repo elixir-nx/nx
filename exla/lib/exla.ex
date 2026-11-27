@@ -44,9 +44,7 @@ defmodule EXLA do
   To use GPUs/TPUs, you must also set the appropriate value for the
   [`XLA_TARGET`](https://github.com/elixir-nx/xla#xla_target) environment
   variable. If you have GPU/TPU enabled, we recommend setting the environment
-  variable for your machine altogether. For CUDA, setting
-  `ELIXIR_ERL_OPTIONS="+sssdio 128"` is also required on more complex operations
-  to increase CUDA's compiler stack size.
+  variable for your machine altogether.
 
   Note that setting the `EXLA.Backend` does not enable the EXLA compiler.
   You must still pass the `compiler: EXLA` option to `Nx.Defn` functions
