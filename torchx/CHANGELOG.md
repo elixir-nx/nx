@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.1.0 (2026-11-27)
 
   * Factor singular matrices in `Nx.LinAlg.lu/2` instead of raising
 
